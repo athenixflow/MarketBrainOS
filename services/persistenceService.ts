@@ -52,7 +52,7 @@ export const updateSystemEmergency = async (admin: UserProfile, active: boolean)
     emergency_lockdown: active, 
     last_updated: now, 
     updated_by: admin.email 
-  }).eq('id', 1); // Assuming single record with ID 1
+  }).eq('id', 1); 
   
   await SecurityEngine.handleViolation(
     active ? 'SYSTEM_EMERGENCY_ACTIVATED' : 'SYSTEM_EMERGENCY_DEACTIVATED',
@@ -83,6 +83,21 @@ export const logUserAction = async (entry: Omit<ActionLogEntry, 'id' | 'timestam
   await supabase.from('action_logs').insert({ ...entry, timestamp, previous_hash: prevHash, hash });
 };
 
+export const logExecutionTrace = async (trace: any) => {
+  await logUserAction({
+    user_id: trace.userId,
+    module: 'System_Core', 
+    action: `EXECUTION_TRACE:${trace.operation.toUpperCase()}`,
+    metadata: {
+      trace_id: trace.id,
+      status: trace.status,
+      duration_ms: Date.now() - trace.timestamp,
+      steps_count: trace.steps.length,
+      full_trace: trace 
+    }
+  });
+};
+
 export const logSecurityViolation = async (event: Omit<SecurityEvent, 'id' | 'timestamp' | 'hash' | 'previous_hash'>) => {
   const prevHash = await getLastHash('security_audit_logs');
   const timestamp = new Date().toISOString();
@@ -100,12 +115,77 @@ export const logAdminAction = async (admin: UserProfile, action: string, target:
   await supabase.from('admin_audit_logs').insert({ ...entry, timestamp, previous_hash: prevHash, hash });
 };
 
-export const deductTokens = async (userId: string, cost: number): Promise<number | null> => {
+// --- TOKEN MANAGEMENT & COMPENSATIONS ---
+
+export const deductTokens = async (userId: string, cost: number): Promise<number> => {
   const { data: current } = await supabase.from('users').select('tokens').eq('id', userId).single();
   const newTokens = Math.max(0, (current?.tokens ?? 0) - cost);
-  await supabase.from('users').update({ tokens: newTokens, last_active: new Date().toISOString() }).eq('id', userId);
+  const { error } = await supabase.from('users').update({ tokens: newTokens, last_active: new Date().toISOString() }).eq('id', userId);
+  if (error) throw new Error("Token deduction failed.");
   return newTokens;
 };
+
+export const refundTokens = async (userId: string, amount: number): Promise<void> => {
+  const { data: current } = await supabase.from('users').select('tokens').eq('id', userId).single();
+  const newTokens = (current?.tokens ?? 0) + amount;
+  await supabase.from('users').update({ tokens: newTokens }).eq('id', userId);
+};
+
+// --- ARTIFACT PERSISTENCE (WITH RETURNS FOR ROLLBACK) ---
+
+export const saveAngleMinerResult = async (userId: string, product: string, industry: string, target: string, results: AngleMinerResults) => {
+  await logUserAction({ user_id: userId, module: 'AngleMiner X', action: 'GENERATE_ANGLES' });
+  const { data, error } = await supabase.from('angleminer_results')
+    .insert({ user_id: userId, industry, target_audience: target, angles_output: results })
+    .select().single();
+  if (error) throw new Error(`Persistence Error: ${error.message}`);
+  return data;
+};
+
+export const deleteAngleMinerResult = async (id: string) => {
+  await supabase.from('angleminer_results').delete().eq('id', id);
+};
+
+export const saveTestLabResult = async (userId: string, type: string, variants: string[], results: TestLabResults) => {
+  await logUserAction({ user_id: userId, module: 'TestLab Pro', action: 'RUN_SIMULATION' });
+  const { data, error } = await supabase.from('testlab_results')
+    .insert({ user_id: userId, comparison_type: type, winner: results.winnerLabel })
+    .select().single();
+  if (error) throw new Error(`Persistence Error: ${error.message}`);
+  return data;
+};
+
+export const deleteTestLabResult = async (id: string) => {
+  await supabase.from('testlab_results').delete().eq('id', id);
+};
+
+export const saveConversionDoctorResult = async (userId: string, input: string, score: number, result: AuditResult) => {
+  await logUserAction({ user_id: userId, module: 'Conversion Doctor', action: 'RUN_AUDIT' });
+  const { data, error } = await supabase.from('conversion_doctor_results')
+    .insert({ user_id: userId, conversion_score: score, audit_output: result })
+    .select().single();
+  if (error) throw new Error(`Persistence Error: ${error.message}`);
+  return data;
+};
+
+export const deleteConversionDoctorResult = async (id: string) => {
+  await supabase.from('conversion_doctor_results').delete().eq('id', id);
+};
+
+export const saveWorkflowRun = async (userId: string, angle: string, testScore: number, conversionScore: number, finalOutput: any) => {
+  await logUserAction({ user_id: userId, module: 'Workflow', action: 'EXECUTE_PIPELINE' });
+  const { data, error } = await supabase.from('workflow_runs')
+    .insert({ user_id: userId, selected_angle: angle, final_output: finalOutput })
+    .select().single();
+  if (error) throw new Error(`Persistence Error: ${error.message}`);
+  return data;
+};
+
+export const deleteWorkflowRun = async (id: string) => {
+  await supabase.from('workflow_runs').delete().eq('id', id);
+};
+
+// --- ADMIN FUNCTIONS ---
 
 export const adminGetAllUsers = async (): Promise<UserProfile[]> => {
   const { data } = await supabase.from('users').select('*').order('last_active', { ascending: false });
@@ -143,25 +223,4 @@ export const adminUpdateUserTokens = async (admin: UserProfile, userId: string, 
 
 export const updateUserRiskProfile = async (userId: string, riskScore: number, isSuspended: boolean, reason?: string) => {
   await supabase.from('users').update({ risk_score: riskScore, is_suspended: isSuspended, suspension_reason: reason }).eq('id', userId);
-};
-
-// ... Rest of persistence wrappers
-export const saveAngleMinerResult = async (userId: string, product: string, industry: string, target: string, results: AngleMinerResults) => {
-  await logUserAction({ user_id: userId, module: 'AngleMiner X', action: 'GENERATE_ANGLES' });
-  await supabase.from('angleminer_results').insert({ user_id: userId, industry, target_audience: target, angles_output: results });
-};
-
-export const saveTestLabResult = async (userId: string, type: string, variants: string[], results: TestLabResults) => {
-  await logUserAction({ user_id: userId, module: 'TestLab Pro', action: 'RUN_SIMULATION' });
-  await supabase.from('testlab_results').insert({ user_id: userId, comparison_type: type, winner: results.winnerLabel });
-};
-
-export const saveConversionDoctorResult = async (userId: string, input: string, score: number, result: AuditResult) => {
-  await logUserAction({ user_id: userId, module: 'Conversion Doctor', action: 'RUN_AUDIT' });
-  await supabase.from('conversion_doctor_results').insert({ user_id: userId, conversion_score: score, audit_output: result });
-};
-
-export const saveWorkflowRun = async (userId: string, angle: string, testScore: number, conversionScore: number, finalOutput: any) => {
-  await logUserAction({ user_id: userId, module: 'Workflow', action: 'EXECUTE_PIPELINE' });
-  await supabase.from('workflow_runs').insert({ user_id: userId, selected_angle: angle, final_output: finalOutput });
 };

@@ -5,8 +5,6 @@ import {
   Card, 
   Input, 
   PrimaryButton, 
-  SecondaryButton,
-  Tabs, 
   EmptyState, 
   LoadingState, 
   ResultContainer, 
@@ -19,7 +17,6 @@ import {
 import { auditConversion, MAX_INPUT_CHARS } from '../services/geminiService';
 import { AuditResult } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { saveConversionDoctorResult, deductTokens, TOKEN_COSTS } from '../services/persistenceService';
 import { copyToClipboard, downloadAsText, printAsPDF, formatConversionDoctorExport } from '../services/exportService';
 import { SecurityEngine } from '../services/securityEngine';
 
@@ -31,7 +28,6 @@ const ConversionDoctor: React.FC = () => {
   const [isTakingLong, setIsTakingLong] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AuditResult | null>(null);
-  const [activeTab, setActiveTab] = useState('Issues');
   const [honeypotValue, setHoneypotValue] = useState('');
 
   const contexts = ['Landing Page', 'Homepage', 'Sales Page', 'Funnel Step'];
@@ -120,11 +116,8 @@ const ConversionDoctor: React.FC = () => {
       const data = await auditConversion(trimmedInput, context, user?.id);
       setResult({ ...data, auditedUrl: trimmedInput.startsWith('http') ? trimmedInput : undefined });
       
-      if (user) {
-        await saveConversionDoctorResult(user.id, trimmedInput, data.score, data);
-        await deductTokens(user.id, TOKEN_COSTS.CONVERSION_AUDIT);
-        await refreshProfile();
-      }
+      if (user) await refreshProfile();
+      
     } catch (err: any) {
       console.error("Audit failed:", err);
       if (err.message && (err.message.includes("Extraction Failed") || err.message.includes("404") || err.message.includes("unreachable"))) {
@@ -141,7 +134,6 @@ const ConversionDoctor: React.FC = () => {
     setInput('');
     setResult(null);
     setError(null);
-    setActiveTab('Issues');
     setHoneypotValue('');
   };
 

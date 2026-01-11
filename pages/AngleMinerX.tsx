@@ -8,7 +8,7 @@ import {
   IntelligenceIndicator, 
   EmptyState, 
   LoadingState, 
-  ResultContainer,
+  ResultContainer, 
   SectionHeader,
   Tabs,
   ErrorMessage,
@@ -20,7 +20,6 @@ import {
 import { analyzeMarketingAngle, improveAngle, MAX_INPUT_CHARS } from '../services/geminiService';
 import { MarketingAngle, AngleMinerResults } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { saveAngleMinerResult, deductTokens, TOKEN_COSTS } from '../services/persistenceService';
 import { copyToClipboard, downloadAsText, printAsPDF, formatAngleMinerExport } from '../services/exportService';
 import { SecurityEngine } from '../services/securityEngine';
 
@@ -96,11 +95,8 @@ const AngleMinerX: React.FC = () => {
       setResults(data);
       setActiveTab('Prime Angles');
       
-      if (user) {
-        await saveAngleMinerResult(user.id, product, industry, target, data);
-        await deductTokens(user.id, TOKEN_COSTS.ANGLEMINER_GENERATE);
-        await refreshProfile();
-      }
+      if (user) await refreshProfile();
+      
     } catch (err: any) {
       console.error(err);
       setError(err.message || "The neural engine encountered an unexpected interruption. Please retry.");
@@ -116,29 +112,33 @@ const AngleMinerX: React.FC = () => {
       return;
     }
 
-    const updatedCategory = results[category].map(a => 
+    const categoryList = results[category] || [];
+
+    const updatedCategory = categoryList.map(a => 
       a.hook === angle.hook ? { ...a, improving: true } : a
     );
     setResults({ ...results, [category]: updatedCategory });
 
     try {
       const improvedText = await improveAngle(angle.hook, user?.id);
-      const finalizedCategory = results[category].map(a => 
+      
+      const currentList = results[category] || [];
+      const finalizedCategory = currentList.map(a => 
         a.hook === angle.hook ? { ...a, improved: improvedText, improving: false } : a
       );
-      setResults({ ...results, [category]: finalizedCategory });
+      setResults(prev => prev ? { ...prev, [category]: finalizedCategory } : prev);
       
-      if (user) {
-        await deductTokens(user.id, TOKEN_COSTS.ANGLEMINER_IMPROVE);
-        await refreshProfile();
-      }
+      if (user) await refreshProfile();
+
     } catch (err: any) {
       console.error(err);
       setError(err.message || "Failed to refine angle. Operational throttle may be active.");
-      const resetCategory = results[category].map(a => 
+      
+      const currentList = results[category] || [];
+      const resetCategory = currentList.map(a => 
         a.hook === angle.hook ? { ...a, improving: false } : a
       );
-      setResults({ ...results, [category]: resetCategory });
+      setResults(prev => prev ? { ...prev, [category]: resetCategory } : prev);
     }
   };
 

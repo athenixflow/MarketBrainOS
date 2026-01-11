@@ -1,4 +1,5 @@
 
+
 export type NavigationItem = 'Dashboard' | 'AngleMiner X' | 'TestLab Pro' | 'Conversion Doctor' | 'Workflow';
 
 export type UserTier = 'free' | 'pro';
@@ -59,7 +60,10 @@ export interface SecurityEvent {
     | 'DEGRADED_MODE_TRIGGERED'
     | 'LEDGER_INTEGRITY_VIOLATION'
     | 'SYSTEM_EMERGENCY_ACTIVATED'
-    | 'SYSTEM_EMERGENCY_DEACTIVATED';
+    | 'SYSTEM_EMERGENCY_DEACTIVATED'
+    | 'HONEYPOT_TRIGGER'
+    | 'CONTRACT_VIOLATION'
+    | 'SYSTEM_RECOVERY';
   severity: 'low' | 'medium' | 'high' | 'critical';
   details: string;
   input_payload?: string;
@@ -85,7 +89,7 @@ export interface ActionLogEntry {
   id: string;
   timestamp: string;
   user_id: string;
-  module: NavigationItem;
+  module: NavigationItem | 'System_Core';
   action: string;
   metadata?: any;
   hash: string;
@@ -147,4 +151,13 @@ export interface AuditResult {
   fixes: AuditFix[];
   rewrites?: AuditRewrite[];
   auditedUrl?: string;
+}
+
+export interface DiagnosticResult {
+  id: string;
+  category: 'CONTRACT' | 'INTEGRATION' | 'SYSTEM_HEALTH';
+  name: string;
+  status: 'PASS' | 'FAIL' | 'WARN';
+  message?: string;
+  timestamp: number;
 }

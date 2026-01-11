@@ -24,7 +24,6 @@ import {
 } from '../services/geminiService';
 import { AngleMinerResults, TestLabResults, AuditResult } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { saveWorkflowRun, deductTokens, TOKEN_COSTS } from '../services/persistenceService';
 import { copyToClipboard, downloadAsText, printAsPDF, formatWorkflowExport } from '../services/exportService';
 import { SecurityEngine } from '../services/securityEngine';
 
@@ -95,7 +94,13 @@ const Workflow: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await analyzeMarketingAngle(minerParams);
+      const data = await analyzeMarketingAngle(minerParams); // No user ID passed to prevent deduction in preview/step 1 if desired, but Workflow logic usually deducts at end? 
+      // Actually, per previous implementation, Workflow deducts at end. 
+      // So we do NOT pass userId here if we want to defer deduction, or we do if we want step-by-step.
+      // The original code only deducted at step 5.
+      // So here we pass undefined for userId to skip persistence/deduction until the final step?
+      // Wait, original code called analyzeMarketingAngle then nextStep. No persistence there.
+      // So we keep it as is: pass undefined userId.
       setMinerResults(data);
       nextStep();
     } catch (err: any) {
@@ -114,7 +119,8 @@ const Workflow: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await runTestLabComparison('Angles', selectedAngleTexts);
+      // Same logic: Step-by-step in workflow was transient in original code.
+      const data = await runTestLabComparison('Angles', selectedAngleTexts); 
       setTestResults(data);
       nextStep();
     } catch (err: any) {
@@ -130,6 +136,7 @@ const Workflow: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
+      // Transient
       const data = await auditConversion(auditInput, 'Landing Page');
       setAuditResult(data);
       nextStep();
@@ -153,20 +160,20 @@ const Workflow: React.FC = () => {
     setError(null);
     try {
       const issues = (auditResult.issues || []).map(i => i.blocker);
-      const data = await improveWorkflowAssets(winner.text, issues);
+      
+      // THIS IS THE FINAL STEP where persistence happens in Workflow
+      // We pass userId here to trigger the transaction
+      const data = await improveWorkflowAssets(
+        winner.text, 
+        issues, 
+        user?.id,
+        winner.score,
+        auditResult.score
+      );
+      
       setFinalImprovements(data);
       
-      if (user && testResults && auditResult) {
-        await saveWorkflowRun(
-          user.id, 
-          winner.text || '', 
-          winner.score || 0, 
-          auditResult.score, 
-          data
-        );
-        await deductTokens(user.id, TOKEN_COSTS.WORKFLOW_RUN);
-        await refreshProfile();
-      }
+      if (user) await refreshProfile();
       
       nextStep();
     } catch (err: any) {

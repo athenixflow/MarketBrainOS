@@ -5,7 +5,6 @@ import {
   Card, 
   Input, 
   PrimaryButton, 
-  SecondaryButton,
   IntelligenceIndicator, 
   EmptyState, 
   LoadingState, 
@@ -20,7 +19,6 @@ import {
 import { runTestLabComparison, MAX_INPUT_CHARS } from '../services/geminiService';
 import { TestLabResults } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { saveTestLabResult, deductTokens, TOKEN_COSTS } from '../services/persistenceService';
 import { copyToClipboard, downloadAsText, printAsPDF, formatTestLabExport } from '../services/exportService';
 import { SecurityEngine } from '../services/securityEngine';
 
@@ -119,14 +117,11 @@ const TestLabPro: React.FC = () => {
     setError(null);
     setResults(null);
     try {
-      const data = await runTestLabComparison(comparisonType, uniqueVariants);
+      const data = await runTestLabComparison(comparisonType, uniqueVariants, user?.id);
       setResults(data);
       
-      if (user) {
-        await saveTestLabResult(user.id, comparisonType, uniqueVariants, data);
-        await deductTokens(user.id, TOKEN_COSTS.TESTLAB_RUN);
-        await refreshProfile();
-      }
+      if (user) await refreshProfile();
+      
     } catch (err: any) {
       console.error(err);
       setError(err.message || "Stability interruption in the performance engine. Please retry.");

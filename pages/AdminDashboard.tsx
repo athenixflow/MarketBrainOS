@@ -5,7 +5,17 @@ import { useAuth } from '../context/AuthContext';
 import { Card, PageHeader, LoadingState, Tabs, ErrorMessage, PrimaryButton, Input, IntelligenceIndicator } from '../components/UI';
 import { adminGetAllUsers, adminGetAuditLogs, adminGetSecurityLogs, adminSuspendUser, adminUpdateUserTokens, updateSystemEmergency, getSystemSettings } from '../services/persistenceService';
 import { SecurityEngine } from '../services/securityEngine';
-import { UserProfile, AuditLogEntry, SecurityEvent, SystemLoadLevel, SystemSettings } from '../types';
+import { DiagnosisEngine } from '../services/diagnosisService';
+import { UserProfile, AuditLogEntry, SecurityEvent, SystemLoadLevel, SystemSettings, DiagnosticResult } from '../types';
+
+interface ConfirmationRequest {
+  type: 'SUSPEND' | 'UPDATE_TOKENS' | 'TOGGLE_LOCKDOWN';
+  userId: string;
+  payload?: any;
+  warningTitle: string;
+  warningMessage: string;
+  keyword: string;
+}
 
 const AdminDashboard: React.FC = () => {
   const { profile, loading: authLoading } = useAuth();
@@ -23,10 +33,17 @@ const AdminDashboard: React.FC = () => {
   const [chainValid, setChainValid] = useState<boolean | null>(null);
   const [verifyingChain, setVerifyingChain] = useState(false);
 
+  // Diagnostics State
+  const [diagnosticResults, setDiagnosticResults] = useState<DiagnosticResult[]>([]);
+  const [runningDiagnostics, setRunningDiagnostics] = useState(false);
+
   // Intervention UI State
+  const [confirmationReq, setConfirmationReq] = useState<ConfirmationRequest | null>(null);
+  const [confirmationInput, setConfirmationInput] = useState('');
+  
   const [showStepUp, setShowStepUp] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
-  const [pendingAction, setPendingAction] = useState<{ type: string, userId: string, payload?: any } | null>(null);
+  const [pendingAction, setPendingAction] = useState<ConfirmationRequest | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   // Token Update Local State
@@ -72,15 +89,60 @@ const AdminDashboard: React.FC = () => {
     }, 1500);
   };
 
-  const handleActionRequest = async (type: 'SUSPEND' | 'UPDATE_TOKENS' | 'TOGGLE_LOCKDOWN', userId: string, payload?: any) => {
+  const runDiagnostics = async () => {
+    setRunningDiagnostics(true);
+    const results = await DiagnosisEngine.runFullSuite();
+    // Simulate slight delay for visual effect
+    setTimeout(() => {
+      setDiagnosticResults(results);
+      setRunningDiagnostics(false);
+    }, 800);
+  };
+
+  const allDiagnosticsPassed = diagnosticResults.length > 0 && diagnosticResults.every(r => r.status === 'PASS');
+
+  // 1. Initial Request -> Opens Confirmation Modal
+  const initiateAction = (type: ConfirmationRequest['type'], userId: string, payload?: any) => {
+    let req: ConfirmationRequest;
+    if (type === 'TOGGLE_LOCKDOWN') {
+      const active = payload.active;
+      req = {
+        type, userId, payload,
+        warningTitle: active ? "ACTIVATE SYSTEM LOCKDOWN" : "RELEASE SYSTEM LOCKDOWN",
+        warningMessage: active 
+          ? "This will immediately halt all neural operations, suspend authentication, and block user access. This is a drastic emergency measure."
+          : "This will restore full system functionality and allow user access.",
+        keyword: active ? "LOCKDOWN" : "RELEASE"
+      };
+    } else if (type === 'SUSPEND') {
+      req = {
+        type, userId, payload,
+        warningTitle: "REVOKE IDENTITY ACCESS",
+        warningMessage: "The user will be immediately disconnected and prevented from signing in. This action is logged to the immutable ledger.",
+        keyword: "SUSPEND"
+      };
+    } else {
+      // Non-destructive (relatively), skip confirmation modal
+      req = { type, userId, payload, warningTitle: "", warningMessage: "", keyword: "" };
+      handleConfirmedAction(req);
+      return;
+    }
+    setConfirmationReq(req);
+    setConfirmationInput('');
+    setActionError(null);
+  };
+
+  // 2. Confirmed Intent -> Checks Permissions / Step-Up
+  const handleConfirmedAction = async (req: ConfirmationRequest) => {
+    setConfirmationReq(null); 
     if (!profile) return;
     setActionError(null);
 
-    const scope = type === 'TOGGLE_LOCKDOWN' ? 'admin:system_config' : 'admin:user_management';
+    const scope = req.type === 'TOGGLE_LOCKDOWN' ? 'admin:system_config' : 'admin:user_management';
     const check = await SecurityEngine.checkPermission(profile, scope);
     
     if (check.stepUpRequired) {
-      setPendingAction({ type, userId, payload });
+      setPendingAction(req);
       setShowStepUp(true);
       return;
     }
@@ -90,20 +152,11 @@ const AdminDashboard: React.FC = () => {
       return;
     }
 
-    try {
-      if (type === 'SUSPEND') {
-        await adminSuspendUser(profile, userId, "Security Suspension");
-      } else if (type === 'UPDATE_TOKENS') {
-        await adminUpdateUserTokens(profile, userId, payload.tokens);
-      } else if (type === 'TOGGLE_LOCKDOWN') {
-        await updateSystemEmergency(profile, payload.active);
-      }
-      await load();
-    } catch (err: any) {
-      setActionError(err.message);
-    }
+    // Execute directly if no step-up needed
+    executeAction(req);
   };
 
+  // 3. Step-Up Verification -> Execute
   const handleVerifyStepUp = async () => {
     if (!profile || !pendingAction) return;
     const res = await SecurityEngine.verifyStepUp(profile, verificationCode);
@@ -112,9 +165,25 @@ const AdminDashboard: React.FC = () => {
       profile.last_verification = new Date().toISOString();
       setShowStepUp(false);
       setVerificationCode('');
-      handleActionRequest(pendingAction.type as any, pendingAction.userId, pendingAction.payload);
+      executeAction(pendingAction);
     } else {
       setActionError("Invalid verification code.");
+    }
+  };
+
+  // 4. Final Execution
+  const executeAction = async (req: ConfirmationRequest) => {
+    try {
+      if (req.type === 'SUSPEND') {
+        await adminSuspendUser(profile!, req.userId, "Security Suspension");
+      } else if (req.type === 'UPDATE_TOKENS') {
+        await adminUpdateUserTokens(profile!, req.userId, req.payload.tokens);
+      } else if (req.type === 'TOGGLE_LOCKDOWN') {
+        await updateSystemEmergency(profile!, req.payload.active);
+      }
+      await load();
+    } catch (err: any) {
+      setActionError(err.message);
     }
   };
 
@@ -124,7 +193,44 @@ const AdminDashboard: React.FC = () => {
   const isEmergencyActive = systemSettings?.emergency_lockdown;
 
   return (
-    <div className="space-y-16 animate-in fade-in duration-700 pb-32">
+    <div className="space-y-16 animate-in fade-in duration-700 pb-32 relative">
+      
+      {/* CONFIRMATION MODAL */}
+      {confirmationReq && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0B0B0B]/95 backdrop-blur-md p-6">
+          <div className="max-w-md w-full bg-[#1A1A1A] border-2 border-red-600 rounded-[32px] p-10 shadow-2xl shadow-red-900/40 animate-in zoom-in duration-300">
+            <p className="text-[10px] font-black text-red-500 uppercase tracking-[0.3em] mb-4">Destructive Action Protocol</p>
+            <h3 className="text-2xl font-black text-white mb-6 uppercase leading-none">{confirmationReq.warningTitle}</h3>
+            <p className="text-sm font-medium text-gray-400 mb-8 leading-relaxed">
+              {confirmationReq.warningMessage}
+            </p>
+            <div className="bg-black/50 p-6 rounded-2xl mb-8 border border-white/10">
+               <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Type the following to confirm:</p>
+               <p className="text-xl font-mono text-white tracking-widest font-bold select-all">"{confirmationReq.keyword}"</p>
+            </div>
+            <Input 
+              label="Confirmation Keyword" 
+              placeholder={confirmationReq.keyword}
+              value={confirmationInput} 
+              onChange={(e) => setConfirmationInput(e.target.value)} 
+            />
+            <div className="flex flex-col gap-4 mt-8">
+              <button 
+                onClick={() => handleConfirmedAction(confirmationReq)}
+                disabled={confirmationInput !== confirmationReq.keyword}
+                className="w-full py-4 bg-red-600 text-white font-black uppercase tracking-[0.2em] rounded-xl hover:bg-red-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                Execute
+              </button>
+              <button onClick={() => setConfirmationReq(null)} className="w-full py-3 text-xs font-bold text-gray-500 hover:text-white uppercase tracking-widest">
+                Cancel Operation
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* STEP UP MODAL */}
       {showStepUp && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0B0B0B]/90 backdrop-blur-sm p-6">
           <Card accent className="max-w-md w-full shadow-2xl animate-in zoom-in duration-300">
@@ -173,7 +279,7 @@ const AdminDashboard: React.FC = () => {
       </div>
 
       <Tabs 
-        tabs={['Overview', 'Users', 'Safety Monitor', 'Audit Ledger']} 
+        tabs={['Overview', 'Users', 'Safety Monitor', 'System Diagnosis', 'Audit Ledger']} 
         activeTab={activeTab} 
         onTabChange={setActiveTab} 
       />
@@ -182,7 +288,19 @@ const AdminDashboard: React.FC = () => {
         {activeTab === 'Overview' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
             <StatCard label="Identities" value={users.length} />
-            <StatCard label="Security Exceptions" value={securityLogs.length} />
+            <div className="lg:col-span-1">
+              <Card className="!p-8">
+                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">System Integrity</p>
+                 <div className="flex items-center gap-4">
+                   <div className={`w-8 h-8 rounded-full flex items-center justify-center ${allDiagnosticsPassed ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                      {allDiagnosticsPassed ? '✓' : '!'}
+                   </div>
+                   <p className="text-xl font-black text-[#0B0B0B]">
+                     {allDiagnosticsPassed ? 'VERIFIED' : 'ATTENTION NEEDED'}
+                   </p>
+                 </div>
+              </Card>
+            </div>
             <div className="lg:col-span-1">
                <Card title="System Kill Switch" className={`!border-2 transition-colors ${isEmergencyActive ? 'border-red-600 bg-red-50' : 'border-gray-100'}`}>
                   <p className="text-[11px] font-medium text-gray-500 leading-relaxed mb-8">
@@ -192,7 +310,7 @@ const AdminDashboard: React.FC = () => {
                   </p>
                   <button 
                     disabled={profile?.role !== 'super_admin'}
-                    onClick={() => handleActionRequest('TOGGLE_LOCKDOWN', 'GLOBAL', { active: !isEmergencyActive })}
+                    onClick={() => initiateAction('TOGGLE_LOCKDOWN', 'GLOBAL', { active: !isEmergencyActive })}
                     className={`w-full py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.3em] transition-all ${
                       isEmergencyActive 
                         ? 'bg-green-600 text-white hover:bg-green-700' 
@@ -241,7 +359,7 @@ const AdminDashboard: React.FC = () => {
                         />
                         <button 
                           disabled={isEmergencyActive}
-                          onClick={() => handleActionRequest('UPDATE_TOKENS', u.id, { tokens: newTokenValues[u.id] })}
+                          onClick={() => initiateAction('UPDATE_TOKENS', u.id, { tokens: newTokenValues[u.id] })}
                           className="text-[9px] font-bold text-blue-500 hover:opacity-60 uppercase tracking-widest disabled:opacity-20"
                         >
                           Sync
@@ -257,7 +375,7 @@ const AdminDashboard: React.FC = () => {
                       {!u.is_suspended && u.role === 'user' && (
                         <button 
                           disabled={isEmergencyActive}
-                          onClick={() => handleActionRequest('SUSPEND', u.id)}
+                          onClick={() => initiateAction('SUSPEND', u.id)}
                           className="text-[9px] font-bold text-red-500 uppercase tracking-widest hover:underline disabled:opacity-20"
                         >
                           Revoke Access
@@ -302,6 +420,49 @@ const AdminDashboard: React.FC = () => {
                 </div>
               )}
             </Card>
+          </div>
+        )}
+
+        {activeTab === 'System Diagnosis' && (
+          <div className="space-y-8">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="text-xl font-bold text-[#0B0B0B]">Regression & Integrity Suite</h3>
+                <p className="text-sm text-gray-500 mt-2">Automated verification of feature contracts, input/output validation logic, and circuit breaker health.</p>
+              </div>
+              <PrimaryButton onClick={runDiagnostics} disabled={runningDiagnostics}>
+                {runningDiagnostics ? 'Running Suite...' : 'Run Auto-Diagnostics'}
+              </PrimaryButton>
+            </div>
+            
+            {diagnosticResults.length > 0 && (
+               <div className="grid grid-cols-1 gap-4 animate-in slide-in-from-bottom-4 duration-500">
+                  {diagnosticResults.map(res => (
+                    <div key={res.id} className={`p-6 rounded-2xl border flex items-center justify-between ${res.status === 'PASS' ? 'bg-green-50 border-green-100' : res.status === 'WARN' ? 'bg-yellow-50 border-yellow-100' : 'bg-red-50 border-red-100'}`}>
+                       <div className="flex items-center gap-4">
+                         <div className={`w-3 h-3 rounded-full ${res.status === 'PASS' ? 'bg-green-500' : res.status === 'WARN' ? 'bg-yellow-500' : 'bg-red-500'}`} />
+                         <div>
+                           <p className="text-sm font-bold text-[#0B0B0B]">{res.name}</p>
+                           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{res.category}</p>
+                         </div>
+                       </div>
+                       <div className="text-right">
+                         <span className={`text-[11px] font-black uppercase px-3 py-1 rounded-full ${res.status === 'PASS' ? 'text-green-600 bg-green-100' : res.status === 'WARN' ? 'text-yellow-600 bg-yellow-100' : 'text-red-600 bg-red-100'}`}>
+                           {res.status}
+                         </span>
+                         {res.message && <p className="text-[10px] font-bold text-gray-500 mt-2 max-w-md">{res.message}</p>}
+                       </div>
+                    </div>
+                  ))}
+               </div>
+            )}
+            
+            {diagnosticResults.length === 0 && !runningDiagnostics && (
+              <Card className="flex flex-col items-center justify-center py-20 bg-gray-50 border-dashed">
+                <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">No Diagnostic Data Available</p>
+                <p className="text-gray-300 text-sm mt-2">Run the suite to detect regressions.</p>
+              </Card>
+            )}
           </div>
         )}
 
