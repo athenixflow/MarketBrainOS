@@ -189,7 +189,7 @@ export const deleteWorkflowRun = async (id: string) => {
 
 export const adminGetAllUsers = async (): Promise<UserProfile[]> => {
   const { data } = await supabase.from('users').select('*').order('last_active', { ascending: false });
-  return (data || []).map(u => ({
+  return (data || []).map((u: any) => ({
     ...u,
     role: u.email === 'admin@marketbrainos.com' ? 'super_admin' : (u.email === 'ops@marketbrainos.com' ? 'ops_admin' : 'user')
   }));
