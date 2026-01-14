@@ -411,7 +411,12 @@ const callGemini = async (
     await new Promise(r => setTimeout(r, totalWaitMs));
   }
 
-  const genAI = new GoogleGenerativeAI(process.env.API_KEY || '');
+  // Ensure API Key exists
+  if (!process.env.API_KEY) {
+    throw new Error("System Configuration Error: Neural Engine Key Missing");
+  }
+
+  const genAI = new GoogleGenerativeAI(process.env.API_KEY);
   
   try {
     SecurityEngine.recordOperationCost(endpoint);
