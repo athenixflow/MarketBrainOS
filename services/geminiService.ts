@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, Type, GenerateContentParameters } from "@google/genai";
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { SecurityEngine } from "./securityEngine";
 import { 
   getUserProfile, 
@@ -18,7 +18,16 @@ import {
 } from "./persistenceService";
 import { PermissionScope, AngleMinerResults, TestLabResults, AuditResult } from "../types";
 
-const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Local interface to match the existing app structure while adapting to the new SDK
+interface GeminiConfig {
+  model: string;
+  contents: string | any[];
+  config?: {
+    responseMimeType?: string;
+    responseSchema?: any;
+    systemInstruction?: string;
+  }
+}
 
 export const MAX_INPUT_CHARS = 12000;
 
@@ -370,7 +379,7 @@ const executeFeature = async <TInput, TOutput>(
 };
 
 const callGemini = async (
-  config: GenerateContentParameters, 
+  config: GeminiConfig, 
   endpoint: string, 
   scope: PermissionScope, 
   tracker: ExecutionTracker
@@ -402,18 +411,33 @@ const callGemini = async (
     await new Promise(r => setTimeout(r, totalWaitMs));
   }
 
-  const ai = getAI();
+  const genAI = new GoogleGenerativeAI(process.env.API_KEY || '');
+  
   try {
     SecurityEngine.recordOperationCost(endpoint);
-    const hardenedConfig = {
-      ...config,
-      config: { ...config.config, systemInstruction: SYSTEM_CORE_INSTRUCTION }
+
+    // Map the application config to the official SDK parameters
+    const modelParams: any = {
+        model: config.model,
+        systemInstruction: SYSTEM_CORE_INSTRUCTION
     };
+    
+    if (config.config) {
+        if (!modelParams.generationConfig) modelParams.generationConfig = {};
+        if (config.config.responseMimeType) {
+            modelParams.generationConfig.responseMimeType = config.config.responseMimeType;
+        }
+        if (config.config.responseSchema) {
+            modelParams.generationConfig.responseSchema = config.config.responseSchema;
+        }
+    }
+
+    const model = genAI.getGenerativeModel(modelParams);
 
     // Execute with Retry Policy
     return await retryOperation(async () => {
-      const response = await ai.models.generateContent(hardenedConfig);
-      return response.text || "";
+      const response = await model.generateContent(config.contents);
+      return response.response.text();
     }, tracker, `AI_CALL:${endpoint}`);
 
   } catch (error: any) {
@@ -584,7 +608,7 @@ export const analyzeMarketingAngle = async (params: any, userId?: string) => {
   return executeFeature(AngleMinerContract, params, userId, async (input, tracker) => {
     const payload = JSON.stringify(input);
     const text = await callGemini({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-1.5-pro', // Using GA model
       contents: `Analyze: ${payload}`,
       config: { responseMimeType: 'application/json' }
     }, 'angle-miner', 'analysis:execute', tracker);
@@ -614,7 +638,7 @@ export const analyzeMarketingAngle = async (params: any, userId?: string) => {
 export const improveAngle = async (text: string, userId?: string) => {
   return executeFeature(ImproveAngleContract, text, userId, async (input, tracker) => {
     const res = await callGemini({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-1.5-pro',
       contents: `Refine: ${input}`,
     }, 'angle-miner:refine', 'analysis:execute', tracker);
     if (!res || res.trim().length === 0) throw new Error("Empty response");
@@ -633,7 +657,7 @@ export const runTestLabComparison = async (type: string, variants: string[], use
   return executeFeature(TestLabContract, { type, variants }, userId, async (input, tracker) => {
     const payload = input.variants.join(', ');
     const text = await callGemini({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-1.5-pro',
       contents: `Compare ${input.type}: ${payload}`,
       config: { responseMimeType: 'application/json' }
     }, 'test-lab', 'simulation:execute', tracker);
@@ -658,7 +682,7 @@ export const runTestLabComparison = async (type: string, variants: string[], use
 export const auditConversion = async (input: string, context: string, userId?: string) => {
   return executeFeature(ConversionDoctorContract, { input, context }, userId, async (data, tracker) => {
     const text = await callGemini({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-1.5-pro',
       contents: `Audit ${data.context}: ${data.input}`,
       config: { responseMimeType: 'application/json' }
     }, 'conversion-doctor', 'audit:execute', tracker);
@@ -684,16 +708,16 @@ export const improveWorkflowAssets = async (angle: string, issues: string[], use
   return executeFeature(WorkflowAssetsContract, { angle, issues }, userId, async (data, tracker) => {
     const payload = data.angle + " " + data.issues.join(', ');
     const text = await callGemini({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-1.5-pro',
       contents: `Refine this winning marketing angle: "${data.angle}" based on these conversion issues detected in the audit: ${data.issues.join(', ')}. Provide an improved headline, cta, and lead offer.`,
       config: { 
         responseMimeType: 'application/json',
         responseSchema: {
-          type: Type.OBJECT,
+          type: SchemaType.OBJECT,
           properties: {
-            headline: { type: Type.STRING },
-            cta: { type: Type.STRING },
-            offer: { type: Type.STRING }
+            headline: { type: SchemaType.STRING },
+            cta: { type: SchemaType.STRING },
+            offer: { type: SchemaType.STRING }
           },
           required: ['headline', 'cta', 'offer']
         }
