@@ -166,8 +166,8 @@ const ConversionDoctor: React.FC = () => {
   return (
     <div className="space-y-24">
       <PageHeader 
-        title="Diagnose why your page isn’t converting." 
-        subtitle="Analyze messaging, clarity, and conversion signals before you drive traffic." 
+        title="Conversion Doctor: Landing Page Audit" 
+        subtitle="Identify conversion blockers, friction points, and messaging gaps. Clinical diagnostic tools for high-performance landing pages." 
       />
 
       <div className="max-w-4xl mx-auto w-full">

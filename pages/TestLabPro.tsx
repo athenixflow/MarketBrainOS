@@ -162,8 +162,8 @@ const TestLabPro: React.FC = () => {
   return (
     <div className="space-y-24">
       <PageHeader 
-        title="Test what works before you spend." 
-        subtitle="Compare ideas, predict performance, and choose the strongest option with confidence." 
+        title="TestLab Pro: Performance Simulation" 
+        subtitle="Simulate performance outcomes for headlines, hooks, and ad copy. Compare variations and predict the winning asset." 
       />
 
       <div className="max-w-4xl mx-auto w-full">

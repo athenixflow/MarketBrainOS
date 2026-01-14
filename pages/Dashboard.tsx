@@ -10,19 +10,19 @@ const Dashboard: React.FC = () => {
   const modules = [
     {
       name: 'AngleMiner X',
-      purpose: 'Evaluate psychological triggers that command attention.',
+      purpose: 'Generate high-conversion psychological angles and marketing hooks.',
       path: '/angle-miner',
       accent: true
     },
     {
       name: 'TestLab Pro',
-      purpose: 'Simulate performance before deployment.',
+      purpose: 'Simulate ad performance and predict winning variations before launch.',
       path: '/test-lab',
       accent: false
     },
     {
       name: 'Conversion Doctor',
-      purpose: 'Evaluate assets for clinical conversion efficiency.',
+      purpose: 'Audit landing pages for conversion blockers and friction points.',
       path: '/conversion-doctor',
       accent: false
     }
@@ -31,12 +31,12 @@ const Dashboard: React.FC = () => {
   return (
     <div className="space-y-24">
       <PageHeader 
-        title="High-Confidence Marketing Intelligence" 
-        subtitle="Evaluate, optimize, and execute high-stakes marketing strategies with clinical precision." 
+        title="Predictive Marketing Intelligence" 
+        subtitle="MarketBrainOS is an executive-grade software platform for pre-validating marketing assets. It utilizes AI to audit conversion funnels, simulate campaign performance, and generate psychological profiles." 
       />
       
       <div className="grid grid-cols-1 gap-12">
-        <h2 className="text-xs font-bold text-gray-500 uppercase tracking-[0.4em] mb-4">Available Intelligence Modules</h2>
+        <h2 className="text-xs font-bold text-gray-500 uppercase tracking-[0.4em] mb-4">Intelligence Modules</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
           {modules.map((mod) => (
             <Card key={mod.name} accent={mod.accent} className="group hover:shadow-2xl hover:shadow-black/10 duration-500">
@@ -62,10 +62,10 @@ const Dashboard: React.FC = () => {
       <div className="pt-12">
         <Card className="!bg-[#0D0D0D] !border-gray-900 !text-white !p-16">
           <div className="max-w-xl">
-            <p className="text-[#FF0000] text-xs font-bold uppercase tracking-[0.3em] mb-6">Strategic Status</p>
-            <h3 className="text-3xl font-bold tracking-tight mb-6">Systems are Calibrated</h3>
+            <p className="text-[#FF0000] text-xs font-bold uppercase tracking-[0.3em] mb-6">System Status</p>
+            <h3 className="text-3xl font-bold tracking-tight mb-6">Intelligence Engine Active</h3>
             <p className="text-gray-400 font-medium leading-relaxed mb-10">
-              The neural processing core is currently running at peak efficiency. All evaluations are powered by Decision-Grade AI for maximum strategic accuracy.
+              The neural processing core is online. All modules are calibrated for decision-grade analysis and performance simulation.
             </p>
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-3">

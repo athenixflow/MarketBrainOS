@@ -263,8 +263,8 @@ const Workflow: React.FC = () => {
       {step === 0 && (
         <div className="max-w-2xl mx-auto text-center py-24 animate-in fade-in zoom-in duration-1000">
           <PageHeader 
-            title="Build and validate your marketing before you launch." 
-            subtitle="The MarketBrainOS Workflow connects our intelligence modules into one seamless executive process." 
+            title="Integrated Campaign Workflow" 
+            subtitle="Connect ideation, testing, and auditing into one seamless executive process. Build and validate your marketing before you launch." 
           />
           {isExhausted ? (
             <TokenNotice 

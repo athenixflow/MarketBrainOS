@@ -230,8 +230,8 @@ const AngleMinerX: React.FC = () => {
   return (
     <div className="space-y-24">
       <PageHeader 
-        title="Generate marketing angles that actually convert." 
-        subtitle="Analyze positioning, uncover strong angles, and refine ideas before you launch." 
+        title="AngleMiner X: Psychological Profiling" 
+        subtitle="Generate marketing angles and psychological hooks. Extract audience triggers to refine your messaging positioning before deployment." 
       />
 
       <div className="max-w-4xl mx-auto w-full">
