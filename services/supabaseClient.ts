@@ -1,5 +1,6 @@
 
 // Deprecated: Migrated to Firebase.
+// This mock object ensures any legacy imports do not crash the build.
 export const supabase = {
   auth: {
     getSession: async () => ({ data: { session: null } }),
