@@ -91,7 +91,7 @@ const AngleMinerX: React.FC = () => {
         industry,
         goal,
         tones: selectedTones
-      }, user?.id);
+      }, user?.uid);
       setResults(data);
       setActiveTab('Prime Angles');
       
@@ -120,7 +120,7 @@ const AngleMinerX: React.FC = () => {
     setResults({ ...results, [category]: updatedCategory });
 
     try {
-      const improvedText = await improveAngle(angle.hook, user?.id);
+      const improvedText = await improveAngle(angle.hook, user?.uid);
       
       const currentList = results[category] || [];
       const finalizedCategory = currentList.map(a => 

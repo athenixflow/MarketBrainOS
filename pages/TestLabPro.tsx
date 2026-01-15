@@ -117,7 +117,7 @@ const TestLabPro: React.FC = () => {
     setError(null);
     setResults(null);
     try {
-      const data = await runTestLabComparison(comparisonType, uniqueVariants, user?.id);
+      const data = await runTestLabComparison(comparisonType, uniqueVariants, user?.uid);
       setResults(data);
       
       if (user) await refreshProfile();

@@ -166,7 +166,7 @@ const Workflow: React.FC = () => {
       const data = await improveWorkflowAssets(
         winner.text, 
         issues, 
-        user?.id,
+        user?.uid,
         winner.score,
         auditResult.score
       );

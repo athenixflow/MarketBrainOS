@@ -113,7 +113,7 @@ const ConversionDoctor: React.FC = () => {
     setError(null);
     setResult(null);
     try {
-      const data = await auditConversion(trimmedInput, context, user?.id);
+      const data = await auditConversion(trimmedInput, context, user?.uid);
       setResult({ ...data, auditedUrl: trimmedInput.startsWith('http') ? trimmedInput : undefined });
       
       if (user) await refreshProfile();
