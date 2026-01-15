@@ -66,8 +66,14 @@ export const getSystemSettings = async (): Promise<SystemSettings> => {
     if (docSnap.exists()) {
       return docSnap.data() as SystemSettings;
     }
-  } catch (e) {
-    console.error("Failed to load settings", e);
+  } catch (e: any) {
+    // Suppress offline errors to prevent console noise
+    const msg = e.message || '';
+    if (e.code === 'unavailable' || msg.includes('offline')) {
+      // System is offline, return default safe settings
+    } else {
+      console.error("Failed to load settings", e);
+    }
   }
   return { emergency_lockdown: false, last_updated: new Date().toISOString(), updated_by: 'system' };
 };

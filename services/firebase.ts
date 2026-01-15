@@ -5,13 +5,13 @@ import { getFirestore, Firestore } from 'firebase/firestore';
 import { getAnalytics, Analytics } from 'firebase/analytics';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBDM5em2UN034YAd-ihukHOssL_Jr4AmqU",
-  authDomain: "marketbrainosweb.firebaseapp.com",
-  projectId: "marketbrainosweb",
-  storageBucket: "marketbrainosweb.firebasestorage.app",
-  messagingSenderId: "516175764122",
-  appId: "1:516175764122:web:e165516d5e6fbb3f1b9d23",
-  measurementId: "G-JE1NN5VX00"
+  apiKey: process.env.FIREBASE_API_KEY || "AIzaSyBDM5em2UN034YAd-ihukHOssL_Jr4AmqU",
+  authDomain: process.env.FIREBASE_AUTH_DOMAIN || "marketbrainosweb.firebaseapp.com",
+  projectId: process.env.FIREBASE_PROJECT_ID || "marketbrainosweb",
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET || "marketbrainosweb.firebasestorage.app",
+  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || "516175764122",
+  appId: process.env.FIREBASE_APP_ID || "1:516175764122:web:e165516d5e6fbb3f1b9d23",
+  measurementId: process.env.FIREBASE_MEASUREMENT_ID || "G-JE1NN5VX00"
 };
 
 let app: FirebaseApp;
