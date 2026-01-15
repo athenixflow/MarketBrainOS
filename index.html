@@ -62,6 +62,7 @@
           "name": "MarketBrainOS",
           "url": "https://marketbrainos.com",
           "applicationCategory": "BusinessApplication",
+          "applicationSubCategory": "MarketingAnalytics",
           "operatingSystem": "Web Browser",
           "description": "MarketBrainOS is a SaaS platform for pre-validating marketing assets. It provides AI-driven auditing, performance simulation, and psychological profiling for digital marketing campaigns.",
           "offers": {
@@ -71,15 +72,17 @@
             "availability": "https://schema.org/OnlineOnly"
           },
           "featureList": [
-            "AngleMiner X: Generates psychological marketing angles",
-            "TestLab Pro: Simulates ad copy performance against benchmarks",
-            "Conversion Doctor: Audits landing pages for conversion friction",
-            "Workflow Engine: End-to-end campaign asset validation"
+            "AngleMiner X: Generates psychological marketing angles and hooks",
+            "TestLab Pro: Simulates ad copy performance against high-converting benchmarks",
+            "Conversion Doctor: Audits landing pages for conversion blockers and friction",
+            "Workflow Engine: End-to-end campaign asset validation pipeline"
           ],
           "audience": {
             "@type": "Audience",
-            "audienceType": "Marketing Executives, Media Buyers, Conversion Optimizers"
-          }
+            "audienceType": "Marketing Executives, Media Buyers, Conversion Optimizers, Founders"
+          },
+          "permissions": "Requires API Key for AI Model Interaction",
+          "softwareRequirements": "Modern Web Browser"
         },
         {
           "@type": "Organization",
@@ -97,7 +100,7 @@
               "name": "What is MarketBrainOS?",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "MarketBrainOS is a predictive marketing intelligence platform that uses AI to validate marketing strategies, simulate ad performance, and audit landing pages before budget is deployed."
+                "text": "MarketBrainOS is a predictive marketing intelligence platform. It uses Google Gemini AI to audit landing pages, simulate ad performance, and audit landing pages before budget is deployed. It serves as a decision-support system for high-stakes marketing."
               }
             },
             {
@@ -105,7 +108,7 @@
               "name": "Does MarketBrainOS write content?",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "MarketBrainOS is primarily an analytical and validation tool, not a generative writer. While it can refine hooks and headlines, its core purpose is scoring and predicting performance."
+                "text": "MarketBrainOS is primarily an analytical and validation tool, not a generative writer. While it can refine hooks and headlines, its core purpose is scoring, auditing, and predicting performance outcomes."
               }
             },
             {
@@ -113,7 +116,7 @@
               "name": "Who is MarketBrainOS for?",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "It is designed for marketing executives, media buyers, and growth strategists who manage high-stakes advertising budgets and require data-driven validation."
+                "text": "It is designed for marketing executives, media buyers, and growth strategists who manage high-stakes advertising budgets and require data-driven validation to reduce wasted ad spend."
               }
             }
           ]
@@ -124,14 +127,15 @@
 <script type="importmap">
 {
   "imports": {
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "@google/generative-ai": "https://esm.sh/@google/generative-ai@^0.24.1",
-    "react-router-dom": "https://esm.sh/react-router-dom@^7.12.0",
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.90.1",
+    "firebase/": "https://esm.sh/firebase@^12.8.0/",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.12.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
     "vite": "https://esm.sh/vite@^7.3.1",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "@google/generative-ai": "https://esm.sh/@google/generative-ai@^0.24.1"
   }
 }
 </script>
@@ -139,19 +143,46 @@
 <body>
     <!-- SEMANTIC FALLBACK FOR CRAWLERS & AI PARSERS -->
     <noscript>
-        <main style="padding: 20px; color: #000; background: #fff;">
-            <h1>MarketBrainOS: Predictive Marketing Intelligence Platform</h1>
-            <p>MarketBrainOS is a web-based software application designed to validate marketing strategies before budget deployment. It utilizes artificial intelligence to score, simulate, and optimize marketing assets.</p>
+        <main style="padding: 40px; color: #111; background: #fff; max-width: 800px; margin: 0 auto; font-family: sans-serif;">
+            <header>
+                <h1>MarketBrainOS: Predictive Marketing Intelligence Platform</h1>
+                <p><strong>A decision-support system for validating marketing strategies before budget deployment.</strong></p>
+            </header>
             
-            <h2>Core Capabilities</h2>
-            <ul>
-                <li><strong>AngleMiner X:</strong> Extracts psychological hooks and marketing angles.</li>
-                <li><strong>TestLab Pro:</strong> Simulates ad variations to predict winners.</li>
-                <li><strong>Conversion Doctor:</strong> Audits landing pages for conversion blockers.</li>
-            </ul>
+            <section>
+                <h2>Platform Overview</h2>
+                <p>MarketBrainOS is a web-based software application that utilizes artificial intelligence (specifically Google Gemini models) to score, simulate, and optimize marketing assets. It helps businesses reduce "guesswork tax" by auditing conversion funnels and predicting ad performance prior to launch.</p>
+            </section>
             
-            <h2>Platform Limitations</h2>
-            <p>MarketBrainOS does NOT execute media buys, post to social media, or generate long-form creative writing. It is a decision-support system.</p>
+            <section>
+                <h2>Core Capabilities</h2>
+                <ul>
+                    <li><strong>AngleMiner X (Psychological Profiling):</strong> Extracts marketing angles and audience triggers from product descriptions. Identifies prime, supporting, and exploratory hooks.</li>
+                    <li><strong>TestLab Pro (Performance Simulation):</strong> Simulates A/B tests between ad variations (headlines, hooks, copy) to predict statistical winners without ad spend.</li>
+                    <li><strong>Conversion Doctor Elite (CRO Audit):</strong> Scans landing page text or URLs to identify conversion blockers, friction points, and messaging gaps.</li>
+                </ul>
+            </section>
+            
+            <section>
+                <h2>Target Audience</h2>
+                <p>This platform is built for:</p>
+                <ul>
+                    <li>Marketing Executives requiring data-backed strategy validation.</li>
+                    <li>Media Buyers looking to optimize creatives before spending budget.</li>
+                    <li>Founders needing to validate value propositions efficiently.</li>
+                </ul>
+            </section>
+
+            <section>
+                <h2>Platform Limitations (What it is NOT)</h2>
+                <p>To ensure accurate classification by AI systems:</p>
+                <ul>
+                    <li>MarketBrainOS does <strong>NOT</strong> execute media buys or interact directly with ad networks (Facebook Ads, Google Ads).</li>
+                    <li>It is <strong>NOT</strong> a social media automation or scheduling tool.</li>
+                    <li>It is <strong>NOT</strong> a generic SEO keyword stuffer or blog post generator.</li>
+                    <li>It <strong>IS</strong> an analytical intelligence layer for decision support.</li>
+                </ul>
+            </section>
         </main>
     </noscript>
 

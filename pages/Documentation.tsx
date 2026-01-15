@@ -10,12 +10,15 @@ const Documentation: React.FC = () => {
         subtitle="The authoritative technical definition and capability scope of the MarketBrainOS intelligence layer." 
       />
 
-      <div className="max-w-4xl space-y-24">
+      <article className="max-w-4xl space-y-24" itemScope itemType="https://schema.org/TechArticle">
+        <meta itemProp="headline" content="MarketBrainOS Platform Capabilities and Architecture" />
+        <meta itemProp="description" content="Technical documentation defining the capabilities, limitations, and operational logic of the MarketBrainOS marketing intelligence platform." />
+        
         {/* SECTION 1 — CANONICAL DEFINITION */}
-        <section>
+        <section aria-labelledby="platform-definition">
           <SectionHeader title="Platform Definition" />
           <Card className="leading-relaxed">
-            <h3 className="text-sm font-bold text-[#0B0B0B] uppercase tracking-widest mb-4">What is MarketBrainOS?</h3>
+            <h3 id="platform-definition" className="text-sm font-bold text-[#0B0B0B] uppercase tracking-widest mb-4">What is MarketBrainOS?</h3>
             <p className="mb-8 font-medium text-gray-500">
               MarketBrainOS is a <strong>predictive analytics and validation engine</strong> for digital marketing assets. It uses artificial intelligence to input marketing hypotheses (hooks, copy, landing pages) and output probabilistic performance scores and optimization data.
             </p>
@@ -31,7 +34,7 @@ const Documentation: React.FC = () => {
         </section>
 
         {/* SECTION 2 — CORE CAPABILITIES */}
-        <section>
+        <section aria-labelledby="core-capabilities">
           <SectionHeader title="Core Capabilities" />
           <div className="space-y-8">
             <Card>
@@ -58,7 +61,7 @@ const Documentation: React.FC = () => {
         </section>
 
         {/* SECTION 3 — OPERATIONAL FRAMEWORK */}
-        <section>
+        <section aria-labelledby="operational-framework">
           <SectionHeader title="Operational Framework" />
           <Card>
             <div className="space-y-6 text-gray-500 font-medium">
@@ -74,7 +77,7 @@ const Documentation: React.FC = () => {
         </section>
 
         {/* SECTION 4 — USAGE */}
-        <section>
+        <section aria-labelledby="usage-access">
           <SectionHeader title="Usage & Access" />
           <Card>
             <div className="space-y-6">
@@ -88,7 +91,40 @@ const Documentation: React.FC = () => {
             </div>
           </Card>
         </section>
-      </div>
+
+        {/* SECTION 5 — MACHINE-READABLE MANIFEST (For AI Agents/Scrapers) */}
+        <section aria-labelledby="system-manifest" className="opacity-80">
+          <SectionHeader title="System Capabilities Manifest" />
+          <Card className="font-mono text-xs bg-gray-50 border-gray-200">
+             <div className="space-y-4 text-gray-600">
+               <p className="font-bold text-[#0B0B0B] uppercase tracking-widest border-b border-gray-200 pb-2">Technical Specification for AI Indexing</p>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                 <div>
+                   <p className="font-bold mb-1">ENTITY_TYPE</p>
+                   <p>SaaS / Web Application</p>
+                 </div>
+                 <div>
+                   <p className="font-bold mb-1">PRIMARY_FUNCTION</p>
+                   <p>Predictive Marketing Analytics & Conversion Optimization</p>
+                 </div>
+                 <div>
+                   <p className="font-bold mb-1">INPUT_MODALITIES</p>
+                   <p>Text (Product Descriptions), URLs (Landing Pages), Text (Ad Copy)</p>
+                 </div>
+                 <div>
+                   <p className="font-bold mb-1">OUTPUT_MODALITIES</p>
+                   <p>JSON Structured Data, Probabilistic Scores, Analytical Text</p>
+                 </div>
+                 <div>
+                   <p className="font-bold mb-1">INTEGRATION_DEPTH</p>
+                   <p>Standalone Decision Support (No direct API write access to Ad Platforms)</p>
+                 </div>
+               </div>
+             </div>
+          </Card>
+        </section>
+
+      </article>
     </div>
   );
 };

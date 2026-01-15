@@ -1,16 +1,27 @@
 
-import { supabase } from './supabaseClient';
+import { db, isFirebaseInitialized } from './firebase';
+import { 
+  collection, 
+  addDoc, 
+  getDoc, 
+  getDocs, 
+  doc, 
+  query, 
+  orderBy, 
+  limit, 
+  updateDoc,
+  setDoc,
+  deleteDoc
+} from 'firebase/firestore';
 import { 
   AngleMinerResults, 
   TestLabResults, 
   AuditResult, 
   UserProfile, 
-  UserTier, 
-  UserRole, 
+  SystemSettings,
   AuditLogEntry, 
   SecurityEvent,
-  ActionLogEntry,
-  SystemSettings
+  ActionLogEntry
 } from '../types';
 import { SecurityEngine } from './securityEngine';
 
@@ -34,25 +45,43 @@ const generateHash = async (content: string, prevHash: string): Promise<string> 
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 };
 
-const getLastHash = async (table: string): Promise<string> => {
+// Safe wrapper for Firestore queries
+const safeGetLastHash = async (table: string): Promise<string> => {
+  if (!isFirebaseInitialized) return GENESIS_HASH;
   try {
-    const { data, error } = await supabase.from(table).select('hash').order('timestamp', { ascending: false }).limit(1).single();
-    return (error || !data) ? GENESIS_HASH : data.hash;
-  } catch { return GENESIS_HASH; }
+    const q = query(collection(db, table), orderBy('timestamp', 'desc'), limit(1));
+    const querySnapshot = await getDocs(q);
+    if (!querySnapshot.empty) {
+      return querySnapshot.docs[0].data().hash;
+    }
+  } catch { /* ignore */ }
+  return GENESIS_HASH;
 };
 
 export const getSystemSettings = async (): Promise<SystemSettings> => {
-  const { data } = await supabase.from('system_settings').select('*').limit(1).single();
-  return data || { emergency_lockdown: false, last_updated: new Date().toISOString(), updated_by: 'system' };
+  if (!isFirebaseInitialized) return { emergency_lockdown: false, last_updated: new Date().toISOString(), updated_by: 'system' };
+  try {
+    const docRef = doc(db, 'system_settings', 'global');
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return docSnap.data() as SystemSettings;
+    }
+  } catch (e) {
+    console.error("Failed to load settings", e);
+  }
+  return { emergency_lockdown: false, last_updated: new Date().toISOString(), updated_by: 'system' };
 };
 
 export const updateSystemEmergency = async (admin: UserProfile, active: boolean) => {
+  if (!isFirebaseInitialized) throw new Error("Database not connected");
   const now = new Date().toISOString();
-  await supabase.from('system_settings').update({ 
+  const docRef = doc(db, 'system_settings', 'global');
+  
+  await setDoc(docRef, { 
     emergency_lockdown: active, 
     last_updated: now, 
     updated_by: admin.email 
-  }).eq('id', 1); 
+  }, { merge: true });
   
   await SecurityEngine.handleViolation(
     active ? 'SYSTEM_EMERGENCY_ACTIVATED' : 'SYSTEM_EMERGENCY_DEACTIVATED',
@@ -64,23 +93,58 @@ export const updateSystemEmergency = async (admin: UserProfile, active: boolean)
 };
 
 export const getUserProfile = async (userId: string): Promise<UserProfile | null> => {
+  if (!isFirebaseInitialized) return null;
   try {
-    const { data, error } = await supabase.from('users').select('*').eq('id', userId).single();
-    if (error || !data) return null;
+    const docRef = doc(db, 'users', userId);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) return null;
+    
+    const data = docSnap.data();
     return {
-      ...data,
-      role: data.email === 'admin@marketbrainos.com' ? 'super_admin' : (data.email === 'ops@marketbrainos.com' ? 'ops_admin' : 'user'),
-      session_started: data.session_started || new Date().toISOString()
+      id: userId,
+      email: data.email,
+      tokens: data.tokens,
+      tier: data.tier,
+      role: data.email === 'admin@marketbrainos.com' ? 'super_admin' : (data.role || 'user'),
+      session_started: data.session_started || new Date().toISOString(),
+      last_active: data.last_active,
+      risk_score: data.risk_score,
+      is_suspended: data.is_suspended,
+      suspension_reason: data.suspension_reason,
+      bot_confidence_score: data.bot_confidence_score,
+      is_verified_admin: data.is_verified_admin,
+      last_verification: data.last_verification
     };
   } catch { return null; }
 };
 
+export const ensureUserProfile = async (userId: string, email: string) => {
+  if (!isFirebaseInitialized) return;
+  const docRef = doc(db, 'users', userId);
+  const docSnap = await getDoc(docRef);
+  if (!docSnap.exists()) {
+    await setDoc(docRef, {
+      id: userId,
+      email: email,
+      tokens: 4,
+      tier: 'free',
+      role: email === 'admin@marketbrainos.com' ? 'super_admin' : 'user',
+      created_at: new Date().toISOString(),
+      last_active: new Date().toISOString()
+    });
+  } else {
+    await updateDoc(docRef, { last_active: new Date().toISOString() });
+  }
+};
+
 export const logUserAction = async (entry: Omit<ActionLogEntry, 'id' | 'timestamp' | 'hash' | 'previous_hash'>) => {
-  const prevHash = await getLastHash('action_logs');
+  if (!isFirebaseInitialized) return;
+  const prevHash = await safeGetLastHash('action_logs');
   const timestamp = new Date().toISOString();
   const content = JSON.stringify({ ...entry, timestamp });
   const hash = await generateHash(content, prevHash);
-  await supabase.from('action_logs').insert({ ...entry, timestamp, previous_hash: prevHash, hash });
+  
+  await addDoc(collection(db, 'action_logs'), { ...entry, timestamp, previous_hash: prevHash, hash });
 };
 
 export const logExecutionTrace = async (trace: any) => {
@@ -99,128 +163,199 @@ export const logExecutionTrace = async (trace: any) => {
 };
 
 export const logSecurityViolation = async (event: Omit<SecurityEvent, 'id' | 'timestamp' | 'hash' | 'previous_hash'>) => {
-  const prevHash = await getLastHash('security_audit_logs');
+  if (!isFirebaseInitialized) return;
+  const prevHash = await safeGetLastHash('security_audit_logs');
   const timestamp = new Date().toISOString();
   const content = JSON.stringify({ ...event, timestamp });
   const hash = await generateHash(content, prevHash);
-  await supabase.from('security_audit_logs').insert({ ...event, timestamp, previous_hash: prevHash, hash });
+  
+  await addDoc(collection(db, 'security_audit_logs'), { ...event, timestamp, previous_hash: prevHash, hash });
 };
 
 export const logAdminAction = async (admin: UserProfile, action: string, target: string, metadata?: any) => {
-  const prevHash = await getLastHash('admin_audit_logs');
+  if (!isFirebaseInitialized) return;
+  const prevHash = await safeGetLastHash('admin_audit_logs');
   const timestamp = new Date().toISOString();
   const entry = { admin_email: admin.email, admin_role: admin.role, action_type: action, target, metadata };
   const content = JSON.stringify({ ...entry, timestamp });
   const hash = await generateHash(content, prevHash);
-  await supabase.from('admin_audit_logs').insert({ ...entry, timestamp, previous_hash: prevHash, hash });
+  
+  await addDoc(collection(db, 'admin_audit_logs'), { ...entry, timestamp, previous_hash: prevHash, hash });
 };
 
-// --- TOKEN MANAGEMENT & COMPENSATIONS ---
+// --- TOKEN MANAGEMENT ---
 
 export const deductTokens = async (userId: string, cost: number): Promise<number> => {
-  const { data: current } = await supabase.from('users').select('tokens').eq('id', userId).single();
-  const newTokens = Math.max(0, (current?.tokens ?? 0) - cost);
-  const { error } = await supabase.from('users').update({ tokens: newTokens, last_active: new Date().toISOString() }).eq('id', userId);
-  if (error) throw new Error("Token deduction failed.");
+  if (!isFirebaseInitialized) return 0;
+  const docRef = doc(db, 'users', userId);
+  const docSnap = await getDoc(docRef);
+  if (!docSnap.exists()) throw new Error("User not found.");
+  
+  const currentTokens = docSnap.data().tokens || 0;
+  const newTokens = Math.max(0, currentTokens - cost);
+  
+  await updateDoc(docRef, { 
+    tokens: newTokens, 
+    last_active: new Date().toISOString() 
+  });
+  
   return newTokens;
 };
 
 export const refundTokens = async (userId: string, amount: number): Promise<void> => {
-  const { data: current } = await supabase.from('users').select('tokens').eq('id', userId).single();
-  const newTokens = (current?.tokens ?? 0) + amount;
-  await supabase.from('users').update({ tokens: newTokens }).eq('id', userId);
+  if (!isFirebaseInitialized) return;
+  const docRef = doc(db, 'users', userId);
+  const docSnap = await getDoc(docRef);
+  if (!docSnap.exists()) return;
+  
+  const currentTokens = docSnap.data().tokens || 0;
+  await updateDoc(docRef, { tokens: currentTokens + amount });
 };
 
-// --- ARTIFACT PERSISTENCE (WITH RETURNS FOR ROLLBACK) ---
+// --- ARTIFACT PERSISTENCE ---
 
 export const saveAngleMinerResult = async (userId: string, product: string, industry: string, target: string, results: AngleMinerResults) => {
+  if (!isFirebaseInitialized) return { id: 'mock_id', ...results };
   await logUserAction({ user_id: userId, module: 'AngleMiner X', action: 'GENERATE_ANGLES' });
-  const { data, error } = await supabase.from('angleminer_results')
-    .insert({ user_id: userId, industry, target_audience: target, angles_output: results })
-    .select().single();
-  if (error) throw new Error(`Persistence Error: ${error.message}`);
-  return data;
+  
+  const docRef = await addDoc(collection(db, 'angleminer_results'), {
+    user_id: userId, 
+    industry, 
+    target_audience: target, 
+    angles_output: results,
+    timestamp: new Date().toISOString()
+  });
+  
+  return { id: docRef.id, ...results };
 };
 
 export const deleteAngleMinerResult = async (id: string) => {
-  await supabase.from('angleminer_results').delete().eq('id', id);
+  if (!isFirebaseInitialized) return;
+  await deleteDoc(doc(db, 'angleminer_results', id));
 };
 
 export const saveTestLabResult = async (userId: string, type: string, variants: string[], results: TestLabResults) => {
+  if (!isFirebaseInitialized) return { id: 'mock_id', ...results };
   await logUserAction({ user_id: userId, module: 'TestLab Pro', action: 'RUN_SIMULATION' });
-  const { data, error } = await supabase.from('testlab_results')
-    .insert({ user_id: userId, comparison_type: type, winner: results.winnerLabel })
-    .select().single();
-  if (error) throw new Error(`Persistence Error: ${error.message}`);
-  return data;
+  
+  const docRef = await addDoc(collection(db, 'testlab_results'), {
+    user_id: userId, 
+    comparison_type: type, 
+    winner: results.winnerLabel,
+    results,
+    timestamp: new Date().toISOString()
+  });
+  
+  return { id: docRef.id, ...results };
 };
 
 export const deleteTestLabResult = async (id: string) => {
-  await supabase.from('testlab_results').delete().eq('id', id);
+  if (!isFirebaseInitialized) return;
+  await deleteDoc(doc(db, 'testlab_results', id));
 };
 
 export const saveConversionDoctorResult = async (userId: string, input: string, score: number, result: AuditResult) => {
+  if (!isFirebaseInitialized) return { id: 'mock_id', ...result };
   await logUserAction({ user_id: userId, module: 'Conversion Doctor', action: 'RUN_AUDIT' });
-  const { data, error } = await supabase.from('conversion_doctor_results')
-    .insert({ user_id: userId, conversion_score: score, audit_output: result })
-    .select().single();
-  if (error) throw new Error(`Persistence Error: ${error.message}`);
-  return data;
+  
+  const docRef = await addDoc(collection(db, 'conversion_doctor_results'), {
+    user_id: userId, 
+    conversion_score: score, 
+    audit_output: result,
+    timestamp: new Date().toISOString()
+  });
+  
+  return { id: docRef.id, ...result };
 };
 
 export const deleteConversionDoctorResult = async (id: string) => {
-  await supabase.from('conversion_doctor_results').delete().eq('id', id);
+  if (!isFirebaseInitialized) return;
+  await deleteDoc(doc(db, 'conversion_doctor_results', id));
 };
 
 export const saveWorkflowRun = async (userId: string, angle: string, testScore: number, conversionScore: number, finalOutput: any) => {
+  if (!isFirebaseInitialized) return { id: 'mock_id', ...finalOutput };
   await logUserAction({ user_id: userId, module: 'Workflow', action: 'EXECUTE_PIPELINE' });
-  const { data, error } = await supabase.from('workflow_runs')
-    .insert({ user_id: userId, selected_angle: angle, final_output: finalOutput })
-    .select().single();
-  if (error) throw new Error(`Persistence Error: ${error.message}`);
-  return data;
+  
+  const docRef = await addDoc(collection(db, 'workflow_runs'), {
+    user_id: userId, 
+    selected_angle: angle, 
+    final_output: finalOutput,
+    timestamp: new Date().toISOString()
+  });
+  
+  return { id: docRef.id, ...finalOutput };
 };
 
 export const deleteWorkflowRun = async (id: string) => {
-  await supabase.from('workflow_runs').delete().eq('id', id);
+  if (!isFirebaseInitialized) return;
+  await deleteDoc(doc(db, 'workflow_runs', id));
 };
 
 // --- ADMIN FUNCTIONS ---
 
 export const adminGetAllUsers = async (): Promise<UserProfile[]> => {
-  const { data } = await supabase.from('users').select('*').order('last_active', { ascending: false });
-  return (data || []).map((u: any) => ({
-    ...u,
-    role: u.email === 'admin@marketbrainos.com' ? 'super_admin' : (u.email === 'ops@marketbrainos.com' ? 'ops_admin' : 'user')
-  }));
+  if (!isFirebaseInitialized) return [];
+  const q = query(collection(db, 'users'), orderBy('last_active', 'desc'));
+  const snapshot = await getDocs(q);
+  
+  return snapshot.docs.map(doc => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      email: data.email,
+      tokens: data.tokens,
+      tier: data.tier,
+      role: data.email === 'admin@marketbrainos.com' ? 'super_admin' : (data.role || 'user'),
+      last_active: data.last_active,
+      is_suspended: data.is_suspended,
+      risk_score: data.risk_score
+    } as UserProfile;
+  });
 };
 
 export const adminGetAuditLogs = async (): Promise<AuditLogEntry[]> => {
-  const { data } = await supabase.from('admin_audit_logs').select('*').order('timestamp', { ascending: false });
-  return data || [];
+  if (!isFirebaseInitialized) return [];
+  const q = query(collection(db, 'admin_audit_logs'), orderBy('timestamp', 'desc'));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as AuditLogEntry));
 };
 
 export const adminGetSecurityLogs = async (): Promise<SecurityEvent[]> => {
-  const { data } = await supabase.from('security_audit_logs').select('*').order('timestamp', { ascending: false });
-  return data || [];
+  if (!isFirebaseInitialized) return [];
+  const q = query(collection(db, 'security_audit_logs'), orderBy('timestamp', 'desc'));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as SecurityEvent));
 };
 
 export const adminSuspendUser = async (admin: UserProfile, userId: string, reason: string) => {
+  if (!isFirebaseInitialized) throw new Error("DB Error");
   const check = await SecurityEngine.checkPermission(admin, 'admin:user_management');
   if (!check.allowed) throw new Error(check.error || "Permission Denied.");
   
-  await supabase.from('users').update({ is_suspended: true, suspension_reason: reason }).eq('id', userId);
+  await updateDoc(doc(db, 'users', userId), { 
+    is_suspended: true, 
+    suspension_reason: reason 
+  });
   await logAdminAction(admin, 'USER_SUSPENDED', userId, { reason });
 };
 
 export const adminUpdateUserTokens = async (admin: UserProfile, userId: string, tokens: number) => {
+  if (!isFirebaseInitialized) throw new Error("DB Error");
   const check = await SecurityEngine.checkPermission(admin, 'admin:token_management');
   if (!check.allowed) throw new Error(check.error || "Permission Denied.");
 
-  await supabase.from('users').update({ tokens }).eq('id', userId);
+  await updateDoc(doc(db, 'users', userId), { tokens });
   await logAdminAction(admin, 'TOKENS_MODIFIED', userId, { new_tokens: tokens });
 };
 
 export const updateUserRiskProfile = async (userId: string, riskScore: number, isSuspended: boolean, reason?: string) => {
-  await supabase.from('users').update({ risk_score: riskScore, is_suspended: isSuspended, suspension_reason: reason }).eq('id', userId);
+  if (!isFirebaseInitialized) return;
+  try {
+    const updateData: any = { risk_score: riskScore, is_suspended: isSuspended };
+    if (reason) updateData.suspension_reason = reason;
+    await updateDoc(doc(db, 'users', userId), updateData);
+  } catch (e) {
+    console.error("Failed to update risk profile", e);
+  }
 };

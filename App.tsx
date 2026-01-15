@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { NavigationItem } from './types';
 import Dashboard from './pages/Dashboard';
 import AngleMinerX from './pages/AngleMinerX';
@@ -10,6 +10,7 @@ import TestLabPro from './pages/TestLabPro';
 import Documentation from './pages/Documentation';
 import AdminDashboard from './pages/AdminDashboard';
 import AuthPage from './pages/Auth';
+import LandingPage from './pages/LandingPage';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Honeypot } from './components/UI';
 import { SecurityEngine } from './services/securityEngine';
@@ -148,22 +149,34 @@ const Header: React.FC = () => {
   );
 };
 
-const AppRoutes: React.FC = () => (
-  <Routes>
-    <Route path="/" element={<Dashboard />} />
-    <Route path="/angle-miner" element={<AngleMinerX />} />
-    <Route path="/test-lab" element={<TestLabPro />} />
-    <Route path="/conversion-doctor" element={<ConversionDoctor />} />
-    <Route path="/workflow" element={<Workflow />} />
-    <Route path="/documentation" element={<Documentation />} />
-    <Route path="/admin" element={<AdminDashboard />} />
-    <Route path="/auth" element={<AuthPage />} />
-  </Routes>
-);
+const AppRoutes: React.FC = () => {
+  const { user, loading } = useAuth();
+
+  if (loading) return null;
+
+  return (
+    <Routes>
+      {/* Route root: If user logged in, Dashboard. If not, LandingPage. */}
+      <Route path="/" element={user ? <Dashboard /> : <LandingPage />} />
+      
+      {/* Protected Routes */}
+      <Route path="/angle-miner" element={user ? <AngleMinerX /> : <Navigate to="/auth" />} />
+      <Route path="/test-lab" element={user ? <TestLabPro /> : <Navigate to="/auth" />} />
+      <Route path="/conversion-doctor" element={user ? <ConversionDoctor /> : <Navigate to="/auth" />} />
+      <Route path="/workflow" element={user ? <Workflow /> : <Navigate to="/auth" />} />
+      <Route path="/admin" element={user ? <AdminDashboard /> : <Navigate to="/auth" />} />
+      
+      {/* Public Routes */}
+      <Route path="/documentation" element={<Documentation />} />
+      <Route path="/auth" element={user ? <Navigate to="/" /> : <AuthPage />} />
+    </Routes>
+  );
+};
 
 const AppContainer: React.FC = () => {
   const [isEmergency, setIsEmergency] = useState(false);
   const location = useLocation();
+  const { user } = useAuth();
 
   useEffect(() => {
     const check = async () => setIsEmergency(await SecurityEngine.isSystemLocked());
@@ -172,6 +185,9 @@ const AppContainer: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Use layout logic: If user is logged in, show sidebar. If not, show full width layout (no sidebar margin).
+  const showSidebar = !!user;
+
   return (
     <div className="min-h-screen bg-[#0B0B0B] text-white selection:bg-[#FF0000] selection:text-white antialiased">
       {isEmergency && !location.pathname.startsWith('/admin') && (
@@ -179,12 +195,19 @@ const AppContainer: React.FC = () => {
           <span className="text-[9px] font-black uppercase tracking-[0.4em]">Strategic Lockdown Protocol Active — Intelligence Engine Offline</span>
         </div>
       )}
-      <Header />
-      <Sidebar />
-      <main className="ml-72 pt-16 min-h-screen flex flex-col">
-        <div className="p-20 max-w-5xl w-full mx-auto flex-grow animate-in fade-in slide-in-from-bottom-4 duration-1000">
+      
+      {/* Only show Fixed Header if logged in, otherwise LandingPage has its own header */}
+      {showSidebar && <Header />}
+      {showSidebar && <Sidebar />}
+      
+      <main className={`${showSidebar ? 'ml-72 pt-16' : ''} min-h-screen flex flex-col`}>
+        {showSidebar ? (
+          <div className="p-20 max-w-5xl w-full mx-auto flex-grow animate-in fade-in slide-in-from-bottom-4 duration-1000">
+            <AppRoutes />
+          </div>
+        ) : (
           <AppRoutes />
-        </div>
+        )}
         <Honeypot />
       </main>
     </div>
