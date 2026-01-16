@@ -110,7 +110,7 @@ const AuthPage: React.FC = () => {
           <form onSubmit={handleVerifyOTP}>
             <Input label="Security Code" placeholder="000000" value={otpCode} onChange={(e) => setOtpCode(e.target.value)} disabled={loading} />
             {error && <ErrorMessage message={error} />}
-            <PrimaryButton className="w-full mt-6" disabled={loading}>Confirm Identity</PrimaryButton>
+            <PrimaryButton type="submit" className="w-full mt-6" disabled={loading}>Confirm Identity</PrimaryButton>
           </form>
         </Card>
       </div>
@@ -133,7 +133,7 @@ const AuthPage: React.FC = () => {
                  {successMsg}
                </div>
              )}
-             <PrimaryButton className="w-full mb-6" disabled={loading}>Send Reset Link</PrimaryButton>
+             <PrimaryButton type="submit" className="w-full mb-6" disabled={loading}>Send Reset Link</PrimaryButton>
              <button type="button" onClick={() => { setMode('signin'); setError(null); }} className="w-full text-[10px] font-bold text-gray-400 uppercase tracking-widest hover:text-[#0B0B0B]">
                Back to Sign In
              </button>
@@ -146,7 +146,7 @@ const AuthPage: React.FC = () => {
             {error && <ErrorMessage message={error} />}
             
             <div className="space-y-6 mt-10">
-              <PrimaryButton className="w-full" disabled={loading}>{mode === 'signup' ? "Provision Account" : "Verify & Sign In"}</PrimaryButton>
+              <PrimaryButton type="submit" className="w-full" disabled={loading}>{mode === 'signup' ? "Provision Account" : "Verify & Sign In"}</PrimaryButton>
               
               <div className="relative flex py-2 items-center">
                 <div className="flex-grow border-t border-gray-200"></div>
