@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { SecurityEngine } from "./securityEngine";
 import { 
@@ -411,13 +410,15 @@ const callGemini = async (
     await new Promise(r => setTimeout(r, totalWaitMs));
   }
 
-  // Ensure API Key exists
-  if (!process.env.API_KEY) {
+  // Ensure API Key exists.
+  // CRITICAL: Exclusively use process.env.API_KEY as per guidelines.
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
     console.error("Configuration Error: API_KEY environment variable is missing.");
     throw new Error("System Configuration Error: Neural Engine Key Missing");
   }
 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: apiKey });
   
   try {
     SecurityEngine.recordOperationCost(endpoint);
@@ -442,6 +443,7 @@ const callGemini = async (
         contents: config.contents as any,
         config: generationConfig
       });
+      // Use response.text directly as per new SDK
       const text = response.text;
       if (!text) throw new Error("No text generated");
       return text;
