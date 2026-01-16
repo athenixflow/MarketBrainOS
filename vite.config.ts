@@ -10,6 +10,9 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     define: {
+      // Expose the specific Google API key requested to import.meta.env
+      'import.meta.env.Google_api': JSON.stringify(env.Google_api),
+      
       // Polyfill process.env for the codebase usage
       'process.env.API_KEY': JSON.stringify(env.API_KEY),
       // Firebase Config - Injected from prompt requirements or env

@@ -1,5 +1,5 @@
 
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { SecurityEngine } from "./securityEngine";
 import { 
   getUserProfile, 
@@ -413,36 +413,38 @@ const callGemini = async (
 
   // Ensure API Key exists
   if (!process.env.API_KEY) {
+    console.error("Configuration Error: API_KEY environment variable is missing.");
     throw new Error("System Configuration Error: Neural Engine Key Missing");
   }
 
-  const genAI = new GoogleGenerativeAI(process.env.API_KEY);
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   try {
     SecurityEngine.recordOperationCost(endpoint);
 
-    // Map the application config to the official SDK parameters
-    const modelParams: any = {
-        model: config.model,
-        systemInstruction: SYSTEM_CORE_INSTRUCTION
+    const generationConfig: any = {
+      systemInstruction: SYSTEM_CORE_INSTRUCTION
     };
     
     if (config.config) {
-        if (!modelParams.generationConfig) modelParams.generationConfig = {};
         if (config.config.responseMimeType) {
-            modelParams.generationConfig.responseMimeType = config.config.responseMimeType;
+            generationConfig.responseMimeType = config.config.responseMimeType;
         }
         if (config.config.responseSchema) {
-            modelParams.generationConfig.responseSchema = config.config.responseSchema;
+            generationConfig.responseSchema = config.config.responseSchema;
         }
     }
 
-    const model = genAI.getGenerativeModel(modelParams);
-
     // Execute with Retry Policy
     return await retryOperation(async () => {
-      const response = await model.generateContent(config.contents);
-      return response.response.text();
+      const response = await ai.models.generateContent({
+        model: config.model,
+        contents: config.contents as any,
+        config: generationConfig
+      });
+      const text = response.text;
+      if (!text) throw new Error("No text generated");
+      return text;
     }, tracker, `AI_CALL:${endpoint}`);
 
   } catch (error: any) {
@@ -613,7 +615,7 @@ export const analyzeMarketingAngle = async (params: any, userId?: string) => {
   return executeFeature(AngleMinerContract, params, userId, async (input, tracker) => {
     const payload = JSON.stringify(input);
     const text = await callGemini({
-      model: 'gemini-1.5-pro', // Using GA model
+      model: 'gemini-3-pro-preview',
       contents: `Analyze: ${payload}`,
       config: { responseMimeType: 'application/json' }
     }, 'angle-miner', 'analysis:execute', tracker);
@@ -643,7 +645,7 @@ export const analyzeMarketingAngle = async (params: any, userId?: string) => {
 export const improveAngle = async (text: string, userId?: string) => {
   return executeFeature(ImproveAngleContract, text, userId, async (input, tracker) => {
     const res = await callGemini({
-      model: 'gemini-1.5-pro',
+      model: 'gemini-3-pro-preview',
       contents: `Refine: ${input}`,
     }, 'angle-miner:refine', 'analysis:execute', tracker);
     if (!res || res.trim().length === 0) throw new Error("Empty response");
@@ -662,7 +664,7 @@ export const runTestLabComparison = async (type: string, variants: string[], use
   return executeFeature(TestLabContract, { type, variants }, userId, async (input, tracker) => {
     const payload = input.variants.join(', ');
     const text = await callGemini({
-      model: 'gemini-1.5-pro',
+      model: 'gemini-3-pro-preview',
       contents: `Compare ${input.type}: ${payload}`,
       config: { responseMimeType: 'application/json' }
     }, 'test-lab', 'simulation:execute', tracker);
@@ -687,7 +689,7 @@ export const runTestLabComparison = async (type: string, variants: string[], use
 export const auditConversion = async (input: string, context: string, userId?: string) => {
   return executeFeature(ConversionDoctorContract, { input, context }, userId, async (data, tracker) => {
     const text = await callGemini({
-      model: 'gemini-1.5-pro',
+      model: 'gemini-3-pro-preview',
       contents: `Audit ${data.context}: ${data.input}`,
       config: { responseMimeType: 'application/json' }
     }, 'conversion-doctor', 'audit:execute', tracker);
@@ -713,16 +715,16 @@ export const improveWorkflowAssets = async (angle: string, issues: string[], use
   return executeFeature(WorkflowAssetsContract, { angle, issues }, userId, async (data, tracker) => {
     const payload = data.angle + " " + data.issues.join(', ');
     const text = await callGemini({
-      model: 'gemini-1.5-pro',
+      model: 'gemini-3-pro-preview',
       contents: `Refine this winning marketing angle: "${data.angle}" based on these conversion issues detected in the audit: ${data.issues.join(', ')}. Provide an improved headline, cta, and lead offer.`,
       config: { 
         responseMimeType: 'application/json',
         responseSchema: {
-          type: SchemaType.OBJECT,
+          type: Type.OBJECT,
           properties: {
-            headline: { type: SchemaType.STRING },
-            cta: { type: SchemaType.STRING },
-            offer: { type: SchemaType.STRING }
+            headline: { type: Type.STRING },
+            cta: { type: Type.STRING },
+            offer: { type: Type.STRING }
           },
           required: ['headline', 'cta', 'offer']
         }
