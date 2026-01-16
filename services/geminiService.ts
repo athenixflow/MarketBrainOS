@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { SecurityEngine } from "./securityEngine";
 import { 
   getUserProfile, 
@@ -411,22 +411,30 @@ const callGemini = async (
   }
 
   // Ensure API Key exists.
-  // CRITICAL: Exclusively use process.env.API_KEY as per guidelines.
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
     console.error("Configuration Error: API_KEY environment variable is missing.");
     throw new Error("System Configuration Error: Neural Engine Key Missing");
   }
 
-  const ai = new GoogleGenAI({ apiKey: apiKey });
+  const genAI = new GoogleGenerativeAI(apiKey);
   
   try {
     SecurityEngine.recordOperationCost(endpoint);
 
-    const generationConfig: any = {
-      systemInstruction: SYSTEM_CORE_INSTRUCTION
+    // Build Model Params
+    const modelParams: any = {
+      model: config.model,
     };
-    
+
+    // Inject System Instruction
+    if (config.config?.systemInstruction) {
+       modelParams.systemInstruction = config.config.systemInstruction;
+    } else {
+       modelParams.systemInstruction = SYSTEM_CORE_INSTRUCTION;
+    }
+
+    const generationConfig: any = {};
     if (config.config) {
         if (config.config.responseMimeType) {
             generationConfig.responseMimeType = config.config.responseMimeType;
@@ -435,16 +443,20 @@ const callGemini = async (
             generationConfig.responseSchema = config.config.responseSchema;
         }
     }
+    
+    // Initialize Model
+    const model = genAI.getGenerativeModel({
+        ...modelParams,
+        generationConfig
+    });
 
     // Execute with Retry Policy
     return await retryOperation(async () => {
-      const response = await ai.models.generateContent({
-        model: config.model,
-        contents: config.contents as any,
-        config: generationConfig
-      });
-      // Use response.text directly as per new SDK
-      const text = response.text;
+      // config.contents passed as is (usually string)
+      const result = await model.generateContent(config.contents);
+      const response = await result.response;
+      const text = response.text();
+      
       if (!text) throw new Error("No text generated");
       return text;
     }, tracker, `AI_CALL:${endpoint}`);
@@ -722,11 +734,11 @@ export const improveWorkflowAssets = async (angle: string, issues: string[], use
       config: { 
         responseMimeType: 'application/json',
         responseSchema: {
-          type: Type.OBJECT,
+          type: SchemaType.OBJECT,
           properties: {
-            headline: { type: Type.STRING },
-            cta: { type: Type.STRING },
-            offer: { type: Type.STRING }
+            headline: { type: SchemaType.STRING },
+            cta: { type: SchemaType.STRING },
+            offer: { type: SchemaType.STRING }
           },
           required: ['headline', 'cta', 'offer']
         }
