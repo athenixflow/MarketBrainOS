@@ -147,6 +147,7 @@ export const logUserAction = async (entry: Omit<ActionLogEntry, 'id' | 'timestam
   if (!isFirebaseInitialized) return;
   const prevHash = await safeGetLastHash('action_logs');
   const timestamp = new Date().toISOString();
+  // Safe serialization to prevent Firestore unsupported value errors
   const content = JSON.stringify({ ...entry, timestamp });
   const hash = await generateHash(content, prevHash);
   
@@ -154,16 +155,24 @@ export const logUserAction = async (entry: Omit<ActionLogEntry, 'id' | 'timestam
 };
 
 export const logExecutionTrace = async (trace: any) => {
+  // Convert custom class instances to plain objects to satisfy Firestore requirements
+  let safeTrace: any;
+  try {
+    safeTrace = JSON.parse(JSON.stringify(trace));
+  } catch (e) {
+    safeTrace = { error: "Trace serialization failed", traceId: trace?.id, operation: trace?.operation };
+  }
+
   await logUserAction({
     user_id: trace.userId,
     module: 'System_Core', 
-    action: `EXECUTION_TRACE:${trace.operation.toUpperCase()}`,
+    action: `EXECUTION_TRACE:${trace.operation?.toUpperCase() || 'UNKNOWN'}`,
     metadata: {
       trace_id: trace.id,
       status: trace.status,
-      duration_ms: Date.now() - trace.timestamp,
-      steps_count: trace.steps.length,
-      full_trace: trace 
+      duration_ms: trace.timestamp ? Date.now() - trace.timestamp : 0,
+      steps_count: trace.steps ? trace.steps.length : 0,
+      full_trace: safeTrace 
     }
   });
 };
