@@ -623,7 +623,13 @@ export const SystemContracts = {
 // --- EXPORTED FEATURES (TRANSACTIONAL) ---
 
 const strictParse = (text: string): any => {
-  try { return JSON.parse(text); } catch (e) { throw new Error("System Integrity Violation: Neural output is not valid JSON."); }
+  // Harden parsing against Markdown blocks (```json ... ```)
+  const cleanText = text.replace(/```json\n?|\n?```/g, '').trim();
+  try { 
+    return JSON.parse(cleanText); 
+  } catch (e) { 
+    throw new Error("System Integrity Violation: Neural output is not valid JSON."); 
+  }
 };
 
 export const analyzeMarketingAngle = async (params: any, userId?: string) => {
@@ -631,8 +637,67 @@ export const analyzeMarketingAngle = async (params: any, userId?: string) => {
     const payload = JSON.stringify(input);
     const text = await callGemini({
       model: 'gemini-3-pro-preview',
-      contents: `Analyze: ${payload}`,
-      config: { responseMimeType: 'application/json' }
+      contents: `Analyze and generate marketing angles: ${payload}`,
+      config: { 
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: SchemaType.OBJECT,
+          properties: {
+            prime: {
+              type: SchemaType.ARRAY,
+              items: {
+                type: SchemaType.OBJECT,
+                properties: {
+                  title: { type: SchemaType.STRING },
+                  hook: { type: SchemaType.STRING },
+                  rational: { type: SchemaType.STRING },
+                  score: { type: SchemaType.NUMBER }
+                },
+                required: ['title', 'hook', 'rational', 'score']
+              }
+            },
+            supporting: {
+              type: SchemaType.ARRAY,
+              items: {
+                type: SchemaType.OBJECT,
+                properties: {
+                  title: { type: SchemaType.STRING },
+                  hook: { type: SchemaType.STRING },
+                  rational: { type: SchemaType.STRING },
+                  score: { type: SchemaType.NUMBER }
+                },
+                required: ['title', 'hook', 'rational', 'score']
+              }
+            },
+            exploratory: {
+              type: SchemaType.ARRAY,
+              items: {
+                type: SchemaType.OBJECT,
+                properties: {
+                  title: { type: SchemaType.STRING },
+                  hook: { type: SchemaType.STRING },
+                  rational: { type: SchemaType.STRING },
+                  score: { type: SchemaType.NUMBER }
+                },
+                required: ['title', 'hook', 'rational', 'score']
+              }
+            },
+            hooks: {
+              type: SchemaType.ARRAY,
+              items: {
+                type: SchemaType.OBJECT,
+                properties: {
+                  platform: { type: SchemaType.STRING },
+                  short: { type: SchemaType.STRING },
+                  expanded: { type: SchemaType.STRING }
+                },
+                required: ['platform', 'short', 'expanded']
+              }
+            }
+          },
+          required: ['prime', 'supporting', 'exploratory', 'hooks']
+        }
+      }
     }, 'angle-miner', 'analysis:execute', tracker);
     
     const result = strictParse(text);
@@ -681,7 +746,29 @@ export const runTestLabComparison = async (type: string, variants: string[], use
     const text = await callGemini({
       model: 'gemini-3-pro-preview',
       contents: `Compare ${input.type}: ${payload}`,
-      config: { responseMimeType: 'application/json' }
+      config: { 
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: SchemaType.OBJECT,
+          properties: {
+            variants: {
+              type: SchemaType.ARRAY,
+              items: {
+                type: SchemaType.OBJECT,
+                properties: {
+                  label: { type: SchemaType.STRING },
+                  text: { type: SchemaType.STRING },
+                  score: { type: SchemaType.NUMBER }
+                },
+                required: ['label', 'text', 'score']
+              }
+            },
+            winnerLabel: { type: SchemaType.STRING },
+            explanation: { type: SchemaType.STRING }
+          },
+          required: ['variants', 'winnerLabel', 'explanation']
+        }
+      }
     }, 'test-lab', 'simulation:execute', tracker);
     const result = strictParse(text);
 
@@ -706,7 +793,40 @@ export const auditConversion = async (input: string, context: string, userId?: s
     const text = await callGemini({
       model: 'gemini-3-pro-preview',
       contents: `Audit ${data.context}: ${data.input}`,
-      config: { responseMimeType: 'application/json' }
+      config: { 
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: SchemaType.OBJECT,
+          properties: {
+            score: { type: SchemaType.NUMBER },
+            summary: { type: SchemaType.STRING },
+            issues: {
+              type: SchemaType.ARRAY,
+              items: {
+                type: SchemaType.OBJECT,
+                properties: {
+                  blocker: { type: SchemaType.STRING },
+                  impact: { type: SchemaType.STRING }
+                },
+                required: ['blocker', 'impact']
+              }
+            },
+            fixes: {
+              type: SchemaType.ARRAY,
+              items: {
+                type: SchemaType.OBJECT,
+                properties: {
+                  what: { type: SchemaType.STRING },
+                  how: { type: SchemaType.STRING },
+                  expectedResult: { type: SchemaType.STRING }
+                },
+                required: ['what', 'how', 'expectedResult']
+              }
+            }
+          },
+          required: ['score', 'summary', 'issues', 'fixes']
+        }
+      }
     }, 'conversion-doctor', 'audit:execute', tracker);
     const result = strictParse(text);
 
