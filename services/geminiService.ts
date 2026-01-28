@@ -411,9 +411,10 @@ const callGemini = async (
   }
 
   // Ensure API Key exists.
-  const apiKey = process.env.API_KEY;
+  // Using Google_api as requested, with fallback to API_KEY
+  const apiKey = process.env.Google_api || process.env.API_KEY;
   if (!apiKey) {
-    console.error("Configuration Error: API_KEY environment variable is missing.");
+    console.error("Configuration Error: API_KEY or Google_api environment variable is missing.");
     throw new Error("System Configuration Error: Neural Engine Key Missing");
   }
 
