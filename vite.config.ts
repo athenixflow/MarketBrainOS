@@ -1,4 +1,3 @@
-
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -14,7 +13,8 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.Google_api': JSON.stringify(env.Google_api),
       
       // Polyfill process.env for the codebase usage
-      'process.env.API_KEY': JSON.stringify(env.API_KEY),
+      // Accept env.Google_api as a fallback for the API Key
+      'process.env.API_KEY': JSON.stringify(env.API_KEY || env.Google_api),
       // Firebase Config - Injected from prompt requirements or env
       'process.env.FIREBASE_API_KEY': JSON.stringify(env.FIREBASE_API_KEY || "AIzaSyBDM5em2UN034YAd-ihukHOssL_Jr4AmqU"),
       'process.env.FIREBASE_AUTH_DOMAIN': JSON.stringify(env.FIREBASE_AUTH_DOMAIN || "marketbrainosweb.firebaseapp.com"),

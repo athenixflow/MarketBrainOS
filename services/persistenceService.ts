@@ -1,4 +1,3 @@
-
 import { db, isFirebaseInitialized } from './firebase';
 import { 
   collection, 
@@ -156,6 +155,7 @@ export const logUserAction = async (entry: Omit<ActionLogEntry, 'id' | 'timestam
 
 export const logExecutionTrace = async (trace: any) => {
   // Convert custom class instances to plain objects to satisfy Firestore requirements
+  // Firestore throws "Unsupported field value: a custom object" for class instances
   let safeTrace: any;
   try {
     safeTrace = JSON.parse(JSON.stringify(trace));
