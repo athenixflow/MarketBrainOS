@@ -632,12 +632,41 @@ const strictParse = (text: string): any => {
   }
 };
 
+const normalizeAngleMinerResponse = (data: any): AngleMinerResults => {
+  if (!data || typeof data !== 'object') return { prime: [], supporting: [], exploratory: [], hooks: [] };
+  
+  // If AI returns an array by mistake (common issue), try to salvage or reset
+  if (Array.isArray(data)) return { prime: [], supporting: [], exploratory: [], hooks: [] };
+
+  return {
+    prime: Array.isArray(data.prime) ? data.prime : [],
+    supporting: Array.isArray(data.supporting) ? data.supporting : [],
+    exploratory: Array.isArray(data.exploratory) ? data.exploratory : [],
+    hooks: Array.isArray(data.hooks) ? data.hooks : []
+  };
+};
+
 export const analyzeMarketingAngle = async (params: any, userId?: string) => {
   return executeFeature(AngleMinerContract, params, userId, async (input, tracker) => {
     const payload = JSON.stringify(input);
     const text = await callGemini({
       model: 'gemini-3-pro-preview',
-      contents: `Analyze and generate marketing angles: ${payload}`,
+      contents: `
+        Analyze the following product and generate marketing angles.
+        Product: ${input.product}
+        Industry: ${input.industry}
+        Target Audience: ${input.target}
+        Goal: ${input.goal}
+        Tone: ${input.tones.join(', ')}
+
+        You MUST return valid JSON in the following structure. Do NOT wrap in markdown.
+        {
+          "prime": [ { "title": "string", "hook": "string", "rational": "string", "score": number } ],
+          "supporting": [ { "title": "string", "hook": "string", "rational": "string", "score": number } ],
+          "exploratory": [ { "title": "string", "hook": "string", "rational": "string", "score": number } ],
+          "hooks": [ { "platform": "string", "short": "string", "expanded": "string" } ]
+        }
+      `,
       config: { 
         responseMimeType: 'application/json',
         responseSchema: {
@@ -700,7 +729,8 @@ export const analyzeMarketingAngle = async (params: any, userId?: string) => {
       }
     }, 'angle-miner', 'analysis:execute', tracker);
     
-    const result = strictParse(text);
+    let result = strictParse(text);
+    result = normalizeAngleMinerResponse(result);
 
     if (userId) {
       let savedRecord: any = null;
