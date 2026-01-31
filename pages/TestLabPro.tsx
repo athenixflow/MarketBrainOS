@@ -8,16 +8,21 @@ import {
   IntelligenceIndicator, 
   EmptyState, 
   LoadingState, 
-  ResultContainer,
+  ResultContainer, 
   SectionHeader,
   ErrorMessage,
-  TokenNotice,
-  TokenWarning,
   ExportControls,
-  HoneypotField
+  HoneypotField,
+  UsageLimitModal,
+  TokenStatusBanner,
+  AnalysisFailureState,
+  SystemBlockState,
+  RateLimitState,
+  isSystemBlockError,
+  isRateLimitError
 } from '../components/UI';
 import { runTestLabComparison, MAX_INPUT_CHARS } from '../services/geminiService';
-import { TestLabResults } from '../types';
+import { TestLabResults, TOKEN_COSTS } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { copyToClipboard, downloadAsText, printAsPDF, formatTestLabExport } from '../services/exportService';
 import { SecurityEngine } from '../services/securityEngine';
@@ -29,8 +34,13 @@ const TestLabPro: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [isTakingLong, setIsTakingLong] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [executionError, setExecutionError] = useState<string | null>(null);
   const [results, setResults] = useState<TestLabResults | null>(null);
   const [honeypotValue, setHoneypotValue] = useState('');
+
+  // Usage Modal State
+  const [showUsageModal, setShowUsageModal] = useState(false);
+  const [usageReason, setUsageReason] = useState<'exhausted' | 'insufficient'>('exhausted');
 
   const comparisonTypes = ['Angles', 'Hooks', 'Headlines', 'Ad Copy'];
 
@@ -61,6 +71,7 @@ const TestLabPro: React.FC = () => {
     setVariants(['', '']);
     setResults(null);
     setError(null);
+    setExecutionError(null);
     setHoneypotValue('');
   };
 
@@ -69,6 +80,21 @@ const TestLabPro: React.FC = () => {
     const words2 = new Set(s2.toLowerCase().split(/\s+/));
     const intersection = new Set([...words1].filter(x => words2.has(x)));
     return intersection.size / Math.max(words1.size, words2.size);
+  };
+
+  const checkTokenAvailability = (): boolean => {
+    if (!profile) return false;
+    if (profile.tokens === 0) {
+      setUsageReason('exhausted');
+      setShowUsageModal(true);
+      return false;
+    }
+    if (profile.tier === 'free' && profile.tokens < TOKEN_COSTS.TestLab) {
+      setUsageReason('insufficient');
+      setShowUsageModal(true);
+      return false;
+    }
+    return true;
   };
 
   const handleRunTest = async () => {
@@ -99,9 +125,8 @@ const TestLabPro: React.FC = () => {
       return;
     }
 
-    if (profile && profile.tokens <= 0) {
-      return;
-    }
+    // Token Check
+    if (!checkTokenAvailability()) return;
 
     // Check for extreme similarity
     for (let i = 0; i < uniqueVariants.length; i++) {
@@ -115,6 +140,7 @@ const TestLabPro: React.FC = () => {
 
     setLoading(true);
     setError(null);
+    setExecutionError(null);
     setResults(null);
     try {
       const data = await runTestLabComparison(comparisonType, uniqueVariants, user?.uid);
@@ -124,7 +150,7 @@ const TestLabPro: React.FC = () => {
       
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "Stability interruption in the performance engine. Please retry.");
+      setExecutionError(err.message || "Stability interruption in the performance engine. Please retry.");
     } finally {
       setLoading(false);
     }
@@ -155,30 +181,28 @@ const TestLabPro: React.FC = () => {
     ? (results.variants || []).find(v => v.label === results.winnerLabel)
     : null;
 
-  const isLowTokens = profile ? (profile.tier === 'free' ? profile.tokens <= 4 : profile.tokens <= 40) : false;
-  const isExhausted = profile ? profile.tokens <= 0 : false;
   const isPro = profile?.tier === 'pro';
 
   return (
-    <div className="space-y-24">
-      <PageHeader 
-        title="TestLab Pro: Performance Simulation" 
-        subtitle="Simulate performance outcomes for headlines, hooks, and ad copy. Compare variations and predict the winning asset." 
+    <div className="space-y-12">
+      {profile && <TokenStatusBanner tier={profile.tier} tokens={profile.tokens} />}
+      <UsageLimitModal 
+        isOpen={showUsageModal} 
+        tier={profile?.tier || 'free'} 
+        reason={usageReason} 
+        onClose={() => setShowUsageModal(false)} 
       />
 
-      <div className="max-w-4xl mx-auto w-full">
-        <Card className="shadow-2xl">
-          {error && <div className="mb-12"><ErrorMessage message={error} action={{ label: "Dismiss", onClick: () => setError(null) }} /></div>}
-          
-          {isLowTokens && !isExhausted && <TokenWarning />}
+      <div className="space-y-24">
+        <PageHeader 
+          title="TestLab Pro: Performance Simulation" 
+          subtitle="Simulate performance outcomes for headlines, hooks, and ad copy. Compare variations and predict the winning asset." 
+        />
 
-          {isExhausted ? (
-            <TokenNotice 
-              tier={profile?.tier || 'free'} 
-              onUpgrade={() => window.open('https://ai.google.dev/gemini-api/docs/billing', '_blank')}
-              onContinue={() => setError(null)}
-            />
-          ) : (
+        <div className="max-w-4xl mx-auto w-full">
+          <Card className="shadow-2xl">
+            {error && <div className="mb-12"><ErrorMessage message={error} action={{ label: "Dismiss", onClick: () => setError(null) }} /></div>}
+            
             <form onSubmit={(e) => { e.preventDefault(); handleRunTest(); }}>
               <HoneypotField value={honeypotValue} onChange={setHoneypotValue} />
               <div className="mb-12">
@@ -245,59 +269,67 @@ const TestLabPro: React.FC = () => {
                 </PrimaryButton>
               </div>
             </form>
-          )}
-        </Card>
-      </div>
+          </Card>
+        </div>
 
-      {loading && <LoadingState message="Predicting market performance..." isTakingLong={isTakingLong} onCancel={() => setLoading(false)} />}
+        {loading && <LoadingState message="Predicting market performance..." isTakingLong={isTakingLong} onCancel={() => setLoading(false)} />}
 
-      {!results && !loading && (
-        <EmptyState 
-          message="No comparison yet." 
-          submessage="Add at least two variations to begin the predictive intelligence test." 
-        />
-      )}
+        {executionError && isSystemBlockError(executionError) ? (
+           <SystemBlockState message={executionError} />
+        ) : executionError && isRateLimitError(executionError) ? (
+           <RateLimitState message={executionError} />
+        ) : executionError ? (
+           <AnalysisFailureState message={executionError} onRetry={() => setExecutionError(null)} />
+        ) : null}
 
-      {results && !loading && (
-        <ResultContainer>
-          <div className="flex justify-between items-end mb-12">
-            <SectionHeader 
-              title="Performance Simulation" 
-              subtitle="The following results represent predicted conversion benchmarks." 
-            />
-            <ExportControls 
-              onCopy={handleCopy} 
-              onExportText={handleExportTxt} 
-              onExportPDF={handleExportPDF} 
-              isPro={isPro} 
-            />
-          </div>
+        {!results && !loading && !executionError && (
+          <EmptyState 
+            message="No comparison yet." 
+            submessage="Add at least two variations to begin the predictive intelligence test." 
+          />
+        )}
 
-          <div className="mb-20">
-            <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-[0.4em] mb-10 text-center">Winning Strategic Asset</p>
-            <Card accent className="!border-[#FF0000]/10 !bg-[#FFF9F9] shadow-2xl scale-[1.02]">
-              <div className="flex justify-between items-start mb-10">
-                <div>
-                  <h3 className="text-3xl font-bold text-[#0B0B0B] tracking-tight mb-2">
-                    {winningVariant?.label} is the Projected Winner
-                  </h3>
-                  <div className="flex items-center gap-3">
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000] animate-pulse" />
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Statistical Significance: High</span>
+        {results && !loading && (
+          <ResultContainer>
+            <div className="flex justify-between items-end mb-12">
+              <SectionHeader 
+                title="Performance Simulation" 
+                subtitle="The following results represent predicted conversion benchmarks." 
+              />
+              <ExportControls 
+                onCopy={handleCopy} 
+                onExportText={handleExportTxt} 
+                onExportPDF={handleExportPDF} 
+                isPro={isPro} 
+              />
+            </div>
+
+            <div className="mb-20">
+              <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-[0.4em] mb-10 text-center">Winning Strategic Asset</p>
+              <Card accent className="!border-[#FF0000]/10 !bg-[#FFF9F9] shadow-2xl scale-[1.02]">
+                <div className="flex justify-between items-start mb-10">
+                  <div>
+                    <h3 className="text-3xl font-bold text-[#0B0B0B] tracking-tight mb-2">
+                      {winningVariant?.label} is the Projected Winner
+                    </h3>
+                    <div className="flex items-center gap-3">
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000] animate-pulse" />
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Statistical Significance: High</span>
+                    </div>
                   </div>
+                  {winningVariant && <IntelligenceIndicator score={winningVariant.score} />}
                 </div>
-                {winningVariant && <IntelligenceIndicator score={winningVariant.score} />}
-              </div>
-              <div className="p-10 bg-white rounded-[32px] border border-[#FF0000]/5 text-2xl font-bold text-[#0B0B0B] leading-relaxed mb-10 shadow-inner">
-                "{winningVariant?.text}"
-              </div>
-              <div className="p-8 bg-gray-50/50 rounded-[24px] border border-gray-100 text-gray-500 leading-relaxed font-medium whitespace-pre-wrap">
-                {results.explanation}
-              </div>
-            </Card>
-          </div>
-        </ResultContainer>
-      )}
+                <div className="p-10 bg-white rounded-[32px] border border-[#FF0000]/5 text-2xl font-bold text-[#0B0B0B] leading-relaxed mb-10 shadow-inner">
+                  "{winningVariant?.text}"
+                </div>
+                <div className="p-8 bg-gray-50/50 rounded-[24px] border border-gray-100 text-gray-500 leading-relaxed font-medium whitespace-pre-wrap">
+                  {results.explanation}
+                </div>
+              </Card>
+            </div>
+          </ResultContainer>
+        )}
+      </div>
     </div>
   );
 };

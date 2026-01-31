@@ -11,10 +11,15 @@ import {
   ResultContainer, 
   SectionHeader,
   ErrorMessage,
-  TokenNotice,
-  TokenWarning,
   ExportControls,
-  HoneypotField
+  HoneypotField,
+  UsageLimitModal,
+  TokenStatusBanner,
+  AnalysisFailureState,
+  SystemBlockState,
+  RateLimitState,
+  isSystemBlockError,
+  isRateLimitError
 } from '../components/UI';
 import { 
   analyzeMarketingAngle, 
@@ -22,7 +27,7 @@ import {
   auditConversion, 
   improveWorkflowAssets 
 } from '../services/geminiService';
-import { AngleMinerResults, TestLabResults, AuditResult } from '../types';
+import { AngleMinerResults, TestLabResults, AuditResult, TOKEN_COSTS } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { copyToClipboard, downloadAsText, printAsPDF, formatWorkflowExport } from '../services/exportService';
 import { SecurityEngine } from '../services/securityEngine';
@@ -33,7 +38,12 @@ const Workflow: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [isTakingLong, setIsTakingLong] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [executionError, setExecutionError] = useState<string | null>(null);
   const [honeypotValue, setHoneypotValue] = useState('');
+
+  // Usage Modal State
+  const [showUsageModal, setShowUsageModal] = useState(false);
+  const [usageReason, setUsageReason] = useState<'exhausted' | 'insufficient'>('exhausted');
 
   // Step 1: AngleMiner X
   const [minerParams, setMinerParams] = useState({ product: '', industry: '', target: '', goal: 'All', tones: [] as string[] });
@@ -65,10 +75,12 @@ const Workflow: React.FC = () => {
   const nextStep = () => {
     setStep(s => s + 1);
     setError(null);
+    setExecutionError(null);
   };
   const prevStep = () => {
     setStep(s => s - 1);
     setError(null);
+    setExecutionError(null);
   };
 
   const checkHoneypot = async () => {
@@ -80,6 +92,22 @@ const Workflow: React.FC = () => {
     return false;
   };
 
+  const checkTokenAvailability = (cost: number = 0): boolean => {
+    if (!profile) return false;
+    if (profile.tokens === 0) {
+      setUsageReason('exhausted');
+      setShowUsageModal(true);
+      return false;
+    }
+    
+    if (profile.tier === 'free' && profile.tokens < cost) {
+      setUsageReason('insufficient');
+      setShowUsageModal(true);
+      return false;
+    }
+    return true;
+  };
+
   const handleStartMiner = async () => {
     if (await checkHoneypot()) return;
     if (minerParams.product.length < 20) {
@@ -87,24 +115,20 @@ const Workflow: React.FC = () => {
       return;
     }
 
-    if (profile && profile.tokens <= 0) {
-      return;
-    }
+    // Step 1 calls AngleMiner_Generate (Cost 3)
+    if (!checkTokenAvailability(TOKEN_COSTS.AngleMiner)) return;
 
     setLoading(true);
     setError(null);
+    setExecutionError(null);
     try {
-      const data = await analyzeMarketingAngle(minerParams); // No user ID passed to prevent deduction in preview/step 1 if desired, but Workflow logic usually deducts at end? 
-      // Actually, per previous implementation, Workflow deducts at end. 
-      // So we do NOT pass userId here if we want to defer deduction, or we do if we want step-by-step.
-      // The original code only deducted at step 5.
-      // So here we pass undefined for userId to skip persistence/deduction until the final step?
-      // Wait, original code called analyzeMarketingAngle then nextStep. No persistence there.
-      // So we keep it as is: pass undefined userId.
+      const data = await analyzeMarketingAngle(minerParams); 
       setMinerResults(data);
+      // We must refresh profile because tokens were deducted on server
+      if (user) await refreshProfile(); 
       nextStep();
     } catch (err: any) {
-      setError(err.message || "Generating angles failed.");
+      setExecutionError(err.message || "Generating angles failed.");
     } finally {
       setLoading(false);
     }
@@ -116,15 +140,20 @@ const Workflow: React.FC = () => {
       setError("Please select at least 2 angles.");
       return;
     }
+
+    // Step 3 calls TestLab_Simulation (Cost 5)
+    if (!checkTokenAvailability(TOKEN_COSTS.TestLab)) return;
+
     setLoading(true);
     setError(null);
+    setExecutionError(null);
     try {
-      // Same logic: Step-by-step in workflow was transient in original code.
       const data = await runTestLabComparison('Angles', selectedAngleTexts); 
       setTestResults(data);
+      if (user) await refreshProfile();
       nextStep();
     } catch (err: any) {
-      setError(err.message || "Simulation error.");
+      setExecutionError(err.message || "Simulation error.");
     } finally {
       setLoading(false);
     }
@@ -133,15 +162,20 @@ const Workflow: React.FC = () => {
   const handleStartAudit = async () => {
     if (await checkHoneypot()) return;
     if (!auditInput) return;
+
+    // Step 4 calls ConversionDoctor_Audit (Cost 4)
+    if (!checkTokenAvailability(TOKEN_COSTS.ConversionDoctor)) return;
+
     setLoading(true);
     setError(null);
+    setExecutionError(null);
     try {
-      // Transient
       const data = await auditConversion(auditInput, 'Landing Page');
       setAuditResult(data);
+      if (user) await refreshProfile();
       nextStep();
     } catch (err: any) {
-      setError(err.message || "Audit engine failed.");
+      setExecutionError(err.message || "Audit engine failed.");
     } finally {
       setLoading(false);
     }
@@ -156,13 +190,15 @@ const Workflow: React.FC = () => {
       return;
     }
 
+    // Step 5 calls Workflow_ImproveAssets (Cost 6)
+    if (!checkTokenAvailability(TOKEN_COSTS.Workflow)) return;
+
     setLoading(true);
     setError(null);
+    setExecutionError(null);
     try {
       const issues = (auditResult.issues || []).map(i => i.blocker);
       
-      // THIS IS THE FINAL STEP where persistence happens in Workflow
-      // We pass userId here to trigger the transaction
       const data = await improveWorkflowAssets(
         winner.text, 
         issues, 
@@ -172,12 +208,10 @@ const Workflow: React.FC = () => {
       );
       
       setFinalImprovements(data);
-      
       if (user) await refreshProfile();
-      
       nextStep();
     } catch (err: any) {
-      setError(err.message || "Asset refinement failed.");
+      setExecutionError(err.message || "Asset refinement failed.");
     } finally {
       setLoading(false);
     }
@@ -228,12 +262,18 @@ const Workflow: React.FC = () => {
     }
   };
 
-  const isLowTokens = profile ? (profile.tier === 'free' ? profile.tokens <= 4 : profile.tokens <= 40) : false;
-  const isExhausted = profile ? profile.tokens <= 0 : false;
   const isPro = profile?.tier === 'pro';
 
   return (
     <div className="space-y-12">
+      {profile && <TokenStatusBanner tier={profile.tier} tokens={profile.tokens} />}
+      <UsageLimitModal 
+        isOpen={showUsageModal} 
+        tier={profile?.tier || 'free'} 
+        reason={usageReason} 
+        onClose={() => setShowUsageModal(false)} 
+      />
+
       <div className="flex justify-between items-center mb-8">
         <div className="flex items-center gap-6">
           <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2 bg-[#121212] rounded-full border border-gray-900">
@@ -257,8 +297,21 @@ const Workflow: React.FC = () => {
       </div>
 
       {error && <div className="max-w-4xl mx-auto"><ErrorMessage message={error} action={{ label: "Retry", onClick: () => setError(null) }} /></div>}
-
-      {isLowTokens && !isExhausted && step > 0 && step < 6 && <TokenWarning />}
+      
+      {/* Execution Errors (Server-side) */}
+      {executionError && isSystemBlockError(executionError) ? (
+         <div className="max-w-4xl mx-auto mb-12">
+           <SystemBlockState message={executionError} />
+         </div>
+      ) : executionError && isRateLimitError(executionError) ? (
+        <div className="max-w-4xl mx-auto mb-12">
+          <RateLimitState message={executionError} />
+        </div>
+      ) : executionError ? (
+        <div className="max-w-4xl mx-auto mb-12">
+          <AnalysisFailureState message={executionError} onRetry={() => setExecutionError(null)} />
+        </div>
+      ) : null}
 
       {step === 0 && (
         <div className="max-w-2xl mx-auto text-center py-24 animate-in fade-in zoom-in duration-1000">
@@ -266,63 +319,47 @@ const Workflow: React.FC = () => {
             title="Integrated Campaign Workflow" 
             subtitle="Connect ideation, testing, and auditing into one seamless executive process. Build and validate your marketing before you launch." 
           />
-          {isExhausted ? (
-            <TokenNotice 
-              tier={profile?.tier || 'free'} 
-              onUpgrade={() => window.open('https://ai.google.dev/gemini-api/docs/billing', '_blank')}
-            />
-          ) : (
-            <PrimaryButton onClick={() => setStep(1)} className="!px-16 !py-6 !text-lg">Start Workflow</PrimaryButton>
-          )}
+          <PrimaryButton onClick={() => setStep(1)} className="!px-16 !py-6 !text-lg">Start Workflow</PrimaryButton>
         </div>
       )}
 
-      {step === 1 && !loading && (
+      {step === 1 && !loading && !executionError && (
         <Card className="max-w-4xl mx-auto shadow-2xl">
           <SectionHeader title="Step 1: AngleMiner X" subtitle="Provide context to generate market triggers." />
           <form onSubmit={(e) => { e.preventDefault(); handleStartMiner(); }}>
             <HoneypotField value={honeypotValue} onChange={setHoneypotValue} />
-            {isExhausted ? (
-              <TokenNotice 
-                tier={profile?.tier || 'free'} 
-                onUpgrade={() => window.open('https://ai.google.dev/gemini-api/docs/billing', '_blank')}
+            <div className="space-y-4">
+              <Input 
+                label="Product Description" 
+                placeholder="What high-value offer are you positioning?" 
+                value={minerParams.product} 
+                onChange={e => { setMinerParams({...minerParams, product: e.target.value}); setError(null); }} 
+                multiline 
               />
-            ) : (
-              <>
-                <div className="space-y-4">
-                  <Input 
-                    label="Product Description" 
-                    placeholder="What high-value offer are you positioning?" 
-                    value={minerParams.product} 
-                    onChange={e => { setMinerParams({...minerParams, product: e.target.value}); setError(null); }} 
-                    multiline 
-                  />
-                  <div className="grid grid-cols-2 gap-8">
-                    <Input 
-                      label="Industry" 
-                      placeholder="e.g. Fintech, EdTech" 
-                      value={minerParams.industry} 
-                      onChange={e => setMinerParams({...minerParams, industry: e.target.value})} 
-                    />
-                    <Input 
-                      label="Target Audience" 
-                      placeholder="Who are the primary decision makers?" 
-                      value={minerParams.target} 
-                      onChange={e => setMinerParams({...minerParams, target: e.target.value})} 
-                    />
-                  </div>
-                </div>
-                <div className="mt-12 flex justify-between">
-                  <SecondaryButton onClick={() => setStep(0)}>Cancel</SecondaryButton>
-                  <PrimaryButton 
-                    type="submit"
-                    disabled={loading || !minerParams.product}
-                  >
-                    Generate Angles
-                  </PrimaryButton>
-                </div>
-              </>
-            )}
+              <div className="grid grid-cols-2 gap-8">
+                <Input 
+                  label="Industry" 
+                  placeholder="e.g. Fintech, EdTech" 
+                  value={minerParams.industry} 
+                  onChange={e => setMinerParams({...minerParams, industry: e.target.value})} 
+                />
+                <Input 
+                  label="Target Audience" 
+                  placeholder="Who is the primary decision makers?" 
+                  value={minerParams.target} 
+                  onChange={e => setMinerParams({...minerParams, target: e.target.value})} 
+                />
+              </div>
+            </div>
+            <div className="mt-12 flex justify-between">
+              <SecondaryButton onClick={() => setStep(0)}>Cancel</SecondaryButton>
+              <PrimaryButton 
+                type="submit"
+                disabled={loading || !minerParams.product}
+              >
+                Generate Angles
+              </PrimaryButton>
+            </div>
           </form>
         </Card>
       )}
@@ -379,7 +416,7 @@ const Workflow: React.FC = () => {
         </Card>
       )}
 
-      {step === 4 && !loading && (
+      {step === 4 && !loading && !executionError && (
         <Card className="max-w-4xl mx-auto shadow-2xl animate-in slide-in-from-bottom-8 duration-700">
           <SectionHeader title="Step 4: Conversion Doctor" subtitle="Diagnose the health of existing assets." />
           <form onSubmit={(e) => { e.preventDefault(); handleStartAudit(); }}>

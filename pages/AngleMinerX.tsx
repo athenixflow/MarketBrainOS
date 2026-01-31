@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   PageHeader, 
@@ -11,13 +12,18 @@ import {
   SectionHeader,
   Tabs,
   ErrorMessage,
-  TokenNotice,
-  TokenWarning,
   ExportControls,
-  HoneypotField
+  HoneypotField,
+  UsageLimitModal,
+  TokenStatusBanner,
+  AnalysisFailureState,
+  SystemBlockState,
+  RateLimitState,
+  isSystemBlockError,
+  isRateLimitError
 } from '../components/UI';
 import { analyzeMarketingAngle, improveAngle, MAX_INPUT_CHARS } from '../services/geminiService';
-import { MarketingAngle, AngleMinerResults } from '../types';
+import { MarketingAngle, AngleMinerResults, TOKEN_COSTS } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { copyToClipboard, downloadAsText, printAsPDF, formatAngleMinerExport } from '../services/exportService';
 import { SecurityEngine } from '../services/securityEngine';
@@ -34,8 +40,13 @@ const AngleMinerX: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [isTakingLong, setIsTakingLong] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [executionError, setExecutionError] = useState<string | null>(null);
   const [results, setResults] = useState<AngleMinerResults | null>(null);
   const [activeTab, setActiveTab] = useState('Prime Angles');
+
+  // Usage Modal State
+  const [showUsageModal, setShowUsageModal] = useState(false);
+  const [usageReason, setUsageReason] = useState<'exhausted' | 'insufficient'>('exhausted');
 
   const tones = ['Direct', 'Emotional', 'Authority', 'Urgent', 'Educational'];
   const goals = ['Paid Ads', 'Organic Content', 'Sales Funnel', 'All'];
@@ -54,6 +65,21 @@ const AngleMinerX: React.FC = () => {
     setSelectedTones(prev => 
       prev.includes(tone) ? prev.filter(t => t !== tone) : [...prev, tone]
     );
+  };
+
+  const checkTokenAvailability = (): boolean => {
+    if (!profile) return false;
+    if (profile.tokens === 0) {
+      setUsageReason('exhausted');
+      setShowUsageModal(true);
+      return false;
+    }
+    if (profile.tier === 'free' && profile.tokens < TOKEN_COSTS.AngleMiner) {
+      setUsageReason('insufficient');
+      setShowUsageModal(true);
+      return false;
+    }
+    return true;
   };
 
   const handleRun = async () => {
@@ -76,12 +102,17 @@ const AngleMinerX: React.FC = () => {
       return;
     }
 
-    if (profile && (profile.tokens <= 0 || profile.is_suspended)) {
+    // Token Check
+    if (!checkTokenAvailability()) return;
+
+    if (profile && profile.is_suspended) {
+      setError("Account operations suspended.");
       return;
     }
 
     setLoading(true);
     setError(null);
+    setExecutionError(null);
     setResults(null);
     try {
       const data = await analyzeMarketingAngle({
@@ -98,7 +129,7 @@ const AngleMinerX: React.FC = () => {
       
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "The neural engine encountered an unexpected interruption. Please retry.");
+      setExecutionError(err.message || "The neural engine encountered an unexpected interruption. Please retry.");
     } finally {
       setLoading(false);
     }
@@ -107,7 +138,9 @@ const AngleMinerX: React.FC = () => {
   const handleImprove = async (angle: MarketingAngle, category: keyof Omit<AngleMinerResults, 'hooks'>) => {
     if (!results) return;
     
-    if (profile && (profile.tokens <= 0 || profile.is_suspended)) {
+    if (profile && profile.tokens <= 0) {
+      setUsageReason('exhausted');
+      setShowUsageModal(true);
       return;
     }
 
@@ -131,7 +164,9 @@ const AngleMinerX: React.FC = () => {
 
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "Failed to refine angle. Operational throttle may be active.");
+      // For inline improvements, we can't easily replace the whole UI, so alert is safer or a toast.
+      // But let's set a global error for visibility too.
+      setExecutionError(err.message || "Failed to refine angle. Operational throttle may be active.");
       
       const currentList = results[category] || [];
       const resetCategory = currentList.map(a => 
@@ -149,6 +184,7 @@ const AngleMinerX: React.FC = () => {
     setSelectedTones([]);
     setResults(null);
     setError(null);
+    setExecutionError(null);
     setHoneypotValue('');
   };
 
@@ -221,189 +257,197 @@ const AngleMinerX: React.FC = () => {
     </Card>
   );
 
-  const isLowTokens = profile ? (profile.tier === 'free' ? profile.tokens <= 4 : profile.tokens <= 40) : false;
-  const isExhausted = profile ? profile.tokens <= 0 : false;
   const isSuspended = profile?.is_suspended;
   const isPro = profile?.tier === 'pro';
 
   return (
-    <div className="space-y-24">
-      <PageHeader 
-        title="AngleMiner X: Psychological Profiling" 
-        subtitle="Generate marketing angles and psychological hooks. Extract audience triggers to refine your messaging positioning before deployment." 
+    <div className="space-y-12">
+      {profile && <TokenStatusBanner tier={profile.tier} tokens={profile.tokens} />}
+      <UsageLimitModal 
+        isOpen={showUsageModal} 
+        tier={profile?.tier || 'free'} 
+        reason={usageReason} 
+        onClose={() => setShowUsageModal(false)} 
       />
 
-      <div className="max-w-4xl mx-auto w-full">
-        <Card className="shadow-2xl">
-          {isSuspended && <div className="mb-12"><ErrorMessage message="SECURITY PROTOCOL ACTIVE: Account suspended due to risk threshold violations." /></div>}
-          {error && <div className="mb-12"><ErrorMessage message={error} action={{ label: "Dismiss", onClick: () => setError(null) }} /></div>}
-          
-          {isLowTokens && !isExhausted && !isSuspended && <TokenWarning />}
-
-          {isExhausted && !isSuspended ? (
-            <TokenNotice 
-              tier={profile?.tier || 'free'} 
-              onUpgrade={() => window.open('https://ai.google.dev/gemini-api/docs/billing', '_blank')}
-              onContinue={() => setError(null)}
-            />
-          ) : !isSuspended && (
-            <form onSubmit={(e) => { e.preventDefault(); handleRun(); }}>
-              <HoneypotField value={honeypotValue} onChange={setHoneypotValue} />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12">
-                <div className="md:col-span-2">
-                  <Input 
-                    label="Product / Offer Description" 
-                    placeholder="Describe what you’re selling and why it matters…" 
-                    value={product} 
-                    onChange={(e) => { setProduct(e.target.value); setError(null); }} 
-                    multiline
-                  />
-                  <p className={`text-right text-[9px] font-bold uppercase tracking-widest ${product.length > MAX_INPUT_CHARS ? 'text-[#FF0000]' : 'text-gray-300'}`}>
-                    {product.length} / {MAX_INPUT_CHARS} characters
-                  </p>
-                </div>
-                <Input 
-                  label="Industry" 
-                  placeholder="e.g. SaaS, E-commerce, Real Estate" 
-                  value={industry} 
-                  onChange={(e) => { setIndustry(e.target.value); setError(null); }} 
-                />
-                <Input 
-                  label="Target Audience" 
-                  placeholder="Who is this for? Be specific." 
-                  value={target} 
-                  onChange={(e) => { setTarget(e.target.value); setError(null); }} 
-                />
-                
-                <div className="mb-12">
-                  <label className="text-xs font-bold text-[#0B0B0B] mb-5 tracking-widest uppercase opacity-40 block">Goal</label>
-                  <div className="flex flex-wrap gap-3">
-                    {goals.map(g => (
-                      <button
-                        key={g}
-                        type="button"
-                        onClick={() => setGoal(g)}
-                        className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
-                          goal === g ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
-                        }`}
-                      >
-                        {g}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mb-12">
-                  <label className="text-xs font-bold text-[#0B0B0B] mb-5 tracking-widest uppercase opacity-40 block">Tone Profile</label>
-                  <div className="flex flex-wrap gap-3">
-                    {tones.map(t => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => handleToggleTone(t)}
-                        className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
-                          selectedTones.includes(t) ? 'bg-[#FF0000] text-white shadow-md shadow-[#FF0000]/20' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
-                        }`}
-                      >
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-6 mt-8">
-                <PrimaryButton 
-                  type="submit"
-                  disabled={loading || !product || !target || !industry || product.length > MAX_INPUT_CHARS}
-                  className="w-full"
-                >
-                  {loading ? 'Mining high-performing angles...' : 'Generate Angles'}
-                </PrimaryButton>
-                <div className="flex justify-center">
-                  <button 
-                    type="button"
-                    onClick={handleReset}
-                    className="text-[10px] font-bold text-gray-300 hover:text-gray-500 uppercase tracking-widest transition-colors"
-                  >
-                    Reset Inputs
-                  </button>
-                </div>
-              </div>
-            </form>
-          )}
-        </Card>
-      </div>
-
-      {loading && <LoadingState message="Evaluating market patterns..." isTakingLong={isTakingLong} onCancel={() => setLoading(false)} />}
-
-      {!results && !loading && (
-        <EmptyState 
-          message="No angles yet." 
-          submessage="Define your product and target audience to extract market intelligence." 
+      <div className="space-y-24">
+        <PageHeader 
+          title="AngleMiner X: Psychological Profiling" 
+          subtitle="Generate marketing angles and psychological hooks. Extract audience triggers to refine your messaging positioning before deployment." 
         />
-      )}
 
-      {results && !loading && (
-        <ResultContainer>
-          <div className="flex justify-between items-end mb-12">
-            <SectionHeader 
-              title="Strategic Angles" 
-              subtitle="The neural engine has extracted the following conversion paths." 
-            />
-            <ExportControls 
-              onCopy={handleCopy} 
-              onExportText={handleExportTxt} 
-              onExportPDF={handleExportPDF} 
-              isPro={isPro} 
-            />
-          </div>
-
-          <Tabs 
-            tabs={['Prime Angles', 'Supporting', 'Exploratory', 'Hooks & Scripts']}
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-          />
-
-          <div className="grid grid-cols-1 gap-12">
-            {activeTab === 'Prime Angles' && (results.prime || []).map(a => renderAngleCard(a, 'prime'))}
-            {activeTab === 'Supporting' && (results.supporting || []).map(a => renderAngleCard(a, 'supporting'))}
-            {activeTab === 'Exploratory' && (results.exploratory || []).map(a => renderAngleCard(a, 'exploratory'))}
+        <div className="max-w-4xl mx-auto w-full">
+          <Card className="shadow-2xl">
+            {isSuspended && <div className="mb-12"><ErrorMessage message="SECURITY PROTOCOL ACTIVE: Account suspended due to risk threshold violations." /></div>}
+            {error && <div className="mb-12"><ErrorMessage message={error} action={{ label: "Dismiss", onClick: () => setError(null) }} /></div>}
             
-            {activeTab === 'Hooks & Scripts' && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-                {['Ads', 'Organic', 'Funnel'].map(platform => (
-                  <div key={platform} className="space-y-8">
-                    <h4 className="text-[10px] font-bold text-[#FF0000] uppercase tracking-[0.4em] mb-4 text-center">{platform} Hooks</h4>
-                    {(results.hooks || [])
-                      .filter(h => h.platform.toLowerCase().includes(platform.toLowerCase()))
-                      .map((hook, i) => (
-                      <Card key={i} className="!p-8 !rounded-[24px]">
-                        <div className="space-y-6">
-                          <div>
-                            <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mb-2">Short Hook</p>
-                            <p className="text-sm font-bold text-[#0B0B0B]">"{hook.short}"</p>
-                          </div>
-                          <div>
-                            <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mb-2">Expanded</p>
-                            <p className="text-xs text-gray-500 leading-relaxed italic">"{hook.expanded}"</p>
-                          </div>
-                          <button 
-                            onClick={() => copyToClipboard(hook.short + "\n" + hook.expanded)}
-                            className="text-[9px] font-bold text-[#FF0000] hover:opacity-60 transition-opacity uppercase tracking-widest border-b border-[#FF0000]/10 pb-1"
-                          >
-                            Copy Hook
-                          </button>
-                        </div>
-                      </Card>
-                    ))}
+            {!isSuspended && (
+              <form onSubmit={(e) => { e.preventDefault(); handleRun(); }}>
+                <HoneypotField value={honeypotValue} onChange={setHoneypotValue} />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12">
+                  <div className="md:col-span-2">
+                    <Input 
+                      label="Product / Offer Description" 
+                      placeholder="Describe what you’re selling and why it matters…" 
+                      value={product} 
+                      onChange={(e) => { setProduct(e.target.value); setError(null); }} 
+                      multiline
+                    />
+                    <p className={`text-right text-[9px] font-bold uppercase tracking-widest ${product.length > MAX_INPUT_CHARS ? 'text-[#FF0000]' : 'text-gray-300'}`}>
+                      {product.length} / {MAX_INPUT_CHARS} characters
+                    </p>
                   </div>
-                ))}
-              </div>
+                  <Input 
+                    label="Industry" 
+                    placeholder="e.g. SaaS, E-commerce, Real Estate" 
+                    value={industry} 
+                    onChange={(e) => { setIndustry(e.target.value); setError(null); }} 
+                  />
+                  <Input 
+                    label="Target Audience" 
+                    placeholder="Who is this for? Be specific." 
+                    value={target} 
+                    onChange={(e) => { setTarget(e.target.value); setError(null); }} 
+                  />
+                  
+                  <div className="mb-12">
+                    <label className="text-xs font-bold text-[#0B0B0B] mb-5 tracking-widest uppercase opacity-40 block">Goal</label>
+                    <div className="flex flex-wrap gap-3">
+                      {goals.map(g => (
+                        <button
+                          key={g}
+                          type="button"
+                          onClick={() => setGoal(g)}
+                          className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
+                            goal === g ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+                          }`}
+                        >
+                          {g}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mb-12">
+                    <label className="text-xs font-bold text-[#0B0B0B] mb-5 tracking-widest uppercase opacity-40 block">Tone Profile</label>
+                    <div className="flex flex-wrap gap-3">
+                      {tones.map(t => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => handleToggleTone(t)}
+                          className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
+                            selectedTones.includes(t) ? 'bg-[#FF0000] text-white shadow-md shadow-[#FF0000]/20' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+                          }`}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-6 mt-8">
+                  <PrimaryButton 
+                    type="submit"
+                    disabled={loading || !product || !target || !industry || product.length > MAX_INPUT_CHARS}
+                    className="w-full"
+                  >
+                    {loading ? 'Mining high-performing angles...' : 'Generate Angles'}
+                  </PrimaryButton>
+                  <div className="flex justify-center">
+                    <button 
+                      type="button"
+                      onClick={handleReset}
+                      className="text-[10px] font-bold text-gray-300 hover:text-gray-500 uppercase tracking-widest transition-colors"
+                    >
+                      Reset Inputs
+                    </button>
+                  </div>
+                </div>
+              </form>
             )}
-          </div>
-        </ResultContainer>
-      )}
+          </Card>
+        </div>
+
+        {loading && <LoadingState message="Evaluating market patterns..." isTakingLong={isTakingLong} onCancel={() => setLoading(false)} />}
+
+        {executionError && isSystemBlockError(executionError) ? (
+           <SystemBlockState message={executionError} />
+        ) : executionError && isRateLimitError(executionError) ? (
+           <RateLimitState message={executionError} />
+        ) : executionError ? (
+           <AnalysisFailureState message={executionError} onRetry={() => setExecutionError(null)} />
+        ) : null}
+
+        {!results && !loading && !executionError && (
+          <EmptyState 
+            message="No angles yet." 
+            submessage="Define your product and target audience to extract market intelligence." 
+          />
+        )}
+
+        {results && !loading && (
+          <ResultContainer>
+            <div className="flex justify-between items-end mb-12">
+              <SectionHeader 
+                title="Strategic Angles" 
+                subtitle="The neural engine has extracted the following conversion paths." 
+              />
+              <ExportControls 
+                onCopy={handleCopy} 
+                onExportText={handleExportTxt} 
+                onExportPDF={handleExportPDF} 
+                isPro={isPro} 
+              />
+            </div>
+
+            <Tabs 
+              tabs={['Prime Angles', 'Supporting', 'Exploratory', 'Hooks & Scripts']}
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+            />
+
+            <div className="grid grid-cols-1 gap-12">
+              {activeTab === 'Prime Angles' && (results.prime || []).map(a => renderAngleCard(a, 'prime'))}
+              {activeTab === 'Supporting' && (results.supporting || []).map(a => renderAngleCard(a, 'supporting'))}
+              {activeTab === 'Exploratory' && (results.exploratory || []).map(a => renderAngleCard(a, 'exploratory'))}
+              
+              {activeTab === 'Hooks & Scripts' && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+                  {['Ads', 'Organic', 'Funnel'].map(platform => (
+                    <div key={platform} className="space-y-8">
+                      <h4 className="text-[10px] font-bold text-[#FF0000] uppercase tracking-[0.4em] mb-4 text-center">{platform} Hooks</h4>
+                      {(results.hooks || [])
+                        .filter(h => h.platform.toLowerCase().includes(platform.toLowerCase()))
+                        .map((hook, i) => (
+                        <Card key={i} className="!p-8 !rounded-[24px]">
+                          <div className="space-y-6">
+                            <div>
+                              <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mb-2">Short Hook</p>
+                              <p className="text-sm font-bold text-[#0B0B0B]">"{hook.short}"</p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mb-2">Expanded</p>
+                              <p className="text-xs text-gray-500 leading-relaxed italic">"{hook.expanded}"</p>
+                            </div>
+                            <button 
+                              onClick={() => copyToClipboard(hook.short + "\n" + hook.expanded)}
+                              className="text-[9px] font-bold text-[#FF0000] hover:opacity-60 transition-opacity uppercase tracking-widest border-b border-[#FF0000]/10 pb-1"
+                            >
+                              Copy Hook
+                            </button>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </ResultContainer>
+        )}
+      </div>
     </div>
   );
 };

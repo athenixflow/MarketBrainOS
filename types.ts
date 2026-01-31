@@ -17,10 +17,31 @@ export type PermissionScope =
 
 export type SystemLoadLevel = 'NORMAL' | 'CONGESTED' | 'CRITICAL' | 'EMERGENCY';
 
+// Client-side cost mirrors for UI checks
+export const TOKEN_COSTS = {
+  AngleMiner: 3,
+  ConversionDoctor: 4,
+  TestLab: 5,
+  Workflow: 6
+};
+
 export interface SystemSettings {
   emergency_lockdown: boolean;
   last_updated: string;
   updated_by: string;
+}
+
+export interface AdminSettings {
+  maintenance_mode: boolean;
+  analyses_paused: boolean;
+  modules_enabled: {
+    AngleMiner: boolean;
+    ConversionDoctor: boolean;
+    TestLabPro: boolean;
+    Workflow: boolean;
+  };
+  last_updated?: string;
+  updated_by?: string;
 }
 
 export interface UserProfile {
@@ -87,13 +108,34 @@ export interface AuditLogEntry {
 
 export interface ActionLogEntry {
   id: string;
-  timestamp: string;
-  user_id: string;
-  module: NavigationItem | 'System_Core';
-  action: string;
+  timestamp?: string; // Optional: Client logs use this
+  created_at?: any;   // Optional: Server logs use this (Firestore Timestamp)
+  user_id?: string;   // Optional: Client logs use this
+  uid?: string;       // Optional: Server logs use this
+  module: string;
+  action?: string;
   metadata?: any;
-  hash: string;
-  previous_hash: string;
+  hash?: string;
+  previous_hash?: string;
+  // Server-side specific fields
+  status?: 'success' | 'failed_refunded' | 'blocked';
+  tokens_used?: number;
+  error_code?: string;
+  // Top-up specific fields
+  tokens_added?: number;
+  amount_paid?: number;
+  payment_reference?: string;
+}
+
+export interface PaymentRecord {
+  id: string;
+  uid: string;
+  payment_reference: string;
+  amount_paid: number;
+  tokens_credited: number;
+  provider?: string;
+  status?: 'completed' | 'pending' | 'failed';
+  created_at?: any;
 }
 
 export interface MarketingAngle {

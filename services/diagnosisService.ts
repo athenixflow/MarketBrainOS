@@ -32,7 +32,7 @@ export class DiagnosisEngine {
     });
 
     // 2. CONTRACT INTEGRITY & FUZZING (Offline)
-    Object.entries(SystemContracts).forEach(([name, contract]) => {
+    Object.entries(SystemContracts).forEach(([name, contract]: [string, any]) => {
       // A. Reject Null/Undefined Inputs
       try {
         contract.inputValidator(null);

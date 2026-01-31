@@ -1,4 +1,5 @@
-import { db, isFirebaseInitialized } from './firebase';
+import { db, isFirebaseInitialized, functions } from './firebase';
+import { httpsCallable } from 'firebase/functions';
 import { 
   collection, 
   addDoc, 
@@ -10,7 +11,11 @@ import {
   limit, 
   updateDoc,
   setDoc,
-  deleteDoc
+  deleteDoc,
+  getCountFromServer,
+  getAggregateFromServer,
+  sum,
+  where
 } from 'firebase/firestore';
 import { 
   AngleMinerResults, 
@@ -20,19 +25,13 @@ import {
   SystemSettings,
   AuditLogEntry, 
   SecurityEvent,
-  ActionLogEntry
+  ActionLogEntry,
+  AdminSettings,
+  PaymentRecord
 } from '../types';
 import { SecurityEngine } from './securityEngine';
 
-export const TOKEN_COSTS = {
-  ANGLEMINER_GENERATE: 10,
-  ANGLEMINER_IMPROVE: 3,
-  TESTLAB_RUN: 6,
-  TESTLAB_IMPROVE: 3,
-  CONVERSION_AUDIT: 12,
-  CONVERSION_REWRITE: 4,
-  WORKFLOW_RUN: 20,
-};
+// TOKEN_COSTS REMOVED: Pricing is now strictly enforced server-side.
 
 const GENESIS_HASH = "0000000000000000000000000000000000000000000000000000000000000000";
 
@@ -77,6 +76,61 @@ export const getSystemSettings = async (): Promise<SystemSettings> => {
   return { emergency_lockdown: false, last_updated: new Date().toISOString(), updated_by: 'system' };
 };
 
+export const getAdminSettings = async (): Promise<AdminSettings> => {
+  const defaultSettings: AdminSettings = {
+    maintenance_mode: false,
+    analyses_paused: false,
+    modules_enabled: {
+      AngleMiner: true,
+      ConversionDoctor: true,
+      TestLabPro: true,
+      Workflow: true
+    }
+  };
+
+  if (!isFirebaseInitialized) return defaultSettings;
+  
+  try {
+    const docRef = doc(db, 'admin_settings', 'global');
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      const data = docSnap.data() as Partial<AdminSettings>;
+      return {
+        ...defaultSettings,
+        ...data,
+        modules_enabled: { ...defaultSettings.modules_enabled, ...(data.modules_enabled || {}) }
+      };
+    }
+  } catch (e) {
+    console.error("Failed to load admin settings", e);
+  }
+  return defaultSettings;
+};
+
+export const callUpdateSystemSettings = async (changes: Partial<AdminSettings>) => {
+  if (!isFirebaseInitialized) throw new Error("Connection failed");
+  const updateSystemSettings = httpsCallable(functions, 'updateSystemSettings');
+  try {
+    const result = await updateSystemSettings({ changes });
+    return result.data;
+  } catch (error: any) {
+    throw new Error(error.message || "Settings update failed on server.");
+  }
+};
+
+export const callConfirmTopUp = async (paymentReference: string) => {
+  if (!isFirebaseInitialized) throw new Error("Connection failed");
+  const confirmTopUp = httpsCallable(functions, 'confirmTopUp');
+  try {
+    // Amount is hardcoded to 5 on client to match server expectation, 
+    // but server enforces it regardless.
+    const result = await confirmTopUp({ paymentReference, amountPaid: 5 });
+    return result.data;
+  } catch (error: any) {
+    throw new Error(error.message || "Top-up failed.");
+  }
+};
+
 export const updateSystemEmergency = async (admin: UserProfile, active: boolean) => {
   if (!isFirebaseInitialized) throw new Error("Database not connected");
   const now = new Date().toISOString();
@@ -94,6 +148,7 @@ export const updateSystemEmergency = async (admin: UserProfile, active: boolean)
     `System emergency state toggled to ${active ? 'ACTIVE' : 'INACTIVE'} by admin.`,
     admin
   );
+  // Log locally for immediate feedback, though server should also log critical events
   await logAdminAction(admin, active ? 'LOCKDOWN_ACTIVATED' : 'LOCKDOWN_RELEASED', 'GLOBAL_SYSTEM');
 };
 
@@ -155,7 +210,6 @@ export const logUserAction = async (entry: Omit<ActionLogEntry, 'id' | 'timestam
 
 export const logExecutionTrace = async (trace: any) => {
   // Convert custom class instances to plain objects to satisfy Firestore requirements
-  // Firestore throws "Unsupported field value: a custom object" for class instances
   let safeTrace: any;
   try {
     safeTrace = JSON.parse(JSON.stringify(trace));
@@ -198,40 +252,11 @@ export const logAdminAction = async (admin: UserProfile, action: string, target:
   await addDoc(collection(db, 'admin_audit_logs'), { ...entry, timestamp, previous_hash: prevHash, hash });
 };
 
-// --- TOKEN MANAGEMENT ---
-
-export const deductTokens = async (userId: string, cost: number): Promise<number> => {
-  if (!isFirebaseInitialized) return 0;
-  const docRef = doc(db, 'users', userId);
-  const docSnap = await getDoc(docRef);
-  if (!docSnap.exists()) throw new Error("User not found.");
-  
-  const currentTokens = docSnap.data().tokens || 0;
-  const newTokens = Math.max(0, currentTokens - cost);
-  
-  await updateDoc(docRef, { 
-    tokens: newTokens, 
-    last_active: new Date().toISOString() 
-  });
-  
-  return newTokens;
-};
-
-export const refundTokens = async (userId: string, amount: number): Promise<void> => {
-  if (!isFirebaseInitialized) return;
-  const docRef = doc(db, 'users', userId);
-  const docSnap = await getDoc(docRef);
-  if (!docSnap.exists()) return;
-  
-  const currentTokens = docSnap.data().tokens || 0;
-  await updateDoc(docRef, { tokens: currentTokens + amount });
-};
-
 // --- ARTIFACT PERSISTENCE ---
 
 export const saveAngleMinerResult = async (userId: string, product: string, industry: string, target: string, results: AngleMinerResults) => {
   if (!isFirebaseInitialized) return { id: 'mock_id', ...results };
-  await logUserAction({ user_id: userId, module: 'AngleMiner X', action: 'GENERATE_ANGLES' });
+  await logUserAction({ user_id: userId, module: 'AngleMiner X', action: 'SAVE_ARTIFACT' });
   
   const docRef = await addDoc(collection(db, 'angleminer_results'), {
     user_id: userId, 
@@ -251,7 +276,7 @@ export const deleteAngleMinerResult = async (id: string) => {
 
 export const saveTestLabResult = async (userId: string, type: string, variants: string[], results: TestLabResults) => {
   if (!isFirebaseInitialized) return { id: 'mock_id', ...results };
-  await logUserAction({ user_id: userId, module: 'TestLab Pro', action: 'RUN_SIMULATION' });
+  await logUserAction({ user_id: userId, module: 'TestLab Pro', action: 'SAVE_ARTIFACT' });
   
   const docRef = await addDoc(collection(db, 'testlab_results'), {
     user_id: userId, 
@@ -271,7 +296,7 @@ export const deleteTestLabResult = async (id: string) => {
 
 export const saveConversionDoctorResult = async (userId: string, input: string, score: number, result: AuditResult) => {
   if (!isFirebaseInitialized) return { id: 'mock_id', ...result };
-  await logUserAction({ user_id: userId, module: 'Conversion Doctor', action: 'RUN_AUDIT' });
+  await logUserAction({ user_id: userId, module: 'Conversion Doctor', action: 'SAVE_ARTIFACT' });
   
   const docRef = await addDoc(collection(db, 'conversion_doctor_results'), {
     user_id: userId, 
@@ -290,7 +315,7 @@ export const deleteConversionDoctorResult = async (id: string) => {
 
 export const saveWorkflowRun = async (userId: string, angle: string, testScore: number, conversionScore: number, finalOutput: any) => {
   if (!isFirebaseInitialized) return { id: 'mock_id', ...finalOutput };
-  await logUserAction({ user_id: userId, module: 'Workflow', action: 'EXECUTE_PIPELINE' });
+  await logUserAction({ user_id: userId, module: 'Workflow', action: 'SAVE_ARTIFACT' });
   
   const docRef = await addDoc(collection(db, 'workflow_runs'), {
     user_id: userId, 
@@ -308,6 +333,62 @@ export const deleteWorkflowRun = async (id: string) => {
 };
 
 // --- ADMIN FUNCTIONS ---
+
+export interface PlatformStats {
+  totalUsers: number;
+  activeUsers: number;
+  totalAnalyses: number;
+  failedAnalyses: number;
+  tokensConsumed: number;
+}
+
+export const adminGetPlatformStats = async (): Promise<PlatformStats> => {
+  if (!isFirebaseInitialized) return { totalUsers: 0, activeUsers: 0, totalAnalyses: 0, failedAnalyses: 0, tokensConsumed: 0 };
+  
+  const usersColl = collection(db, 'users');
+  const logsColl = collection(db, 'action_logs');
+  
+  // Calculate 24h window
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+  try {
+    // 1. Total Users Count
+    const usersSnap = await getCountFromServer(usersColl);
+    const totalUsers = usersSnap.data().count;
+
+    // 2. Active Users (Last 24h)
+    const activeUsersQuery = query(usersColl, where('last_active', '>=', twentyFourHoursAgo));
+    const activeUsersSnap = await getCountFromServer(activeUsersQuery);
+    const activeUsers = activeUsersSnap.data().count;
+
+    // 3. Tokens Consumed (Sum)
+    const logsAggSnap = await getAggregateFromServer(logsColl, {
+      totalTokens: sum('tokens_used')
+    });
+    const tokensConsumed = logsAggSnap.data().totalTokens;
+
+    // 4. Total Analyses Count
+    const totalAnalysesSnap = await getCountFromServer(logsColl);
+    const totalAnalyses = totalAnalysesSnap.data().count;
+
+    // 5. Failed Analyses Count
+    const failedQuery = query(logsColl, where('status', '==', 'failed_refunded'));
+    const failedSnap = await getCountFromServer(failedQuery);
+    const failedAnalyses = failedSnap.data().count;
+
+    return {
+      totalUsers,
+      activeUsers,
+      totalAnalyses,
+      failedAnalyses,
+      tokensConsumed
+    };
+  } catch (e) {
+    console.error("Failed to fetch platform stats", e);
+    // Return safe zero values on error
+    return { totalUsers: 0, activeUsers: 0, totalAnalyses: 0, failedAnalyses: 0, tokensConsumed: 0 };
+  }
+};
 
 export const adminGetAllUsers = async (): Promise<UserProfile[]> => {
   if (!isFirebaseInitialized) return [];
@@ -343,25 +424,111 @@ export const adminGetSecurityLogs = async (): Promise<SecurityEvent[]> => {
   return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as SecurityEvent));
 };
 
-export const adminSuspendUser = async (admin: UserProfile, userId: string, reason: string) => {
-  if (!isFirebaseInitialized) throw new Error("DB Error");
-  const check = await SecurityEngine.checkPermission(admin, 'admin:user_management');
-  if (!check.allowed) throw new Error(check.error || "Permission Denied.");
+export const adminGetActionLogs = async (limitCount: number = 100): Promise<ActionLogEntry[]> => {
+  if (!isFirebaseInitialized) return [];
   
-  await updateDoc(doc(db, 'users', userId), { 
-    is_suspended: true, 
-    suspension_reason: reason 
-  });
-  await logAdminAction(admin, 'USER_SUSPENDED', userId, { reason });
+  try {
+    // We have a mixed schema in 'action_logs'.
+    // 1. Client logs have 'timestamp' string (ISO).
+    // 2. Server logs have 'created_at' Timestamp.
+    // To show a comprehensive view, we fetch both recent slices and merge.
+    
+    const serverQ = query(collection(db, 'action_logs'), orderBy('created_at', 'desc'), limit(limitCount));
+    const clientQ = query(collection(db, 'action_logs'), orderBy('timestamp', 'desc'), limit(limitCount));
+    
+    const [serverSnap, clientSnap] = await Promise.all([getDocs(serverQ), getDocs(clientQ)]);
+    
+    const logs: ActionLogEntry[] = [];
+    
+    serverSnap.forEach(d => logs.push({ id: d.id, ...d.data() } as ActionLogEntry));
+    clientSnap.forEach(d => {
+      // Avoid duplicates if any doc has both (unlikely given current implementation but safe)
+      if (!logs.find(l => l.id === d.id)) {
+        logs.push({ id: d.id, ...d.data() } as ActionLogEntry);
+      }
+    });
+
+    // Normalize sorting client-side
+    return logs.sort((a, b) => {
+      const tA = a.created_at ? a.created_at.toMillis() : new Date(a.timestamp || 0).getTime();
+      const tB = b.created_at ? b.created_at.toMillis() : new Date(b.timestamp || 0).getTime();
+      return tB - tA;
+    });
+
+  } catch (e) {
+    console.error("Failed to fetch action logs", e);
+    return [];
+  }
 };
 
-export const adminUpdateUserTokens = async (admin: UserProfile, userId: string, tokens: number) => {
-  if (!isFirebaseInitialized) throw new Error("DB Error");
-  const check = await SecurityEngine.checkPermission(admin, 'admin:token_management');
-  if (!check.allowed) throw new Error(check.error || "Permission Denied.");
+export const getUserActionLogs = async (userId: string, limitCount: number = 50): Promise<ActionLogEntry[]> => {
+  if (!isFirebaseInitialized) return [];
+  try {
+    // We prioritize server-side logs which use 'uid' and 'created_at' (Firestore Timestamp)
+    // Client logs use 'user_id' and 'timestamp' string.
+    // For Token Usage history, server logs are the source of truth.
+    
+    const q = query(
+      collection(db, 'action_logs'), 
+      where('uid', '==', userId), 
+      limit(limitCount)
+    );
+    
+    const snapshot = await getDocs(q);
+    const logs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ActionLogEntry));
+    
+    // Sort client-side to avoid compound index requirements in this restricted environment
+    return logs.sort((a, b) => {
+      const tA = a.created_at ? a.created_at.toMillis() : 0;
+      const tB = b.created_at ? b.created_at.toMillis() : 0;
+      return tB - tA;
+    });
+  } catch (e) {
+    console.error("Failed to fetch user history", e);
+    return [];
+  }
+};
 
-  await updateDoc(doc(db, 'users', userId), { tokens });
-  await logAdminAction(admin, 'TOKENS_MODIFIED', userId, { new_tokens: tokens });
+export const getUserPaymentHistory = async (userId: string): Promise<PaymentRecord[]> => {
+  if (!isFirebaseInitialized) return [];
+  try {
+    const q = query(
+      collection(db, 'payments'),
+      where('uid', '==', userId)
+    );
+    const snapshot = await getDocs(q);
+    const records = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as PaymentRecord));
+    
+    // Sort client-side
+    return records.sort((a, b) => {
+      const tA = a.created_at ? a.created_at.toMillis() : 0;
+      const tB = b.created_at ? b.created_at.toMillis() : 0;
+      return tB - tA;
+    });
+  } catch (e) {
+    console.error("Failed to fetch payments", e);
+    return [];
+  }
+};
+
+// --- SECURE ADMIN MUTATIONS (VIA CLOUD FUNCTION) ---
+
+export type AdminUserAction = 
+  | 'promoteToAdmin' 
+  | 'demoteAdmin' 
+  | 'changePlan' 
+  | 'resetTokens' 
+  | 'toggleStatus';
+
+export const callAdminUserAction = async (action: AdminUserAction, targetUserId: string, payload?: any) => {
+  if (!isFirebaseInitialized) throw new Error("Connection failed");
+  const manageUser = httpsCallable(functions, 'manageUser');
+  try {
+    const result = await manageUser({ action, targetUserId, payload });
+    return result.data;
+  } catch (error: any) {
+    throw new Error(error.message || "Admin action failed on server.");
+  }
 };
 
 export const updateUserRiskProfile = async (userId: string, riskScore: number, isSuspended: boolean, reason?: string) => {

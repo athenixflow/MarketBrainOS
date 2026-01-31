@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { NavigationItem } from './types';
@@ -12,7 +11,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import AuthPage from './pages/Auth';
 import LandingPage from './pages/LandingPage';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { Honeypot } from './components/UI';
+import { Honeypot, LoadingState } from './components/UI';
 import { SecurityEngine } from './services/securityEngine';
 
 interface SidebarProps {
@@ -24,8 +23,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const location = useLocation();
   const { profile } = useAuth();
   
-  const isAdminPath = location.pathname.startsWith('/admin');
   const isAdminRole = profile?.role === 'super_admin' || profile?.role === 'ops_admin';
+  // STRICT CHECK: Only show admin layout if user is actually an admin
+  const isAdminPath = location.pathname.startsWith('/admin') && isAdminRole;
 
   const navItems: { label: NavigationItem; path: string }[] = [
     { label: 'Dashboard', path: '/' },
@@ -165,7 +165,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 const Header: React.FC<{ onToggleSidebar?: () => void }> = ({ onToggleSidebar }) => {
   const { user, profile, signOut } = useAuth();
   const location = useLocation();
-  const isAdminPath = location.pathname.startsWith('/admin');
+  // Ensure title reflects Admin only if user is authorized
+  const isAdminRole = profile?.role === 'super_admin' || profile?.role === 'ops_admin';
+  const isAdminPath = location.pathname.startsWith('/admin') && isAdminRole;
   const [isEmergency, setIsEmergency] = useState(false);
 
   useEffect(() => {
@@ -216,6 +218,28 @@ const Header: React.FC<{ onToggleSidebar?: () => void }> = ({ onToggleSidebar })
   );
 };
 
+// --- ADMIN GUARD ---
+// Enforces role-based security at the routing level.
+const AdminGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, profile, loading } = useAuth();
+
+  if (loading) return <LoadingState message="Verifying Security Clearance..." />;
+  
+  // 1. Must be authenticated
+  if (!user) return <Navigate to="/auth" replace />;
+
+  // 2. Must be an admin
+  const isAdmin = profile?.role === 'super_admin' || profile?.role === 'ops_admin';
+  
+  if (!isAdmin) {
+    // Redirect unauthorized users back to safety
+    return <Navigate to="/" replace />;
+  }
+
+  // 3. Access Granted
+  return <>{children}</>;
+};
+
 const AppRoutes: React.FC = () => {
   const { user, loading } = useAuth();
 
@@ -231,7 +255,13 @@ const AppRoutes: React.FC = () => {
       <Route path="/test-lab" element={user ? <TestLabPro /> : <Navigate to="/auth" />} />
       <Route path="/conversion-doctor" element={user ? <ConversionDoctor /> : <Navigate to="/auth" />} />
       <Route path="/workflow" element={user ? <Workflow /> : <Navigate to="/auth" />} />
-      <Route path="/admin" element={user ? <AdminDashboard /> : <Navigate to="/auth" />} />
+      
+      {/* SECURE ADMIN ROUTE */}
+      <Route path="/admin" element={
+        <AdminGuard>
+          <AdminDashboard />
+        </AdminGuard>
+      } />
       
       {/* Public Routes */}
       <Route path="/documentation" element={<Documentation />} />
@@ -293,4 +323,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-    

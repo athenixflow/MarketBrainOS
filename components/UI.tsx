@@ -1,7 +1,10 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { SecurityEngine } from '../services/securityEngine';
 import { useAuth } from '../context/AuthContext';
+import { UserTier, ActionLogEntry, PaymentRecord } from '../types';
+import { getUserActionLogs, getUserPaymentHistory } from '../services/persistenceService';
 
 // 1. PRIMARY ACTION BUTTON
 export const PrimaryButton: React.FC<{
@@ -177,7 +180,7 @@ export const LoadingState: React.FC<{
   </div>
 );
 
-// 10. ERROR MESSAGE COMPONENT
+// 10. ERROR MESSAGE COMPONENT (GENERIC / CLIENT)
 export const ErrorMessage: React.FC<{ 
   message: string; 
   action?: { label: string; onClick: () => void } 
@@ -196,7 +199,101 @@ export const ErrorMessage: React.FC<{
   </div>
 );
 
-// 11. RESULT CONTAINER
+// 11. ANALYSIS FAILURE STATE (SERVER / TOKENS)
+export const AnalysisFailureState: React.FC<{
+  message: string;
+  onRetry?: () => void;
+}> = ({ message, onRetry }) => (
+  <div className="py-12 px-8 rounded-[32px] bg-red-50/30 border border-red-100 flex flex-col items-center text-center animate-in fade-in duration-500 my-8">
+    <div className="w-12 h-12 bg-red-100 text-red-500 rounded-full flex items-center justify-center mb-6 shadow-sm">
+       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+       </svg>
+    </div>
+    <h3 className="text-lg font-bold text-[#0B0B0B] mb-2 uppercase tracking-wide">Analysis Interrupted</h3>
+    <p className="text-sm font-medium text-gray-500 mb-8 max-w-md leading-relaxed">{message}</p>
+    
+    <div className="flex items-center gap-3 px-5 py-3 bg-white rounded-xl border border-gray-100 shadow-sm mb-8">
+       <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" />
+       <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Safe: No tokens deducted</span>
+    </div>
+
+    {onRetry && (
+      <button 
+        onClick={onRetry}
+        className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest hover:text-[#D40000] hover:underline underline-offset-4 transition-all"
+      >
+        Dismiss & Adjust Inputs
+      </button>
+    )}
+  </div>
+);
+
+// 11b. SYSTEM BLOCK STATE (MAINTENANCE / PAUSE)
+export const SystemBlockState: React.FC<{ message: string }> = ({ message }) => (
+  <div className="py-12 px-8 rounded-[32px] bg-yellow-50/50 border border-yellow-100 flex flex-col items-center text-center animate-in fade-in duration-500 my-8">
+    <div className="w-12 h-12 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mb-6 shadow-sm">
+       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+         <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
+       </svg>
+    </div>
+    <h3 className="text-lg font-bold text-[#0B0B0B] mb-2 uppercase tracking-wide">Analysis Unavailable</h3>
+    <p className="text-sm font-medium text-gray-500 mb-8 max-w-md leading-relaxed">{message}</p>
+
+    <div className="flex items-center gap-3 px-5 py-3 bg-white rounded-xl border border-gray-100 shadow-sm mb-6">
+       <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" />
+       <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Safe: No tokens deducted</span>
+    </div>
+    
+    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Please check back shortly.</p>
+  </div>
+);
+
+// 11c. RATE LIMIT STATE (COOLDOWN)
+export const RateLimitState: React.FC<{ message: string }> = ({ message }) => (
+  <div className="py-12 px-8 rounded-[32px] bg-blue-50/50 border border-blue-100 flex flex-col items-center text-center animate-in fade-in duration-500 my-8">
+    <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-6 shadow-sm">
+       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+         <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+       </svg>
+    </div>
+    <h3 className="text-lg font-bold text-[#0B0B0B] mb-2 uppercase tracking-wide">Cooldown Active</h3>
+    <p className="text-sm font-medium text-gray-500 mb-2">You’re making requests too quickly.</p>
+    <p className="text-xs text-gray-400 mb-8 max-w-md leading-relaxed">
+      {message.toLowerCase().includes("wait") || message.toLowerCase().includes("limit") 
+        ? message 
+        : "To ensure platform stability, we limit the frequency of complex analyses."}
+    </p>
+
+    <div className="flex items-center gap-3 px-5 py-3 bg-white rounded-xl border border-gray-100 shadow-sm mb-6">
+       <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" />
+       <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Safe: No tokens deducted</span>
+    </div>
+    
+    <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">
+      Please check back shortly.
+    </p>
+  </div>
+);
+
+export const isSystemBlockError = (msg: string | null): boolean => {
+  if (!msg) return false;
+  const lower = msg.toLowerCase();
+  return lower.includes('maintenance mode') || 
+         lower.includes('currently paused') || 
+         lower.includes('module is currently disabled');
+};
+
+export const isRateLimitError = (msg: string | null): boolean => {
+  if (!msg) return false;
+  const lower = msg.toLowerCase();
+  return lower.includes('rate limit') || 
+         lower.includes('wait') || 
+         lower.includes('resource-exhausted') ||
+         lower.includes('too quickly');
+};
+
+// 12. RESULT CONTAINER
 export const ResultContainer: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="mt-24 space-y-12 animate-in slide-in-from-bottom-8 duration-1000">
     {children}
@@ -212,48 +309,141 @@ export const PageHeader: React.FC<{ title: string; subtitle: string }> = ({ titl
   </div>
 );
 
-// 12. TOKEN NOTICE COMPONENT
-export const TokenNotice: React.FC<{ 
-  tier: 'free' | 'pro'; 
-  onUpgrade?: () => void;
-  onContinue?: () => void;
-}> = ({ tier, onUpgrade, onContinue }) => (
-  <div className="py-24 px-12 flex flex-col items-center text-center animate-in fade-in slide-in-from-bottom-4 duration-700">
-    <div className="w-1.5 h-1.5 bg-[#FF0000] rounded-full mb-10" />
-    {tier === 'free' ? (
-      <>
-        <p className="text-2xl font-bold text-[#0B0B0B] mb-12 max-w-md leading-relaxed">
-          You’ve used your free analysis credits. Upgrade to Pro to continue running analyses.
+// 13. USAGE LIMIT MODAL (BLOCKING)
+export const UsageLimitModal: React.FC<{
+  isOpen: boolean;
+  tier: UserTier;
+  reason: 'exhausted' | 'insufficient';
+  onClose: () => void;
+}> = ({ isOpen, tier, reason, onClose }) => {
+  const navigate = useNavigate();
+  if (!isOpen) return null;
+
+  const isFree = tier === 'free';
+
+  const handlePrimaryAction = () => {
+    if (isFree) {
+      window.open('https://ai.google.dev/gemini-api/docs/billing', '_blank');
+    } else {
+      navigate('/'); // Go to dashboard for top-up
+    }
+  };
+
+  let content = {
+    title: "",
+    body: "",
+    primaryCTA: "",
+    secondaryCTA: "",
+    hint: ""
+  };
+
+  if (isFree) {
+    if (reason === 'exhausted') {
+      content = {
+        title: "You’ve used your free tokens",
+        body: "You’ve reached the limit of your free tokens.\nUpgrade to Pro to get 200 tokens every month and keep running analyses.",
+        primaryCTA: "Upgrade to Pro — $7/month",
+        secondaryCTA: "Not now",
+        hint: "Tokens are only used when analyses complete successfully."
+      };
+    } else {
+      content = {
+        title: "This analysis needs more tokens",
+        body: "This tool requires more tokens than are available on the Free plan.\nUpgrade to Pro to unlock full access and monthly tokens.",
+        primaryCTA: "Upgrade to Pro",
+        secondaryCTA: "Go back",
+        hint: ""
+      };
+    }
+  } else {
+    // Pro User
+    if (reason === 'exhausted') {
+      content = {
+        title: "You’ve used all your tokens",
+        body: "You’ve used your monthly tokens.\nTop up to keep running analyses instantly.",
+        primaryCTA: "Top up tokens",
+        secondaryCTA: "Wait for monthly reset",
+        hint: "$5 = 100 tokens"
+      };
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0B0B0B]/90 backdrop-blur-md p-6 animate-in fade-in duration-300">
+      <div className="bg-white text-[#0B0B0B] max-w-md w-full p-12 rounded-[40px] shadow-2xl relative">
+        <div className="w-2 h-2 rounded-full bg-[#FF0000] mb-8" />
+        <h3 className="text-2xl font-bold mb-4 tracking-tight">{content.title}</h3>
+        <p className="text-gray-500 font-medium mb-10 leading-relaxed whitespace-pre-line">
+          {content.body}
         </p>
-        <div className="flex flex-col md:flex-row gap-6">
-          <PrimaryButton onClick={onUpgrade}>Upgrade to Pro</PrimaryButton>
+        
+        {content.hint && (
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-8">{content.hint}</p>
+        )}
+
+        <div className="flex flex-col gap-4">
+          <PrimaryButton onClick={handlePrimaryAction} className="w-full">
+            {content.primaryCTA}
+          </PrimaryButton>
           <button 
-            onClick={onContinue}
-            className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors py-4 px-10"
+            onClick={onClose}
+            className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest py-3 transition-colors"
           >
-            Continue exploring
+            {content.secondaryCTA}
           </button>
         </div>
-      </>
-    ) : (
-      <p className="text-2xl font-bold text-[#0B0B0B] mb-4 max-w-md leading-relaxed">
-        You’ve reached your monthly analysis allowance. Your usage resets next month.
-      </p>
-    )}
-  </div>
-);
+      </div>
+    </div>
+  );
+};
 
-// 13. TOKEN WARNING COMPONENT (SUBTLE)
-export const TokenWarning: React.FC = () => (
-  <div className="flex items-center justify-center gap-4 py-8 animate-in fade-in duration-1000">
-    <div className="w-1 h-1 rounded-full bg-[#FF0000] animate-pulse" />
-    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em]">
-      You’re approaching your monthly usage limit.
-    </p>
-  </div>
-);
+// 14. TOKEN STATUS BANNER (PASSIVE)
+export const TokenStatusBanner: React.FC<{
+  tier: UserTier;
+  tokens: number;
+}> = ({ tier, tokens }) => {
+  const navigate = useNavigate();
 
-// 14. UPGRADE CARD (DASHBOARD)
+  if (tier === 'free') {
+    return (
+      <div className="w-full bg-[#1A1A1A] border-b border-gray-800 py-3 px-6 flex flex-col sm:flex-row items-center justify-center gap-4 text-center">
+        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+          You’re on the Free plan. Upgrade to Pro to get 200 tokens every month.
+        </p>
+        <button 
+          onClick={() => window.open('https://ai.google.dev/gemini-api/docs/billing', '_blank')}
+          className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest hover:text-white transition-colors"
+        >
+          Upgrade to Pro →
+        </button>
+      </div>
+    );
+  }
+
+  // Pro Logic: Show only if low
+  if (tier === 'pro' && tokens <= 50 && tokens > 0) {
+    return (
+      <div className="w-full bg-[#FF0000]/5 border-b border-[#FF0000]/10 py-3 px-6 flex flex-col sm:flex-row items-center justify-center gap-4 text-center">
+        <div className="flex items-center gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000] animate-pulse" />
+          <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest">
+            You’re running low on tokens. Top up 100 tokens for $5 to avoid interruptions.
+          </p>
+        </div>
+        <button 
+          onClick={() => navigate('/')}
+          className="text-[10px] font-bold text-[#0B0B0B] uppercase tracking-widest hover:opacity-60 transition-opacity underline decoration-gray-300 underline-offset-4"
+        >
+          Top up tokens
+        </button>
+      </div>
+    );
+  }
+
+  return null;
+};
+
+// 15. UPGRADE CARD (DASHBOARD)
 export const UpgradeCard: React.FC<{ onClick: () => void }> = ({ onClick }) => (
   <Card className="!bg-[#FF0000] !text-white !border-none shadow-2xl shadow-[#FF0000]/20 hover:scale-[1.01] transition-transform cursor-pointer" onClick={onClick}>
     <div className="flex flex-col h-full justify-between">
@@ -269,7 +459,7 @@ export const UpgradeCard: React.FC<{ onClick: () => void }> = ({ onClick }) => (
   </Card>
 );
 
-// 15. EXPORT CONTROLS
+// 16. EXPORT CONTROLS
 export const ExportControls: React.FC<{
   onCopy: () => void;
   onExportText?: () => void;
@@ -315,7 +505,7 @@ export const ExportControls: React.FC<{
   );
 };
 
-// 16. HONEYPOT COMPONENT
+// 17. HONEYPOT COMPONENT
 export const Honeypot: React.FC = () => {
   const { profile } = useAuth();
   const triggerHoneypot = (e: React.MouseEvent) => {
@@ -337,7 +527,7 @@ export const Honeypot: React.FC = () => {
   );
 };
 
-// 17. HONEYPOT FIELD
+// 18. HONEYPOT FIELD
 export const HoneypotField: React.FC<{ value: string; onChange: (val: string) => void }> = ({ value, onChange }) => (
   <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }} aria-hidden="true">
     <input
@@ -350,3 +540,207 @@ export const HoneypotField: React.FC<{ value: string; onChange: (val: string) =>
     />
   </div>
 );
+
+// 19. TOKEN HISTORY MODAL
+export const TokenHistoryModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const { user } = useAuth();
+  const [logs, setLogs] = useState<ActionLogEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      getUserActionLogs(user.uid)
+        .then(setLogs)
+        .catch(console.error)
+        .finally(() => setLoading(false));
+    }
+  }, [user]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0B0B0B]/90 backdrop-blur-md p-6 animate-in fade-in duration-300">
+      <div className="bg-white text-[#0B0B0B] max-w-2xl w-full p-10 rounded-[40px] shadow-2xl relative max-h-[85vh] overflow-hidden flex flex-col">
+        <div className="flex justify-between items-center mb-8 shrink-0">
+          <div>
+            <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000] mb-2" />
+            <h3 className="text-2xl font-bold tracking-tight">Token Usage History</h3>
+          </div>
+          <button 
+            onClick={onClose}
+            className="p-2 text-gray-400 hover:text-[#0B0B0B] transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="overflow-y-auto flex-grow pr-2">
+          {loading ? (
+            <div className="py-20 text-center">
+              <div className="w-2 h-2 rounded-full bg-[#FF0000] animate-pulse mx-auto mb-4" />
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Loading Records...</p>
+            </div>
+          ) : logs.length === 0 ? (
+            <div className="py-20 text-center text-gray-400 font-medium">
+              No token usage recorded yet.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {logs.map(log => {
+                const date = log.created_at ? new Date(log.created_at.toMillis()) : new Date(log.timestamp || 0);
+                const isTopUp = log.action === 'token_topup';
+                const isFailure = log.status === 'failed_refunded';
+                
+                return (
+                  <div key={log.id} className="p-6 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-between group hover:bg-gray-100 transition-colors">
+                    <div className="flex flex-col gap-1">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        {date.toLocaleDateString()} • {date.toLocaleTimeString()}
+                      </p>
+                      <p className="text-sm font-bold text-[#0B0B0B]">
+                        {isTopUp ? 'Usage Credit Purchase' : log.module || 'System Action'}
+                      </p>
+                      <p className="text-xs text-gray-500 font-medium truncate max-w-[200px]">
+                        {isTopUp ? 'Account Top-Up' : log.action || 'Analysis Execution'}
+                      </p>
+                    </div>
+                    
+                    <div className="text-right">
+                      {isFailure ? (
+                        <div>
+                          <span className="inline-block px-3 py-1 rounded-full bg-gray-200 text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">
+                            Refunded
+                          </span>
+                          <p className="text-xs font-bold text-gray-400 line-through">
+                            {log.tokens_used} Tokens
+                          </p>
+                        </div>
+                      ) : isTopUp ? (
+                        <div>
+                          <p className="text-sm font-black text-green-600">
+                            +{log.tokens_added || 100} Tokens
+                          </p>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                            ${log.amount_paid || 5}.00
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-sm font-black text-[#0B0B0B]">
+                          -{log.tokens_used} Tokens
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        
+        <div className="pt-8 mt-4 border-t border-gray-100 text-center shrink-0">
+          <p className="text-[10px] text-gray-400">All records are immutable and server-verified.</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// 20. PAYMENT HISTORY MODAL
+export const PaymentHistoryModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const { user } = useAuth();
+  const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      getUserPaymentHistory(user.uid)
+        .then(setPayments)
+        .catch(console.error)
+        .finally(() => setLoading(false));
+    }
+  }, [user]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0B0B0B]/90 backdrop-blur-md p-6 animate-in fade-in duration-300">
+      <div className="bg-white text-[#0B0B0B] max-w-2xl w-full p-10 rounded-[40px] shadow-2xl relative max-h-[85vh] overflow-hidden flex flex-col">
+        <div className="flex justify-between items-center mb-8 shrink-0">
+          <div>
+            <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000] mb-2" />
+            <h3 className="text-2xl font-bold tracking-tight">Top-Up Receipts</h3>
+          </div>
+          <button 
+            onClick={onClose}
+            className="p-2 text-gray-400 hover:text-[#0B0B0B] transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="overflow-y-auto flex-grow pr-2">
+          {loading ? (
+            <div className="py-20 text-center">
+              <div className="w-2 h-2 rounded-full bg-[#FF0000] animate-pulse mx-auto mb-4" />
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Loading Receipts...</p>
+            </div>
+          ) : payments.length === 0 ? (
+            <div className="py-20 text-center text-gray-400 font-medium">
+              You haven’t topped up any tokens yet.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {payments.map(payment => {
+                const date = payment.created_at ? new Date(payment.created_at.toMillis()) : new Date(0);
+                const isFailed = payment.status === 'failed';
+                
+                return (
+                  <div key={payment.id} className="p-6 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-between group hover:bg-gray-100 transition-colors">
+                    <div className="flex flex-col gap-1">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        {date.toLocaleDateString()} • {date.toLocaleTimeString()}
+                      </p>
+                      <p className="text-sm font-bold text-[#0B0B0B]">
+                        Token Top-Up
+                      </p>
+                      <p className="text-xs text-gray-500 font-medium truncate max-w-[200px] font-mono">
+                        Ref: {payment.payment_reference || 'N/A'}
+                      </p>
+                    </div>
+                    
+                    <div className="text-right">
+                      {isFailed ? (
+                        <div>
+                          <span className="inline-block px-3 py-1 rounded-full bg-red-100 text-red-500 text-[10px] font-bold uppercase tracking-widest mb-1">
+                            Failed
+                          </span>
+                          <p className="text-xs font-bold text-gray-400 line-through">
+                            ${payment.amount_paid}
+                          </p>
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="text-sm font-black text-green-600">
+                            +{payment.tokens_credited} Tokens
+                          </p>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                            ${payment.amount_paid}.00 USD
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        
+        <div className="pt-8 mt-4 border-t border-gray-100 text-center shrink-0">
+          <p className="text-[10px] text-gray-400 mb-1">Top-ups add extra tokens and do not affect your monthly token reset.</p>
+          <p className="text-[9px] text-gray-300">Transaction records are immutable.</p>
+        </div>
+      </div>
+    </div>
+  );
+};

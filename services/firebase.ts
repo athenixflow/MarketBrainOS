@@ -1,7 +1,7 @@
-
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
+import { getFunctions, Functions } from 'firebase/functions';
 import { getAnalytics, Analytics } from 'firebase/analytics';
 
 const firebaseConfig = {
@@ -18,6 +18,7 @@ let app: FirebaseApp;
 let auth: Auth;
 let googleProvider: GoogleAuthProvider;
 let db: Firestore;
+let functions: Functions;
 let analytics: Analytics | null = null;
 let isFirebaseInitialized = false;
 
@@ -28,6 +29,8 @@ try {
   auth = getAuth(app);
   googleProvider = new GoogleAuthProvider();
   db = getFirestore(app);
+  functions = getFunctions(app);
+  
   // Conditional analytics initialization
   if (typeof window !== 'undefined') {
     analytics = getAnalytics(app);
@@ -56,6 +59,9 @@ try {
   
   // Mock DB
   db = {} as unknown as Firestore;
+  
+  // Mock Functions
+  functions = {} as unknown as Functions;
 }
 
-export { auth, googleProvider, db, analytics, isFirebaseInitialized };
+export { auth, googleProvider, db, functions, analytics, isFirebaseInitialized };

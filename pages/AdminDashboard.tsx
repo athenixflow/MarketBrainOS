@@ -3,14 +3,27 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Card, PageHeader, LoadingState, Tabs, ErrorMessage, PrimaryButton, Input, IntelligenceIndicator } from '../components/UI';
-import { adminGetAllUsers, adminGetAuditLogs, adminGetSecurityLogs, adminSuspendUser, adminUpdateUserTokens, updateSystemEmergency, getSystemSettings } from '../services/persistenceService';
+import { 
+  adminGetAllUsers, 
+  adminGetAuditLogs, 
+  adminGetSecurityLogs, 
+  adminGetActionLogs,
+  callAdminUserAction,
+  updateSystemEmergency, 
+  getSystemSettings,
+  getAdminSettings,
+  callUpdateSystemSettings,
+  adminGetPlatformStats,
+  PlatformStats,
+  AdminUserAction
+} from '../services/persistenceService';
 import { SecurityEngine } from '../services/securityEngine';
 import { DiagnosisEngine } from '../services/diagnosisService';
-import { UserProfile, AuditLogEntry, SecurityEvent, SystemLoadLevel, SystemSettings, DiagnosticResult } from '../types';
+import { UserProfile, AuditLogEntry, SecurityEvent, SystemLoadLevel, SystemSettings, DiagnosticResult, ActionLogEntry, AdminSettings } from '../types';
 
 interface ConfirmationRequest {
-  type: 'SUSPEND' | 'UPDATE_TOKENS' | 'TOGGLE_LOCKDOWN';
-  userId: string;
+  type: AdminUserAction | 'TOGGLE_LOCKDOWN' | 'UPDATE_SETTINGS';
+  userId?: string;
   payload?: any;
   warningTitle: string;
   warningMessage: string;
@@ -18,16 +31,23 @@ interface ConfirmationRequest {
 }
 
 const AdminDashboard: React.FC = () => {
-  const { profile, loading: authLoading } = useAuth();
+  const { profile } = useAuth();
   const navigate = useNavigate();
   
   const [activeTab, setActiveTab] = useState('Overview');
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [securityLogs, setSecurityLogs] = useState<SecurityEvent[]>([]);
+  const [actionLogs, setActionLogs] = useState<ActionLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [systemLoad, setSystemLoad] = useState<{ level: SystemLoadLevel, score: number, percentage: number }>(SecurityEngine.getSystemLoadLevel());
   const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
+  const [adminSettings, setAdminSettings] = useState<AdminSettings | null>(null);
+  const [platformStats, setPlatformStats] = useState<PlatformStats | null>(null);
+
+  // Health Metrics
+  const [failureRate, setFailureRate] = useState(0);
+  const [lastFailure, setLastFailure] = useState<string | null>(null);
 
   // Integrity Chain State
   const [chainValid, setChainValid] = useState<boolean | null>(null);
@@ -46,25 +66,42 @@ const AdminDashboard: React.FC = () => {
   const [pendingAction, setPendingAction] = useState<ConfirmationRequest | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  // Token Update Local State
-  const [newTokenValues, setNewTokenValues] = useState<Record<string, number>>({});
-
-  useEffect(() => {
-    if (!authLoading && (!profile || profile.role === 'user')) navigate('/');
-  }, [profile, authLoading, navigate]);
+  // Log Filters
+  const [logFilterModule, setLogFilterModule] = useState('All');
+  const [logFilterStatus, setLogFilterStatus] = useState('All');
 
   const load = async () => {
     setLoading(true);
-    const [u, logs, sLogs, settings] = await Promise.all([
+    const [u, logs, sLogs, aLogs, settings, admSettings, stats] = await Promise.all([
       adminGetAllUsers(), 
       adminGetAuditLogs(),
       adminGetSecurityLogs(),
-      getSystemSettings()
+      adminGetActionLogs(200), // Fetch recent 200 actions
+      getSystemSettings(),
+      getAdminSettings(),
+      adminGetPlatformStats()
     ]);
     setUsers(u);
     setAuditLogs(logs);
     setSecurityLogs(sLogs);
+    setActionLogs(aLogs);
     setSystemSettings(settings);
+    setAdminSettings(admSettings);
+    setPlatformStats(stats);
+    
+    // Calculate Health Metrics from Action Logs (Real Data)
+    const recentLogs = aLogs.filter(l => {
+      const t = l.created_at ? l.created_at.toMillis() : new Date(l.timestamp || 0).getTime();
+      return (Date.now() - t) < 24 * 60 * 60 * 1000; // Last 24h
+    });
+    
+    const failures = recentLogs.filter(l => l.status === 'failed_refunded');
+    const rate = recentLogs.length > 0 ? (failures.length / recentLogs.length) * 100 : 0;
+    setFailureRate(rate);
+
+    const lastFailLog = aLogs.find(l => l.status === 'failed_refunded');
+    setLastFailure(lastFailLog ? (lastFailLog.created_at ? new Date(lastFailLog.created_at.toMillis()).toLocaleString() : new Date(lastFailLog.timestamp!).toLocaleString()) : null);
+
     setLoading(false);
     
     const verify = await SecurityEngine.verifyChainIntegrity(logs);
@@ -102,31 +139,78 @@ const AdminDashboard: React.FC = () => {
   const allDiagnosticsPassed = diagnosticResults.length > 0 && diagnosticResults.every(r => r.status === 'PASS');
 
   // 1. Initial Request -> Opens Confirmation Modal
-  const initiateAction = (type: ConfirmationRequest['type'], userId: string, payload?: any) => {
+  const initiateAction = (type: ConfirmationRequest['type'], userId: string | undefined, payload?: any) => {
     let req: ConfirmationRequest;
-    if (type === 'TOGGLE_LOCKDOWN') {
-      const active = payload.active;
-      req = {
-        type, userId, payload,
-        warningTitle: active ? "ACTIVATE SYSTEM LOCKDOWN" : "RELEASE SYSTEM LOCKDOWN",
-        warningMessage: active 
-          ? "This will immediately halt all neural operations, suspend authentication, and block user access. This is a drastic emergency measure."
-          : "This will restore full system functionality and allow user access.",
-        keyword: active ? "LOCKDOWN" : "RELEASE"
-      };
-    } else if (type === 'SUSPEND') {
-      req = {
-        type, userId, payload,
-        warningTitle: "REVOKE IDENTITY ACCESS",
-        warningMessage: "The user will be immediately disconnected and prevented from signing in. This action is logged to the immutable ledger.",
-        keyword: "SUSPEND"
-      };
-    } else {
-      // Non-destructive (relatively), skip confirmation modal
-      req = { type, userId, payload, warningTitle: "", warningMessage: "", keyword: "" };
-      handleConfirmedAction(req);
-      return;
+    
+    // Define warnings based on action type
+    switch(type) {
+      case 'promoteToAdmin':
+        req = {
+          type, userId, payload,
+          warningTitle: "GRANT ADMINISTRATIVE PRIVILEGES",
+          warningMessage: "This user will gain full access to user management and sensitive system controls.",
+          keyword: "PROMOTE"
+        };
+        break;
+      case 'demoteAdmin':
+         req = {
+          type, userId, payload,
+          warningTitle: "REVOKE ADMINISTRATIVE PRIVILEGES",
+          warningMessage: "This user will immediately lose access to all admin tools.",
+          keyword: "DEMOTE"
+        };
+        break;
+      case 'toggleStatus':
+        req = {
+          type, userId, payload,
+          warningTitle: payload.targetStatus === 'disabled' ? "DISABLE ACCOUNT ACCESS" : "RESTORE ACCOUNT ACCESS",
+          warningMessage: payload.targetStatus === 'disabled' 
+            ? "User will be immediately signed out and blocked from logging in." 
+            : "User will be allowed to sign in and use the platform again.",
+          keyword: payload.targetStatus === 'disabled' ? "DISABLE" : "RESTORE"
+        };
+        break;
+      case 'resetTokens':
+        req = {
+          type, userId, payload,
+          warningTitle: "RESET TOKEN BALANCE",
+          warningMessage: "User's token count will be reset to their plan's default immediately.",
+          keyword: "RESET"
+        };
+        break;
+      case 'changePlan':
+         req = {
+          type, userId, payload,
+          warningTitle: "CHANGE SUBSCRIPTION TIER",
+          warningMessage: `Switching user to ${payload.plan.toUpperCase()} plan.`,
+          keyword: "CONFIRM"
+        };
+        break;
+      case 'TOGGLE_LOCKDOWN':
+        const active = payload.active;
+        req = {
+          type, userId, payload,
+          warningTitle: active ? "ACTIVATE SYSTEM LOCKDOWN" : "RELEASE SYSTEM LOCKDOWN",
+          warningMessage: active 
+            ? "This will immediately halt all neural operations, suspend authentication, and block user access. This is a drastic emergency measure."
+            : "This will restore full system functionality and allow user access.",
+          keyword: active ? "LOCKDOWN" : "RELEASE"
+        };
+        break;
+      case 'UPDATE_SETTINGS':
+        const settingName = payload.name;
+        const newVal = payload.value;
+        req = {
+          type, payload,
+          warningTitle: `CHANGE SYSTEM SETTING: ${settingName}`,
+          warningMessage: `You are about to change ${settingName} to ${newVal}. This will affect global platform behavior immediately.`,
+          keyword: "CONFIRM"
+        };
+        break;
+      default:
+         req = { type, userId, payload, warningTitle: "CONFIRM ACTION", warningMessage: "Are you sure?", keyword: "YES" };
     }
+
     setConfirmationReq(req);
     setConfirmationInput('');
     setActionError(null);
@@ -138,7 +222,7 @@ const AdminDashboard: React.FC = () => {
     if (!profile) return;
     setActionError(null);
 
-    const scope = req.type === 'TOGGLE_LOCKDOWN' ? 'admin:system_config' : 'admin:user_management';
+    const scope = (req.type === 'TOGGLE_LOCKDOWN' || req.type === 'UPDATE_SETTINGS') ? 'admin:system_config' : 'admin:user_management';
     const check = await SecurityEngine.checkPermission(profile, scope);
     
     if (check.stepUpRequired) {
@@ -174,20 +258,47 @@ const AdminDashboard: React.FC = () => {
   // 4. Final Execution
   const executeAction = async (req: ConfirmationRequest) => {
     try {
-      if (req.type === 'SUSPEND') {
-        await adminSuspendUser(profile!, req.userId, "Security Suspension");
-      } else if (req.type === 'UPDATE_TOKENS') {
-        await adminUpdateUserTokens(profile!, req.userId, req.payload.tokens);
-      } else if (req.type === 'TOGGLE_LOCKDOWN') {
+      if (req.type === 'TOGGLE_LOCKDOWN') {
         await updateSystemEmergency(profile!, req.payload.active);
+      } else if (req.type === 'UPDATE_SETTINGS') {
+        await callUpdateSystemSettings(req.payload.changes);
+      } else {
+        // User Management Action
+        if (req.userId) await callAdminUserAction(req.type as AdminUserAction, req.userId, req.payload);
       }
+      // Refresh Data
       await load();
     } catch (err: any) {
       setActionError(err.message);
     }
   };
 
-  if (authLoading || loading) return <LoadingState message="Synchronizing Strategic Ledger..." />;
+  const getFilteredLogs = () => {
+    return actionLogs.filter(log => {
+      const modMatch = logFilterModule === 'All' || log.module === logFilterModule;
+      const statusMatch = logFilterStatus === 'All' || 
+                          (logFilterStatus === 'Failed' && log.status === 'failed_refunded') ||
+                          (logFilterStatus === 'Blocked' && log.status === 'blocked') ||
+                          (logFilterStatus === 'Success' && log.status === 'success') ||
+                          (logFilterStatus === 'Client' && !log.status); 
+      return modMatch && statusMatch;
+    });
+  };
+
+  const ToggleSwitch: React.FC<{ label: string; checked: boolean; onChange: () => void; disabled?: boolean; color?: string }> = ({ label, checked, onChange, disabled, color = 'bg-[#FF0000]' }) => (
+    <div className="flex items-center justify-between p-6 bg-gray-50 rounded-2xl border border-gray-100">
+      <span className="text-sm font-bold text-[#0B0B0B]">{label}</span>
+      <button 
+        onClick={onChange}
+        disabled={disabled}
+        className={`w-14 h-8 rounded-full p-1 transition-colors duration-300 ${checked ? color : 'bg-gray-300'} disabled:opacity-50`}
+      >
+        <div className={`w-6 h-6 rounded-full bg-white shadow-md transform transition-transform duration-300 ${checked ? 'translate-x-6' : 'translate-x-0'}`} />
+      </button>
+    </div>
+  );
+
+  if (loading) return <LoadingState message="Synchronizing Strategic Ledger..." />;
 
   const clearanceLevel = profile?.is_verified_admin ? "Level 2: VERIFIED" : "Level 1: READ_ONLY";
   const isEmergencyActive = systemSettings?.emergency_lockdown;
@@ -251,6 +362,13 @@ const AdminDashboard: React.FC = () => {
         </div>
       )}
 
+      {/* Action Feedback Error */}
+      {actionError && !showStepUp && !confirmationReq && (
+         <div className="fixed bottom-10 right-10 z-50 animate-in slide-in-from-bottom-4">
+            <ErrorMessage message={actionError} action={{ label: "Dismiss", onClick: () => setActionError(null) }} />
+         </div>
+      )}
+
       {isEmergencyActive && (
         <div className="fixed top-16 left-72 right-0 bg-red-600 text-white py-2 px-12 z-40 flex items-center justify-center gap-4 animate-pulse">
           <div className="w-2 h-2 rounded-full bg-white" />
@@ -279,7 +397,7 @@ const AdminDashboard: React.FC = () => {
       </div>
 
       <Tabs 
-        tabs={['Overview', 'Users', 'Safety Monitor', 'System Diagnosis', 'Audit Ledger']} 
+        tabs={['Overview', 'Controls', 'Users', 'Safety Monitor', 'System Diagnosis', 'Activity Logs', 'Audit Ledger']} 
         activeTab={activeTab} 
         onTabChange={setActiveTab} 
       />
@@ -287,21 +405,30 @@ const AdminDashboard: React.FC = () => {
       <div className="min-h-[400px]">
         {activeTab === 'Overview' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-            <StatCard label="Identities" value={users.length} />
+            <StatCard label="Total Identities" value={platformStats?.totalUsers || 0} />
+            <StatCard label="Active Users (24h)" value={platformStats?.activeUsers || 0} />
+            <StatCard label="Analyses Run" value={platformStats?.totalAnalyses || 0} />
+            <StatCard label="Tokens Consumed" value={platformStats?.tokensConsumed || 0} />
+            <StatCard label="Failed/Refunded" value={platformStats?.failedAnalyses || 0} />
+            
             <div className="lg:col-span-1">
-              <Card className="!p-8">
+              <Card className="!p-8 h-full">
                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">System Integrity</p>
                  <div className="flex items-center gap-4">
                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${allDiagnosticsPassed ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
                       {allDiagnosticsPassed ? '✓' : '!'}
                    </div>
-                   <p className="text-xl font-black text-[#0B0B0B]">
-                     {allDiagnosticsPassed ? 'VERIFIED' : 'ATTENTION NEEDED'}
-                   </p>
+                   <div>
+                     <p className="text-xl font-black text-[#0B0B0B] leading-none">
+                       {allDiagnosticsPassed ? 'VERIFIED' : 'ATTENTION'}
+                     </p>
+                     <p className="text-[10px] text-gray-400 mt-1">Diagnostic Circuit Check</p>
+                   </div>
                  </div>
               </Card>
             </div>
-            <div className="lg:col-span-1">
+            
+             <div className="lg:col-span-1">
                <Card title="System Kill Switch" className={`!border-2 transition-colors ${isEmergencyActive ? 'border-red-600 bg-red-50' : 'border-gray-100'}`}>
                   <p className="text-[11px] font-medium text-gray-500 leading-relaxed mb-8">
                     {isEmergencyActive 
@@ -324,82 +451,199 @@ const AdminDashboard: React.FC = () => {
           </div>
         )}
 
+        {activeTab === 'Controls' && adminSettings && (
+          <div className="space-y-12 animate-in slide-in-from-bottom-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <Card title="Global Operational Controls">
+                <div className="space-y-6">
+                  <ToggleSwitch 
+                    label="Maintenance Mode" 
+                    checked={adminSettings.maintenance_mode}
+                    color="bg-yellow-500" 
+                    onChange={() => initiateAction('UPDATE_SETTINGS', undefined, { 
+                      name: 'Maintenance Mode', 
+                      value: !adminSettings.maintenance_mode ? 'ON' : 'OFF',
+                      changes: { maintenance_mode: !adminSettings.maintenance_mode }
+                    })} 
+                  />
+                  <p className="text-xs text-gray-400 px-2">Blocks normal user access. Admins retain dashboard access.</p>
+                  
+                  <ToggleSwitch 
+                    label="Pause All Analyses" 
+                    checked={adminSettings.analyses_paused}
+                    color="bg-red-500" 
+                    onChange={() => initiateAction('UPDATE_SETTINGS', undefined, { 
+                      name: 'Global Pause', 
+                      value: !adminSettings.analyses_paused ? 'PAUSED' : 'ACTIVE',
+                      changes: { analyses_paused: !adminSettings.analyses_paused }
+                    })} 
+                  />
+                  <p className="text-xs text-gray-400 px-2">Immediately halts all neural engine processing. Billing is suspended.</p>
+                </div>
+              </Card>
+
+              <Card title="Module Availability">
+                <div className="space-y-4">
+                  {Object.keys(adminSettings.modules_enabled).map((module) => (
+                    <ToggleSwitch 
+                      key={module}
+                      label={module} 
+                      checked={adminSettings.modules_enabled[module as keyof typeof adminSettings.modules_enabled]}
+                      color="bg-green-500"
+                      onChange={() => {
+                        const newState = !adminSettings.modules_enabled[module as keyof typeof adminSettings.modules_enabled];
+                        initiateAction('UPDATE_SETTINGS', undefined, { 
+                          name: `${module} Module`, 
+                          value: newState ? 'ENABLED' : 'DISABLED',
+                          changes: { 
+                            modules_enabled: { 
+                              ...adminSettings.modules_enabled, 
+                              [module]: newState 
+                            } 
+                          }
+                        });
+                      }} 
+                    />
+                  ))}
+                </div>
+              </Card>
+            </div>
+            
+            <div className="text-right text-xs text-gray-400 font-mono">
+              Last Config Update: {adminSettings.last_updated ? new Date(adminSettings.last_updated).toLocaleString() : 'Never'} by {adminSettings.updated_by || 'System'}
+            </div>
+          </div>
+        )}
+
         {activeTab === 'Users' && (
           <Card className="!p-0 overflow-hidden">
-            <table className="w-full text-left">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  <th className="px-10 py-6 text-[10px] uppercase font-bold text-gray-400">Identity</th>
-                  <th className="px-10 py-6 text-[10px] uppercase font-bold text-gray-400">Clearance</th>
-                  <th className="px-10 py-6 text-[10px] uppercase font-bold text-gray-400">Risk</th>
-                  <th className="px-10 py-6 text-[10px] uppercase font-bold text-gray-400">Credits</th>
-                  <th className="px-10 py-6 text-[10px] uppercase font-bold text-gray-400">Status</th>
-                  <th className="px-10 py-6 text-[10px] uppercase font-bold text-gray-400">Intervention</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {users.map(u => (
-                  <tr key={u.id}>
-                    <td className="px-10 py-6">
-                      <p className="text-sm font-bold text-[#0B0B0B]">{u.email}</p>
-                      <p className="text-[10px] text-gray-400 font-medium">Last Active: {u.last_active ? new Date(u.last_active).toLocaleDateString() : 'Never'}</p>
-                    </td>
-                    <td className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-gray-400">{u.role}</td>
-                    <td className="px-10 py-6">
-                       <span className={`text-sm font-black ${u.risk_score && u.risk_score > 50 ? 'text-red-500' : 'text-green-500'}`}>{u.risk_score || 0}</span>
-                    </td>
-                    <td className="px-10 py-6">
-                      <div className="flex items-center gap-4">
-                        <input 
-                          disabled={isEmergencyActive}
-                          type="number"
-                          className="w-16 bg-transparent border-b border-gray-200 text-xs font-bold focus:outline-none disabled:opacity-30"
-                          value={newTokenValues[u.id] ?? u.tokens}
-                          onChange={(e) => setNewTokenValues({...newTokenValues, [u.id]: parseInt(e.target.value)})}
-                        />
-                        <button 
-                          disabled={isEmergencyActive}
-                          onClick={() => initiateAction('UPDATE_TOKENS', u.id, { tokens: newTokenValues[u.id] })}
-                          className="text-[9px] font-bold text-blue-500 hover:opacity-60 uppercase tracking-widest disabled:opacity-20"
-                        >
-                          Sync
-                        </button>
-                      </div>
-                    </td>
-                    <td className="px-10 py-6">
-                      <span className={`text-[9px] font-bold uppercase px-3 py-1 rounded-full border ${u.is_suspended ? 'border-red-500 text-red-500 bg-red-50' : 'border-green-500 text-green-500 bg-green-50'}`}>
-                        {u.is_suspended ? 'Suspended' : 'Active'}
-                      </span>
-                    </td>
-                    <td className="px-10 py-6">
-                      {!u.is_suspended && u.role === 'user' && (
-                        <button 
-                          disabled={isEmergencyActive}
-                          onClick={() => initiateAction('SUSPEND', u.id)}
-                          className="text-[9px] font-bold text-red-500 uppercase tracking-widest hover:underline disabled:opacity-20"
-                        >
-                          Revoke Access
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {users.length === 0 ? (
+                <div className="p-12 text-center text-gray-400 font-medium">No users found.</div>
+            ) : (
+                <table className="w-full text-left">
+                <thead className="bg-gray-50 border-b border-gray-100">
+                    <tr>
+                    <th className="px-8 py-6 text-[10px] uppercase font-bold text-gray-400">Identity</th>
+                    <th className="px-8 py-6 text-[10px] uppercase font-bold text-gray-400">Plan</th>
+                    <th className="px-8 py-6 text-[10px] uppercase font-bold text-gray-400">Role</th>
+                    <th className="px-8 py-6 text-[10px] uppercase font-bold text-gray-400">Tokens</th>
+                    <th className="px-8 py-6 text-[10px] uppercase font-bold text-gray-400">Status</th>
+                    <th className="px-8 py-6 text-[10px] uppercase font-bold text-gray-400 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                    {users.map(u => (
+                    <tr key={u.id} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-8 py-6">
+                        <p className="text-sm font-bold text-[#0B0B0B]">{u.email}</p>
+                        <p className="text-[10px] text-gray-400 font-medium">Last: {u.last_active ? new Date(u.last_active).toLocaleDateString() : 'Never'}</p>
+                        </td>
+                        <td className="px-8 py-6">
+                            <button 
+                                onClick={() => initiateAction('changePlan', u.id, { plan: u.tier === 'free' ? 'pro' : 'free' })}
+                                className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border transition-all hover:opacity-80 ${u.tier === 'pro' ? 'bg-[#FF0000] text-white border-[#FF0000]' : 'bg-gray-100 text-gray-500 border-gray-200'}`}
+                            >
+                                {u.tier}
+                            </button>
+                        </td>
+                        <td className="px-8 py-6">
+                            <span className={`text-[10px] font-bold uppercase tracking-widest ${u.role !== 'user' ? 'text-blue-600' : 'text-gray-400'}`}>
+                                {u.role === 'user' ? 'User' : 'Admin'}
+                            </span>
+                        </td>
+                        <td className="px-8 py-6">
+                            <span className="text-sm font-bold text-[#0B0B0B]">{u.tokens}</span>
+                        </td>
+                        <td className="px-8 py-6">
+                        <span className={`text-[9px] font-bold uppercase px-3 py-1 rounded-full border ${u.is_suspended ? 'border-red-500 text-red-500 bg-red-50' : 'border-green-500 text-green-500 bg-green-50'}`}>
+                            {u.is_suspended ? 'Disabled' : 'Active'}
+                        </span>
+                        </td>
+                        <td className="px-8 py-6 text-right">
+                        <div className="flex items-center justify-end gap-3">
+                            {/* TOKEN RESET */}
+                            <button 
+                                onClick={() => initiateAction('resetTokens', u.id)}
+                                disabled={isEmergencyActive}
+                                className="p-2 text-gray-400 hover:text-blue-500 transition-colors disabled:opacity-30"
+                                title="Reset Tokens"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                                </svg>
+                            </button>
+
+                            {/* PROMOTE / DEMOTE */}
+                            {u.role === 'user' ? (
+                                <button 
+                                    onClick={() => initiateAction('promoteToAdmin', u.id)}
+                                    disabled={isEmergencyActive}
+                                    className="p-2 text-gray-400 hover:text-green-600 transition-colors disabled:opacity-30"
+                                    title="Promote to Admin"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 11.25l-3-3m0 0l-3 3m3-3v7.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </button>
+                            ) : (
+                                <button 
+                                    onClick={() => initiateAction('demoteAdmin', u.id)}
+                                    disabled={isEmergencyActive}
+                                    className="p-2 text-gray-400 hover:text-red-600 transition-colors disabled:opacity-30"
+                                    title="Revoke Admin"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </button>
+                            )}
+
+                            {/* DISABLE / ENABLE */}
+                            <button 
+                                onClick={() => initiateAction('toggleStatus', u.id, { targetStatus: u.is_suspended ? 'active' : 'disabled' })}
+                                disabled={isEmergencyActive}
+                                className={`text-[9px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg transition-colors disabled:opacity-30 ${u.is_suspended ? 'bg-green-50 text-green-600 hover:bg-green-100' : 'bg-red-50 text-red-500 hover:bg-red-100'}`}
+                            >
+                                {u.is_suspended ? 'Enable' : 'Disable'}
+                            </button>
+                        </div>
+                        </td>
+                    </tr>
+                    ))}
+                </tbody>
+                </table>
+            )}
           </Card>
         )}
 
         {activeTab === 'Safety Monitor' && (
           <div className="space-y-12">
-            <Card title="Compute Pressure" accent>
-              <div className="flex items-center gap-8">
-                <div className="h-32 w-1.5 bg-gray-100 rounded-full relative overflow-hidden">
-                   <div className={`absolute bottom-0 left-0 w-full transition-all duration-1000 ${systemLoad.level === 'NORMAL' ? 'bg-green-500' : 'bg-red-500'}`} style={{ height: `${systemLoad.percentage}%` }} />
-                </div>
-                <div>
-                   <h3 className="text-4xl font-black text-[#0B0B0B] mb-2">{Math.round(systemLoad.percentage)}%</h3>
-                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Strategic Load Indicator</p>
-                </div>
+            {/* Real System Health based on Action Logs */}
+            <Card title="System Health Status" accent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                 <div className="flex flex-col gap-2">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Recent Failure Rate (24h)</p>
+                    <div className="flex items-center gap-4">
+                       <span className={`text-4xl font-black ${failureRate > 5 ? 'text-red-500' : 'text-green-500'}`}>
+                          {failureRate.toFixed(1)}%
+                       </span>
+                       <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${failureRate > 5 ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                          {failureRate > 5 ? 'DEGRADED' : 'HEALTHY'}
+                       </div>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">
+                       Calculated from {actionLogs.filter(l => (Date.now() - (l.created_at?.toMillis() || 0)) < 86400000).length} recent operations.
+                    </p>
+                 </div>
+                 <div className="flex flex-col gap-2">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Last Failure Event</p>
+                    <p className="text-xl font-bold text-[#0B0B0B]">
+                       {lastFailure || 'No recent failures'}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-2">
+                       Most recent 'failed_refunded' status.
+                    </p>
+                 </div>
               </div>
             </Card>
 
@@ -466,6 +710,86 @@ const AdminDashboard: React.FC = () => {
           </div>
         )}
 
+        {activeTab === 'Activity Logs' && (
+          <div className="space-y-6">
+             <div className="flex gap-4 mb-6">
+               <select 
+                 className="p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold uppercase tracking-widest text-gray-600"
+                 value={logFilterModule}
+                 onChange={(e) => setLogFilterModule(e.target.value)}
+               >
+                 <option value="All">All Modules</option>
+                 <option value="AngleMiner_Generate">AngleMiner</option>
+                 <option value="AngleMiner X">AngleMiner (Client)</option>
+                 <option value="TestLab_Simulation">TestLab</option>
+                 <option value="ConversionDoctor_Audit">Conversion Doctor</option>
+               </select>
+               <select 
+                 className="p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold uppercase tracking-widest text-gray-600"
+                 value={logFilterStatus}
+                 onChange={(e) => setLogFilterStatus(e.target.value)}
+               >
+                 <option value="All">All Statuses</option>
+                 <option value="Success">Success</option>
+                 <option value="Failed">Failed</option>
+                 <option value="Blocked">Blocked</option>
+                 <option value="Client">Client Only</option>
+               </select>
+             </div>
+             
+             <Card className="!p-0 overflow-hidden">
+                <table className="w-full text-left">
+                  <thead className="bg-gray-50 border-b border-gray-100">
+                    <tr>
+                      <th className="px-8 py-6 text-[10px] uppercase font-bold text-gray-400">Timestamp</th>
+                      <th className="px-8 py-6 text-[10px] uppercase font-bold text-gray-400">User</th>
+                      <th className="px-8 py-6 text-[10px] uppercase font-bold text-gray-400">Module</th>
+                      <th className="px-8 py-6 text-[10px] uppercase font-bold text-gray-400">Action</th>
+                      <th className="px-8 py-6 text-[10px] uppercase font-bold text-gray-400">Status</th>
+                      <th className="px-8 py-6 text-[10px] uppercase font-bold text-gray-400">Cost</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {getFilteredLogs().map(log => {
+                      const date = log.created_at ? new Date(log.created_at.toMillis()) : new Date(log.timestamp || 0);
+                      return (
+                        <tr key={log.id} className="hover:bg-gray-50/50">
+                          <td className="px-8 py-6 text-xs font-medium text-gray-600">{date.toLocaleString()}</td>
+                          <td className="px-8 py-6 text-xs font-bold text-[#0B0B0B]">{log.user_id || log.uid || 'Unknown'}</td>
+                          <td className="px-8 py-6 text-[10px] uppercase font-bold text-gray-500">{log.module}</td>
+                          <td className="px-8 py-6 text-xs font-medium text-gray-600 truncate max-w-[200px]">{log.action || 'Analysis'}</td>
+                          <td className="px-8 py-6">
+                             {log.status ? (
+                               <span className={`text-[9px] font-bold uppercase px-3 py-1 rounded-full ${
+                                 log.status === 'success' ? 'bg-green-50 text-green-600' : 
+                                 log.status === 'blocked' ? 'bg-yellow-50 text-yellow-600' : 'bg-red-50 text-red-600'
+                               }`}>
+                                 {log.status === 'failed_refunded' ? 'Failed' : log.status === 'blocked' ? 'Blocked' : 'Success'}
+                               </span>
+                             ) : (
+                               <span className="text-[9px] font-bold uppercase text-gray-300">Client Action</span>
+                             )}
+                             {log.error_code && <p className="text-[9px] text-red-500 mt-1 truncate max-w-[150px]">{log.error_code}</p>}
+                          </td>
+                          <td className="px-8 py-6 text-xs font-bold text-gray-600">
+                            {log.tokens_used !== undefined ? log.tokens_used : '-'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {getFilteredLogs().length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-8 py-12 text-center text-gray-400 text-sm italic">
+                          No activity logs found matching criteria.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+             </Card>
+          </div>
+        )}
+
         {activeTab === 'Audit Ledger' && (
           <div className="space-y-6">
              <div className="flex justify-between items-center px-10">
@@ -497,6 +821,14 @@ const AdminDashboard: React.FC = () => {
                          <p className="font-bold text-[#0B0B0B] truncate">{log.target}</p>
                        </div>
                     </div>
+                    {log.metadata && log.metadata.changes && (
+                      <div className="pt-4 border-t border-gray-50">
+                        <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mb-2">Change Delta</p>
+                        <pre className="text-[9px] font-mono text-gray-500 bg-gray-50 p-2 rounded-lg overflow-x-auto">
+                          {JSON.stringify(log.metadata.changes, null, 2)}
+                        </pre>
+                      </div>
+                    )}
                     <div className="pt-4 border-t border-gray-50 flex flex-col gap-2">
                        <p className="text-[9px] font-black text-gray-300 uppercase tracking-[0.2em]">Block Hash Signature</p>
                        <code className="text-[10px] font-mono text-gray-400 break-all bg-gray-50 p-2 rounded-lg">{log.hash}</code>
