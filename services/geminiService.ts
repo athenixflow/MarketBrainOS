@@ -1,12 +1,11 @@
 
-import { functions, auth } from "./firebase";
-import { httpsCallable } from "firebase/functions";
+import { auth } from "./firebase";
+// Removed firebase functions import as we now use Vercel API routes
 import { 
   saveAngleMinerResult,
   saveTestLabResult,
   saveConversionDoctorResult,
   saveWorkflowRun,
-  getUserProfile,
   deleteAngleMinerResult,
   deleteTestLabResult,
   deleteConversionDoctorResult,
@@ -78,7 +77,8 @@ export const SystemContracts: Record<string, {
   }
 };
 
-// --- NORMALIZATION LAYER ---
+// --- NORMALIZATION LAYER (Client-Side Redundancy) ---
+// Kept as a safety net, though main normalization now happens in Vercel API.
 
 const safeStr = (val: any): string => (typeof val === 'string' ? val.trim() : '');
 const safeNum = (val: any): number => (typeof val === 'number' && !isNaN(val) ? val : 0);
@@ -95,7 +95,6 @@ const normalizeAngleMinerResponse = (raw: any): AngleMinerResults => {
         score: 85 
       };
     }
-    
     const hook = safeStr(item.hook || item.angle || item.text);
     if (!hook) return null;
 
@@ -126,10 +125,8 @@ const normalizeTestLabResponse = (raw: any): TestLabResults => {
   const variants = safeArray(raw?.variants).map((v: any) => {
     if (!v) return null;
     if (typeof v === 'string') return { label: 'Variant', text: v, score: 70 };
-    
     const text = safeStr(v.text || v.content || v.copy);
     if (!text) return null;
-
     return {
       label: safeStr(v.label) || 'Variant',
       text: text,
@@ -138,7 +135,6 @@ const normalizeTestLabResponse = (raw: any): TestLabResults => {
   }).filter((x): x is TestLabVariant => x !== null);
 
   let winnerLabel = safeStr(raw?.winnerLabel || raw?.winner);
-  
   if (variants.length > 0 && !variants.find(v => v.label === winnerLabel)) {
     const sorted = [...variants].sort((a, b) => b.score - a.score);
     winnerLabel = sorted[0].label;
@@ -193,16 +189,15 @@ const invokeCloudAnalysis = async (module: string, input: any): Promise<any> => 
   if (!user) throw new Error("User must be logged in.");
 
   try {
-    // We strictly use FETCH for executeAnalysis to support explicit CORS handling
-    // and manual token management, fixing the "Analysis Interrupted" issues.
+    // Vercel API Route Execution
     const token = await user.getIdToken();
-    const endpoint = "https://us-central1-marketbrainosweb.cloudfunctions.net/executeAnalysis";
+    const endpoint = "/api/execute-analysis";
     
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`
+        "Authorization": `Bearer ${token}` // Forward token for future server-side auth if needed
       },
       body: JSON.stringify({ module, input })
     });
@@ -210,8 +205,6 @@ const invokeCloudAnalysis = async (module: string, input: any): Promise<any> => 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       const errorMessage = errorData.error?.message || response.statusText || "Server request failed";
-      
-      // Pass server error code/message directly
       throw new Error(errorMessage);
     }
 
@@ -231,7 +224,7 @@ const invokeCloudAnalysis = async (module: string, input: any): Promise<any> => 
       throw new Error("Network Unreachable: Please check your connection or try again shortly.");
     }
     
-    throw new Error(error.message || "Server connection failed.");
+    throw new Error(error.message || "Analysis execution failed.");
   }
 };
 
@@ -240,13 +233,13 @@ const invokeCloudAnalysis = async (module: string, input: any): Promise<any> => 
 export const analyzeMarketingAngle = async (params: any, userId?: string) => {
   SystemContracts.AngleMiner.inputValidator(params);
 
-  // 1. Request Analysis
+  // 1. Request Analysis from Vercel API
   const raw = await invokeCloudAnalysis('AngleMiner_Generate', params);
   
-  // 2. Normalize
+  // 2. Normalize (Redundant safety check)
   const normalized = normalizeAngleMinerResponse(raw);
 
-  // 3. Safety Check: If strictly empty (rare), fail.
+  // 3. Safety Check
   const hasContent = normalized.prime.length > 0 || normalized.supporting.length > 0 || normalized.exploratory.length > 0;
   if (!hasContent) {
     throw new Error("Analysis Interrupted: No usable insights extracted.");
@@ -298,7 +291,6 @@ export const auditConversion = async (input: string, context: string, userId?: s
 export const improveWorkflowAssets = async (angle: string, issues: string[], userId?: string, testScore?: number, auditScore?: number) => {
   const raw = await invokeCloudAnalysis('Workflow_ImproveAssets', { angle, issues });
   
-  // Simple normalization for workflow assets
   const normalized = {
     headline: safeStr(raw?.headline),
     cta: safeStr(raw?.cta),
