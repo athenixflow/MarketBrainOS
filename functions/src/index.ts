@@ -92,7 +92,7 @@ const logAdminAudit = async (adminUid: string, adminEmail: string, action: strin
 
 // --- CORE FUNCTIONS ---
 
-export const executeAnalysis = functions.https.onCall(async (data, context) => {
+export const executeAnalysis = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
   }
@@ -142,7 +142,7 @@ export const executeAnalysis = functions.https.onCall(async (data, context) => {
   const rateLimitRef = db.collection('rate_limits').doc(uid);
   const now = admin.firestore.Timestamp.now();
   
-  await db.runTransaction(async (t) => {
+  await db.runTransaction(async (t: admin.firestore.Transaction) => {
     const doc = await t.get(rateLimitRef);
     const limitData = doc.exists ? doc.data()! : {
       last_request_at: null,
@@ -182,7 +182,7 @@ export const executeAnalysis = functions.https.onCall(async (data, context) => {
   let tokensDeducted = false;
 
   try {
-    await db.runTransaction(async (t) => {
+    await db.runTransaction(async (t: admin.firestore.Transaction) => {
       const userDoc = await t.get(userRef);
       if (!userDoc.exists) throw new functions.https.HttpsError('not-found', 'User profile not found.');
       
@@ -267,7 +267,7 @@ export const executeAnalysis = functions.https.onCall(async (data, context) => {
 
   } catch (error: any) {
     if (tokensDeducted) {
-      await db.runTransaction(async (t) => {
+      await db.runTransaction(async (t: admin.firestore.Transaction) => {
         const userDoc = await t.get(userRef);
         if (userDoc.exists) {
           const current = userDoc.data()!.tokens || 0;
@@ -285,7 +285,7 @@ export const executeAnalysis = functions.https.onCall(async (data, context) => {
       created_at: admin.firestore.FieldValue.serverTimestamp()
     });
     
-    await db.runTransaction(async (t) => {
+    await db.runTransaction(async (t: admin.firestore.Transaction) => {
         const doc = await t.get(rateLimitRef);
         if(doc.exists) {
             const d = doc.data()!;
@@ -299,7 +299,7 @@ export const executeAnalysis = functions.https.onCall(async (data, context) => {
 
 // --- ADMIN MANAGEMENT FUNCTION ---
 
-export const manageUser = functions.https.onCall(async (data, context) => {
+export const manageUser = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
   // 1. Auth Check
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
@@ -328,7 +328,7 @@ export const manageUser = functions.https.onCall(async (data, context) => {
   
   // 3. Execution Logic
   try {
-    await db.runTransaction(async (t) => {
+    await db.runTransaction(async (t: admin.firestore.Transaction) => {
       const targetDoc = await t.get(targetRef);
       if (!targetDoc.exists) throw new functions.https.HttpsError('not-found', 'Target user not found');
       
@@ -399,7 +399,7 @@ export const manageUser = functions.https.onCall(async (data, context) => {
 
 // --- ADMIN CONTROLS FUNCTION ---
 
-export const updateSystemSettings = functions.https.onCall(async (data, context) => {
+export const updateSystemSettings = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
   }
@@ -421,7 +421,7 @@ export const updateSystemSettings = functions.https.onCall(async (data, context)
   const settingsRef = db.collection('admin_settings').doc('global');
 
   try {
-    await db.runTransaction(async (t) => {
+    await db.runTransaction(async (t: admin.firestore.Transaction) => {
       const doc = await t.get(settingsRef);
       const currentData = doc.exists ? doc.data() : {};
       
@@ -452,7 +452,7 @@ export const updateSystemSettings = functions.https.onCall(async (data, context)
 
 // --- TOKEN TOP-UP FUNCTION ---
 
-export const confirmTopUp = functions.https.onCall(async (data, context) => {
+export const confirmTopUp = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
   // 1. AUTH & INPUT VALIDATION
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
@@ -473,7 +473,7 @@ export const confirmTopUp = functions.https.onCall(async (data, context) => {
   const userRef = db.collection('users').doc(uid);
 
   try {
-    await db.runTransaction(async (t) => {
+    await db.runTransaction(async (t: admin.firestore.Transaction) => {
       // 2. IDEMPOTENCY CHECK
       // If payment already recorded, assume it was successful (idempotent) and return success.
       const paymentDoc = await t.get(paymentRef);
