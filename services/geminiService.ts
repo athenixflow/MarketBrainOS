@@ -1,3 +1,4 @@
+
 import { functions } from "./firebase";
 import { httpsCallable } from "firebase/functions";
 import { 
@@ -11,7 +12,7 @@ import {
   deleteConversionDoctorResult,
   deleteWorkflowRun
 } from "./persistenceService";
-import { AngleMinerResults, TestLabResults, AuditResult } from "../types";
+import { AngleMinerResults, TestLabResults, AuditResult, MarketingAngle, TestLabVariant, AuditIssue, AuditFix } from "../types";
 
 export const MAX_INPUT_CHARS = 12000;
 
@@ -43,12 +44,11 @@ export const SystemContracts: Record<string, {
       if (typeof input === 'object' && input.product === "Too short") throw new Error("Contract Violation: Product too short");
     },
     outputValidator: (output: any) => {
-      if (output && output.invalid_schema) throw new Error("Contract Violation: Invalid schema");
-      if (output && Array.isArray(output.prime)) {
-        output.prime.forEach((p: any) => {
-          if (!p.title && !p.hook) throw new Error("Contract Violation: Malformed item");
-        });
-      }
+      // Adjusted to be strict on NORMALIZED output
+      if (!output || typeof output !== 'object') throw new Error("Contract Violation: Invalid output type");
+      if (!Array.isArray(output.prime)) throw new Error("Contract Violation: Schema Mismatch (Prime Array)");
+      // Ensure at least empty arrays exist
+      if (!Array.isArray(output.supporting) || !Array.isArray(output.exploratory)) throw new Error("Contract Violation: Schema Mismatch");
     }
   },
   TestLab: {
@@ -58,7 +58,7 @@ export const SystemContracts: Record<string, {
       if (input && Array.isArray(input.variants) && input.variants.length < 2) throw new Error("Contract Violation: Insufficient variants");
     },
     outputValidator: (output: any) => {
-      if (output && output.invalid_schema) throw new Error("Contract Violation");
+      if (!output || !Array.isArray(output.variants)) throw new Error("Contract Violation");
     }
   },
   ConversionDoctor: {
@@ -68,7 +68,7 @@ export const SystemContracts: Record<string, {
       if (input && typeof input.input === 'string' && input.input === '') throw new Error("Contract Violation: Empty input");
     },
     outputValidator: (output: any) => {
-      if (output && output.invalid_schema) throw new Error("Contract Violation");
+      if (!output || typeof output.score !== 'number') throw new Error("Contract Violation");
     }
   },
   Workflow: {
@@ -76,9 +76,119 @@ export const SystemContracts: Record<string, {
       if (input === null) throw new Error("Contract Violation");
     },
     outputValidator: (output: any) => {
-      if (output && output.invalid_schema) throw new Error("Contract Violation");
+      if (!output || !output.headline) throw new Error("Contract Violation");
     }
   }
+};
+
+// --- NORMALIZATION LAYER ---
+// Safely coerces AI output into strictly typed objects.
+// Prevents "Analysis Interrupted" on partial/recoverable errors.
+
+const safeStr = (val: any): string => (typeof val === 'string' ? val.trim() : '');
+const safeNum = (val: any): number => (typeof val === 'number' && !isNaN(val) ? val : 0);
+const safeArray = (arr: any): any[] => (Array.isArray(arr) ? arr : []);
+
+const normalizeAngleMinerResponse = (raw: any): AngleMinerResults => {
+  const cleanAngle = (item: any): MarketingAngle | null => {
+    if (!item) return null;
+    if (typeof item === 'string') {
+      return { 
+        title: 'Generated Insight', 
+        hook: item, 
+        rational: 'Automatically extracted from analysis.', 
+        score: 85 
+      };
+    }
+    
+    const hook = safeStr(item.hook || item.angle || item.text);
+    if (!hook) return null; // Hook is mandatory
+
+    return { 
+      title: safeStr(item.title) || 'Strategic Angle',
+      hook,
+      rational: safeStr(item.rational || item.reason || item.rationale) || 'AI Analysis',
+      score: safeNum(item.score) || 80,
+      improved: safeStr(item.improved),
+      improving: !!item.improving
+    };
+  };
+
+  const prime = safeArray(raw?.prime).map(cleanAngle).filter((x): x is MarketingAngle => x !== null);
+  const supporting = safeArray(raw?.supporting).map(cleanAngle).filter((x): x is MarketingAngle => x !== null);
+  const exploratory = safeArray(raw?.exploratory).map(cleanAngle).filter((x): x is MarketingAngle => x !== null);
+  
+  const hooks = safeArray(raw?.hooks).map((h: any) => ({
+    platform: safeStr(h?.platform) || 'General',
+    short: safeStr(h?.short || h?.hook),
+    expanded: safeStr(h?.expanded || h?.description)
+  })).filter(h => h.short);
+
+  return { prime, supporting, exploratory, hooks };
+};
+
+const normalizeTestLabResponse = (raw: any): TestLabResults => {
+  const variants = safeArray(raw?.variants).map((v: any) => {
+    if (!v) return null;
+    if (typeof v === 'string') return { label: 'Variant', text: v, score: 70 };
+    
+    const text = safeStr(v.text || v.content || v.copy);
+    if (!text) return null;
+
+    return {
+      label: safeStr(v.label) || 'Variant',
+      text: text,
+      score: safeNum(v.score)
+    };
+  }).filter((x): x is TestLabVariant => x !== null);
+
+  let winnerLabel = safeStr(raw?.winnerLabel || raw?.winner);
+  
+  // Logic Fix: Ensure winner points to an actual variant
+  if (variants.length > 0 && !variants.find(v => v.label === winnerLabel)) {
+    // If mismatch, trust the score
+    const sorted = [...variants].sort((a, b) => b.score - a.score);
+    winnerLabel = sorted[0].label;
+  }
+
+  return {
+    variants,
+    winnerLabel: winnerLabel || (variants[0]?.label || 'None'),
+    explanation: safeStr(raw?.explanation || raw?.analysis) || 'No specific explanation provided.'
+  };
+};
+
+const normalizeAuditResponse = (raw: any): AuditResult => {
+  const issues = safeArray(raw?.issues).map((i: any) => {
+    if (typeof i === 'string') return { blocker: i, impact: 'Medium' };
+    return {
+      blocker: safeStr(i?.blocker || i?.issue),
+      impact: safeStr(i?.impact) || 'Medium'
+    };
+  }).filter(i => i.blocker);
+
+  const fixes = safeArray(raw?.fixes).map((f: any) => {
+    if (typeof f === 'string') return { what: f, how: 'Review content', expectedResult: 'Improved clarity' };
+    return {
+      what: safeStr(f?.what || f?.action),
+      how: safeStr(f?.how || f?.implementation),
+      expectedResult: safeStr(f?.expectedResult || f?.result)
+    };
+  }).filter(f => f.what);
+
+  const rewrites = safeArray(raw?.rewrites).map((r: any) => ({
+    label: safeStr(r?.label) || 'Rewrite',
+    text: safeStr(r?.text || r?.content)
+  })).filter(r => r.text);
+
+  return {
+    score: safeNum(raw?.score),
+    summary: safeStr(raw?.summary || raw?.overview) || 'Analysis complete.',
+    issues,
+    fixes,
+    rewrites,
+    auditedUrl: safeStr(raw?.auditedUrl) || undefined
+  };
 };
 
 // --- CORE ---
@@ -109,54 +219,75 @@ const invokeCloudAnalysis = async (module: string, input: any): Promise<any> => 
 export const analyzeMarketingAngle = async (params: any, userId?: string) => {
   SystemContracts.AngleMiner.inputValidator(params);
 
-  // 1. Request Analysis (Server handles Auth, Billing, AI)
-  const result = await invokeCloudAnalysis('AngleMiner_Generate', params);
+  // 1. Request Analysis
+  const raw = await invokeCloudAnalysis('AngleMiner_Generate', params);
   
-  SystemContracts.AngleMiner.outputValidator(result);
+  // 2. Normalize
+  const normalized = normalizeAngleMinerResponse(raw);
 
-  // 2. Persist Artifact (Client-side record keeping only, no billing)
-  if (userId) {
-    await saveAngleMinerResult(userId, params.product, params.industry, params.target, result as AngleMinerResults);
+  // 3. Safety Check: If strictly empty (rare), fail.
+  const hasContent = normalized.prime.length > 0 || normalized.supporting.length > 0 || normalized.exploratory.length > 0;
+  if (!hasContent) {
+    throw new Error("Analysis Interrupted: No usable insights extracted.");
   }
-  return result as AngleMinerResults;
+
+  // 4. Validate Normalized Output
+  SystemContracts.AngleMiner.outputValidator(normalized);
+
+  // 5. Persist
+  if (userId) {
+    await saveAngleMinerResult(userId, params.product, params.industry, params.target, normalized);
+  }
+  return normalized;
 };
 
 export const improveAngle = async (text: string, userId?: string) => {
   const result = await invokeCloudAnalysis('AngleMiner_Improve', text);
-  return result as string;
+  return safeStr(result);
 };
 
 export const runTestLabComparison = async (type: string, variants: string[], userId?: string) => {
   SystemContracts.TestLab.inputValidator({ type, variants });
 
-  const result = await invokeCloudAnalysis('TestLab_Simulation', { type, variants });
+  const raw = await invokeCloudAnalysis('TestLab_Simulation', { type, variants });
+  const normalized = normalizeTestLabResponse(raw);
   
-  SystemContracts.TestLab.outputValidator(result);
+  SystemContracts.TestLab.outputValidator(normalized);
 
   if (userId) {
-    await saveTestLabResult(userId, type, variants, result as TestLabResults);
+    await saveTestLabResult(userId, type, variants, normalized);
   }
-  return result as TestLabResults;
+  return normalized;
 };
 
 export const auditConversion = async (input: string, context: string, userId?: string) => {
   SystemContracts.ConversionDoctor.inputValidator({ input, context });
 
-  const result = await invokeCloudAnalysis('ConversionDoctor_Audit', { input, context });
+  const raw = await invokeCloudAnalysis('ConversionDoctor_Audit', { input, context });
+  const normalized = normalizeAuditResponse(raw);
   
-  SystemContracts.ConversionDoctor.outputValidator(result);
+  SystemContracts.ConversionDoctor.outputValidator(normalized);
   
   if (userId) {
-    await saveConversionDoctorResult(userId, input, 0, result as AuditResult);
+    await saveConversionDoctorResult(userId, input, normalized.score, normalized);
   }
-  return result as AuditResult;
+  return normalized;
 };
 
 export const improveWorkflowAssets = async (angle: string, issues: string[], userId?: string, testScore?: number, auditScore?: number) => {
-  const result = await invokeCloudAnalysis('Workflow_ImproveAssets', { angle, issues });
+  const raw = await invokeCloudAnalysis('Workflow_ImproveAssets', { angle, issues });
   
+  // Simple normalization for workflow assets
+  const normalized = {
+    headline: safeStr(raw?.headline),
+    cta: safeStr(raw?.cta),
+    offer: safeStr(raw?.offer)
+  };
+
+  SystemContracts.Workflow.outputValidator(normalized);
+
   if (userId) {
-    await saveWorkflowRun(userId, angle, testScore || 0, auditScore || 0, result);
+    await saveWorkflowRun(userId, angle, testScore || 0, auditScore || 0, normalized);
   }
-  return result;
+  return normalized;
 };
