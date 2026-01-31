@@ -18,8 +18,10 @@ import {
   AnalysisFailureState,
   SystemBlockState,
   RateLimitState,
+  NetworkErrorState,
   isSystemBlockError,
-  isRateLimitError
+  isRateLimitError,
+  isNetworkError
 } from '../components/UI';
 import { runTestLabComparison, MAX_INPUT_CHARS } from '../services/geminiService';
 import { TestLabResults, TOKEN_COSTS } from '../types';
@@ -276,6 +278,8 @@ const TestLabPro: React.FC = () => {
 
         {executionError && isSystemBlockError(executionError) ? (
            <SystemBlockState message={executionError} />
+        ) : executionError && isNetworkError(executionError) ? (
+           <NetworkErrorState message={executionError} onRetry={handleRunTest} />
         ) : executionError && isRateLimitError(executionError) ? (
            <RateLimitState message={executionError} />
         ) : executionError ? (

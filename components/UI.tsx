@@ -276,6 +276,33 @@ export const RateLimitState: React.FC<{ message: string }> = ({ message }) => (
   </div>
 );
 
+// 11d. NETWORK ERROR STATE (CONNECTIVITY/CORS)
+export const NetworkErrorState: React.FC<{ message: string; onRetry?: () => void }> = ({ message, onRetry }) => (
+  <div className="py-12 px-8 rounded-[32px] bg-gray-50 border border-gray-200 flex flex-col items-center text-center animate-in fade-in duration-500 my-8">
+    <div className="w-12 h-12 bg-gray-200 text-gray-500 rounded-full flex items-center justify-center mb-6 shadow-sm">
+       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+         <path strokeLinecap="round" strokeLinejoin="round" d="M3 3l1.664 1.664M21 21l-1.5-1.5m-5.485-1.242L12 17.25 4.5 12.75m0 0l7.5-4.5 4.885 2.932m-4.885 5.568l3-1.8m-3 1.8L9 15.75m3-3v3m0-3l-3-3m3 3l3 3" />
+       </svg>
+    </div>
+    <h3 className="text-lg font-bold text-[#0B0B0B] mb-2 uppercase tracking-wide">Network Unreachable</h3>
+    <p className="text-sm font-medium text-gray-500 mb-8 max-w-md leading-relaxed">{message}</p>
+    
+    <div className="flex items-center gap-3 px-5 py-3 bg-white rounded-xl border border-gray-100 shadow-sm mb-8">
+       <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" />
+       <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Safe: No tokens deducted</span>
+    </div>
+
+    {onRetry && (
+      <button 
+        onClick={onRetry}
+        className="text-[10px] font-bold text-[#0B0B0B] uppercase tracking-widest hover:underline underline-offset-4 transition-all"
+      >
+        Retry Connection
+      </button>
+    )}
+  </div>
+);
+
 export const isSystemBlockError = (msg: string | null): boolean => {
   if (!msg) return false;
   const lower = msg.toLowerCase();
@@ -291,6 +318,15 @@ export const isRateLimitError = (msg: string | null): boolean => {
          lower.includes('wait') || 
          lower.includes('resource-exhausted') ||
          lower.includes('too quickly');
+};
+
+export const isNetworkError = (msg: string | null): boolean => {
+  if (!msg) return false;
+  const lower = msg.toLowerCase();
+  return lower.includes('network unreachable') || 
+         lower.includes('failed to fetch') || 
+         lower.includes('check your connection') ||
+         lower.includes('network error');
 };
 
 // 12. RESULT CONTAINER

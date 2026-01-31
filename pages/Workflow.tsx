@@ -18,8 +18,10 @@ import {
   AnalysisFailureState,
   SystemBlockState,
   RateLimitState,
+  NetworkErrorState,
   isSystemBlockError,
-  isRateLimitError
+  isRateLimitError,
+  isNetworkError
 } from '../components/UI';
 import { 
   analyzeMarketingAngle, 
@@ -302,6 +304,15 @@ const Workflow: React.FC = () => {
       {executionError && isSystemBlockError(executionError) ? (
          <div className="max-w-4xl mx-auto mb-12">
            <SystemBlockState message={executionError} />
+         </div>
+      ) : executionError && isNetworkError(executionError) ? (
+         <div className="max-w-4xl mx-auto mb-12">
+           <NetworkErrorState message={executionError} onRetry={
+             step === 1 ? handleStartMiner : 
+             step === 3 ? handleStartTest : 
+             step === 4 ? handleStartAudit : 
+             step === 5 ? handleRunImprovement : undefined
+           } />
          </div>
       ) : executionError && isRateLimitError(executionError) ? (
         <div className="max-w-4xl mx-auto mb-12">

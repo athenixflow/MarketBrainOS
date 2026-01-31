@@ -19,8 +19,10 @@ import {
   AnalysisFailureState,
   SystemBlockState,
   RateLimitState,
+  NetworkErrorState,
   isSystemBlockError,
-  isRateLimitError
+  isRateLimitError,
+  isNetworkError
 } from '../components/UI';
 import { analyzeMarketingAngle, improveAngle, MAX_INPUT_CHARS } from '../services/geminiService';
 import { MarketingAngle, AngleMinerResults, TOKEN_COSTS } from '../types';
@@ -374,6 +376,8 @@ const AngleMinerX: React.FC = () => {
 
         {executionError && isSystemBlockError(executionError) ? (
            <SystemBlockState message={executionError} />
+        ) : executionError && isNetworkError(executionError) ? (
+           <NetworkErrorState message={executionError} onRetry={handleRun} />
         ) : executionError && isRateLimitError(executionError) ? (
            <RateLimitState message={executionError} />
         ) : executionError ? (

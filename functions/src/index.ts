@@ -1,3 +1,4 @@
+
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -90,216 +91,282 @@ const logAdminAudit = async (adminUid: string, adminEmail: string, action: strin
   });
 };
 
-// --- CORE FUNCTIONS ---
+// --- CORE FUNCTION (Converted to onRequest for strict CORS control) ---
 
-export const executeAnalysis = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
-  }
-  const uid = context.auth.uid;
-  const { module, input } = data;
-
-  if (!COSTS[module]) {
-    throw new functions.https.HttpsError('invalid-argument', `Unknown module: ${module}`);
-  }
-  const cost = COSTS[module];
-
-  // 1. SYSTEM CONTROLS CHECK (Before everything)
-  const settingsDoc = await db.collection('admin_settings').doc('global').get();
-  if (settingsDoc.exists) {
-    const settings = settingsDoc.data()!;
-    
-    // Global Pause
-    if (settings.analyses_paused) {
-      await db.collection('action_logs').add({
-        uid, module, tokens_used: 0, status: 'blocked', error_code: 'SYSTEM_PAUSED', created_at: admin.firestore.FieldValue.serverTimestamp()
-      });
-      throw new functions.https.HttpsError('unavailable', 'System analysis is currently paused by administrators.');
-    }
-
-    // Maintenance Mode (Allow Admins)
-    if (settings.maintenance_mode) {
-      const userDoc = await db.collection('users').doc(uid).get();
-      const role = userDoc.exists ? userDoc.data()!.role : 'user';
-      if (role !== 'super_admin' && role !== 'ops_admin') {
-        await db.collection('action_logs').add({
-          uid, module, tokens_used: 0, status: 'blocked', error_code: 'MAINTENANCE_MODE', created_at: admin.firestore.FieldValue.serverTimestamp()
-        });
-        throw new functions.https.HttpsError('unavailable', 'System is in maintenance mode. Please try again later.');
-      }
-    }
-
-    // Module Specific Toggle
-    const moduleKey = MODULE_MAPPING[module];
-    if (moduleKey && settings.modules_enabled && settings.modules_enabled[moduleKey] === false) {
-      await db.collection('action_logs').add({
-        uid, module, tokens_used: 0, status: 'blocked', error_code: 'MODULE_DISABLED', created_at: admin.firestore.FieldValue.serverTimestamp()
-      });
-      throw new functions.https.HttpsError('unavailable', `The ${moduleKey} module is currently disabled.`);
-    }
-  }
-
-  const rateLimitRef = db.collection('rate_limits').doc(uid);
-  const now = admin.firestore.Timestamp.now();
+export const executeAnalysis = functions.https.onRequest(async (req: any, res: any) => {
+  // 1. CORS MIDDLEWARE
+  const allowedOrigins = [
+    'https://www.marketbrainos.com', 
+    'https://marketbrainos.com', 
+    'http://localhost:5173'
+  ];
+  const origin = req.headers.origin;
   
-  await db.runTransaction(async (t: admin.firestore.Transaction) => {
-    const doc = await t.get(rateLimitRef);
-    const limitData = doc.exists ? doc.data()! : {
-      last_request_at: null,
-      requests_in_last_minute: 0,
-      failed_requests_in_window: 0,
-      blocked_until: null,
-      burst_window_start: now
-    };
+  if (origin && allowedOrigins.includes(origin)) {
+    res.set('Access-Control-Allow-Origin', origin);
+  }
+  
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.set('Access-Control-Max-Age', '3600');
 
-    if (limitData.blocked_until && limitData.blocked_until.toMillis() > now.toMillis()) {
-      throw new functions.https.HttpsError('resource-exhausted', 'Account temporarily blocked due to rate limits.');
-    }
-
-    if (limitData.last_request_at && (now.toMillis() - limitData.last_request_at.toMillis() < RATE_LIMIT_RULES.COOLDOWN_MS)) {
-      throw new functions.https.HttpsError('resource-exhausted', 'Please wait 10 seconds between analyses.');
-    }
-
-    if (limitData.burst_window_start && (now.toMillis() - limitData.burst_window_start.toMillis() > RATE_LIMIT_RULES.BURST_WINDOW_MS)) {
-      limitData.requests_in_last_minute = 0;
-      limitData.burst_window_start = now;
-    }
-    
-    if (limitData.requests_in_last_minute >= RATE_LIMIT_RULES.BURST_LIMIT) {
-       t.set(rateLimitRef, { ...limitData, blocked_until: admin.firestore.Timestamp.fromMillis(now.toMillis() + RATE_LIMIT_RULES.BLOCK_DURATION_MS) }, { merge: true });
-       throw new functions.https.HttpsError('resource-exhausted', 'Rate limit exceeded. Pausing for 10 minutes.');
-    }
-
-    t.set(rateLimitRef, {
-      ...limitData,
-      last_request_at: now,
-      requests_in_last_minute: limitData.requests_in_last_minute + 1,
-      burst_window_start: limitData.burst_window_start || now
-    }, { merge: true });
-  });
-
-  const userRef = db.collection('users').doc(uid);
-  let tokensDeducted = false;
-
-  try {
-    await db.runTransaction(async (t: admin.firestore.Transaction) => {
-      const userDoc = await t.get(userRef);
-      if (!userDoc.exists) throw new functions.https.HttpsError('not-found', 'User profile not found.');
-      
-      const userData = userDoc.data()!;
-      if (userData.is_suspended) throw new functions.https.HttpsError('permission-denied', 'Account suspended.');
-      
-      const currentTokens = userData.tokens || 0;
-      if (currentTokens < cost) {
-        throw new functions.https.HttpsError('resource-exhausted', 'Insufficient analysis credits.');
-      }
-
-      t.update(userRef, { tokens: currentTokens - cost, last_active: now.toISOString() });
-      tokensDeducted = true;
-    });
-  } catch (e: any) {
-    if (e.code === 'resource-exhausted' || e.code === 'permission-denied') throw e;
-    throw new functions.https.HttpsError('internal', 'Billing transaction failed.');
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
   }
 
+  if (req.method !== 'POST') {
+    res.status(405).send('Method Not Allowed');
+    return;
+  }
+
+  // 2. AUTHENTICATION MIDDLEWARE
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    res.status(401).json({ error: { message: 'Unauthenticated', code: 'unauthenticated' } });
+    return;
+  }
+
+  let uid: string;
   try {
-    let responseText = "";
-    const model = genAI.getGenerativeModel({ model: "gemini-3-pro-preview", systemInstruction });
+    const idToken = authHeader.split('Bearer ')[1];
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    uid = decodedToken.uid;
+  } catch (e) {
+    res.status(401).json({ error: { message: 'Invalid or expired token', code: 'unauthenticated' } });
+    return;
+  }
 
-    if (module === 'AngleMiner_Generate') {
-      const prompt = `
-        Analyze: Product: ${input.product}, Industry: ${input.industry}, Target: ${input.target}, Goal: ${input.goal}, Tones: ${input.tones?.join(', ')}.
-        Return strict JSON: { prime: [{title, hook, rational, score}], supporting: [...], exploratory: [...], hooks: [{platform, short, expanded}] }
-      `;
-      const result = await model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: 'application/json' }
-      });
-      responseText = result.response.text();
-    } 
-    else if (module === 'AngleMiner_Improve') {
-      const result = await model.generateContent(`Refine this hook for higher conversion: "${input}"`);
-      responseText = result.response.text();
+  // 3. EXECUTION LOGIC
+  try {
+    const { module, input } = req.body;
+
+    if (!COSTS[module]) {
+      res.status(400).json({ error: { message: `Unknown module: ${module}`, code: 'invalid-argument' } });
+      return;
     }
-    else if (module === 'TestLab_Simulation') {
-      const prompt = `Compare variants for ${input.type}: ${input.variants?.join(', ')}. Return JSON: { variants: [{label, text, score}], winnerLabel, explanation }`;
-      const result = await model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: 'application/json' }
-      });
-      responseText = result.response.text();
-    }
-    else if (module === 'ConversionDoctor_Audit') {
-      const prompt = `Audit ${input.context}: "${input.input}". Return JSON: { score, summary, issues: [{blocker, impact}], fixes: [{what, how, expectedResult}] }`;
-      const result = await model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: 'application/json' }
-      });
-      responseText = result.response.text();
-    }
-    else if (module === 'Workflow_ImproveAssets') {
-      const prompt = `Refine angle "${input.angle}" based on issues: ${input.issues?.join(', ')}. Return JSON: { headline, cta, offer }`;
-      const result = await model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: 'application/json' }
-      });
-      responseText = result.response.text();
+    const cost = COSTS[module];
+
+    // SYSTEM CONTROLS CHECK
+    const settingsDoc = await db.collection('admin_settings').doc('global').get();
+    if (settingsDoc.exists) {
+      const settings = settingsDoc.data()!;
+      
+      if (settings.analyses_paused) {
+        await db.collection('action_logs').add({
+          uid, module, tokens_used: 0, status: 'blocked', error_code: 'SYSTEM_PAUSED', created_at: admin.firestore.FieldValue.serverTimestamp()
+        });
+        res.status(503).json({ error: { message: 'System analysis is currently paused by administrators.', code: 'unavailable' } });
+        return;
+      }
+
+      if (settings.maintenance_mode) {
+        const userDoc = await db.collection('users').doc(uid).get();
+        const role = userDoc.exists ? userDoc.data()!.role : 'user';
+        if (role !== 'super_admin' && role !== 'ops_admin') {
+          await db.collection('action_logs').add({
+            uid, module, tokens_used: 0, status: 'blocked', error_code: 'MAINTENANCE_MODE', created_at: admin.firestore.FieldValue.serverTimestamp()
+          });
+          res.status(503).json({ error: { message: 'System is in maintenance mode.', code: 'unavailable' } });
+          return;
+        }
+      }
+
+      const moduleKey = MODULE_MAPPING[module];
+      if (moduleKey && settings.modules_enabled && settings.modules_enabled[moduleKey] === false) {
+        await db.collection('action_logs').add({
+          uid, module, tokens_used: 0, status: 'blocked', error_code: 'MODULE_DISABLED', created_at: admin.firestore.FieldValue.serverTimestamp()
+        });
+        res.status(503).json({ error: { message: `The ${moduleKey} module is currently disabled.`, code: 'unavailable' } });
+        return;
+      }
     }
 
-    let finalOutput;
-    if (module !== 'AngleMiner_Improve') {
-      finalOutput = cleanJSON(responseText);
-      if (!finalOutput || Object.keys(finalOutput).length === 0) throw new Error("Empty JSON");
-    } else {
-      finalOutput = responseText.trim();
-      if (!finalOutput) throw new Error("Empty Response");
-    }
+    // RATE LIMIT CHECK
+    const rateLimitRef = db.collection('rate_limits').doc(uid);
+    const now = admin.firestore.Timestamp.now();
+    let isRateLimited = false;
+    let rateLimitMessage = '';
 
-    await db.collection('action_logs').add({
-      uid,
-      module,
-      tokens_used: cost,
-      status: 'success',
-      created_at: admin.firestore.FieldValue.serverTimestamp()
+    await db.runTransaction(async (t: admin.firestore.Transaction) => {
+      const doc = await t.get(rateLimitRef);
+      const limitData = doc.exists ? doc.data()! : {
+        last_request_at: null,
+        requests_in_last_minute: 0,
+        blocked_until: null,
+        burst_window_start: now
+      };
+
+      if (limitData.blocked_until && limitData.blocked_until.toMillis() > now.toMillis()) {
+        isRateLimited = true;
+        rateLimitMessage = 'Account temporarily blocked due to rate limits.';
+        return;
+      }
+
+      if (limitData.last_request_at && (now.toMillis() - limitData.last_request_at.toMillis() < RATE_LIMIT_RULES.COOLDOWN_MS)) {
+        isRateLimited = true;
+        rateLimitMessage = 'Please wait 10 seconds between analyses.';
+        return;
+      }
+
+      if (limitData.burst_window_start && (now.toMillis() - limitData.burst_window_start.toMillis() > RATE_LIMIT_RULES.BURST_WINDOW_MS)) {
+        limitData.requests_in_last_minute = 0;
+        limitData.burst_window_start = now;
+      }
+      
+      if (limitData.requests_in_last_minute >= RATE_LIMIT_RULES.BURST_LIMIT) {
+         t.set(rateLimitRef, { ...limitData, blocked_until: admin.firestore.Timestamp.fromMillis(now.toMillis() + RATE_LIMIT_RULES.BLOCK_DURATION_MS) }, { merge: true });
+         isRateLimited = true;
+         rateLimitMessage = 'Rate limit exceeded. Pausing for 10 minutes.';
+         return;
+      }
+
+      t.set(rateLimitRef, {
+        ...limitData,
+        last_request_at: now,
+        requests_in_last_minute: limitData.requests_in_last_minute + 1,
+        burst_window_start: limitData.burst_window_start || now
+      }, { merge: true });
     });
 
-    return finalOutput;
+    if (isRateLimited) {
+      res.status(429).json({ error: { message: rateLimitMessage, code: 'resource-exhausted' } });
+      return;
+    }
 
-  } catch (error: any) {
-    if (tokensDeducted) {
+    // BILLING & EXECUTION
+    const userRef = db.collection('users').doc(uid);
+    let tokensDeducted = false;
+
+    try {
       await db.runTransaction(async (t: admin.firestore.Transaction) => {
         const userDoc = await t.get(userRef);
-        if (userDoc.exists) {
-          const current = userDoc.data()!.tokens || 0;
-          t.update(userRef, { tokens: current + cost });
+        if (!userDoc.exists) throw new Error('User profile not found.');
+        
+        const userData = userDoc.data()!;
+        if (userData.is_suspended) throw new Error('Account suspended.');
+        
+        const currentTokens = userData.tokens || 0;
+        if (currentTokens < cost) {
+          throw new Error('Insufficient analysis credits.');
         }
+
+        t.update(userRef, { tokens: currentTokens - cost, last_active: now.toDate().toISOString() });
+        tokensDeducted = true;
       });
+    } catch (e: any) {
+      if (e.message === 'Insufficient analysis credits.') {
+        res.status(429).json({ error: { message: e.message, code: 'resource-exhausted' } });
+      } else if (e.message === 'Account suspended.') {
+        res.status(403).json({ error: { message: e.message, code: 'permission-denied' } });
+      } else {
+        res.status(500).json({ error: { message: 'Billing failure', code: 'internal' } });
+      }
+      return;
     }
 
-    await db.collection('action_logs').add({
-      uid,
-      module,
-      tokens_used: 0,
-      status: 'failed_refunded',
-      error_code: error.message || 'unknown',
-      created_at: admin.firestore.FieldValue.serverTimestamp()
-    });
-    
-    await db.runTransaction(async (t: admin.firestore.Transaction) => {
-        const doc = await t.get(rateLimitRef);
-        if(doc.exists) {
-            const d = doc.data()!;
-            t.update(rateLimitRef, { failed_requests_in_window: (d.failed_requests_in_window || 0) + 1 });
-        }
-    });
+    try {
+      let responseText = "";
+      const model = genAI.getGenerativeModel({ model: "gemini-3-pro-preview", systemInstruction });
 
-    throw new functions.https.HttpsError('internal', 'Analysis failed. Tokens have been refunded.');
+      if (module === 'AngleMiner_Generate') {
+        const prompt = `
+          Analyze: Product: ${input.product}, Industry: ${input.industry}, Target: ${input.target}, Goal: ${input.goal}, Tones: ${input.tones?.join(', ')}.
+          Return strict JSON: { prime: [{title, hook, rational, score}], supporting: [...], exploratory: [...], hooks: [{platform, short, expanded}] }
+        `;
+        const result = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: 'application/json' }
+        });
+        responseText = result.response.text();
+      } 
+      else if (module === 'AngleMiner_Improve') {
+        const result = await model.generateContent(`Refine this hook for higher conversion: "${input}"`);
+        responseText = result.response.text();
+      }
+      else if (module === 'TestLab_Simulation') {
+        const prompt = `Compare variants for ${input.type}: ${input.variants?.join(', ')}. Return JSON: { variants: [{label, text, score}], winnerLabel, explanation }`;
+        const result = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: 'application/json' }
+        });
+        responseText = result.response.text();
+      }
+      else if (module === 'ConversionDoctor_Audit') {
+        const prompt = `Audit ${input.context}: "${input.input}". Return JSON: { score, summary, issues: [{blocker, impact}], fixes: [{what, how, expectedResult}] }`;
+        const result = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: 'application/json' }
+        });
+        responseText = result.response.text();
+      }
+      else if (module === 'Workflow_ImproveAssets') {
+        const prompt = `Refine angle "${input.angle}" based on issues: ${input.issues?.join(', ')}. Return JSON: { headline, cta, offer }`;
+        const result = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: 'application/json' }
+        });
+        responseText = result.response.text();
+      }
+
+      let finalOutput;
+      if (module !== 'AngleMiner_Improve') {
+        finalOutput = cleanJSON(responseText);
+        if (!finalOutput || Object.keys(finalOutput).length === 0) throw new Error("Empty JSON");
+      } else {
+        finalOutput = responseText.trim();
+        if (!finalOutput) throw new Error("Empty Response");
+      }
+
+      await db.collection('action_logs').add({
+        uid,
+        module,
+        tokens_used: cost,
+        status: 'success',
+        created_at: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      res.status(200).json({ result: finalOutput });
+
+    } catch (error: any) {
+      if (tokensDeducted) {
+        await db.runTransaction(async (t: admin.firestore.Transaction) => {
+          const userDoc = await t.get(userRef);
+          if (userDoc.exists) {
+            const current = userDoc.data()!.tokens || 0;
+            t.update(userRef, { tokens: current + cost });
+          }
+        });
+      }
+
+      await db.collection('action_logs').add({
+        uid,
+        module,
+        tokens_used: 0,
+        status: 'failed_refunded',
+        error_code: error.message || 'unknown',
+        created_at: admin.firestore.FieldValue.serverTimestamp()
+      });
+      
+      await db.runTransaction(async (t: admin.firestore.Transaction) => {
+          const doc = await t.get(rateLimitRef);
+          if(doc.exists) {
+              const d = doc.data()!;
+              t.update(rateLimitRef, { failed_requests_in_window: (d.failed_requests_in_window || 0) + 1 });
+          }
+      });
+
+      res.status(500).json({ error: { message: 'Analysis failed. Tokens have been refunded.', code: 'internal' } });
+    }
+
+  } catch (err: any) {
+    res.status(500).json({ error: { message: 'Internal Server Error', code: 'internal' } });
   }
 });
 
 // --- ADMIN MANAGEMENT FUNCTION ---
 
-export const manageUser = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
+export const manageUser = functions.https.onCall(async (data: any, context: any) => {
   // 1. Auth Check
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
@@ -399,7 +466,7 @@ export const manageUser = functions.https.onCall(async (data: any, context: func
 
 // --- ADMIN CONTROLS FUNCTION ---
 
-export const updateSystemSettings = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
+export const updateSystemSettings = functions.https.onCall(async (data: any, context: any) => {
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
   }
@@ -452,7 +519,7 @@ export const updateSystemSettings = functions.https.onCall(async (data: any, con
 
 // --- TOKEN TOP-UP FUNCTION ---
 
-export const confirmTopUp = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
+export const confirmTopUp = functions.https.onCall(async (data: any, context: any) => {
   // 1. AUTH & INPUT VALIDATION
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'Authentication required');

@@ -1,5 +1,5 @@
 
-import { functions } from "./firebase";
+import { functions, auth } from "./firebase";
 import { httpsCallable } from "firebase/functions";
 import { 
   saveAngleMinerResult,
@@ -16,7 +16,7 @@ import { AngleMinerResults, TestLabResults, AuditResult, MarketingAngle, TestLab
 
 export const MAX_INPUT_CHARS = 12000;
 
-// --- METRICS & CONTRACTS (Added for Diagnosis Service) ---
+// --- METRICS & CONTRACTS ---
 
 export interface FeatureMetrics {
   circuitState: 'OPEN' | 'CLOSED' | 'HALF_OPEN';
@@ -40,14 +40,11 @@ export const SystemContracts: Record<string, {
     inputValidator: (input: any) => {
       if (input === null) throw new Error("Contract Violation: Input cannot be null");
       if (typeof input === 'object' && Object.keys(input).length === 0) throw new Error("Contract Violation: Input cannot be empty");
-      // Specific check for diagnosisService test case
       if (typeof input === 'object' && input.product === "Too short") throw new Error("Contract Violation: Product too short");
     },
     outputValidator: (output: any) => {
-      // Adjusted to be strict on NORMALIZED output
       if (!output || typeof output !== 'object') throw new Error("Contract Violation: Invalid output type");
       if (!Array.isArray(output.prime)) throw new Error("Contract Violation: Schema Mismatch (Prime Array)");
-      // Ensure at least empty arrays exist
       if (!Array.isArray(output.supporting) || !Array.isArray(output.exploratory)) throw new Error("Contract Violation: Schema Mismatch");
     }
   },
@@ -82,8 +79,6 @@ export const SystemContracts: Record<string, {
 };
 
 // --- NORMALIZATION LAYER ---
-// Safely coerces AI output into strictly typed objects.
-// Prevents "Analysis Interrupted" on partial/recoverable errors.
 
 const safeStr = (val: any): string => (typeof val === 'string' ? val.trim() : '');
 const safeNum = (val: any): number => (typeof val === 'number' && !isNaN(val) ? val : 0);
@@ -102,7 +97,7 @@ const normalizeAngleMinerResponse = (raw: any): AngleMinerResults => {
     }
     
     const hook = safeStr(item.hook || item.angle || item.text);
-    if (!hook) return null; // Hook is mandatory
+    if (!hook) return null;
 
     return { 
       title: safeStr(item.title) || 'Strategic Angle',
@@ -144,9 +139,7 @@ const normalizeTestLabResponse = (raw: any): TestLabResults => {
 
   let winnerLabel = safeStr(raw?.winnerLabel || raw?.winner);
   
-  // Logic Fix: Ensure winner points to an actual variant
   if (variants.length > 0 && !variants.find(v => v.label === winnerLabel)) {
-    // If mismatch, trust the score
     const sorted = [...variants].sort((a, b) => b.score - a.score);
     winnerLabel = sorted[0].label;
   }
@@ -193,23 +186,51 @@ const normalizeAuditResponse = (raw: any): AuditResult => {
 
 // --- CORE ---
 
-// Wraps the Cloud Function call with error handling and metrics
 const invokeCloudAnalysis = async (module: string, input: any): Promise<any> => {
-  const executeAnalysis = httpsCallable(functions, 'executeAnalysis');
   const metricKey = module.split('_')[0];
+  const user = auth.currentUser;
+  
+  if (!user) throw new Error("User must be logged in.");
 
   try {
-    const result = await executeAnalysis({ module, input });
+    // We strictly use FETCH for executeAnalysis to support explicit CORS handling
+    // and manual token management, fixing the "Analysis Interrupted" issues.
+    const token = await user.getIdToken();
+    const endpoint = "https://us-central1-marketbrainosweb.cloudfunctions.net/executeAnalysis";
+    
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({ module, input })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage = errorData.error?.message || response.statusText || "Server request failed";
+      
+      // Pass server error code/message directly
+      throw new Error(errorMessage);
+    }
+
+    const data = await response.json();
     
     // Reset failures on success
     if (metrics[metricKey]) metrics[metricKey].consecutiveFailures = 0;
     
-    return result.data;
+    return data.result;
+
   } catch (error: any) {
     // Track failures
     if (metrics[metricKey]) metrics[metricKey].consecutiveFailures++;
     
-    // Pass through specific error messages from the server
+    // Explicitly detect Network/CORS failures
+    if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
+      throw new Error("Network Unreachable: Please check your connection or try again shortly.");
+    }
+    
     throw new Error(error.message || "Server connection failed.");
   }
 };

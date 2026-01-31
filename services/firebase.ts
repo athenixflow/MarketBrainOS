@@ -1,3 +1,4 @@
+
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
@@ -24,6 +25,7 @@ let isFirebaseInitialized = false;
 
 try {
   // Initialize or retrieve existing app
+  // @ts-ignore
   app = getApps().length ? getApp() : initializeApp(firebaseConfig);
   
   auth = getAuth(app);
@@ -33,6 +35,7 @@ try {
   
   // Conditional analytics initialization
   if (typeof window !== 'undefined') {
+    // @ts-ignore
     analytics = getAnalytics(app);
   }
   isFirebaseInitialized = true;

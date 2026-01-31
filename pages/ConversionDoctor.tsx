@@ -16,8 +16,10 @@ import {
   AnalysisFailureState,
   SystemBlockState,
   RateLimitState,
+  NetworkErrorState,
   isSystemBlockError,
-  isRateLimitError
+  isRateLimitError,
+  isNetworkError
 } from '../components/UI';
 import { auditConversion, MAX_INPUT_CHARS } from '../services/geminiService';
 import { AuditResult, TOKEN_COSTS } from '../types';
@@ -299,6 +301,8 @@ const ConversionDoctor: React.FC = () => {
 
         {executionError && isSystemBlockError(executionError) ? (
            <SystemBlockState message={executionError} />
+        ) : executionError && isNetworkError(executionError) ? (
+           <NetworkErrorState message={executionError} onRetry={handleAudit} />
         ) : executionError && isRateLimitError(executionError) ? (
            <RateLimitState message={executionError} />
         ) : executionError ? (
