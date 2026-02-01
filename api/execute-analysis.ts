@@ -4,10 +4,16 @@ export const config = {
   runtime: 'edge',
 };
 
-// --- CONFIGURATION ---
-const ai = new GoogleGenerativeAI(process.env.API_KEY || process.env.Google_api || '');
+// --- CONFIGURATION & HELPERS ---
 
-// --- HELPERS ---
+const getAIClient = () => {
+  const key = process.env.API_KEY || process.env.Google_api;
+  if (!key) {
+    console.error("CRITICAL: API Key not found in environment variables (API_KEY or Google_api).");
+    return null;
+  }
+  return new GoogleGenerativeAI(key);
+};
 
 const cleanJSON = (text: string) => {
   const clean = text.replace(/```json\n?|\n?```/g, '').trim();
@@ -114,9 +120,11 @@ async function generateContentWithRetry(model: any, prompt: string, retries = 2)
   
   for (let i = 0; i <= retries; i++) {
     try {
-      // Explicit 15s timeout per attempt
+      console.log(`[Gemini] Attempt ${i+1}/${retries+1}...`);
+      
+      // Explicit 20s timeout per attempt
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error("Timeout")), 15000);
+        setTimeout(() => reject(new Error("Request Timed Out (20s limit)")), 20000);
       });
       
       const generationPromise = model.generateContent(prompt);
@@ -125,26 +133,27 @@ async function generateContentWithRetry(model: any, prompt: string, retries = 2)
       const response = await result.response;
       const text = response.text();
       
-      if (!text) throw new Error("Empty response from model");
+      if (!text) throw new Error("Received empty response from Gemini model.");
       return text;
       
     } catch (e: any) {
-      console.warn(`Attempt ${i + 1} failed: ${e.message}`);
+      console.error(`[Gemini] Attempt ${i + 1} failed:`, e.message);
       lastError = e;
       
-      // Stop on fatal errors (invalid API key, blocked content)
-      if (e.message?.includes("API_KEY") || e.message?.includes("blocked")) {
-        throw e;
+      // Stop immediately on fatal auth/config errors
+      if (e.message?.includes("API key") || e.message?.includes("403") || e.message?.includes("invalid")) {
+        throw new Error(`Auth Error: ${e.message}`);
       }
 
       if (i < retries) {
-        // Exponential backoff: 500ms, 1000ms, 2000ms...
-        await wait(500 * Math.pow(2, i));
+        const backoff = 1000 * Math.pow(2, i);
+        console.log(`[Gemini] Retrying in ${backoff}ms...`);
+        await wait(backoff);
       }
     }
   }
   
-  throw lastError || new Error("Analysis failed after retries");
+  throw lastError || new Error("Gemini analysis failed after multiple retries.");
 }
 
 // --- HANDLER ---
@@ -155,6 +164,14 @@ export default async function handler(request: Request) {
   }
 
   try {
+    const ai = getAIClient();
+    if (!ai) {
+      return new Response(JSON.stringify({ 
+        status: 'error',
+        error: { message: "Server Configuration Error: Missing API Key." } 
+      }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+
     const { module, input } = await request.json();
     
     let prompt = "";
@@ -212,16 +229,17 @@ export default async function handler(request: Request) {
 
     // --- EXECUTION ---
 
+    // Using gemini-1.5-flash as the standard stable model for analysis.
     const model = ai.getGenerativeModel({
       model: 'gemini-1.5-flash',
       generationConfig: { 
         responseMimeType: module === 'AngleMiner_Improve' ? 'text/plain' : 'application/json',
-        maxOutputTokens: 1500
+        maxOutputTokens: 2000
       }
     });
 
     try {
-      const text = await generateContentWithRetry(model, prompt, 2); // 2 retries = 3 attempts total
+      const text = await generateContentWithRetry(model, prompt, 1); 
       let finalOutput;
 
       if (module === 'AngleMiner_Improve') {
@@ -233,7 +251,7 @@ export default async function handler(request: Request) {
         finalOutput = normalizer(json);
       }
 
-      // Return explicit success status
+      // Explicit SUCCESS status
       return new Response(JSON.stringify({ 
         status: 'success',
         result: finalOutput
@@ -243,13 +261,14 @@ export default async function handler(request: Request) {
       });
 
     } catch (err: any) {
-      console.error("AI Generation Error:", err);
-      // Return explicit error status so UI knows to fail
+      console.error("AI Generation Critical Failure:", err);
+      // Return detailed error for debugging purposes in this context
       return new Response(JSON.stringify({ 
         status: 'error',
         error: { 
-          message: "System busy or unresponsive. Please try again.",
-          details: err.message
+          message: "AI Analysis Unavailable",
+          details: err.message,
+          code: 'ai_unavailable'
         } 
       }), { 
         status: 200, 
@@ -258,11 +277,12 @@ export default async function handler(request: Request) {
     }
 
   } catch (error: any) {
+    console.error("Unhandled Server Error:", error);
     return new Response(JSON.stringify({ 
       status: 'error',
-      error: { message: "Server busy. Please try again." } 
+      error: { message: "Internal Server Error", details: error.message } 
     }), { 
-      status: 200, 
+      status: 500, 
       headers: { 'Content-Type': 'application/json' } 
     });
   }
