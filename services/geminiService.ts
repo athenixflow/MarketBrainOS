@@ -204,21 +204,23 @@ const invokeCloudAnalysis = async (module: string, input: any): Promise<any> => 
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      const errorMessage = errorData.error?.message || response.statusText || "Server request failed";
+      const errorMessage = errorData.error || response.statusText || "Server request failed";
       throw new Error(errorMessage);
     }
 
     const data = await response.json();
 
     // STRICT CHECK: Ensure explicit success status
-    if (data.status === 'error' || data.error) {
-       throw new Error(data.error?.message || "Analysis failed.");
+    // Supports { success: boolean, data: any, error?: string }
+    if (data.success === false) {
+       throw new Error(data.error || "Analysis failed.");
     }
     
     // Reset failures on success
     if (metrics[metricKey]) metrics[metricKey].consecutiveFailures = 0;
     
-    return data.result;
+    // Return payload. 'data' is the standardized field for successful content.
+    return data.data;
 
   } catch (error: any) {
     // Track failures

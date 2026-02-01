@@ -160,15 +160,15 @@ async function generateContentWithRetry(model: any, prompt: string, retries = 2)
 
 export default async function handler(request: Request) {
   if (request.method !== 'POST') {
-    return new Response(JSON.stringify({ error: { message: 'Method Not Allowed' } }), { status: 405 });
+    return new Response(JSON.stringify({ success: false, error: 'Method Not Allowed' }), { status: 405, headers: { 'Content-Type': 'application/json' } });
   }
 
   try {
     const ai = getAIClient();
     if (!ai) {
       return new Response(JSON.stringify({ 
-        status: 'error',
-        error: { message: "Server Configuration Error: Missing API Key." } 
+        success: false,
+        error: "Server Configuration Error: Missing API Key." 
       }), { status: 500, headers: { 'Content-Type': 'application/json' } });
     }
 
@@ -224,12 +224,11 @@ export default async function handler(request: Request) {
       normalizer = (raw: any) => ({ headline: safeStr(raw?.headline), cta: safeStr(raw?.cta), offer: safeStr(raw?.offer) });
     }
     else {
-      return new Response(JSON.stringify({ status: 'error', error: { message: "Invalid module" } }), { status: 400 });
+      return new Response(JSON.stringify({ success: false, error: "Invalid module" }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
 
     // --- EXECUTION ---
 
-    // Using gemini-1.5-flash as the standard stable model for analysis.
     const model = ai.getGenerativeModel({
       model: 'gemini-1.5-flash',
       generationConfig: { 
@@ -251,10 +250,10 @@ export default async function handler(request: Request) {
         finalOutput = normalizer(json);
       }
 
-      // Explicit SUCCESS status
+      // Explicit SUCCESS status with normalized schema
       return new Response(JSON.stringify({ 
-        status: 'success',
-        result: finalOutput
+        success: true,
+        data: finalOutput
       }), { 
         status: 200, 
         headers: { 'Content-Type': 'application/json' } 
@@ -264,9 +263,9 @@ export default async function handler(request: Request) {
       console.error("AI Generation Critical Failure:", err);
       // Return detailed error for debugging purposes in this context
       return new Response(JSON.stringify({ 
-        status: 'error',
-        error: { 
-          message: "AI Analysis Unavailable",
+        success: false,
+        error: "AI Analysis Unavailable",
+        meta: { 
           details: err.message,
           code: 'ai_unavailable'
         } 
@@ -279,8 +278,9 @@ export default async function handler(request: Request) {
   } catch (error: any) {
     console.error("Unhandled Server Error:", error);
     return new Response(JSON.stringify({ 
-      status: 'error',
-      error: { message: "Internal Server Error", details: error.message } 
+      success: false,
+      error: "Internal Server Error", 
+      meta: { details: error.message } 
     }), { 
       status: 500, 
       headers: { 'Content-Type': 'application/json' } 
