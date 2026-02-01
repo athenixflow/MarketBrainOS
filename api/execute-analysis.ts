@@ -151,7 +151,7 @@ export default async function handler(request: Request) {
 
     // Select Model - using 1.5-pro for reliability with standard API keys
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-pro", 
+      model: "gemini-2.5-pro", 
       systemInstruction 
     });
 
