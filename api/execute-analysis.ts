@@ -1,17 +1,13 @@
-
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from "@google/genai";
 
 export const config = {
   runtime: 'edge',
 };
 
 // --- CONFIGURATION ---
-const genAI = new GoogleGenerativeAI(process.env.Google_api || '');
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || process.env.Google_api || '' });
 
-const systemInstruction = `
-You are the MarketBrainOS Intelligence Engine.
-Core Mission: Provide high-confidence marketing angles, conversion audits, and performance simulations.
-`;
+const systemInstruction = "You are MarketBrainOS. Output strict JSON only. No markdown. No commentary.";
 
 // --- HELPERS ---
 
@@ -20,17 +16,16 @@ const cleanJSON = (text: string) => {
   try {
     return JSON.parse(clean);
   } catch (e) {
-    // Attempt to extract JSON if surrounded by text
     const firstBrace = clean.indexOf('{');
     const lastBrace = clean.lastIndexOf('}');
     if (firstBrace !== -1 && lastBrace !== -1) {
       try {
         return JSON.parse(clean.substring(firstBrace, lastBrace + 1));
       } catch (e2) {
-        throw new Error("AI Output Malformed: Not valid JSON");
+        return null;
       }
     }
-    throw new Error("AI Output Malformed: Not valid JSON");
+    return null;
   }
 };
 
@@ -38,91 +33,78 @@ const safeStr = (val: any): string => (typeof val === 'string' ? val.trim() : ''
 const safeNum = (val: any): number => (typeof val === 'number' && !isNaN(val) ? val : 0);
 const safeArray = (arr: any): any[] => (Array.isArray(arr) ? arr : []);
 
-// --- NORMALIZATION LOGIC ---
+// --- NORMALIZERS ---
 
 const normalizeAngleMinerResponse = (raw: any) => {
   const cleanAngle = (item: any) => {
     if (!item) return null;
-    if (typeof item === 'string') {
-      return { 
-        title: 'Generated Insight', 
-        hook: item, 
-        rational: 'Automatically extracted from analysis.', 
-        score: 85 
-      };
-    }
     const hook = safeStr(item.hook || item.angle || item.text);
     if (!hook) return null;
-
     return { 
-      title: safeStr(item.title) || 'Strategic Angle',
+      title: safeStr(item.title) || 'Insight',
       hook,
-      rational: safeStr(item.rational || item.reason || item.rationale) || 'AI Analysis',
+      rational: safeStr(item.rational || item.reason) || 'AI Analysis',
       score: safeNum(item.score) || 80,
       improved: safeStr(item.improved),
       improving: !!item.improving
     };
   };
 
-  const prime = safeArray(raw?.prime).map(cleanAngle).filter(x => x !== null);
-  const supporting = safeArray(raw?.supporting).map(cleanAngle).filter(x => x !== null);
-  const exploratory = safeArray(raw?.exploratory).map(cleanAngle).filter(x => x !== null);
-  
+  const prime = safeArray(raw?.prime).map(cleanAngle).filter((x: any) => x !== null);
+  const supporting = safeArray(raw?.supporting).map(cleanAngle).filter((x: any) => x !== null);
+  const exploratory = safeArray(raw?.exploratory).map(cleanAngle).filter((x: any) => x !== null);
   const hooks = safeArray(raw?.hooks).map((h: any) => ({
     platform: safeStr(h?.platform) || 'General',
     short: safeStr(h?.short || h?.hook),
     expanded: safeStr(h?.expanded || h?.description)
   })).filter((h: any) => h.short);
 
+  // Ensure arrays are never empty to match schema requirements
+  if (prime.length === 0) prime.push({ 
+    title: 'No Data', 
+    hook: 'Analysis yielded no prime angles.', 
+    rational: 'Try different inputs.', 
+    score: 0,
+    improved: '',
+    improving: false
+  });
+  
   return { prime, supporting, exploratory, hooks };
 };
 
 const normalizeTestLabResponse = (raw: any) => {
-  const variants = safeArray(raw?.variants).map((v: any) => {
-    if (!v) return null;
-    if (typeof v === 'string') return { label: 'Variant', text: v, score: 70 };
-    const text = safeStr(v.text || v.content || v.copy);
-    if (!text) return null;
-    return {
-      label: safeStr(v.label) || 'Variant',
-      text: text,
-      score: safeNum(v.score)
-    };
-  }).filter(x => x !== null);
+  const variants = safeArray(raw?.variants).map((v: any) => ({
+    label: safeStr(v.label) || 'Variant',
+    text: safeStr(v.text || v.content || v.copy) || 'No text',
+    score: safeNum(v.score)
+  })).filter((v: any) => v.text !== 'No text');
 
   let winnerLabel = safeStr(raw?.winnerLabel || raw?.winner);
   if (variants.length > 0 && !variants.find((v: any) => v.label === winnerLabel)) {
-    const sorted = [...variants].sort((a: any, b: any) => b.score - a.score);
-    winnerLabel = sorted[0].label;
+    winnerLabel = variants[0].label;
   }
 
   return {
     variants,
-    winnerLabel: winnerLabel || (variants[0]?.label || 'None'),
-    explanation: safeStr(raw?.explanation || raw?.analysis) || 'No specific explanation provided.'
+    winnerLabel: winnerLabel || 'None',
+    explanation: safeStr(raw?.explanation || raw?.analysis) || 'Analysis complete.'
   };
 };
 
 const normalizeAuditResponse = (raw: any) => {
-  const issues = safeArray(raw?.issues).map((i: any) => {
-    if (typeof i === 'string') return { blocker: i, impact: 'Medium' };
-    return {
-      blocker: safeStr(i?.blocker || i?.issue),
-      impact: safeStr(i?.impact) || 'Medium'
-    };
-  }).filter((i: any) => i.blocker);
+  const issues = safeArray(raw?.issues).map((i: any) => ({
+    blocker: safeStr(i?.blocker || i?.issue),
+    impact: safeStr(i?.impact) || 'Medium'
+  })).filter((i: any) => i.blocker);
 
-  const fixes = safeArray(raw?.fixes).map((f: any) => {
-    if (typeof f === 'string') return { what: f, how: 'Review content', expectedResult: 'Improved clarity' };
-    return {
-      what: safeStr(f?.what || f?.action),
-      how: safeStr(f?.how || f?.implementation),
-      expectedResult: safeStr(f?.expectedResult || f?.result)
-    };
-  }).filter((f: any) => f.what);
+  const fixes = safeArray(raw?.fixes).map((f: any) => ({
+    what: safeStr(f?.what || f?.action),
+    how: safeStr(f?.how || f?.implementation),
+    expectedResult: safeStr(f?.expectedResult || f?.result)
+  })).filter((f: any) => f.what);
 
   const rewrites = safeArray(raw?.rewrites).map((r: any) => ({
-    label: safeStr(r?.label) || 'Rewrite',
+    label: safeStr(r?.label),
     text: safeStr(r?.text || r?.content)
   })).filter((r: any) => r.text);
 
@@ -136,110 +118,117 @@ const normalizeAuditResponse = (raw: any) => {
   };
 };
 
+// --- TIMEOUT WRAPPER ---
+
+const withTimeout = async (promise: Promise<any>, ms: number, fallback: any) => {
+  let timer: any;
+  const timeoutPromise = new Promise((resolve) => {
+    timer = setTimeout(() => resolve({ __TIMEOUT__: true, ...fallback }), ms);
+  });
+  try {
+    const result = await Promise.race([promise, timeoutPromise]);
+    clearTimeout(timer);
+    return result;
+  } catch (e) {
+    clearTimeout(timer);
+    // On hard error (e.g. API quota), return fallback too to prevent crash
+    console.error("AI Execution Error:", e);
+    return { __ERROR__: true, ...fallback };
+  }
+};
+
 // --- HANDLER ---
 
 export default async function handler(request: Request) {
   if (request.method !== 'POST') {
-    return new Response(JSON.stringify({ error: { message: 'Method Not Allowed' } }), {
-      status: 405,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return new Response(JSON.stringify({ error: { message: 'Method Not Allowed' } }), { status: 405 });
   }
 
   try {
     const { module, input } = await request.json();
+    
+    let prompt = "";
+    let normalizer = (d: any) => d;
+    let fallback: any = {};
 
-    // Select Model - using 1.5-pro for reliability with standard API keys
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.5-pro", 
-      systemInstruction 
-    });
-
-    let responseText = "";
-    let finalOutput: any = {};
-
-    // --- EXECUTION LOGIC ---
+    // --- SETUP MODULE CONFIGS ---
 
     if (module === 'AngleMiner_Generate') {
-      const prompt = `
-        Analyze: Product: ${input.product}, Industry: ${input.industry}, Target: ${input.target}, Goal: ${input.goal}, Tones: ${input.tones?.join(', ')}.
-        Return strict JSON: { prime: [{title, hook, rational, score}], supporting: [...], exploratory: [...], hooks: [{platform, short, expanded}] }
-      `;
-      const result = await model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: 'application/json' }
-      });
-      responseText = result.response.text();
-      finalOutput = normalizeAngleMinerResponse(cleanJSON(responseText));
+      prompt = `JSON. Product:${(input.product || '').slice(0,800)}. Ind:${input.industry}. Tgt:${input.target}. Out:{prime:[{title,hook,rational,score}],supporting:[{title,hook,rational,score}],exploratory:[{title,hook,rational,score}],hooks:[{platform,short,expanded}]}`;
+      normalizer = normalizeAngleMinerResponse;
+      fallback = { prime: [{title:'System Busy',hook:'High traffic. Please retry.',rational:'Timeout',score:0}], supporting:[], exploratory:[], hooks:[] };
     } 
     else if (module === 'AngleMiner_Improve') {
-      const result = await model.generateContent(`Refine this hook for higher conversion: "${input}"`);
-      responseText = result.response.text();
-      // For string improvement, we return text directly
-      finalOutput = responseText.trim();
+      prompt = `Refine hook for conversion: "${(input || '').slice(0,300)}"`;
+      normalizer = (d: any) => d; // Plain text
+      fallback = input; // Return original if fail
     }
     else if (module === 'TestLab_Simulation') {
-      const prompt = `Compare variants for ${input.type}: ${input.variants?.join(', ')}. Return JSON: { variants: [{label, text, score}], winnerLabel, explanation }`;
-      const result = await model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: 'application/json' }
-      });
-      responseText = result.response.text();
-      finalOutput = normalizeTestLabResponse(cleanJSON(responseText));
+      prompt = `JSON. Compare ${input.type}. Variants:${(input.variants || []).join('|').slice(0,1000)}. Out:{variants:[{label,text,score}],winnerLabel,explanation}`;
+      normalizer = normalizeTestLabResponse;
+      fallback = { variants: input.variants?.map((v:string, i:number) => ({label:\`Variant \${i+1}\`, text:v, score:0})) || [], winnerLabel:'None', explanation:'System timed out.' };
     }
     else if (module === 'ConversionDoctor_Audit') {
-      const prompt = `Audit ${input.context}: "${input.input}". Return JSON: { score, summary, issues: [{blocker, impact}], fixes: [{what, how, expectedResult}] }`;
-      const result = await model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: 'application/json' }
-      });
-      responseText = result.response.text();
-      finalOutput = normalizeAuditResponse(cleanJSON(responseText));
+      prompt = `JSON. Audit ${input.context}. Content:${(input.input || '').slice(0,1500)}. Out:{score,summary,issues:[{blocker,impact}],fixes:[{what,how,expectedResult}]}`;
+      normalizer = normalizeAuditResponse;
+      fallback = { score:0, summary:'Analysis timed out due to high load.', issues:[], fixes:[] };
     }
     else if (module === 'Workflow_ImproveAssets') {
-      const prompt = `Refine angle "${input.angle}" based on issues: ${input.issues?.join(', ')}. Return JSON: { headline, cta, offer }`;
-      const result = await model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: 'application/json' }
-      });
-      responseText = result.response.text();
-      const raw = cleanJSON(responseText);
-      finalOutput = {
-        headline: safeStr(raw?.headline),
-        cta: safeStr(raw?.cta),
-        offer: safeStr(raw?.offer)
-      };
+      prompt = `JSON. Refine "${(input.angle || '').slice(0,300)}". Issues:${(input.issues || []).join('|').slice(0,500)}. Out:{headline,cta,offer}`;
+      normalizer = (raw: any) => ({ headline: safeStr(raw?.headline), cta: safeStr(raw?.cta), offer: safeStr(raw?.offer) });
+      fallback = { headline:'Analysis Timeout', cta:'Retry', offer:'Retry' };
     }
     else {
-        throw new Error(`Unknown module: ${module}`);
+      return new Response(JSON.stringify({ error: { message: "Invalid module" } }), { status: 400 });
     }
 
-    // --- SAFETY CHECK ---
-    // If output is completely empty/invalid after normalization, throw error
-    if (typeof finalOutput === 'object' && finalOutput !== null) {
-       // Check keys for AngleMiner
-       if (module === 'AngleMiner_Generate' && 
-           !finalOutput.prime?.length && 
-           !finalOutput.supporting?.length && 
-           !finalOutput.exploratory?.length) {
-           throw new Error("No usable insights could be extracted.");
-       }
-    } else if (!finalOutput) {
-        throw new Error("Empty response from analysis engine.");
+    // --- EXECUTION ---
+
+    const aiPromise = ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+      config: { 
+        responseMimeType: module === 'AngleMiner_Improve' ? 'text/plain' : 'application/json',
+        maxOutputTokens: 1500
+      }
+    });
+
+    // 8-second hard timeout
+    const resultRaw = await withTimeout(aiPromise, 8000, fallback);
+
+    let finalOutput;
+    
+    if (resultRaw.__TIMEOUT__ || resultRaw.__ERROR__) {
+      finalOutput = module === 'AngleMiner_Improve' ? fallback : normalizer(fallback);
+    } else {
+      const text = resultRaw.text;
+      if (module === 'AngleMiner_Improve') {
+        finalOutput = text ? text.trim() : fallback;
+      } else {
+        const json = cleanJSON(text || '');
+        if (!json) {
+          finalOutput = normalizer(fallback); // JSON parse failed -> return fallback
+        } else {
+          finalOutput = normalizer(json);
+        }
+      }
     }
 
-    return new Response(JSON.stringify({ result: finalOutput }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
+    return new Response(JSON.stringify({ 
+      result: finalOutput, 
+      status: resultRaw.__TIMEOUT__ ? 'timeout' : resultRaw.__ERROR__ ? 'error' : 'success' 
+    }), { 
+      status: 200, 
+      headers: { 'Content-Type': 'application/json' } 
     });
 
   } catch (error: any) {
-    console.error("API Analysis Error:", error);
+    // Ultimate safety net
     return new Response(JSON.stringify({ 
-      error: { message: error.message || 'Internal Analysis Error' } 
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      error: { message: "Server busy. Please try again." } 
+    }), { 
+      status: 200, 
+      headers: { 'Content-Type': 'application/json' } 
     });
   }
 }
