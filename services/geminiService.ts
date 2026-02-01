@@ -209,6 +209,11 @@ const invokeCloudAnalysis = async (module: string, input: any): Promise<any> => 
     }
 
     const data = await response.json();
+
+    // STRICT CHECK: Ensure explicit success status
+    if (data.status === 'error' || data.error) {
+       throw new Error(data.error?.message || "Analysis failed.");
+    }
     
     // Reset failures on success
     if (metrics[metricKey]) metrics[metricKey].consecutiveFailures = 0;

@@ -5,7 +5,7 @@ export const config = {
 };
 
 // --- CONFIGURATION ---
-const genAI = new GoogleGenerativeAI(process.env.API_KEY || process.env.Google_api || '');
+const ai = new GoogleGenerativeAI(process.env.API_KEY || process.env.Google_api || '');
 
 // --- HELPERS ---
 
@@ -30,6 +30,7 @@ const cleanJSON = (text: string) => {
 const safeStr = (val: any): string => (typeof val === 'string' ? val.trim() : '');
 const safeNum = (val: any): number => (typeof val === 'number' && !isNaN(val) ? val : 0);
 const safeArray = (arr: any): any[] => (Array.isArray(arr) ? arr : []);
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // --- NORMALIZERS ---
 
@@ -57,15 +58,6 @@ const normalizeAngleMinerResponse = (raw: any) => {
     expanded: safeStr(h?.expanded || h?.description)
   })).filter((h: any) => h.short);
 
-  if (prime.length === 0) prime.push({ 
-    title: 'No Data', 
-    hook: 'Analysis yielded no prime angles.', 
-    rational: 'Try different inputs.', 
-    score: 0,
-    improved: '',
-    improving: false
-  });
-  
   return { prime, supporting, exploratory, hooks };
 };
 
@@ -115,23 +107,45 @@ const normalizeAuditResponse = (raw: any) => {
   };
 };
 
-// --- TIMEOUT WRAPPER ---
+// --- EXECUTION WITH RETRY ---
 
-const withTimeout = async (promise: Promise<any>, ms: number, fallback: any) => {
-  let timer: any;
-  const timeoutPromise = new Promise((resolve) => {
-    timer = setTimeout(() => resolve({ __TIMEOUT__: true, ...fallback }), ms);
-  });
-  try {
-    const result = await Promise.race([promise, timeoutPromise]);
-    clearTimeout(timer);
-    return result;
-  } catch (e) {
-    clearTimeout(timer);
-    console.error("AI Execution Error:", e);
-    return { __ERROR__: true, ...fallback };
+async function generateContentWithRetry(model: any, prompt: string, retries = 2) {
+  let lastError: any;
+  
+  for (let i = 0; i <= retries; i++) {
+    try {
+      // Explicit 15s timeout per attempt
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("Timeout")), 15000);
+      });
+      
+      const generationPromise = model.generateContent(prompt);
+      const result: any = await Promise.race([generationPromise, timeoutPromise]);
+      
+      const response = await result.response;
+      const text = response.text();
+      
+      if (!text) throw new Error("Empty response from model");
+      return text;
+      
+    } catch (e: any) {
+      console.warn(`Attempt ${i + 1} failed: ${e.message}`);
+      lastError = e;
+      
+      // Stop on fatal errors (invalid API key, blocked content)
+      if (e.message?.includes("API_KEY") || e.message?.includes("blocked")) {
+        throw e;
+      }
+
+      if (i < retries) {
+        // Exponential backoff: 500ms, 1000ms, 2000ms...
+        await wait(500 * Math.pow(2, i));
+      }
+    }
   }
-};
+  
+  throw lastError || new Error("Analysis failed after retries");
+}
 
 // --- HANDLER ---
 
@@ -145,7 +159,6 @@ export default async function handler(request: Request) {
     
     let prompt = "";
     let normalizer = (d: any) => d;
-    let fallback: any = {};
 
     // --- SETUP MODULE CONFIGS ---
 
@@ -157,19 +170,11 @@ export default async function handler(request: Request) {
         `Target: ${input.target}`,
         "Schema: {prime:[{title,hook,rational,score}],supporting:[{title,hook,rational,score}],exploratory:[{title,hook,rational,score}],hooks:[{platform,short,expanded}]}"
       ].join(" ");
-
       normalizer = normalizeAngleMinerResponse;
-      fallback = { 
-        prime: [{title:'System Busy',hook:'High traffic. Please retry.',rational:'Timeout',score:0,improved:'',improving:false}], 
-        supporting:[], 
-        exploratory:[], 
-        hooks:[] 
-      };
     } 
     else if (module === 'AngleMiner_Improve') {
       prompt = `Refine hook for conversion: "${(input || '').slice(0,300)}"`;
-      normalizer = (d: any) => d; // Plain text
-      fallback = input; // Return original if fail
+      normalizer = (d: any) => d; 
     }
     else if (module === 'TestLab_Simulation') {
       const variantsSafe = (input.variants || []).join('|').slice(0,1000);
@@ -179,17 +184,7 @@ export default async function handler(request: Request) {
         `Variants: ${variantsSafe}`,
         "Schema: {variants:[{label,text,score}],winnerLabel,explanation}"
       ].join(" ");
-
       normalizer = normalizeTestLabResponse;
-      fallback = { 
-        variants: input.variants?.map((v:string, i:number) => ({
-          label: `Variant ${i+1}`, 
-          text: v, 
-          score: 0
-        })) || [], 
-        winnerLabel: 'None', 
-        explanation: 'System timed out.' 
-      };
     }
     else if (module === 'ConversionDoctor_Audit') {
       prompt = [
@@ -198,9 +193,7 @@ export default async function handler(request: Request) {
         `Content: ${(input.input || '').slice(0,1500)}`,
         "Schema: {score,summary,issues:[{blocker,impact}],fixes:[{what,how,expectedResult}]}"
       ].join(" ");
-
       normalizer = normalizeAuditResponse;
-      fallback = { score:0, summary:'Analysis timed out due to high load.', issues:[], fixes:[] };
     }
     else if (module === 'Workflow_ImproveAssets') {
       const issuesSafe = (input.issues || []).join('|').slice(0,500);
@@ -212,15 +205,14 @@ export default async function handler(request: Request) {
       ].join(" ");
 
       normalizer = (raw: any) => ({ headline: safeStr(raw?.headline), cta: safeStr(raw?.cta), offer: safeStr(raw?.offer) });
-      fallback = { headline:'Analysis Timeout', cta:'Retry', offer:'Retry' };
     }
     else {
-      return new Response(JSON.stringify({ error: { message: "Invalid module" } }), { status: 400 });
+      return new Response(JSON.stringify({ status: 'error', error: { message: "Invalid module" } }), { status: 400 });
     }
 
     // --- EXECUTION ---
 
-    const model = genAI.getGenerativeModel({
+    const model = ai.getGenerativeModel({
       model: 'gemini-1.5-flash',
       generationConfig: { 
         responseMimeType: module === 'AngleMiner_Improve' ? 'text/plain' : 'application/json',
@@ -228,47 +220,46 @@ export default async function handler(request: Request) {
       }
     });
 
-    const aiPromise = model.generateContent(prompt);
+    try {
+      const text = await generateContentWithRetry(model, prompt, 2); // 2 retries = 3 attempts total
+      let finalOutput;
 
-    // 8-second hard timeout
-    const resultRaw = await withTimeout(aiPromise, 8000, fallback);
-
-    let finalOutput;
-    
-    if (resultRaw.__TIMEOUT__ || resultRaw.__ERROR__) {
-      finalOutput = module === 'AngleMiner_Improve' ? fallback : normalizer(fallback);
-    } else {
-      try {
-        const response = await resultRaw.response;
-        const text = response.text();
-
-        if (module === 'AngleMiner_Improve') {
-          finalOutput = text ? text.trim() : fallback;
-        } else {
-          const json = cleanJSON(text || '');
-          if (!json) {
-            finalOutput = normalizer(fallback); // JSON parse failed -> return fallback
-          } else {
-            finalOutput = normalizer(json);
-          }
-        }
-      } catch (e) {
-        console.error("Result processing error:", e);
-        finalOutput = module === 'AngleMiner_Improve' ? fallback : normalizer(fallback);
+      if (module === 'AngleMiner_Improve') {
+        finalOutput = text ? text.trim() : "";
+        if (!finalOutput) throw new Error("Generated empty text");
+      } else {
+        const json = cleanJSON(text || '');
+        if (!json) throw new Error("Failed to parse JSON response");
+        finalOutput = normalizer(json);
       }
+
+      // Return explicit success status
+      return new Response(JSON.stringify({ 
+        status: 'success',
+        result: finalOutput
+      }), { 
+        status: 200, 
+        headers: { 'Content-Type': 'application/json' } 
+      });
+
+    } catch (err: any) {
+      console.error("AI Generation Error:", err);
+      // Return explicit error status so UI knows to fail
+      return new Response(JSON.stringify({ 
+        status: 'error',
+        error: { 
+          message: "System busy or unresponsive. Please try again.",
+          details: err.message
+        } 
+      }), { 
+        status: 200, 
+        headers: { 'Content-Type': 'application/json' } 
+      });
     }
 
-    return new Response(JSON.stringify({ 
-      result: finalOutput, 
-      status: resultRaw.__TIMEOUT__ ? 'timeout' : resultRaw.__ERROR__ ? 'error' : 'success' 
-    }), { 
-      status: 200, 
-      headers: { 'Content-Type': 'application/json' } 
-    });
-
   } catch (error: any) {
-    // Ultimate safety net
     return new Response(JSON.stringify({ 
+      status: 'error',
       error: { message: "Server busy. Please try again." } 
     }), { 
       status: 200, 
