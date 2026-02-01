@@ -1,24 +1,21 @@
 
-import { db, jsonResponse, errorResponse } from '../utils';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db, serverTimestamp, sendJson, sendError } from '../utils';
 
+// Force Node.js runtime for Admin SDK
 export const config = { runtime: 'nodejs' };
 
-export default async function handler(request: Request) {
-  if (request.method !== 'POST') return errorResponse('Method Not Allowed', 'method_not_allowed', 405);
+export default async function handler(req: any, res: any) {
+  if (req.method !== 'POST') return sendError(res, 'Method Not Allowed', 'method_not_allowed', 405);
 
   try {
-    const body = await request.json().catch(() => null);
-    
-    if (!body || !body.module || !body.input) {
-      return errorResponse('Missing module or input', 'invalid_request', 400);
+    const { module, input } = req.body;
+
+    if (!module || !input) {
+      return sendError(res, 'Missing module or input', 'invalid_request', 400);
     }
 
-    const { module, input } = body;
-
-    // 1. FAST PERSISTENCE ONLY
-    // No AI calls. No validation logic. No processing.
-    const jobRef = await addDoc(collection(db, 'analysis_jobs'), {
+    // 1. FAST PERSISTENCE (Admin SDK)
+    const jobRef = await db.collection('analysis_jobs').add({
       module,
       input,
       status: 'queued',
@@ -27,8 +24,8 @@ export default async function handler(request: Request) {
       updated_at: serverTimestamp()
     });
 
-    // 2. RETURN IMMEDIATELY (< 200ms goal)
-    return jsonResponse({
+    // 2. RETURN IMMEDIATELY
+    return sendJson(res, {
       success: true,
       data: {
         jobId: jobRef.id,
@@ -38,6 +35,6 @@ export default async function handler(request: Request) {
 
   } catch (error: any) {
     console.error("Analysis Start Error:", error);
-    return errorResponse(error.message || 'Failed to initialize analysis job', 'init_failed');
+    return sendError(res, error.message || 'Failed to initialize analysis job', 'init_failed');
   }
 }

@@ -1,26 +1,30 @@
 
-import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import * as admin from 'firebase-admin';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// Shared Config
+// Shared Config - Force Node.js runtime for Admin SDK compatibility
 export const config = {
-  runtime: 'edge',
+  runtime: 'nodejs',
 };
 
-// Initialize Firebase (Edge Compatible)
-const firebaseConfig = {
-  apiKey: process.env.FIREBASE_API_KEY,
-  authDomain: process.env.FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.FIREBASE_PROJECT_ID,
-  storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.FIREBASE_APP_ID,
-};
+// Initialize Firebase Admin (Singleton)
+if (!admin.apps.length) {
+  try {
+    // 1. Try Service Account from Env (Best for Vercel)
+    const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY 
+      ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY) 
+      : undefined;
+      
+    admin.initializeApp({
+      credential: serviceAccount ? admin.credential.cert(serviceAccount) : undefined,
+    });
+  } catch (error) {
+    console.error('Firebase Admin Initialization Error:', error);
+  }
+}
 
-// Singleton Init pattern for Edge
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+export const db = admin.firestore();
+export const serverTimestamp = admin.firestore.FieldValue.serverTimestamp;
 
 // AI Client
 export const getAIClient = () => {
@@ -29,17 +33,7 @@ export const getAIClient = () => {
   return new GoogleGenerativeAI(key);
 };
 
-// Response Helpers
-export const jsonResponse = (data: any, status = 200) => 
-  new Response(JSON.stringify(data), { 
-    status, 
-    headers: { 'Content-Type': 'application/json' } 
-  });
-
-export const errorResponse = (message: string, code = 'internal_error', status = 500) =>
-  jsonResponse({ success: false, error: message, meta: { code } }, status);
-
-// Data Cleaning
+// Data Cleaning Helper
 export const cleanJSON = (text: string) => {
   const clean = text.replace(/```json\n?|\n?```/g, '').trim();
   try {
@@ -52,4 +46,13 @@ export const cleanJSON = (text: string) => {
     }
     return null;
   }
+};
+
+// Node.js Response Helpers (Express-like style for Vercel Functions)
+export const sendJson = (res: any, data: any, status = 200) => {
+  res.status(status).json(data);
+};
+
+export const sendError = (res: any, message: string, code = 'internal_error', status = 500) => {
+  res.status(status).json({ success: false, error: message, meta: { code } });
 };

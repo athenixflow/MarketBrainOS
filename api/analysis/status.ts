@@ -1,26 +1,24 @@
 
-import { db, jsonResponse, errorResponse } from '../utils';
-import { doc, getDoc } from 'firebase/firestore';
+import { db, sendJson, sendError } from '../utils';
 
-export const config = { runtime: 'edge' };
+export const config = { runtime: 'nodejs' };
 
-export default async function handler(request: Request) {
-  if (request.method !== 'GET') return errorResponse('Method Not Allowed', 'method_not_allowed', 405);
+export default async function handler(req: any, res: any) {
+  if (req.method !== 'GET') return sendError(res, 'Method Not Allowed', 'method_not_allowed', 405);
 
   try {
-    const url = new URL(request.url);
-    const jobId = url.searchParams.get('jobId');
+    const { jobId } = req.query;
 
-    if (!jobId) return errorResponse('Missing Job ID', 'invalid_request', 400);
+    if (!jobId) return sendError(res, 'Missing Job ID', 'invalid_request', 400);
 
-    const jobRef = doc(db, 'analysis_jobs', jobId);
-    const jobSnap = await getDoc(jobRef);
+    const jobRef = db.collection('analysis_jobs').doc(jobId as string);
+    const jobSnap = await jobRef.get();
 
-    if (!jobSnap.exists()) return errorResponse('Job not found', 'not_found', 404);
+    if (!jobSnap.exists) return sendError(res, 'Job not found', 'not_found', 404);
 
-    const data = jobSnap.data();
+    const data = jobSnap.data()!;
 
-    return jsonResponse({
+    return sendJson(res, {
       success: true,
       data: {
         status: data.status,
@@ -31,6 +29,6 @@ export default async function handler(request: Request) {
     });
 
   } catch (error: any) {
-    return errorResponse(error.message, 'status_check_failed');
+    return sendError(res, error.message, 'status_check_failed');
   }
 }

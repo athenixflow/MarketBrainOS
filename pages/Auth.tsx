@@ -2,12 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, googleProvider } from '../services/firebase';
-import { 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signInWithPopup, 
-  sendPasswordResetEmail 
-} from 'firebase/auth';
+import * as FirebaseAuth from 'firebase/auth';
 import { Card, Input, PrimaryButton, PageHeader, ErrorMessage } from '../components/UI';
 import { SecurityEngine } from '../services/securityEngine';
 import { useAuth } from '../context/AuthContext';
@@ -51,15 +46,15 @@ const AuthPage: React.FC = () => {
     setLoading(true);
     try {
       if (mode === 'signup') {
-        await createUserWithEmailAndPassword(auth, email, password);
+        await FirebaseAuth.createUserWithEmailAndPassword(auth, email, password);
         await refreshProfile();
         navigate('/');
       } else if (mode === 'signin') {
-        await signInWithEmailAndPassword(auth, email, password);
+        await FirebaseAuth.signInWithEmailAndPassword(auth, email, password);
         await refreshProfile();
         navigate('/');
       } else if (mode === 'forgot') {
-        await sendPasswordResetEmail(auth, email);
+        await FirebaseAuth.sendPasswordResetEmail(auth, email);
         setSuccessMsg("Password reset email sent. Check your inbox.");
         setLoading(false);
       }
@@ -74,7 +69,7 @@ const AuthPage: React.FC = () => {
     setError(null);
     setLoading(true);
     try {
-      await signInWithPopup(auth, googleProvider);
+      await FirebaseAuth.signInWithPopup(auth, googleProvider);
       await refreshProfile();
       navigate('/');
     } catch (err: any) {

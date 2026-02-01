@@ -1,8 +1,7 @@
 
-import { db, getAIClient, jsonResponse, errorResponse, cleanJSON } from '../utils';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db, serverTimestamp, getAIClient, cleanJSON, sendJson, sendError } from '../utils';
 
-export const config = { runtime: 'edge' };
+export const config = { runtime: 'nodejs' };
 
 // --- Normalizers ---
 const safeStr = (val: any) => (typeof val === 'string' ? val.trim() : '');
@@ -57,25 +56,25 @@ const normalizeAuditResponse = (raw: any) => {
   };
 };
 
-export default async function handler(request: Request) {
-  if (request.method !== 'POST') return errorResponse('Method Not Allowed', 'method_not_allowed', 405);
+export default async function handler(req: any, res: any) {
+  if (req.method !== 'POST') return sendError(res, 'Method Not Allowed', 'method_not_allowed', 405);
 
   try {
-    const { jobId } = await request.json();
-    if (!jobId) return errorResponse('Missing Job ID', 'invalid_request', 400);
+    const { jobId } = req.body;
+    if (!jobId) return sendError(res, 'Missing Job ID', 'invalid_request', 400);
 
-    const jobRef = doc(db, 'analysis_jobs', jobId);
-    const jobSnap = await getDoc(jobRef);
+    const jobRef = db.collection('analysis_jobs').doc(jobId);
+    const jobSnap = await jobRef.get();
 
-    if (!jobSnap.exists()) return errorResponse('Job not found', 'not_found', 404);
-    const job = jobSnap.data();
+    if (!jobSnap.exists) return sendError(res, 'Job not found', 'not_found', 404);
+    const job = jobSnap.data()!;
 
     if (job.status === 'completed' || job.status === 'failed') {
-      return jsonResponse({ success: true, data: { status: job.status } });
+      return sendJson(res, { success: true, data: { status: job.status } });
     }
 
     // Lock Job
-    await updateDoc(jobRef, { status: 'running', updated_at: serverTimestamp() });
+    await jobRef.update({ status: 'running', updated_at: serverTimestamp() });
 
     const ai = getAIClient();
     if (!ai) throw new Error("AI Client Configuration Missing");
@@ -129,25 +128,25 @@ export default async function handler(request: Request) {
     }
 
     // Save Result
-    await updateDoc(jobRef, {
+    await jobRef.update({
       status: 'completed',
       result: finalOutput,
       updated_at: serverTimestamp()
     });
 
-    return jsonResponse({ success: true, data: { status: 'completed' } });
+    return sendJson(res, { success: true, data: { status: 'completed' } });
 
   } catch (error: any) {
     if (error.message === 'AI_TIMEOUT') {
       // Don't fail the job, just let it stay running for next polling cycle to retry
-      return jsonResponse({ success: true, data: { status: 'running' } });
+      return sendJson(res, { success: true, data: { status: 'running' } });
     }
 
     // Real Failure
     try {
-       const { jobId } = await request.json();
+       const { jobId } = req.body;
        if(jobId) {
-          await updateDoc(doc(db, 'analysis_jobs', jobId), {
+          await db.collection('analysis_jobs').doc(jobId).update({
             status: 'failed',
             error: error.message,
             updated_at: serverTimestamp()
@@ -155,6 +154,6 @@ export default async function handler(request: Request) {
        }
     } catch(e) {}
 
-    return errorResponse(error.message, 'execution_failed');
+    return sendError(res, error.message, 'execution_failed');
   }
 }
