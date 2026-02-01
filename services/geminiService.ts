@@ -19,8 +19,6 @@ export const getFeatureMetrics = () => {
   };
 };
 
-// --- CONTRACTS ---
-// (Contracts remain same as before, simplified for brevity in this output but fully preserved in implementation)
 export const SystemContracts: Record<string, { 
   inputValidator: (input: any) => void; 
   outputValidator: (output: any) => void; 
@@ -43,8 +41,6 @@ export const SystemContracts: Record<string, {
   }
 };
 
-// --- ASYNC JOB ORCHESTRATOR ---
-
 const wait = (ms: number) => new Promise(res => setTimeout(res, ms));
 
 const executeAsyncJob = async (module: string, input: any): Promise<any> => {
@@ -57,32 +53,38 @@ const executeAsyncJob = async (module: string, input: any): Promise<any> => {
     "Authorization": `Bearer ${token}`
   };
 
-  // 1. START JOB
+  // 1. FAST START
   const startRes = await fetch("/api/analysis/start", {
     method: "POST", headers, body: JSON.stringify({ module, input })
   });
   
-  if (!startRes.ok) throw new Error("Failed to initialize analysis job.");
+  if (!startRes.ok) {
+     const err = await startRes.json().catch(() => ({}));
+     throw new Error(err.error || "Failed to initialize analysis job.");
+  }
+  
   const startData = await startRes.json();
   const jobId = startData.data?.jobId;
   
   if (!jobId) throw new Error("No Job ID returned from server.");
 
-  // 2. POLLING LOOP
-  // We explicitly trigger 'run' periodically to ensure the serverless worker is active.
+  // 2. POLLING & EXECUTION LOOP
   let attempts = 0;
-  const maxAttempts = 30; // 30 * 2s = 60s max wait time
+  const maxAttempts = 30; // 60s timeout
   
   while (attempts < maxAttempts) {
     attempts++;
     
-    // A. Trigger Execution (Fire & Forget logic handled by waiting for response)
-    // We await this to ensure we don't flood the server, but we ignore the result unless it's an error.
-    await fetch("/api/analysis/run", {
+    // Trigger Execution (Non-Blocking fire & forget attempt)
+    // We catch errors here because the polling status check is the authority on failure
+    fetch("/api/analysis/run", {
       method: "POST", headers, body: JSON.stringify({ jobId })
-    }).catch(e => console.warn("Run trigger warning:", e));
+    }).catch(e => console.warn("Background run trigger failed (safe to ignore):", e));
 
-    // B. Check Status
+    // Wait for work to happen
+    await wait(2000);
+
+    // Check Status
     const statusRes = await fetch(`/api/analysis/status?jobId=${jobId}`, { headers });
     if (statusRes.ok) {
       const statusData = await statusRes.json();
@@ -97,15 +99,10 @@ const executeAsyncJob = async (module: string, input: any): Promise<any> => {
         throw new Error(job.error || "Analysis job failed on server.");
       }
     }
-
-    // Wait before next poll
-    await wait(2000);
   }
 
   throw new Error("Analysis timed out. Please try again.");
 };
-
-// --- CLIENT INTENT FUNCTIONS ---
 
 export const analyzeMarketingAngle = async (params: any, userId?: string) => {
   SystemContracts.AngleMiner.inputValidator(params);

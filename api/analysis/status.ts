@@ -20,11 +20,10 @@ export default async function handler(request: Request) {
 
     const data = jobSnap.data();
 
-    // Standardized Response
     return jsonResponse({
       success: true,
       data: {
-        status: data.status, // queued, running, completed, failed
+        status: data.status,
         progress: data.progress || 0,
         result: data.result || null,
         error: data.error || null

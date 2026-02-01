@@ -8,11 +8,16 @@ export default async function handler(request: Request) {
   if (request.method !== 'POST') return errorResponse('Method Not Allowed', 'method_not_allowed', 405);
 
   try {
-    const { module, input } = await request.json();
+    const body = await request.json().catch(() => null);
+    
+    if (!body || !body.module || !body.input) {
+      return errorResponse('Missing module or input', 'invalid_request', 400);
+    }
 
-    if (!module || !input) return errorResponse('Missing module or input', 'invalid_request', 400);
+    const { module, input } = body;
 
-    // Create Job
+    // 1. FAST PERSISTENCE ONLY
+    // No AI calls. No validation logic. No processing.
     const jobRef = await addDoc(collection(db, 'analysis_jobs'), {
       module,
       input,
@@ -22,6 +27,7 @@ export default async function handler(request: Request) {
       updated_at: serverTimestamp()
     });
 
+    // 2. RETURN IMMEDIATELY (< 200ms goal)
     return jsonResponse({
       success: true,
       data: {
@@ -31,6 +37,7 @@ export default async function handler(request: Request) {
     });
 
   } catch (error: any) {
-    return errorResponse(error.message || 'Failed to start analysis', 'start_failed');
+    console.error("Analysis Start Error:", error);
+    return errorResponse(error.message || 'Failed to initialize analysis job', 'init_failed');
   }
 }

@@ -18,6 +18,7 @@ const firebaseConfig = {
   appId: process.env.FIREBASE_APP_ID,
 };
 
+// Singleton Init pattern for Edge
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 

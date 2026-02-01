@@ -4,7 +4,7 @@ import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 
 export const config = { runtime: 'edge' };
 
-// --- Normalizers (Reused) ---
+// --- Normalizers ---
 const safeStr = (val: any) => (typeof val === 'string' ? val.trim() : '');
 const safeNum = (val: any) => (typeof val === 'number' && !isNaN(val) ? val : 0);
 const safeArray = (arr: any) => (Array.isArray(arr) ? arr : []);
@@ -70,18 +70,11 @@ export default async function handler(request: Request) {
     if (!jobSnap.exists()) return errorResponse('Job not found', 'not_found', 404);
     const job = jobSnap.data();
 
-    // Idempotency: If already running or done, return current state
     if (job.status === 'completed' || job.status === 'failed') {
       return jsonResponse({ success: true, data: { status: job.status } });
     }
 
-    // Check for stale running jobs (> 60s) to allow restart
-    const isStale = job.status === 'running' && (Date.now() - (job.updated_at?.toMillis() || 0) > 60000);
-    if (job.status === 'running' && !isStale) {
-      return jsonResponse({ success: true, data: { status: 'running' } });
-    }
-
-    // --- EXECUTION START ---
+    // Lock Job
     await updateDoc(jobRef, { status: 'running', updated_at: serverTimestamp() });
 
     const ai = getAIClient();
@@ -91,7 +84,7 @@ export default async function handler(request: Request) {
     let prompt = "";
     let normalizer = (d: any) => d;
 
-    // Prompt Logic (Mirrors execute-analysis.ts)
+    // AI Configuration
     if (module === 'AngleMiner_Generate') {
       prompt = `Return strictly valid JSON. Product: ${(input.product || '').slice(0,800)}. Industry: ${input.industry}. Target: ${input.target}. Schema: {prime:[{title,hook,rational,score}],supporting:[{title,hook,rational,score}],exploratory:[{title,hook,rational,score}],hooks:[{platform,short,expanded}]}`;
       normalizer = normalizeAngleMinerResponse;
@@ -114,12 +107,10 @@ export default async function handler(request: Request) {
        normalizer = (raw: any) => ({ headline: safeStr(raw?.headline), cta: safeStr(raw?.cta), offer: safeStr(raw?.offer) });
     }
 
-    // AI Call with Race Timeout (8s to stay safe within Vercel Hobby limits)
+    // EXECUTION: Bounded Timeout (8 seconds)
     const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash', generationConfig: { responseMimeType: 'application/json' }});
     
-    // NOTE: We don't use generateContentWithRetry here to keep it strictly within the single function time budget.
-    // Retries are handled by the frontend re-triggering 'run' if it stalls.
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("AI_TIMEOUT")), 9000));
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("AI_TIMEOUT")), 8500));
     
     const result: any = await Promise.race([
       model.generateContent(prompt),
@@ -137,7 +128,7 @@ export default async function handler(request: Request) {
       finalOutput = normalizer(json);
     }
 
-    // --- SUCCESS ---
+    // Save Result
     await updateDoc(jobRef, {
       status: 'completed',
       result: finalOutput,
@@ -148,22 +139,21 @@ export default async function handler(request: Request) {
 
   } catch (error: any) {
     if (error.message === 'AI_TIMEOUT') {
-      // Don't mark as failed, just leave as 'running'. Client polling will re-trigger run or timeout.
+      // Don't fail the job, just let it stay running for next polling cycle to retry
       return jsonResponse({ success: true, data: { status: 'running' } });
     }
 
-    console.error("Job Failed:", error);
+    // Real Failure
     try {
-      // Attempt to save error state
-      const { jobId } = await request.json();
-      if(jobId) {
+       const { jobId } = await request.json();
+       if(jobId) {
           await updateDoc(doc(db, 'analysis_jobs', jobId), {
             status: 'failed',
             error: error.message,
             updated_at: serverTimestamp()
           });
-      }
-    } catch (e) {}
+       }
+    } catch(e) {}
 
     return errorResponse(error.message, 'execution_failed');
   }
