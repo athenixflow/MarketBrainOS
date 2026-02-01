@@ -1,6 +1,5 @@
-
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, Auth } from 'firebase/auth';
+import * as firebaseAuth from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getFunctions, Functions } from 'firebase/functions';
 import { getAnalytics, Analytics } from 'firebase/analytics';
@@ -16,8 +15,8 @@ const firebaseConfig = {
 };
 
 let app: FirebaseApp;
-let auth: Auth;
-let googleProvider: GoogleAuthProvider;
+let auth: firebaseAuth.Auth;
+let googleProvider: firebaseAuth.GoogleAuthProvider;
 let db: Firestore;
 let functions: Functions;
 let analytics: Analytics | null = null;
@@ -28,8 +27,8 @@ try {
   // @ts-ignore
   app = getApps().length ? getApp() : initializeApp(firebaseConfig);
   
-  auth = getAuth(app);
-  googleProvider = new GoogleAuthProvider();
+  auth = firebaseAuth.getAuth(app);
+  googleProvider = new firebaseAuth.GoogleAuthProvider();
   db = getFirestore(app);
   functions = getFunctions(app);
   
@@ -56,9 +55,9 @@ try {
     createUserWithEmailAndPassword: asyncReject,
     signInWithPopup: asyncReject,
     updateProfile: asyncReject,
-  } as unknown as Auth;
+  } as unknown as firebaseAuth.Auth;
 
-  googleProvider = new GoogleAuthProvider();
+  googleProvider = new firebaseAuth.GoogleAuthProvider();
   
   // Mock DB
   db = {} as unknown as Firestore;
