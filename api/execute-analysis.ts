@@ -7,8 +7,6 @@ export const config = {
 // --- CONFIGURATION ---
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || process.env.Google_api || '' });
 
-const systemInstruction = "You are MarketBrainOS. Output strict JSON only. No markdown. No commentary.";
-
 // --- HELPERS ---
 
 const cleanJSON = (text: string) => {
@@ -59,7 +57,6 @@ const normalizeAngleMinerResponse = (raw: any) => {
     expanded: safeStr(h?.expanded || h?.description)
   })).filter((h: any) => h.short);
 
-  // Ensure arrays are never empty to match schema requirements
   if (prime.length === 0) prime.push({ 
     title: 'No Data', 
     hook: 'Analysis yielded no prime angles.', 
@@ -131,7 +128,6 @@ const withTimeout = async (promise: Promise<any>, ms: number, fallback: any) => 
     return result;
   } catch (e) {
     clearTimeout(timer);
-    // On hard error (e.g. API quota), return fallback too to prevent crash
     console.error("AI Execution Error:", e);
     return { __ERROR__: true, ...fallback };
   }
@@ -154,9 +150,21 @@ export default async function handler(request: Request) {
     // --- SETUP MODULE CONFIGS ---
 
     if (module === 'AngleMiner_Generate') {
-      prompt = `JSON. Product:${(input.product || '').slice(0,800)}. Ind:${input.industry}. Tgt:${input.target}. Out:{prime:[{title,hook,rational,score}],supporting:[{title,hook,rational,score}],exploratory:[{title,hook,rational,score}],hooks:[{platform,short,expanded}]}`;
+      prompt = [
+        "Return strictly valid JSON.",
+        `Product: ${(input.product || '').slice(0,800)}`,
+        `Industry: ${input.industry}`,
+        `Target: ${input.target}`,
+        "Schema: {prime:[{title,hook,rational,score}],supporting:[{title,hook,rational,score}],exploratory:[{title,hook,rational,score}],hooks:[{platform,short,expanded}]}"
+      ].join(" ");
+
       normalizer = normalizeAngleMinerResponse;
-      fallback = { prime: [{title:'System Busy',hook:'High traffic. Please retry.',rational:'Timeout',score:0}], supporting:[], exploratory:[], hooks:[] };
+      fallback = { 
+        prime: [{title:'System Busy',hook:'High traffic. Please retry.',rational:'Timeout',score:0,improved:'',improving:false}], 
+        supporting:[], 
+        exploratory:[], 
+        hooks:[] 
+      };
     } 
     else if (module === 'AngleMiner_Improve') {
       prompt = `Refine hook for conversion: "${(input || '').slice(0,300)}"`;
@@ -164,17 +172,45 @@ export default async function handler(request: Request) {
       fallback = input; // Return original if fail
     }
     else if (module === 'TestLab_Simulation') {
-      prompt = `JSON. Compare ${input.type}. Variants:${(input.variants || []).join('|').slice(0,1000)}. Out:{variants:[{label,text,score}],winnerLabel,explanation}`;
+      const variantsSafe = (input.variants || []).join('|').slice(0,1000);
+      prompt = [
+        "Return strictly valid JSON.",
+        `Compare Type: ${input.type}`,
+        `Variants: ${variantsSafe}`,
+        "Schema: {variants:[{label,text,score}],winnerLabel,explanation}"
+      ].join(" ");
+
       normalizer = normalizeTestLabResponse;
-      fallback = { variants: input.variants?.map((v:string, i:number) => ({label:\`Variant \${i+1}\`, text:v, score:0})) || [], winnerLabel:'None', explanation:'System timed out.' };
+      fallback = { 
+        variants: input.variants?.map((v:string, i:number) => ({
+          label: `Variant ${i+1}`, 
+          text: v, 
+          score: 0
+        })) || [], 
+        winnerLabel: 'None', 
+        explanation: 'System timed out.' 
+      };
     }
     else if (module === 'ConversionDoctor_Audit') {
-      prompt = `JSON. Audit ${input.context}. Content:${(input.input || '').slice(0,1500)}. Out:{score,summary,issues:[{blocker,impact}],fixes:[{what,how,expectedResult}]}`;
+      prompt = [
+        "Return strictly valid JSON.",
+        `Audit Context: ${input.context}`,
+        `Content: ${(input.input || '').slice(0,1500)}`,
+        "Schema: {score,summary,issues:[{blocker,impact}],fixes:[{what,how,expectedResult}]}"
+      ].join(" ");
+
       normalizer = normalizeAuditResponse;
       fallback = { score:0, summary:'Analysis timed out due to high load.', issues:[], fixes:[] };
     }
     else if (module === 'Workflow_ImproveAssets') {
-      prompt = `JSON. Refine "${(input.angle || '').slice(0,300)}". Issues:${(input.issues || []).join('|').slice(0,500)}. Out:{headline,cta,offer}`;
+      const issuesSafe = (input.issues || []).join('|').slice(0,500);
+      prompt = [
+        "Return strictly valid JSON.",
+        `Refine Angle: "${(input.angle || '').slice(0,300)}"`,
+        `Issues to fix: ${issuesSafe}`,
+        "Schema: {headline,cta,offer}"
+      ].join(" ");
+
       normalizer = (raw: any) => ({ headline: safeStr(raw?.headline), cta: safeStr(raw?.cta), offer: safeStr(raw?.offer) });
       fallback = { headline:'Analysis Timeout', cta:'Retry', offer:'Retry' };
     }
@@ -185,7 +221,7 @@ export default async function handler(request: Request) {
     // --- EXECUTION ---
 
     const aiPromise = ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-1.5-flash',
       contents: prompt,
       config: { 
         responseMimeType: module === 'AngleMiner_Improve' ? 'text/plain' : 'application/json',
