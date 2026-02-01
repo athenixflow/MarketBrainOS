@@ -2,38 +2,47 @@
 import * as admin from 'firebase-admin';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// Shared Config - Force Node.js runtime for Admin SDK compatibility
+// Shared Config
 export const config = {
   runtime: 'nodejs',
 };
 
-// Initialize Firebase Admin (Singleton)
+// --- FIREBASE ADMIN INITIALIZATION ---
+// This block ensures we don't crash the server if env vars are malformed.
 if (!admin.apps.length) {
   try {
-    // 1. Try Service Account from Env (Best for Vercel)
-    const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY 
-      ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY) 
-      : undefined;
+    const key = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+    
+    if (key) {
+      // FIX: Handle both standard newlines and escaped newlines (common in Vercel/Dotenv)
+      const sanitizedKey = key.replace(/\\n/g, '\n');
+      const serviceAccount = JSON.parse(sanitizedKey);
       
-    admin.initializeApp({
-      credential: serviceAccount ? admin.credential.cert(serviceAccount) : undefined,
-    });
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+      });
+    } else {
+      console.warn("FIREBASE_SERVICE_ACCOUNT_KEY missing. Attempting Application Default Credentials...");
+      // Fallback: This might work if deployed on GCP/Firebase Functions, but likely fails on Vercel without env var.
+      admin.initializeApp(); 
+    }
   } catch (error) {
-    console.error('Firebase Admin Initialization Error:', error);
+    console.error('CRITICAL: Firebase Admin Initialization Failed.', error);
   }
 }
 
-export const db = admin.firestore();
+// SAFE EXPORT: If initialization failed, db is null. Endpoints must check this.
+export const db = admin.apps.length ? admin.firestore() : null;
 export const serverTimestamp = admin.firestore.FieldValue.serverTimestamp;
 
-// AI Client
+// --- AI CLIENT ---
 export const getAIClient = () => {
   const key = process.env.API_KEY || process.env.Google_api;
   if (!key) return null;
   return new GoogleGenerativeAI(key);
 };
 
-// Data Cleaning Helper
+// --- DATA CLEANING ---
 export const cleanJSON = (text: string) => {
   const clean = text.replace(/```json\n?|\n?```/g, '').trim();
   try {
@@ -48,7 +57,7 @@ export const cleanJSON = (text: string) => {
   }
 };
 
-// Node.js Response Helpers (Express-like style for Vercel Functions)
+// --- RESPONSE HELPERS ---
 export const sendJson = (res: any, data: any, status = 200) => {
   res.status(status).json(data);
 };

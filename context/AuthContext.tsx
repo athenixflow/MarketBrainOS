@@ -1,8 +1,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { auth } from '../services/firebase';
-import { onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth';
-import type { User } from 'firebase/auth';
+import { onAuthStateChanged, signOut as firebaseSignOut, User } from 'firebase/auth';
 import { UserProfile } from '../types';
 import { getUserProfile, ensureUserProfile } from '../services/persistenceService';
 

@@ -1,11 +1,16 @@
 
 import { db, serverTimestamp, sendJson, sendError } from '../utils';
 
-// Force Node.js runtime for Admin SDK
 export const config = { runtime: 'nodejs' };
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return sendError(res, 'Method Not Allowed', 'method_not_allowed', 405);
+
+  // CRITICAL CHECK: Ensure DB is connected
+  if (!db) {
+    console.error("Database connection missing. Check FIREBASE_SERVICE_ACCOUNT_KEY.");
+    return sendError(res, 'Server Configuration Error: Database not connected.', 'config_error', 500);
+  }
 
   try {
     const { module, input } = req.body;
@@ -14,7 +19,7 @@ export default async function handler(req: any, res: any) {
       return sendError(res, 'Missing module or input', 'invalid_request', 400);
     }
 
-    // 1. FAST PERSISTENCE (Admin SDK)
+    // 1. FAST PERSISTENCE
     const jobRef = await db.collection('analysis_jobs').add({
       module,
       input,

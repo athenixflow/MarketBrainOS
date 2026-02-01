@@ -6,6 +6,10 @@ export const config = { runtime: 'nodejs' };
 export default async function handler(req: any, res: any) {
   if (req.method !== 'GET') return sendError(res, 'Method Not Allowed', 'method_not_allowed', 405);
 
+  if (!db) {
+    return sendError(res, 'Server Configuration Error: Database not connected.', 'config_error', 500);
+  }
+
   try {
     const { jobId } = req.query;
 

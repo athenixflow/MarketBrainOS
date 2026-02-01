@@ -1,7 +1,6 @@
 
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import type { Auth } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getFunctions, Functions } from 'firebase/functions';
 import { getAnalytics, Analytics } from 'firebase/analytics';

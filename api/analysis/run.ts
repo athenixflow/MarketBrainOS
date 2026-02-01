@@ -59,6 +59,10 @@ const normalizeAuditResponse = (raw: any) => {
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return sendError(res, 'Method Not Allowed', 'method_not_allowed', 405);
 
+  if (!db) {
+    return sendError(res, 'Server Configuration Error: Database not connected.', 'config_error', 500);
+  }
+
   try {
     const { jobId } = req.body;
     if (!jobId) return sendError(res, 'Missing Job ID', 'invalid_request', 400);
@@ -83,7 +87,6 @@ export default async function handler(req: any, res: any) {
     let prompt = "";
     let normalizer = (d: any) => d;
 
-    // AI Configuration
     if (module === 'AngleMiner_Generate') {
       prompt = `Return strictly valid JSON. Product: ${(input.product || '').slice(0,800)}. Industry: ${input.industry}. Target: ${input.target}. Schema: {prime:[{title,hook,rational,score}],supporting:[{title,hook,rational,score}],exploratory:[{title,hook,rational,score}],hooks:[{platform,short,expanded}]}`;
       normalizer = normalizeAngleMinerResponse;
@@ -138,11 +141,9 @@ export default async function handler(req: any, res: any) {
 
   } catch (error: any) {
     if (error.message === 'AI_TIMEOUT') {
-      // Don't fail the job, just let it stay running for next polling cycle to retry
       return sendJson(res, { success: true, data: { status: 'running' } });
     }
 
-    // Real Failure
     try {
        const { jobId } = req.body;
        if(jobId) {
