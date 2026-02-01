@@ -1,11 +1,11 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export const config = {
   runtime: 'edge',
 };
 
 // --- CONFIGURATION ---
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || process.env.Google_api || '' });
+const genAI = new GoogleGenerativeAI(process.env.API_KEY || process.env.Google_api || '');
 
 // --- HELPERS ---
 
@@ -220,14 +220,15 @@ export default async function handler(request: Request) {
 
     // --- EXECUTION ---
 
-    const aiPromise = ai.models.generateContent({
+    const model = genAI.getGenerativeModel({
       model: 'gemini-1.5-flash',
-      contents: prompt,
-      config: { 
+      generationConfig: { 
         responseMimeType: module === 'AngleMiner_Improve' ? 'text/plain' : 'application/json',
         maxOutputTokens: 1500
       }
     });
+
+    const aiPromise = model.generateContent(prompt);
 
     // 8-second hard timeout
     const resultRaw = await withTimeout(aiPromise, 8000, fallback);
@@ -237,16 +238,23 @@ export default async function handler(request: Request) {
     if (resultRaw.__TIMEOUT__ || resultRaw.__ERROR__) {
       finalOutput = module === 'AngleMiner_Improve' ? fallback : normalizer(fallback);
     } else {
-      const text = resultRaw.text;
-      if (module === 'AngleMiner_Improve') {
-        finalOutput = text ? text.trim() : fallback;
-      } else {
-        const json = cleanJSON(text || '');
-        if (!json) {
-          finalOutput = normalizer(fallback); // JSON parse failed -> return fallback
+      try {
+        const response = await resultRaw.response;
+        const text = response.text();
+
+        if (module === 'AngleMiner_Improve') {
+          finalOutput = text ? text.trim() : fallback;
         } else {
-          finalOutput = normalizer(json);
+          const json = cleanJSON(text || '');
+          if (!json) {
+            finalOutput = normalizer(fallback); // JSON parse failed -> return fallback
+          } else {
+            finalOutput = normalizer(json);
+          }
         }
+      } catch (e) {
+        console.error("Result processing error:", e);
+        finalOutput = module === 'AngleMiner_Improve' ? fallback : normalizer(fallback);
       }
     }
 
