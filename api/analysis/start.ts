@@ -5,7 +5,10 @@ export const config = { runtime: 'nodejs' };
 // --- INLINE INITIALIZATION START ---
 // We inline this logic to avoid "ERR_MODULE_NOT_FOUND" for local utils during Vercel deployment isolation.
 
-if (!admin.apps.length) {
+// DEFENSIVE CHECK: Ensure admin.apps exists before accessing .length to prevent crash
+const apps = admin.apps || [];
+
+if (!apps.length) {
   try {
     const key = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
     
@@ -26,7 +29,8 @@ if (!admin.apps.length) {
   }
 }
 
-const db = admin.apps.length ? admin.firestore() : null;
+// Re-check apps length safely
+const db = (admin.apps && admin.apps.length) ? admin.firestore() : null;
 const serverTimestamp = admin.firestore.FieldValue.serverTimestamp;
 // --- INLINE INITIALIZATION END ---
 
@@ -48,10 +52,30 @@ export default async function handler(request: Request) {
   }
 
   try {
-    const { module, input } = await request.json();
+    // Safe JSON parsing
+    const body = await request.json().catch(() => null);
 
-    if (!module || !input) {
-      return new Response(JSON.stringify({ success: false, error: 'Missing module or input', meta: { code: 'invalid_request' } }), {
+    // DEFENSIVE VALIDATION: Check types before access
+    if (!body || typeof body !== 'object') {
+       return new Response(JSON.stringify({ success: false, error: 'Invalid JSON body', meta: { code: 'invalid_json' } }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const { module, input } = body;
+
+    // Validate Module
+    if (!module || typeof module !== 'string') {
+      return new Response(JSON.stringify({ success: false, error: 'Missing or invalid module identifier', meta: { code: 'invalid_module' } }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Validate Input
+    if (!input) {
+      return new Response(JSON.stringify({ success: false, error: 'Missing input data', meta: { code: 'invalid_input' } }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
