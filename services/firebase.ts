@@ -1,8 +1,13 @@
-import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+import * as firebaseApp from 'firebase/app';
 import { getAuth, GoogleAuthProvider, Auth, User } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getFunctions, Functions } from 'firebase/functions';
 import { getAnalytics, Analytics } from 'firebase/analytics';
+
+const initializeApp = (firebaseApp as any).initializeApp;
+const getApps = (firebaseApp as any).getApps;
+const getApp = (firebaseApp as any).getApp;
+type FirebaseApp = any;
 
 const firebaseConfig = {
   apiKey: process.env.FIREBASE_API_KEY || "AIzaSyBDM5em2UN034YAd-ihukHOssL_Jr4AmqU",

@@ -1,6 +1,34 @@
-import { db, serverTimestamp } from '../utils';
+import * as admin from 'firebase-admin';
 
 export const config = { runtime: 'nodejs' };
+
+// --- INLINE INITIALIZATION START ---
+// We inline this logic to avoid "ERR_MODULE_NOT_FOUND" for local utils during Vercel deployment isolation.
+
+if (!admin.apps.length) {
+  try {
+    const key = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+    
+    if (key) {
+      // Handle both standard newlines and escaped newlines (common in Vercel/Dotenv)
+      const sanitizedKey = key.replace(/\\n/g, '\n');
+      const serviceAccount = JSON.parse(sanitizedKey);
+      
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+      });
+    } else {
+      // Fallback for environments with Application Default Credentials
+      admin.initializeApp(); 
+    }
+  } catch (error) {
+    console.error('CRITICAL: Firebase Admin Initialization Failed inside handler.', error);
+  }
+}
+
+const db = admin.apps.length ? admin.firestore() : null;
+const serverTimestamp = admin.firestore.FieldValue.serverTimestamp;
+// --- INLINE INITIALIZATION END ---
 
 export default async function handler(request: Request) {
   if (request.method !== 'POST') {
