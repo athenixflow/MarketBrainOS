@@ -1,14 +1,12 @@
-import * as admin from 'firebase-admin';
+import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 export const config = { runtime: 'nodejs' };
 
 // --- INLINE INITIALIZATION START ---
 // We inline this logic to avoid "ERR_MODULE_NOT_FOUND" for local utils during Vercel deployment isolation.
 
-// DEFENSIVE CHECK: Ensure admin.apps exists before accessing .length to prevent crash
-const apps = admin.apps || [];
-
-if (!apps.length) {
+if (!getApps().length) {
   try {
     const key = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
     
@@ -17,12 +15,12 @@ if (!apps.length) {
       const sanitizedKey = key.replace(/\\n/g, '\n');
       const serviceAccount = JSON.parse(sanitizedKey);
       
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
+      initializeApp({
+        credential: cert(serviceAccount),
       });
     } else {
       // Fallback for environments with Application Default Credentials
-      admin.initializeApp(); 
+      initializeApp(); 
     }
   } catch (error) {
     console.error('CRITICAL: Firebase Admin Initialization Failed inside handler.', error);
@@ -30,8 +28,8 @@ if (!apps.length) {
 }
 
 // Re-check apps length safely
-const db = (admin.apps && admin.apps.length) ? admin.firestore() : null;
-const serverTimestamp = admin.firestore.FieldValue.serverTimestamp;
+const db = getApps().length ? getFirestore() : null;
+const serverTimestamp = FieldValue.serverTimestamp;
 // --- INLINE INITIALIZATION END ---
 
 export default async function handler(request: Request) {

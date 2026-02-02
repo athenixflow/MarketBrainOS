@@ -1,5 +1,5 @@
-
-import * as admin from 'firebase-admin';
+import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // Shared Config
@@ -9,7 +9,7 @@ export const config = {
 
 // --- FIREBASE ADMIN INITIALIZATION ---
 // This block ensures we don't crash the server if env vars are malformed.
-if (!admin.apps.length) {
+if (!getApps().length) {
   try {
     const key = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
     
@@ -18,13 +18,13 @@ if (!admin.apps.length) {
       const sanitizedKey = key.replace(/\\n/g, '\n');
       const serviceAccount = JSON.parse(sanitizedKey);
       
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
+      initializeApp({
+        credential: cert(serviceAccount),
       });
     } else {
       console.warn("FIREBASE_SERVICE_ACCOUNT_KEY missing. Attempting Application Default Credentials...");
       // Fallback: This might work if deployed on GCP/Firebase Functions, but likely fails on Vercel without env var.
-      admin.initializeApp(); 
+      initializeApp(); 
     }
   } catch (error) {
     console.error('CRITICAL: Firebase Admin Initialization Failed.', error);
@@ -32,8 +32,8 @@ if (!admin.apps.length) {
 }
 
 // SAFE EXPORT: If initialization failed, db is null. Endpoints must check this.
-export const db = admin.apps.length ? admin.firestore() : null;
-export const serverTimestamp = admin.firestore.FieldValue.serverTimestamp;
+export const db = getApps().length ? getFirestore() : null;
+export const serverTimestamp = FieldValue.serverTimestamp;
 
 // --- AI CLIENT ---
 export const getAIClient = () => {
