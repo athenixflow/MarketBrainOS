@@ -17,6 +17,7 @@ if (!getApps().length) {
       
       initializeApp({
         credential: cert(serviceAccount),
+        projectId: serviceAccount.project_id, // Explicitly set Project ID for Vercel/Serverless
       });
     } else {
       // Fallback for environments with Application Default Credentials

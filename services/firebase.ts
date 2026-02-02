@@ -1,6 +1,6 @@
 import * as firebaseApp from 'firebase/app';
 import { getAuth, GoogleAuthProvider, Auth, User } from 'firebase/auth';
-import { getFirestore, Firestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
+import { getFirestore, Firestore } from 'firebase/firestore';
 import { getFunctions, Functions } from 'firebase/functions';
 import { getAnalytics, Analytics } from 'firebase/analytics';
 
@@ -35,16 +35,11 @@ try {
   auth = getAuth(app);
   googleProvider = new GoogleAuthProvider();
   
-  // Initialize Firestore with offline persistence
-  // This prevents "Could not reach Cloud Firestore backend" timeouts by serving from cache
-  try {
-    db = initializeFirestore(app, {
-      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-    });
-  } catch (err) {
-    // Fallback if persistence fails (e.g. browsing in privacy mode) or already initialized
-    db = getFirestore(app);
-  }
+  // Initialize Firestore
+  // We use getFirestore() which uses default settings.
+  // Explicitly configuring complex persistence (tabManager) can cause connection timeouts
+  // in some environments if tabs lock the DB.
+  db = getFirestore(app);
 
   functions = getFunctions(app);
   

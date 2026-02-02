@@ -20,6 +20,7 @@ if (!getApps().length) {
       
       initializeApp({
         credential: cert(serviceAccount),
+        projectId: serviceAccount.project_id, // Explicitly set Project ID for Vercel/Serverless
       });
     } else {
       console.warn("FIREBASE_SERVICE_ACCOUNT_KEY missing. Attempting Application Default Credentials...");
