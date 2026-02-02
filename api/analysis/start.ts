@@ -1,22 +1,32 @@
-
-import { db, serverTimestamp, sendJson, sendError } from '../utils';
+import { db, serverTimestamp } from '../utils';
 
 export const config = { runtime: 'nodejs' };
 
-export default async function handler(req: any, res: any) {
-  if (req.method !== 'POST') return sendError(res, 'Method Not Allowed', 'method_not_allowed', 405);
+export default async function handler(request: Request) {
+  if (request.method !== 'POST') {
+    return new Response(JSON.stringify({ success: false, error: 'Method Not Allowed', meta: { code: 'method_not_allowed' } }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
 
   // CRITICAL CHECK: Ensure DB is connected
   if (!db) {
     console.error("Database connection missing. Check FIREBASE_SERVICE_ACCOUNT_KEY.");
-    return sendError(res, 'Server Configuration Error: Database not connected.', 'config_error', 500);
+    return new Response(JSON.stringify({ success: false, error: 'Server Configuration Error: Database not connected.', meta: { code: 'config_error' } }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 
   try {
-    const { module, input } = req.body;
+    const { module, input } = await request.json();
 
     if (!module || !input) {
-      return sendError(res, 'Missing module or input', 'invalid_request', 400);
+      return new Response(JSON.stringify({ success: false, error: 'Missing module or input', meta: { code: 'invalid_request' } }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     // 1. FAST PERSISTENCE
@@ -30,16 +40,22 @@ export default async function handler(req: any, res: any) {
     });
 
     // 2. RETURN IMMEDIATELY
-    return sendJson(res, {
+    return new Response(JSON.stringify({
       success: true,
       data: {
         jobId: jobRef.id,
         status: 'queued'
       }
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
     });
 
   } catch (error: any) {
     console.error("Analysis Start Error:", error);
-    return sendError(res, error.message || 'Failed to initialize analysis job', 'init_failed');
+    return new Response(JSON.stringify({ success: false, error: error.message || 'Failed to initialize analysis job', meta: { code: 'init_failed' } }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 }

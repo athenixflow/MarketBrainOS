@@ -1,11 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { auth } from '../services/firebase';
-import * as firebaseAuth from 'firebase/auth';
+import { User, onAuthStateChanged, signOut } from 'firebase/auth';
 import { UserProfile } from '../types';
 import { getUserProfile, ensureUserProfile } from '../services/persistenceService';
 
 interface AuthContextType {
-  user: firebaseAuth.User | null;
+  user: User | null;
   profile: UserProfile | null;
   loading: boolean;
   signOut: () => Promise<void>;
@@ -15,7 +15,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<firebaseAuth.User | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -28,7 +28,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    const unsubscribe = firebaseAuth.onAuthStateChanged(auth, async (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
         await fetchProfile(currentUser.uid, currentUser.email);
@@ -42,7 +42,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const handleSignOut = async () => {
-    await firebaseAuth.signOut(auth);
+    await signOut(auth);
   };
 
   const refreshProfile = async () => {
