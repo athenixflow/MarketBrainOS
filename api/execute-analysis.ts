@@ -1,46 +1,20 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { getApps } from 'firebase-admin/app';
-
-export const config = {
-  runtime: 'edge',
-};
 
 // --- CONFIGURATION & HELPERS ---
 
 const getAIClient = () => {
-  // First try to get project ID from Firebase Admin (service account)
-  const firebaseApp = getApps()[0];
-  if (firebaseApp) {
-    try {
-      const projectId = firebaseApp.options.projectId;
-      if (projectId) {
-        console.log("Using Firebase Admin project ID for Gemini API:", projectId);
-        const key = process.env.VITE_GEMINI_API_KEY || process.env.API_KEY || process.env.Google_api;
-        if (key) {
-          return new GoogleGenerativeAI(key);
-        }
-      }
-    } catch (error) {
-      if (error instanceof Error) {
-        console.warn("Firebase Admin credentials not available for Gemini:", error.message);
-      } else {
-        console.warn("Firebase Admin credentials not available for Gemini");
-      }
-    }
-  }
-
-  // Fallback to direct API key if service account is not available
+  // Get API key from environment variables
   const key = process.env.VITE_GEMINI_API_KEY || process.env.API_KEY || process.env.Google_api;
   if (!key) {
     console.error("CRITICAL: API Key not found in environment variables (VITE_GEMINI_API_KEY, API_KEY, or Google_api).");
     return null;
   }
   
-  // Try to get project ID from environment
+  // Get project ID from environment variables
   const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.FIREBASE_PROJECT_ID;
   
   if (projectId) {
-    console.log("Using direct API key with project ID:", projectId);
+    console.log("Using API key with project ID:", projectId);
     return new GoogleGenerativeAI(key);
   } else {
     console.warn("No project ID found, using API key only (may cause authentication issues)");
