@@ -1,6 +1,35 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
+// TypeScript declarations for import.meta.env
+interface ImportMetaEnv {
+  readonly Google_api?: string;
+  readonly API_KEY?: string;
+  readonly FIREBASE_API_KEY?: string;
+  readonly FIREBASE_AUTH_DOMAIN?: string;
+  readonly FIREBASE_PROJECT_ID?: string;
+  readonly FIREBASE_STORAGE_BUCKET?: string;
+  readonly FIREBASE_MESSAGING_SENDER_ID?: string;
+  readonly FIREBASE_APP_ID?: string;
+  readonly FIREBASE_MEASUREMENT_ID?: string;
+  readonly SUPABASE_URL?: string;
+  readonly SUPABASE_ANON_KEY?: string;
+  readonly SUPABASE_SERVICE_ROLE_KEY?: string;
+  // Add other environment variables as needed
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}
+
+declare global {
+  interface Window {
+    process?: {
+      env: NodeJS.ProcessEnv;
+    };
+  }
+}
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   // Load env file based on `mode` in the current working directory.
