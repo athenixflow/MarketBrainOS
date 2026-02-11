@@ -7,9 +7,9 @@ export const config = {
 // --- CONFIGURATION & HELPERS ---
 
 const getAIClient = () => {
-  const key = process.env.API_KEY || process.env.Google_api;
+  const key = process.env.API_KEY || process.env.Google_api || process.env.VITE_GEMINI_API_KEY;
   if (!key) {
-    console.error("CRITICAL: API Key not found in environment variables (API_KEY or Google_api).");
+    console.error("CRITICAL: API Key not found in environment variables (API_KEY, Google_api, or VITE_GEMINI_API_KEY).");
     return null;
   }
   return new GoogleGenerativeAI(key);
