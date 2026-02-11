@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom scrollbar styles */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #0B0B0B;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #444;
+}
+
+/* Body styles */
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: #0B0B0B;
+    margin: 0;
+    padding: 0;
+    color: white;
+}
+
+/* Additional global styles */
+* {
+    box-sizing: border-box;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+/* Utility classes for common patterns */
+.text-gradient {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.btn-primary {
+    @apply bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-2 px-6 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg;
+}
+
+.btn-secondary {
+    @apply bg-gray-800 hover:bg-gray-700 text-white font-semibold py-2 px-6 rounded-lg transition-all duration-300 border border-gray-600;
+}
+
+.card {
+    @apply bg-gray-900 border border-gray-800 rounded-lg p-6 shadow-xl;
+}
+
+.input-field {
+    @apply w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300;
+}
+
+.label {
+    @apply block text-sm font-medium text-gray-300 mb-2;
+}
+
+.text-fade {
+    @apply text-gray-400;
+}
+
+.border-gradient {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    padding: 2px;
+}
+
+/* Dark theme overrides */
+.dark {
+    @apply bg-gray-900 text-white;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .container {
+        padding: 0 15px;
+    }
+    
+    .btn-primary, .btn-secondary {
+        @apply w-full;
+    }
+}
