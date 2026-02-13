@@ -1,7 +1,17 @@
-
-import { db, serverTimestamp, getAIClient, cleanJSON, sendJson, sendError } from '../utils';
+import { createClient } from '@supabase/supabase-js';
+import { getAIClient, cleanJSON, sendJson, sendError } from '../utils';
 
 export const config = { runtime: 'nodejs' };
+
+// Initialize Supabase client
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error('CRITICAL: Supabase URL or Service Role Key not found in environment variables.');
+}
+
+const supabase = createClient(supabaseUrl!, supabaseKey!);
 
 // --- Normalizers ---
 const safeStr = (val: any) => (typeof val === 'string' ? val.trim() : '');
@@ -59,7 +69,7 @@ const normalizeAuditResponse = (raw: any) => {
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return sendError(res, 'Method Not Allowed', 'method_not_allowed', 405);
 
-  if (!db) {
+  if (!supabase) {
     return sendError(res, 'Server Configuration Error: Database not connected.', 'config_error', 500);
   }
 
@@ -67,18 +77,32 @@ export default async function handler(req: any, res: any) {
     const { jobId } = req.body;
     if (!jobId) return sendError(res, 'Missing Job ID', 'invalid_request', 400);
 
-    const jobRef = db.collection('analysis_jobs').doc(jobId);
-    const jobSnap = await jobRef.get();
+    // Get job from job_queue table
+    const { data: job, error: jobError } = await supabase
+      .from('job_queue')
+      .select('*')
+      .eq('id', jobId)
+      .single();
 
-    if (!jobSnap.exists) return sendError(res, 'Job not found', 'not_found', 404);
-    const job = jobSnap.data()!;
+    if (jobError || !job) return sendError(res, 'Job not found', 'not_found', 404);
 
     if (job.status === 'completed' || job.status === 'failed') {
       return sendJson(res, { success: true, data: { status: job.status } });
     }
 
-    // Lock Job
-    await jobRef.update({ status: 'running', updated_at: serverTimestamp() });
+    // Lock Job - Update status to running
+    const { error: lockError } = await supabase
+      .from('job_queue')
+      .update({ 
+        status: 'processing',
+        started_at: new Date().toISOString()
+      })
+      .eq('id', jobId);
+
+    if (lockError) {
+      console.error("Supabase Lock Error:", lockError);
+      throw new Error(`Database Error: ${lockError.message}`);
+    }
 
     const ai = getAIClient();
     if (!ai) throw new Error("AI Client Configuration Missing");
@@ -130,30 +154,47 @@ export default async function handler(req: any, res: any) {
       finalOutput = normalizer(json);
     }
 
-    // Save Result
-    await jobRef.update({
-      status: 'completed',
-      result: finalOutput,
-      updated_at: serverTimestamp()
-    });
+    // Save Result - Update job with completed status and result
+    const { error: updateError } = await supabase
+      .from('job_queue')
+      .update({
+        status: 'completed',
+        result: finalOutput,
+        completed_at: new Date().toISOString()
+      })
+      .eq('id', jobId);
+
+    if (updateError) {
+      console.error("Supabase Update Error:", updateError);
+      throw new Error(`Database Error: ${updateError.message}`);
+    }
 
     return sendJson(res, { success: true, data: { status: 'completed' } });
 
   } catch (error: any) {
     if (error.message === 'AI_TIMEOUT') {
-      return sendJson(res, { success: true, data: { status: 'running' } });
+      return sendJson(res, { success: true, data: { status: 'processing' } });
     }
 
     try {
        const { jobId } = req.body;
        if(jobId) {
-          await db.collection('analysis_jobs').doc(jobId).update({
-            status: 'failed',
-            error: error.message,
-            updated_at: serverTimestamp()
-          });
+          const { error: failError } = await supabase
+            .from('job_queue')
+            .update({
+              status: 'failed',
+              error: error.message,
+              completed_at: new Date().toISOString()
+            })
+            .eq('id', jobId);
+
+          if (failError) {
+            console.error("Supabase Fail Update Error:", failError);
+          }
        }
-    } catch(e) {}
+    } catch(e) {
+      console.error("Error updating job status to failed:", e);
+    }
 
     return sendError(res, error.message, 'execution_failed');
   }

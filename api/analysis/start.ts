@@ -1,37 +1,16 @@
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { createClient } from '@supabase/supabase-js';
 
 export const config = { runtime: 'nodejs' };
 
-// --- INLINE INITIALIZATION START ---
-// We inline this logic to avoid "ERR_MODULE_NOT_FOUND" for local utils during Vercel deployment isolation.
+// Initialize Supabase client
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!getApps().length) {
-  try {
-    const key = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-    
-    if (key) {
-      // Handle both standard newlines and escaped newlines (common in Vercel/Dotenv)
-      const sanitizedKey = key.replace(/\\n/g, '\n');
-      const serviceAccount = JSON.parse(sanitizedKey);
-      
-      initializeApp({
-        credential: cert(serviceAccount),
-        projectId: serviceAccount.project_id, // Explicitly set Project ID for Vercel/Serverless
-      });
-    } else {
-      // Fallback for environments with Application Default Credentials
-      initializeApp(); 
-    }
-  } catch (error) {
-    console.error('CRITICAL: Firebase Admin Initialization Failed inside handler.', error);
-  }
+if (!supabaseUrl || !supabaseKey) {
+  console.error('CRITICAL: Supabase URL or Service Role Key not found in environment variables.');
 }
 
-// Re-check apps length safely
-const db = getApps().length ? getFirestore() : null;
-const serverTimestamp = FieldValue.serverTimestamp;
-// --- INLINE INITIALIZATION END ---
+const supabase = createClient(supabaseUrl!, supabaseKey!);
 
 export default async function handler(req: any, res: any) {
   // 1. Method Check
@@ -44,8 +23,8 @@ export default async function handler(req: any, res: any) {
   }
 
   // 2. Critical DB Check
-  if (!db) {
-    console.error("Database connection missing. Check FIREBASE_SERVICE_ACCOUNT_KEY.");
+  if (!supabase) {
+    console.error("Database connection missing. Check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
     return res.status(500).json({ 
       success: false, 
       error: 'Server Configuration Error: Database not connected.', 
@@ -86,22 +65,29 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // 4. FAST PERSISTENCE
-    const jobRef = await db.collection('analysis_jobs').add({
-      module,
-      input,
-      status: 'queued',
-      progress: 0,
-      created_at: serverTimestamp(),
-      updated_at: serverTimestamp()
-    });
+    // 4. FAST PERSISTENCE - Insert into job_queue table
+    const { data, error } = await supabase
+      .from('job_queue')
+      .insert([{
+        module,
+        input,
+        status: 'pending',
+        created_at: new Date().toISOString()
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Supabase Insert Error:", error);
+      throw new Error(`Database Error: ${error.message}`);
+    }
 
     // 5. RETURN IMMEDIATELY
     return res.status(200).json({
       success: true,
       data: {
-        jobId: jobRef.id,
-        status: 'queued'
+        jobId: data.id,
+        status: 'pending'
       }
     });
 
