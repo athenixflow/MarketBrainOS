@@ -1,17 +1,51 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
 // --- CONFIGURATION & HELPERS ---
 
-const getAIClient = () => {
-  // Get API key from environment variables
+const getGeminiApiKey = () => {
   const key = process.env.VITE_GEMINI_API_KEY || process.env.API_KEY || process.env.Google_api;
   if (!key) {
     console.error("CRITICAL: API Key not found in environment variables (VITE_GEMINI_API_KEY, API_KEY, or Google_api).");
     return null;
   }
+  console.log("Using API key for direct Gemini API calls");
+  return key;
+};
+
+// Helper function to make direct HTTP requests to Gemini API
+const callGeminiAPI = async (apiKey: string, prompt: string, model: string = 'gemini-2.5-flash') => {
+  const url = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`;
   
-  console.log("Using API key only for Gemini API authentication");
-  return new GoogleGenerativeAI(key);
+  const requestBody = {
+    contents: [{
+      parts: [{
+        text: prompt
+      }]
+    }],
+    generationConfig: {
+      responseMimeType: "application/json",
+      maxOutputTokens: 2000
+    }
+  };
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(requestBody)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Gemini API Error: ${response.status} ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  
+  // Extract the generated text from the response
+  if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
+    return data.candidates[0].content.parts[0].text;
+  }
+  
+  throw new Error('No content returned from Gemini API');
 };
 
 const cleanJSON = (text: string) => {
@@ -163,8 +197,8 @@ export default async function handler(request: Request) {
   }
 
   try {
-    const ai = getAIClient();
-    if (!ai) {
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) {
       return new Response(JSON.stringify({ 
         success: false,
         error: "Server Configuration Error: Missing API Key." 
@@ -175,6 +209,7 @@ export default async function handler(request: Request) {
     
     let prompt = "";
     let normalizer = (d: any) => d;
+    let responseMimeType = "application/json";
 
     // --- SETUP MODULE CONFIGS ---
 
@@ -191,6 +226,7 @@ export default async function handler(request: Request) {
     else if (module === 'AngleMiner_Improve') {
       prompt = `Refine hook for conversion: "${(input || '').slice(0,300)}"`;
       normalizer = (d: any) => d; 
+      responseMimeType = "text/plain";
     }
     else if (module === 'TestLab_Simulation') {
       const variantsSafe = (input.variants || []).join('|').slice(0,1000);
@@ -226,53 +262,61 @@ export default async function handler(request: Request) {
       return new Response(JSON.stringify({ success: false, error: "Invalid module" }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
 
-    // --- EXECUTION ---
+    // --- EXECUTION WITH RETRY ---
+    let lastError: any;
+    let finalOutput: any;
+    const maxRetries = 2;
+    
+    for (let i = 0; i <= maxRetries; i++) {
+      try {
+        console.log(`[Gemini] Attempt ${i+1}/${maxRetries+1}...`);
+        
+        // Make direct API call to Gemini
+        const text = await callGeminiAPI(apiKey, prompt, 'gemini-2.5-flash');
+        
+        if (!text) throw new Error("Received empty response from Gemini API.");
+        
+        if (module === 'AngleMiner_Improve') {
+          finalOutput = text ? text.trim() : "";
+          if (!finalOutput) throw new Error("Generated empty text");
+        } else {
+          const json = cleanJSON(text || '');
+          if (!json) throw new Error("Failed to parse JSON response");
+          finalOutput = normalizer(json);
+        }
+        
+        // Success - break out of retry loop
+        break;
+        
+      } catch (e: any) {
+        console.error(`[Gemini] Attempt ${i + 1} failed:`, e.message);
+        lastError = e;
+        
+        // Stop immediately on fatal auth/config errors
+        if (e.message?.includes("API key") || e.message?.includes("403") || e.message?.includes("invalid")) {
+          throw new Error(`Auth Error: ${e.message}`);
+        }
 
-    const model = ai.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      generationConfig: { 
-        responseMimeType: module === 'AngleMiner_Improve' ? 'text/plain' : 'application/json',
-        maxOutputTokens: 2000
+        if (i < maxRetries) {
+          const backoff = 1000 * Math.pow(2, i);
+          console.log(`[Gemini] Retrying in ${backoff}ms...`);
+          await wait(backoff);
+        }
       }
-    });
-
-    try {
-      const text = await generateContentWithRetry(model, prompt, 1); 
-      let finalOutput;
-
-      if (module === 'AngleMiner_Improve') {
-        finalOutput = text ? text.trim() : "";
-        if (!finalOutput) throw new Error("Generated empty text");
-      } else {
-        const json = cleanJSON(text || '');
-        if (!json) throw new Error("Failed to parse JSON response");
-        finalOutput = normalizer(json);
-      }
-
-      // Explicit SUCCESS status with normalized schema
-      return new Response(JSON.stringify({ 
-        success: true,
-        data: finalOutput
-      }), { 
-        status: 200, 
-        headers: { 'Content-Type': 'application/json' } 
-      });
-
-    } catch (err: any) {
-      console.error("AI Generation Critical Failure:", err);
-      // Return detailed error for debugging purposes in this context
-      return new Response(JSON.stringify({ 
-        success: false,
-        error: "AI Analysis Unavailable",
-        meta: { 
-          details: err.message,
-          code: 'ai_unavailable'
-        } 
-      }), { 
-        status: 200, 
-        headers: { 'Content-Type': 'application/json' } 
-      });
     }
+    
+    if (!finalOutput) {
+      throw lastError || new Error("Gemini analysis failed after multiple retries.");
+    }
+
+    // Explicit SUCCESS status with normalized schema
+    return new Response(JSON.stringify({ 
+      success: true,
+      data: finalOutput
+    }), { 
+      status: 200, 
+      headers: { 'Content-Type': 'application/json' } 
+    });
 
   } catch (error: any) {
     console.error("Unhandled Server Error:", error);
