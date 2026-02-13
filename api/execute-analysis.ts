@@ -146,48 +146,6 @@ const normalizeAuditResponse = (raw: any) => {
   };
 };
 
-// --- EXECUTION WITH RETRY ---
-
-async function generateContentWithRetry(model: any, prompt: string, retries = 2) {
-  let lastError: any;
-  
-  for (let i = 0; i <= retries; i++) {
-    try {
-      console.log(`[Gemini] Attempt ${i+1}/${retries+1}...`);
-      
-      // Explicit 20s timeout per attempt
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error("Request Timed Out (20s limit)")), 20000);
-      });
-      
-      const generationPromise = model.generateContent(prompt);
-      const result: any = await Promise.race([generationPromise, timeoutPromise]);
-      
-      const response = await result.response;
-      const text = response.text();
-      
-      if (!text) throw new Error("Received empty response from Gemini model.");
-      return text;
-      
-    } catch (e: any) {
-      console.error(`[Gemini] Attempt ${i + 1} failed:`, e.message);
-      lastError = e;
-      
-      // Stop immediately on fatal auth/config errors
-      if (e.message?.includes("API key") || e.message?.includes("403") || e.message?.includes("invalid")) {
-        throw new Error(`Auth Error: ${e.message}`);
-      }
-
-      if (i < retries) {
-        const backoff = 1000 * Math.pow(2, i);
-        console.log(`[Gemini] Retrying in ${backoff}ms...`);
-        await wait(backoff);
-      }
-    }
-  }
-  
-  throw lastError || new Error("Gemini analysis failed after multiple retries.");
-}
 
 // --- HANDLER ---
 
