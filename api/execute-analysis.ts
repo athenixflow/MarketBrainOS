@@ -10,16 +10,8 @@ const getAIClient = () => {
     return null;
   }
   
-  // Get project ID from environment variables
-  const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.FIREBASE_PROJECT_ID;
-  
-  if (projectId) {
-    console.log("Using API key with project ID:", projectId);
-    return new GoogleGenerativeAI(key);
-  } else {
-    console.warn("No project ID found, using API key only (may cause authentication issues)");
-    return new GoogleGenerativeAI(key);
-  }
+  console.log("Using API key only for Gemini API authentication");
+  return new GoogleGenerativeAI(key);
 };
 
 const cleanJSON = (text: string) => {
