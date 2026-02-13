@@ -165,7 +165,7 @@ export default async function handler(req: any, res: any) {
     }
 
     // EXECUTION: Bounded Timeout (8 seconds)
-    const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash', generationConfig: { responseMimeType: 'application/json' }});
+    const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash', generationConfig: { responseMimeType: 'application/json' }});
     
     const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("AI_TIMEOUT")), 8500));
     
