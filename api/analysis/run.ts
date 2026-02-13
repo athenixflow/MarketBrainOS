@@ -1,5 +1,36 @@
 import { createClient } from '@supabase/supabase-js';
-import { getAIClient, cleanJSON, sendJson, sendError } from '../utils';
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+// --- AI CLIENT ---
+const getAIClient = () => {
+  const key = process.env.API_KEY || process.env.Google_api;
+  if (!key) return null;
+  return new GoogleGenerativeAI(key);
+};
+
+// --- DATA CLEANING ---
+const cleanJSON = (text: string) => {
+  const clean = text.replace(/```json\n?|\n?```/g, '').trim();
+  try {
+    return JSON.parse(clean);
+  } catch (e) {
+    const firstBrace = clean.indexOf('{');
+    const lastBrace = clean.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1) {
+      try { return JSON.parse(clean.substring(firstBrace, lastBrace + 1)); } catch (e2) { return null; }
+    }
+    return null;
+  }
+};
+
+// --- RESPONSE HELPERS ---
+const sendJson = (res: any, data: any, status = 200) => {
+  res.status(status).json(data);
+};
+
+const sendError = (res: any, message: string, code = 'internal_error', status = 500) => {
+  res.status(status).json({ success: false, error: message, meta: { code } });
+};
 
 export const config = { runtime: 'nodejs' };
 

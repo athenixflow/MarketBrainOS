@@ -1,5 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
-import { sendJson, sendError } from '../utils';
+
+// --- RESPONSE HELPERS ---
+const sendJson = (res: any, data: any, status = 200) => {
+  res.status(status).json(data);
+};
+
+const sendError = (res: any, message: string, code = 'internal_error', status = 500) => {
+  res.status(status).json({ success: false, error: message, meta: { code } });
+};
 
 export const config = { runtime: 'nodejs' };
 
