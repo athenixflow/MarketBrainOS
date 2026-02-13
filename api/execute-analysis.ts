@@ -229,7 +229,7 @@ export default async function handler(request: Request) {
     // --- EXECUTION ---
 
     const model = ai.getGenerativeModel({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       generationConfig: { 
         responseMimeType: module === 'AngleMiner_Improve' ? 'text/plain' : 'application/json',
         maxOutputTokens: 2000
