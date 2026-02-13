@@ -45,7 +45,7 @@ const wait = (ms: number) => new Promise(res => setTimeout(res, ms));
 
 const executeAsyncJob = async (module: string, input: any): Promise<any> => {
   const user = auth.currentUser;
-  if (!user) throw new Error("User must be logged in.");
+  if (!user) throw new Error("ERR_AUTH_REQUIRED: User must be logged in.");
   
   const token = await user.getIdToken();
   const headers = {
@@ -54,23 +54,48 @@ const executeAsyncJob = async (module: string, input: any): Promise<any> => {
   };
 
   // 1. FAST START
-  const startRes = await fetch("/api/analysis/start", {
-    method: "POST", headers, body: JSON.stringify({ module, input })
-  });
-  
-  if (!startRes.ok) {
-     const err = await startRes.json().catch(() => ({}));
-     throw new Error(err.error || "Failed to initialize analysis job.");
+  let startRes;
+  try {
+    startRes = await fetch("/api/analysis/start", {
+      method: "POST", 
+      headers, 
+      body: JSON.stringify({ module, input }),
+      signal: AbortSignal.timeout(10000) // 10s timeout for start request
+    });
+  } catch (e: any) {
+    if (e.name === 'AbortError') {
+      throw new Error("ERR_NETWORK_TIMEOUT: Start request timed out after 10s.");
+    }
+    throw new Error(`ERR_NETWORK: Failed to start analysis job. ${e.message}`);
   }
   
-  const startData = await startRes.json();
+  if (!startRes.ok) {
+     let errorMessage = "ERR_API_START_FAILED: Failed to initialize analysis job.";
+     try {
+       const err = await startRes.json().catch(() => ({}));
+       if (err.error) errorMessage = `ERR_API_START_FAILED: ${err.error}`;
+       if (err.meta?.details) errorMessage += ` Details: ${err.meta.details}`;
+     } catch (e: any) {
+       // Ignore JSON parsing errors
+     }
+     throw new Error(errorMessage);
+  }
+  
+  let startData;
+  try {
+    startData = await startRes.json();
+  } catch (e) {
+    throw new Error("ERR_API_PARSE_FAILED: Failed to parse start response.");
+  }
+  
   const jobId = startData.data?.jobId;
   
-  if (!jobId) throw new Error("No Job ID returned from server.");
+  if (!jobId) throw new Error("ERR_API_NO_JOB_ID: No Job ID returned from server.");
 
   // 2. POLLING & EXECUTION LOOP
   let attempts = 0;
   const maxAttempts = 30; // 60s timeout
+  let lastError = null;
   
   while (attempts < maxAttempts) {
     attempts++;
@@ -78,30 +103,75 @@ const executeAsyncJob = async (module: string, input: any): Promise<any> => {
     // Trigger Execution (Non-Blocking fire & forget attempt)
     // We catch errors here because the polling status check is the authority on failure
     fetch("/api/analysis/run", {
-      method: "POST", headers, body: JSON.stringify({ jobId })
+      method: "POST", 
+      headers, 
+      body: JSON.stringify({ jobId }),
+      signal: AbortSignal.timeout(5000) // 5s timeout for run request
     }).catch(e => console.warn("Background run trigger failed (safe to ignore):", e));
 
     // Wait for work to happen
     await wait(2000);
 
     // Check Status
-    const statusRes = await fetch(`/api/analysis/status?jobId=${jobId}`, { headers });
+    let statusRes;
+    try {
+      statusRes = await fetch(`/api/analysis/status?jobId=${jobId}`, { 
+        headers,
+        signal: AbortSignal.timeout(10000) // 10s timeout for status request
+      });
+    } catch (e: any) {
+      if (e.name === 'AbortError') {
+        lastError = "ERR_NETWORK_TIMEOUT: Status check timed out after 10s.";
+        continue; // Try again
+      }
+      lastError = `ERR_NETWORK: Failed to check status. ${e.message}`;
+      continue; // Try again
+    }
+    
     if (statusRes.ok) {
-      const statusData = await statusRes.json();
+      let statusData;
+      try {
+        statusData = await statusRes.json();
+      } catch (e: any) {
+        lastError = "ERR_API_PARSE_FAILED: Failed to parse status response.";
+        continue; // Try again
+      }
+      
       const job = statusData.data;
 
       if (job.status === 'completed') {
-        if (!job.result) throw new Error("Job completed but returned no result.");
+        if (!job.result) {
+          throw new Error("ERR_API_NO_RESULT: Job completed but returned no result.");
+        }
         return job.result;
       }
       
       if (job.status === 'failed') {
-        throw new Error(job.error || "Analysis job failed on server.");
+        let errorMessage = "ERR_API_JOB_FAILED: Analysis job failed on server.";
+        if (job.error) errorMessage = `ERR_API_JOB_FAILED: ${job.error}`;
+        if (job.meta?.details) errorMessage += ` Details: ${job.meta.details}`;
+        throw new Error(errorMessage);
+      }
+      
+      if (job.status === 'blocked') {
+        throw new Error("ERR_API_BLOCKED: Request was blocked by security engine.");
+      }
+    } else {
+      try {
+        const errorData = await statusRes.json();
+        lastError = `ERR_API_STATUS_FAILED: Status check failed with ${statusRes.status}. ${errorData.error || ''}`;
+      } catch (e: any) {
+        lastError = `ERR_API_STATUS_FAILED: Status check failed with ${statusRes.status}.`;
       }
     }
   }
 
-  throw new Error("Analysis timed out. Please try again.");
+  // If we get here, we timed out
+  let timeoutMessage = "ERR_TIMEOUT: Analysis timed out after 60s. Please try again.";
+  if (lastError) {
+    timeoutMessage += ` Last error: ${lastError}`;
+  }
+  throw new Error(timeoutMessage);
 };
 
 export const analyzeMarketingAngle = async (params: any, userId?: string) => {
