@@ -1,8 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Card, PageHeader, LoadingState, Tabs, ErrorMessage, PrimaryButton, Input, IntelligenceIndicator } from '../components/UI';
+import AnimatedSection from '../components/AnimatedSection';
 import { 
   adminGetAllUsers, 
   adminGetAuditLogs, 
@@ -15,11 +16,30 @@ import {
   callUpdateSystemSettings,
   adminGetPlatformStats,
   PlatformStats,
-  AdminUserAction
+  AdminUserAction,
+  computeSystemMetrics
 } from '../services/persistenceService';
 import { SecurityEngine } from '../services/securityEngine';
 import { DiagnosisEngine } from '../services/diagnosisService';
 import { UserProfile, AuditLogEntry, SecurityEvent, SystemLoadLevel, SystemSettings, DiagnosticResult, ActionLogEntry, AdminSettings } from '../types';
+
+// Display names for the module-availability toggles (keys = server module keys).
+const MODULE_LABELS: Record<string, string> = {
+  AngleMiner: 'Angle Miner',
+  ConversionDoctor: 'Conversion Doctor',
+  TestLabPro: 'TestLab Pro',
+  Workflow: 'Workflow',
+  StrategyLab: 'Strategy Lab',
+  OfferAnalyzer: 'Offer Analyzer',
+  AudienceIntel: 'Audience Intelligence',
+  MarketIntel: 'Market Intelligence',
+  Competitor: 'Competitor Analyzer',
+  Messaging: 'Messaging Analyzer',
+  ContentStrategy: 'Content Strategy',
+  Campaign: 'Campaign Analyzer',
+  Growth: 'Growth Analyzer',
+  WorkflowAnalyzer: 'Workflow Analyzer',
+};
 
 interface ConfirmationRequest {
   type: AdminUserAction | 'TOGGLE_LOCKDOWN' | 'UPDATE_SETTINGS';
@@ -137,6 +157,9 @@ const AdminDashboard: React.FC = () => {
   };
 
   const allDiagnosticsPassed = diagnosticResults.length > 0 && diagnosticResults.every(r => r.status === 'PASS');
+
+  // System monitoring (§68): roll up the already-loaded action_logs slice.
+  const metrics = useMemo(() => computeSystemMetrics(actionLogs), [actionLogs]);
 
   // 1. Initial Request -> Opens Confirmation Modal
   const initiateAction = (type: ConfirmationRequest['type'], userId: string | undefined, payload?: any) => {
@@ -377,7 +400,7 @@ const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      <div className="flex justify-between items-start">
+      <AnimatedSection index={0} className="flex justify-between items-start">
         <PageHeader title="Control Center" subtitle="Immutable Ledger & Identity Governance" />
         <div className="flex flex-col items-end gap-3 pt-4">
           <div className={`flex items-center gap-3 px-5 py-2.5 rounded-full border ${profile?.is_verified_admin ? 'bg-green-50 border-green-100 text-green-600' : 'bg-blue-50 border-blue-100 text-blue-600'}`}>
@@ -394,15 +417,17 @@ const AdminDashboard: React.FC = () => {
             </span>
           </div>
         </div>
-      </div>
+      </AnimatedSection>
 
-      <Tabs 
-        tabs={['Overview', 'Controls', 'Users', 'Safety Monitor', 'System Diagnosis', 'Activity Logs', 'Audit Ledger']} 
-        activeTab={activeTab} 
-        onTabChange={setActiveTab} 
-      />
+      <AnimatedSection index={1}>
+        <Tabs
+          tabs={['Overview', 'Monitoring', 'Controls', 'Users', 'Safety Monitor', 'System Diagnosis', 'Activity Logs', 'Audit Ledger']}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+        />
+      </AnimatedSection>
 
-      <div className="min-h-[400px]">
+      <AnimatedSection index={2} className="min-h-[400px]">
         {activeTab === 'Overview' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
             <StatCard label="Total Identities" value={platformStats?.totalUsers || 0} />
@@ -451,6 +476,81 @@ const AdminDashboard: React.FC = () => {
           </div>
         )}
 
+        {activeTab === 'Monitoring' && (
+          <div className="space-y-10 animate-in slide-in-from-bottom-4">
+            <p className="text-[11px] font-medium text-gray-500 leading-relaxed max-w-2xl">
+              Operational health rolled up from the most recent {metrics.sampleSize} system events
+              (analysis runs, blocks, and refunds). Use this to spot failure spikes, disabled-module
+              hits, or rate-limit storms at a glance.
+            </p>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              <StatCard label="Events Sampled" value={metrics.sampleSize} />
+              <StatCard label="Successful" value={metrics.statusCounts.success} />
+              <StatCard label="Failed / Refunded" value={metrics.statusCounts.failed} />
+              <StatCard label="Blocked" value={metrics.statusCounts.blocked} />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <Card title="Volume by Module">
+                {metrics.byModule.length === 0 ? (
+                  <p className="text-sm text-gray-400 font-medium py-6">No activity recorded yet.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {metrics.byModule.slice(0, 10).map(m => (
+                      <div key={m.module} className="flex items-center justify-between gap-4">
+                        <span className="text-xs font-bold text-[#0B0B0B] truncate">{m.module}</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{m.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+
+              <Card title="Top Error Codes">
+                {metrics.topErrors.length === 0 ? (
+                  <p className="text-sm text-gray-400 font-medium py-6">No errors in the sampled window. ✓</p>
+                ) : (
+                  <div className="space-y-3">
+                    {metrics.topErrors.map(e => (
+                      <div key={e.code} className="flex items-center justify-between gap-4">
+                        <span className="text-xs font-medium text-red-600 truncate font-mono">{e.code}</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{e.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            </div>
+
+            <Card title="Recent Issues (failures & blocks)">
+              {metrics.recentIssues.length === 0 ? (
+                <p className="text-sm text-gray-400 font-medium py-6">No recent failures or blocks. ✓</p>
+              ) : (
+                <div className="space-y-3">
+                  {metrics.recentIssues.map(l => {
+                    const when = l.created_at ? new Date(l.created_at.toMillis()) : (l.timestamp ? new Date(l.timestamp) : null);
+                    return (
+                      <div key={l.id} className="flex items-start justify-between gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-[#0B0B0B] truncate">{l.module || l.action || 'unknown'}</p>
+                          <p className="text-[10px] text-gray-400 font-mono truncate">{l.error_code || '—'}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className={`inline-block px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${l.status === 'blocked' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-600'}`}>
+                            {l.status === 'blocked' ? 'Blocked' : 'Failed'}
+                          </span>
+                          <p className="text-[10px] text-gray-400 mt-1">{when ? when.toLocaleString() : '—'}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+          </div>
+        )}
+
         {activeTab === 'Controls' && adminSettings && (
           <div className="space-y-12 animate-in slide-in-from-bottom-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -485,13 +585,13 @@ const AdminDashboard: React.FC = () => {
               <Card title="Module Availability">
                 <div className="space-y-4">
                   {Object.keys(adminSettings.modules_enabled).map((module) => (
-                    <ToggleSwitch 
+                    <ToggleSwitch
                       key={module}
-                      label={module} 
-                      checked={adminSettings.modules_enabled[module as keyof typeof adminSettings.modules_enabled]}
+                      label={MODULE_LABELS[module] || module}
+                      checked={adminSettings.modules_enabled[module]}
                       color="bg-green-500"
                       onChange={() => {
-                        const newState = !adminSettings.modules_enabled[module as keyof typeof adminSettings.modules_enabled];
+                        const newState = !adminSettings.modules_enabled[module];
                         initiateAction('UPDATE_SETTINGS', undefined, { 
                           name: `${module} Module`, 
                           value: newState ? 'ENABLED' : 'DISABLED',
@@ -838,7 +938,7 @@ const AdminDashboard: React.FC = () => {
              </div>
           </div>
         )}
-      </div>
+      </AnimatedSection>
     </div>
   );
 };

@@ -1,0 +1,190 @@
+rules_version = '2';
+
+// MarketBrain OS — Firestore Security Rules (Phase 6.0 / Master Wiring)
+//
+// SERVER-ENFORCED multi-tenant isolation. These rules replace the previous "no rules"
+// (client-trust) posture. Two invariants:
+//   1. Backward compatibility — every V1 flow keeps working (personal analyses, first-login
+//      profile creation, history, notifications, top-ups, admin console).
+//   2. The token/subscription economy is server-only: clients may NEVER raise their own
+//      tokens, tier, role, or suspension state. Those mutate exclusively via Cloud Functions
+//      (Admin SDK bypasses these rules).
+//
+// MEMBERSHIP DOC ID CONVENTION (required by 6.1+): membership docs are keyed
+//   `${containerId}_${uid}`  in workspace_members / agency_members / enterprise_members
+// so these rules can check membership with a single exists()/get().
+//
+// ⚠️ DEPLOY-TIME: test in the Firestore emulator / a staging project before
+//    `firebase deploy --only firestore:rules`. See docs/OPERATIONS.md.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+    function isSignedIn() { return request.auth != null; }
+    function self(uid) { return isSignedIn() && request.auth.uid == uid; }
+
+    function platformRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    function isPlatformAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && platformRole() in ['super_admin', 'ops_admin'];
+    }
+
+    function isWorkspaceMember(wid) {
+      return isSignedIn() && wid != null
+        && exists(/databases/$(database)/documents/workspace_members/$(wid + '_' + request.auth.uid));
+    }
+    function isAgencyMember(aid) {
+      return isSignedIn() && aid != null
+        && exists(/databases/$(database)/documents/agency_members/$(aid + '_' + request.auth.uid));
+    }
+    function isEnterpriseMember(eid) {
+      return isSignedIn() && eid != null
+        && exists(/databases/$(database)/documents/enterprise_members/$(eid + '_' + request.auth.uid));
+    }
+
+    // Can the requester see a stamped doc (analysis/report) under visibility rules?
+    function canSeeStamped(d) {
+      return (d.creator_user_id == request.auth.uid || d.user_id == request.auth.uid)
+        || (d.visibility_type == 'team' && isWorkspaceMember(d.workspace_id))
+        || (d.visibility_type == 'client' && isAgencyMember(d.agency_id))
+        || (d.visibility_type == 'enterprise' && isEnterpriseMember(d.enterprise_id));
+    }
+
+    // ---------- users ----------
+    // First-login creation is client-driven (ensureUserProfile). Lock the economy fields:
+    // a new self-created profile must be free/user with the starter token grant.
+    match /users/{uid} {
+      allow read: if self(uid) || isPlatformAdmin();
+
+      allow create: if self(uid)
+        && request.resource.data.tier == 'free'
+        && request.resource.data.tokens <= 4
+        && (request.resource.data.role == 'user'
+            || request.auth.token.email == 'admin@marketbrainos.com');
+
+      // Client updates may NOT change economy/authority fields (server-only via functions).
+      allow update: if self(uid)
+        && request.resource.data.tokens == resource.data.tokens
+        && request.resource.data.tier == resource.data.tier
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.get('is_suspended', false) == resource.data.get('is_suspended', false)
+        && request.resource.data.get('subscription_status', 'free') == resource.data.get('subscription_status', 'free');
+
+      allow delete: if false; // never from the client
+    }
+
+    // ---------- analyses (unified history) ----------
+    match /tool_analysis_results/{id} {
+      allow create: if isSignedIn()
+        && request.resource.data.creator_user_id == request.auth.uid;
+      allow read:   if isSignedIn() && canSeeStamped(resource.data);
+      // Mutations limited to the creator (role-based shared deletes go through functions).
+      allow update, delete: if isSignedIn()
+        && (resource.data.creator_user_id == request.auth.uid
+            || resource.data.user_id == request.auth.uid);
+    }
+
+    // ---------- reports (unified reporting) ----------
+    match /reports/{id} {
+      allow create: if isSignedIn()
+        && request.resource.data.creator_user_id == request.auth.uid;
+      allow read:   if isSignedIn() && canSeeStamped(resource.data);
+      allow update, delete: if isSignedIn()
+        && resource.data.creator_user_id == request.auth.uid;
+    }
+
+    // ---------- notifications (per user) ----------
+    match /notifications/{id} {
+      allow read:   if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.uid == request.auth.uid; // mark read
+      allow delete: if false;
+    }
+
+    // ---------- action logs (client + server append, immutable) ----------
+    match /action_logs/{id} {
+      allow create: if isSignedIn();
+      allow read:   if isSignedIn()
+        && (resource.data.get('uid', '') == request.auth.uid
+            || resource.data.get('user_id', '') == request.auth.uid
+            || isPlatformAdmin());
+      allow update, delete: if false; // immutable ledger
+    }
+
+    // ---------- payments (server-written, owner-readable) ----------
+    match /payments/{id} {
+      allow read:  if isSignedIn() && (resource.data.uid == request.auth.uid || isPlatformAdmin());
+      allow write: if false; // confirmTopUp / changeSubscription only (Admin SDK)
+    }
+
+    // ---------- platform settings / security ledgers ----------
+    match /admin_settings/{id} {
+      allow read:  if isSignedIn();   // module flags gate the UI
+      allow write: if false;          // updateSystemSettings only
+    }
+    match /admin_audit_logs/{id}    { allow read: if isPlatformAdmin(); allow write: if false; }
+    match /security_audit_logs/{id} { allow read: if isPlatformAdmin(); allow create: if isSignedIn(); allow update, delete: if false; }
+    match /rate_limits/{id}         { allow read, write: if false; } // server only
+
+    // ============================================================
+    // PHASE 6 ORGANIZATIONAL CONTAINERS
+    // Privileged mutations (create/invite/role/remove/delete) run through Cloud Functions
+    // (Admin SDK), so client WRITES are denied. Members may READ their containers, and may
+    // create collaborative artifacts (comments) within them.
+    // ============================================================
+
+    match /workspaces/{wid} {
+      allow read:  if isWorkspaceMember(wid) || isPlatformAdmin();
+      allow write: if false;
+    }
+    match /workspace_members/{id} {
+      allow read:  if isSignedIn();   // members list visible to authenticated app; UI filters
+      allow write: if false;
+    }
+    match /workspace_permissions/{id} { allow read: if isSignedIn(); allow write: if false; }
+    match /workspace_activity/{id}    { allow read: if isSignedIn(); allow write: if false; }
+    match /workspace_comments/{id} {
+      allow read:   if isWorkspaceMember(resource.data.workspace_id) || isPlatformAdmin();
+      allow create: if isWorkspaceMember(request.resource.data.workspace_id)
+                    && request.resource.data.author_uid == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.author_uid == request.auth.uid;
+    }
+
+    match /agencies/{aid}        { allow read: if isAgencyMember(aid) || isPlatformAdmin(); allow write: if false; }
+    match /agency_members/{id}   { allow read: if isSignedIn(); allow write: if false; }
+    match /agency_clients/{id}   { allow read: if isSignedIn(); allow write: if false; }
+    match /client_workspaces/{id}{ allow read: if isSignedIn(); allow write: if false; }
+    match /client_assignments/{id}{ allow read: if isSignedIn(); allow write: if false; }
+    match /client_activity/{id}  { allow read: if isSignedIn(); allow write: if false; }
+    match /client_reports/{id}   { allow read: if isSignedIn(); allow write: if false; }
+    match /client_notes/{id} {
+      allow read:   if isAgencyMember(resource.data.agency_id) || isPlatformAdmin();
+      allow create: if isAgencyMember(request.resource.data.agency_id)
+                    && request.resource.data.author_uid == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.author_uid == request.auth.uid;
+    }
+
+    match /enterprises/{eid}            { allow read: if isEnterpriseMember(eid) || isPlatformAdmin(); allow write: if false; }
+    match /enterprise_members/{id}      { allow read: if isSignedIn(); allow write: if false; }
+    match /enterprise_departments/{id}  { allow read: if isSignedIn(); allow write: if false; }
+    match /enterprise_brands/{id}       { allow read: if isSignedIn(); allow write: if false; }
+    match /enterprise_reports/{id}      { allow read: if isSignedIn(); allow write: if false; }
+    match /enterprise_briefings/{id}    { allow read: if isSignedIn(); allow write: if false; }
+    match /enterprise_forecasts/{id}    { allow read: if isSignedIn(); allow write: if false; }
+    match /enterprise_analytics/{id}    { allow read: if isSignedIn(); allow write: if false; }
+    match /enterprise_health_scores/{id}{ allow read: if isSignedIn(); allow write: if false; }
+
+    // ---------- V1 bespoke-tool result collections (creator-owned) ----------
+    match /angleminer_results/{id}        { allow read, write: if isSignedIn() && (resource == null || resource.data.user_id == request.auth.uid); }
+    match /testlab_results/{id}           { allow read, write: if isSignedIn() && (resource == null || resource.data.user_id == request.auth.uid); }
+    match /conversion_doctor_results/{id} { allow read, write: if isSignedIn() && (resource == null || resource.data.user_id == request.auth.uid); }
+    match /workflow_runs/{id}             { allow read, write: if isSignedIn() && (resource == null || resource.data.user_id == request.auth.uid); }
+
+    // Default deny.
+    match /{document=**} { allow read, write: if false; }
+  }
+}

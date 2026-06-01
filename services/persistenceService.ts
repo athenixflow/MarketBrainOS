@@ -27,7 +27,15 @@ import {
   SecurityEvent,
   ActionLogEntry,
   AdminSettings,
-  PaymentRecord
+  PaymentRecord,
+  AppNotification,
+  NotificationCategory,
+  Scope,
+  ScopeLevel,
+  VisibilityType,
+  OwnershipStamp,
+  UserMembership,
+  Report
 } from '../types';
 import { SecurityEngine } from './securityEngine';
 
@@ -81,10 +89,22 @@ export const getAdminSettings = async (): Promise<AdminSettings> => {
     maintenance_mode: false,
     analyses_paused: false,
     modules_enabled: {
+      // Original bespoke tools
       AngleMiner: true,
       ConversionDoctor: true,
       TestLabPro: true,
-      Workflow: true
+      Workflow: true,
+      // Generic §14–22 tools (keys match MODULE_MAPPING values in functions/src/index.ts)
+      StrategyLab: true,
+      OfferAnalyzer: true,
+      AudienceIntel: true,
+      MarketIntel: true,
+      Competitor: true,
+      Messaging: true,
+      ContentStrategy: true,
+      Campaign: true,
+      Growth: true,
+      WorkflowAnalyzer: true
     }
   };
 
@@ -122,12 +142,24 @@ export const callConfirmTopUp = async (paymentReference: string) => {
   if (!isFirebaseInitialized) throw new Error("Connection failed");
   const confirmTopUp = httpsCallable(functions, 'confirmTopUp');
   try {
-    // Amount is hardcoded to 5 on client to match server expectation, 
+    // Amount is hardcoded to 5 on client to match server expectation,
     // but server enforces it regardless.
     const result = await confirmTopUp({ paymentReference, amountPaid: 5 });
     return result.data;
   } catch (error: any) {
     throw new Error(error.message || "Top-up failed.");
+  }
+};
+
+// §30 Subscription lifecycle — server-authoritative state transitions.
+export const callChangeSubscription = async (action: 'upgrade' | 'cancel' | 'downgrade' | 'renew') => {
+  if (!isFirebaseInitialized) throw new Error("Connection failed");
+  const changeSubscription = httpsCallable(functions, 'changeSubscription');
+  try {
+    const result = await changeSubscription({ action });
+    return result.data as { success: boolean; status?: string; plan_renews_at?: string };
+  } catch (error: any) {
+    throw new Error(error.message || "Subscription change failed.");
   }
 };
 
@@ -173,9 +205,23 @@ export const getUserProfile = async (userId: string): Promise<UserProfile | null
       suspension_reason: data.suspension_reason,
       bot_confidence_score: data.bot_confidence_score,
       is_verified_admin: data.is_verified_admin,
-      last_verification: data.last_verification
+      last_verification: data.last_verification,
+      onboarded: data.onboarded ?? false,
+      subscription_status: data.subscription_status || (data.tier === 'pro' ? 'active' : 'free'),
+      plan_renews_at: data.plan_renews_at,
+      subscription_started_at: data.subscription_started_at
     };
   } catch { return null; }
+};
+
+export const setOnboarded = async (userId: string) => {
+  if (!isFirebaseInitialized) return;
+  try { await updateDoc(doc(db, 'users', userId), { onboarded: true }); } catch (e) { console.error(e); }
+};
+
+export const replayOnboarding = async (userId: string) => {
+  if (!isFirebaseInitialized) return;
+  try { await updateDoc(doc(db, 'users', userId), { onboarded: false }); } catch (e) { console.error(e); }
 };
 
 export const ensureUserProfile = async (userId: string, email: string) => {
@@ -189,6 +235,8 @@ export const ensureUserProfile = async (userId: string, email: string) => {
       tokens: 4,
       tier: 'free',
       role: email === 'admin@marketbrainos.com' ? 'super_admin' : 'user',
+      onboarded: false,
+      subscription_status: 'free',
       created_at: new Date().toISOString(),
       last_active: new Date().toISOString()
     });
@@ -332,6 +380,247 @@ export const deleteWorkflowRun = async (id: string) => {
   await deleteDoc(doc(db, 'workflow_runs', id));
 };
 
+// Generic persistence for the PRD §14–22 analysis tools.
+// Stores under 'tool_analysis_results' keyed by module for a unified history view.
+// Phase 6: derive the ownership stamp from the active scope. 'personal' (the V1 default)
+// yields a private, creator-only record — identical visibility to pre-Phase-6 behavior.
+export const scopeToOwnership = (userId: string, scope?: Scope): OwnershipStamp => {
+  const s = scope || { level: 'personal' as ScopeLevel };
+  const visibility: VisibilityType =
+    s.level === 'team' ? 'team' :
+    s.level === 'client' ? 'client' :
+    s.level === 'enterprise' ? 'enterprise' : 'private';
+  return {
+    creator_user_id: userId,
+    visibility_type: visibility,
+    workspace_id: s.workspaceId ?? null,
+    agency_id: s.agencyId ?? null,
+    client_id: s.clientId ?? null,
+    enterprise_id: s.enterpriseId ?? null,
+  };
+};
+
+export const saveGenericAnalysis = async (
+  userId: string,
+  module: string,
+  inputs: Record<string, string>,
+  result: any,
+  scope?: Scope
+) => {
+  if (!isFirebaseInitialized) return { id: 'mock_id', ...result };
+  await logUserAction({ user_id: userId, module, action: 'SAVE_ARTIFACT' });
+
+  const ownership = scopeToOwnership(userId, scope);
+  const docRef = await addDoc(collection(db, 'tool_analysis_results'), {
+    user_id: userId,            // retained for V1 readers/back-compat
+    module,
+    inputs,
+    result,
+    timestamp: new Date().toISOString(),
+    ...ownership,               // creator_user_id + visibility_type + *_id stamp
+  });
+
+  return { id: docRef.id, ...result };
+};
+
+export const deleteGenericAnalysis = async (id: string) => {
+  if (!isFirebaseInitialized) return;
+  await deleteDoc(doc(db, 'tool_analysis_results', id));
+};
+
+export interface ToolAnalysisRecord {
+  id: string;
+  module: string;
+  inputs: Record<string, string>;
+  result: any;
+  timestamp: string;
+}
+
+// Reads a user's saved generic-tool analyses for the connected-ecosystem context picker.
+// Sorted newest-first client-side to avoid composite-index requirements.
+// This is the PERSONAL-scope case (creator's own records) and remains the V1 behavior.
+export const getUserToolAnalyses = async (userId: string): Promise<ToolAnalysisRecord[]> => {
+  if (!isFirebaseInitialized) return [];
+  try {
+    const q = query(collection(db, 'tool_analysis_results'), where('user_id', '==', userId));
+    const snapshot = await getDocs(q);
+    const rows = snapshot.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as ToolAnalysisRecord[];
+    return rows.sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
+  } catch (e) {
+    console.error('Failed to fetch tool analyses', e);
+    return [];
+  }
+};
+
+// Phase 6: the UNIFIED analysis-history reader. Returns the records visible in a given
+// scope. 'personal' === getUserToolAnalyses (own records, incl. legacy un-stamped docs);
+// team/client/enterprise scopes filter by the corresponding container id. Server-side
+// firestore.rules enforce that the caller is actually a member of that container — this
+// reader assumes membership has already been established by ScopeContext.
+export const getAnalysesForScope = async (userId: string, scope: Scope): Promise<ToolAnalysisRecord[]> => {
+  if (!isFirebaseInitialized) return [];
+  if (scope.level === 'personal') return getUserToolAnalyses(userId);
+  try {
+    const col = collection(db, 'tool_analysis_results');
+    let q;
+    if (scope.level === 'team' && scope.workspaceId) {
+      q = query(col, where('workspace_id', '==', scope.workspaceId), where('visibility_type', '==', 'team'));
+    } else if (scope.level === 'client' && scope.clientId) {
+      q = query(col, where('client_id', '==', scope.clientId), where('visibility_type', '==', 'client'));
+    } else if (scope.level === 'enterprise' && scope.enterpriseId) {
+      q = query(col, where('enterprise_id', '==', scope.enterpriseId), where('visibility_type', '==', 'enterprise'));
+    } else {
+      return [];
+    }
+    const snapshot = await getDocs(q);
+    const rows = snapshot.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as ToolAnalysisRecord[];
+    return rows.sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
+  } catch (e) {
+    console.error('Failed to fetch scoped analyses', e);
+    return [];
+  }
+};
+
+// Phase 6: UNIFIED reporting engine (one collection, same ownership stamp as analyses).
+export const saveReport = async (
+  userId: string,
+  report: { title: string; report_type: string; content: any },
+  scope?: Scope
+): Promise<Report> => {
+  const ownership = scopeToOwnership(userId, scope);
+  const doc: Report = {
+    title: report.title,
+    report_type: report.report_type,
+    content: report.content,
+    created_at: new Date().toISOString(),
+    ...ownership,
+  };
+  if (!isFirebaseInitialized) return { id: 'mock_report', ...doc };
+  const ref = await addDoc(collection(db, 'reports'), doc as any);
+  return { id: ref.id, ...doc };
+};
+
+export const deleteReport = async (id: string) => {
+  if (!isFirebaseInitialized) return;
+  await deleteDoc(doc(db, 'reports', id));
+};
+
+// Reports visible in a given scope — mirrors getAnalysesForScope.
+export const getReportsForScope = async (userId: string, scope: Scope): Promise<Report[]> => {
+  if (!isFirebaseInitialized) return [];
+  try {
+    const col = collection(db, 'reports');
+    let q;
+    if (scope.level === 'personal') {
+      q = query(col, where('creator_user_id', '==', userId));
+    } else if (scope.level === 'team' && scope.workspaceId) {
+      q = query(col, where('workspace_id', '==', scope.workspaceId), where('visibility_type', '==', 'team'));
+    } else if (scope.level === 'client' && scope.clientId) {
+      q = query(col, where('client_id', '==', scope.clientId), where('visibility_type', '==', 'client'));
+    } else if (scope.level === 'enterprise' && scope.enterpriseId) {
+      q = query(col, where('enterprise_id', '==', scope.enterpriseId), where('visibility_type', '==', 'enterprise'));
+    } else {
+      return [];
+    }
+    const snapshot = await getDocs(q);
+    const rows = snapshot.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as Report[];
+    return rows.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+  } catch (e) {
+    console.error('Failed to fetch scoped reports', e);
+    return [];
+  }
+};
+
+// Phase 6: every container the user belongs to, across all org layers. Member docs
+// denormalize {container_id, role, name} for cheap reads. Until the Team/Agency/Enterprise
+// collections exist (6.1+), these queries simply return empty — safe no-op for V1 users.
+export const getUserMemberships = async (userId: string): Promise<UserMembership[]> => {
+  if (!isFirebaseInitialized || !userId) return [];
+  const out: UserMembership[] = [];
+  const sources: { coll: string; family: UserMembership['family'] }[] = [
+    { coll: 'workspace_members', family: 'workspace' },
+    { coll: 'agency_members', family: 'agency' },
+    { coll: 'enterprise_members', family: 'enterprise' },
+  ];
+  for (const { coll, family } of sources) {
+    try {
+      const snap = await getDocs(query(collection(db, coll), where('uid', '==', userId)));
+      snap.forEach(d => {
+        const data: any = d.data();
+        if (data.status && data.status !== 'active') return; // skip pending/removed invites
+        out.push({
+          family,
+          containerId: data.container_id,
+          name: data.name || 'Workspace',
+          role: data.role,
+          agencyId: data.agency_id,
+        });
+      });
+    } catch (e) {
+      // Collection may not exist yet, or rules deny — treat as no memberships.
+      console.error(`Failed to read ${coll}`, e);
+    }
+  }
+  return out;
+};
+
+// --- NOTIFICATIONS (§39) ---
+// In-app notification center. Emits are best-effort and never block the main flow.
+// EMAIL SEAM (§67): every user-facing notification flows through here. To add the email
+// channel without touching call sites, deploy a Firestore `onCreate` Cloud Function trigger
+// on the `notifications` collection that fans each new doc out to an email provider
+// (e.g. SendGrid/Resend) using the user's email + category→template mapping. Respect a
+// per-user `email_opt_out`/quiet-hours flag before sending. See docs/OPERATIONS.md.
+export const createNotification = async (
+  userId: string,
+  category: NotificationCategory,
+  title: string,
+  body?: string
+): Promise<void> => {
+  if (!isFirebaseInitialized || !userId) return;
+  try {
+    await addDoc(collection(db, 'notifications'), {
+      uid: userId,
+      category,
+      title,
+      body: body || '',
+      read: false,
+      created_at: new Date().toISOString()
+    });
+  } catch (e) {
+    console.error('Failed to create notification', e);
+  }
+};
+
+export const getUserNotifications = async (userId: string): Promise<AppNotification[]> => {
+  if (!isFirebaseInitialized) return [];
+  try {
+    const q = query(collection(db, 'notifications'), where('uid', '==', userId));
+    const snapshot = await getDocs(q);
+    const rows = snapshot.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as AppNotification[];
+    return rows.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+  } catch (e) {
+    console.error('Failed to fetch notifications', e);
+    return [];
+  }
+};
+
+export const markNotificationRead = async (id: string): Promise<void> => {
+  if (!isFirebaseInitialized) return;
+  try { await updateDoc(doc(db, 'notifications', id), { read: true }); } catch (e) { console.error(e); }
+};
+
+export const markAllNotificationsRead = async (userId: string): Promise<void> => {
+  if (!isFirebaseInitialized) return;
+  try {
+    const q = query(collection(db, 'notifications'), where('uid', '==', userId), where('read', '==', false));
+    const snapshot = await getDocs(q);
+    await Promise.all(snapshot.docs.map(d => updateDoc(doc(db, 'notifications', d.id), { read: true })));
+  } catch (e) {
+    console.error('Failed to mark all read', e);
+  }
+};
+
 // --- ADMIN FUNCTIONS ---
 
 export interface PlatformStats {
@@ -459,6 +748,68 @@ export const adminGetActionLogs = async (limitCount: number = 100): Promise<Acti
     console.error("Failed to fetch action logs", e);
     return [];
   }
+};
+
+// --- SYSTEM MONITORING (§68) ---
+// Aggregates the most-recent action_logs into operational health metrics for the
+// admin dashboard. Pure client-side roll-up over the existing log stream — no new backend.
+
+export interface SystemMetrics {
+  sampleSize: number;
+  statusCounts: { success: number; failed: number; blocked: number; other: number };
+  byModule: { module: string; count: number }[];
+  topErrors: { code: string; count: number }[];
+  recentIssues: ActionLogEntry[];
+}
+
+/** Pure aggregation over an already-fetched log slice (no I/O) — reusable by the dashboard. */
+export const computeSystemMetrics = (logs: ActionLogEntry[]): SystemMetrics => {
+  const empty: SystemMetrics = {
+    sampleSize: 0,
+    statusCounts: { success: 0, failed: 0, blocked: 0, other: 0 },
+    byModule: [],
+    topErrors: [],
+    recentIssues: [],
+  };
+  if (!logs || logs.length === 0) return empty;
+
+  const statusCounts = { success: 0, failed: 0, blocked: 0, other: 0 };
+  const moduleMap = new Map<string, number>();
+  const errorMap = new Map<string, number>();
+
+  logs.forEach(l => {
+    if (l.status === 'success') statusCounts.success++;
+    else if (l.status === 'failed_refunded') statusCounts.failed++;
+    else if (l.status === 'blocked') statusCounts.blocked++;
+    else statusCounts.other++;
+
+    const mod = l.module || l.action || 'unknown';
+    moduleMap.set(mod, (moduleMap.get(mod) || 0) + 1);
+
+    if ((l.status === 'failed_refunded' || l.status === 'blocked') && l.error_code) {
+      errorMap.set(l.error_code, (errorMap.get(l.error_code) || 0) + 1);
+    }
+  });
+
+  const byModule = Array.from(moduleMap.entries())
+    .map(([module, count]) => ({ module, count }))
+    .sort((a, b) => b.count - a.count);
+  const topErrors = Array.from(errorMap.entries())
+    .map(([code, count]) => ({ code, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
+  const recentIssues = logs
+    .filter(l => l.status === 'failed_refunded' || l.status === 'blocked')
+    .slice(0, 15);
+
+  return { sampleSize: logs.length, statusCounts, byModule, topErrors, recentIssues };
+};
+
+/** Fetch the most-recent action_logs and roll them up into operational metrics. */
+export const getSystemMetrics = async (limitN: number = 200): Promise<SystemMetrics> => {
+  if (!isFirebaseInitialized) return computeSystemMetrics([]);
+  const logs = await adminGetActionLogs(limitN);
+  return computeSystemMetrics(logs);
 };
 
 export const getUserActionLogs = async (userId: string, limitCount: number = 50): Promise<ActionLogEntry[]> => {

@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { 
+import AnimatedSection from '../components/AnimatedSection';
+import {
   PageHeader, 
   Card, 
   Input, 
@@ -25,7 +26,7 @@ import {
   isNetworkError
 } from '../components/UI';
 import { analyzeMarketingAngle, improveAngle, MAX_INPUT_CHARS } from '../services/geminiService';
-import { MarketingAngle, AngleMinerResults, TOKEN_COSTS } from '../types';
+import { MarketingAngle, AngleMinerResults, AngleType, ANGLE_TYPES, TOKEN_COSTS } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { copyToClipboard, downloadAsText, printAsPDF, formatAngleMinerExport } from '../services/exportService';
 import { SecurityEngine } from '../services/securityEngine';
@@ -44,7 +45,9 @@ const AngleMinerX: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [executionError, setExecutionError] = useState<string | null>(null);
   const [results, setResults] = useState<AngleMinerResults | null>(null);
-  const [activeTab, setActiveTab] = useState('Prime Angles');
+  const [productName, setProductName] = useState('');
+  const [market, setMarket] = useState('');
+  const [activeTab, setActiveTab] = useState<string>(ANGLE_TYPES[0]);
 
   // Usage Modal State
   const [showUsageModal, setShowUsageModal] = useState(false);
@@ -118,14 +121,18 @@ const AngleMinerX: React.FC = () => {
     setResults(null);
     try {
       const data = await analyzeMarketingAngle({
+        productName,
         product,
         target,
         industry,
+        market,
         goal,
         tones: selectedTones
       }, user?.uid);
       setResults(data);
-      setActiveTab('Prime Angles');
+      // Open the first angle type that actually has results.
+      const firstType = ANGLE_TYPES.find(t => (data.angles || []).some((a: MarketingAngle) => (a.type || 'Emotional') === t)) || ANGLE_TYPES[0];
+      setActiveTab(firstType);
       
       if (user) await refreshProfile();
       
@@ -137,50 +144,39 @@ const AngleMinerX: React.FC = () => {
     }
   };
 
-  const handleImprove = async (angle: MarketingAngle, category: keyof Omit<AngleMinerResults, 'hooks'>) => {
+  const handleImprove = async (angle: MarketingAngle) => {
     if (!results) return;
-    
+
     if (profile && profile.tokens <= 0) {
       setUsageReason('exhausted');
       setShowUsageModal(true);
       return;
     }
 
-    const categoryList = results[category] || [];
+    const mark = (improving: boolean, extra: Partial<MarketingAngle> = {}) =>
+      setResults(prev => prev ? {
+        ...prev,
+        angles: (prev.angles || []).map(a => a.hook === angle.hook ? { ...a, improving, ...extra } : a)
+      } : prev);
 
-    const updatedCategory = categoryList.map(a => 
-      a.hook === angle.hook ? { ...a, improving: true } : a
-    );
-    setResults({ ...results, [category]: updatedCategory });
+    mark(true);
 
     try {
       const improvedText = await improveAngle(angle.hook, user?.uid);
-      
-      const currentList = results[category] || [];
-      const finalizedCategory = currentList.map(a => 
-        a.hook === angle.hook ? { ...a, improved: improvedText, improving: false } : a
-      );
-      setResults(prev => prev ? { ...prev, [category]: finalizedCategory } : prev);
-      
+      mark(false, { improved: improvedText });
       if (user) await refreshProfile();
-
     } catch (err: any) {
       console.error(err);
-      // For inline improvements, we can't easily replace the whole UI, so alert is safer or a toast.
-      // But let's set a global error for visibility too.
       setExecutionError(err.message || "Failed to refine angle. Operational throttle may be active.");
-      
-      const currentList = results[category] || [];
-      const resetCategory = currentList.map(a => 
-        a.hook === angle.hook ? { ...a, improving: false } : a
-      );
-      setResults(prev => prev ? { ...prev, [category]: resetCategory } : prev);
+      mark(false);
     }
   };
 
   const handleReset = () => {
+    setProductName('');
     setProduct('');
     setIndustry('');
+    setMarket('');
     setTarget('');
     setGoal('All');
     setSelectedTones([]);
@@ -211,12 +207,12 @@ const AngleMinerX: React.FC = () => {
     }
   };
 
-  const renderAngleCard = (angle: MarketingAngle, category: keyof Omit<AngleMinerResults, 'hooks'>) => (
-    <Card key={angle.hook} accent={category === 'prime'} className="group hover:shadow-xl transition-all duration-500">
+  const renderAngleCard = (angle: MarketingAngle) => (
+    <Card key={angle.hook} className="group hover:shadow-xl transition-all duration-500">
       <div className="flex justify-between items-start mb-8">
         <div>
           <h3 className="text-xl font-bold text-[#0B0B0B] mb-2">{angle.title}</h3>
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{category} Strategy</p>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{angle.type || 'Emotional'} Angle</p>
         </div>
         <IntelligenceIndicator score={angle.score} />
       </div>
@@ -241,8 +237,8 @@ const AngleMinerX: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-6 pt-6 border-t border-gray-50">
-          <button 
-            onClick={() => handleImprove(angle, category)}
+          <button
+            onClick={() => handleImprove(angle)}
             disabled={angle.improving}
             className="text-[10px] font-bold text-[#FF0000] hover:opacity-60 transition-opacity uppercase tracking-widest disabled:opacity-30"
           >
@@ -273,12 +269,14 @@ const AngleMinerX: React.FC = () => {
       />
 
       <div className="space-y-24">
-        <PageHeader 
-          title="AngleMiner X: Psychological Profiling" 
-          subtitle="Generate marketing angles and psychological hooks. Extract audience triggers to refine your messaging positioning before deployment." 
-        />
+        <AnimatedSection index={0}>
+          <PageHeader
+            title="AngleMiner X: Psychological Profiling"
+            subtitle="Generate marketing angles and psychological hooks. Extract audience triggers to refine your messaging positioning before deployment."
+          />
+        </AnimatedSection>
 
-        <div className="max-w-4xl mx-auto w-full">
+        <AnimatedSection index={1} className="max-w-4xl mx-auto w-full">
           <Card className="shadow-2xl">
             {isSuspended && <div className="mb-12"><ErrorMessage message="SECURITY PROTOCOL ACTIVE: Account suspended due to risk threshold violations." /></div>}
             {error && <div className="mb-12"><ErrorMessage message={error} action={{ label: "Dismiss", onClick: () => setError(null) }} /></div>}
@@ -288,28 +286,42 @@ const AngleMinerX: React.FC = () => {
                 <HoneypotField value={honeypotValue} onChange={setHoneypotValue} />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12">
                   <div className="md:col-span-2">
-                    <Input 
-                      label="Product / Offer Description" 
-                      placeholder="Describe what you’re selling and why it matters…" 
-                      value={product} 
-                      onChange={(e) => { setProduct(e.target.value); setError(null); }} 
+                    <Input
+                      label="Product Name"
+                      placeholder="e.g. MarketBrain OS"
+                      value={productName}
+                      onChange={(e) => { setProductName(e.target.value); setError(null); }}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <Input
+                      label="Product / Offer Description"
+                      placeholder="Describe what you’re selling and why it matters…"
+                      value={product}
+                      onChange={(e) => { setProduct(e.target.value); setError(null); }}
                       multiline
                     />
                     <p className={`text-right text-[9px] font-bold uppercase tracking-widest ${product.length > MAX_INPUT_CHARS ? 'text-[#FF0000]' : 'text-gray-300'}`}>
                       {product.length} / {MAX_INPUT_CHARS} characters
                     </p>
                   </div>
-                  <Input 
-                    label="Industry" 
-                    placeholder="e.g. SaaS, E-commerce, Real Estate" 
-                    value={industry} 
-                    onChange={(e) => { setIndustry(e.target.value); setError(null); }} 
+                  <Input
+                    label="Industry"
+                    placeholder="e.g. SaaS, E-commerce, Real Estate"
+                    value={industry}
+                    onChange={(e) => { setIndustry(e.target.value); setError(null); }}
                   />
-                  <Input 
-                    label="Target Audience" 
-                    placeholder="Who is this for? Be specific." 
-                    value={target} 
-                    onChange={(e) => { setTarget(e.target.value); setError(null); }} 
+                  <Input
+                    label="Market"
+                    placeholder="e.g. North America SMBs, Gen-Z creators"
+                    value={market}
+                    onChange={(e) => { setMarket(e.target.value); setError(null); }}
+                  />
+                  <Input
+                    label="Target Audience"
+                    placeholder="Who is this for? Be specific."
+                    value={target}
+                    onChange={(e) => { setTarget(e.target.value); setError(null); }}
                   />
                   
                   <div className="mb-12">
@@ -370,7 +382,7 @@ const AngleMinerX: React.FC = () => {
               </form>
             )}
           </Card>
-        </div>
+        </AnimatedSection>
 
         {loading && <LoadingState message="Evaluating market patterns..." isTakingLong={isTakingLong} onCancel={() => setLoading(false)} />}
 
@@ -406,17 +418,23 @@ const AngleMinerX: React.FC = () => {
               />
             </div>
 
-            <Tabs 
-              tabs={['Prime Angles', 'Supporting', 'Exploratory', 'Hooks & Scripts']}
+            <Tabs
+              tabs={[...ANGLE_TYPES, 'Hooks & Scripts']}
               activeTab={activeTab}
               onTabChange={setActiveTab}
             />
 
             <div className="grid grid-cols-1 gap-12">
-              {activeTab === 'Prime Angles' && (results.prime || []).map(a => renderAngleCard(a, 'prime'))}
-              {activeTab === 'Supporting' && (results.supporting || []).map(a => renderAngleCard(a, 'supporting'))}
-              {activeTab === 'Exploratory' && (results.exploratory || []).map(a => renderAngleCard(a, 'exploratory'))}
-              
+              {ANGLE_TYPES.includes(activeTab as AngleType) && (
+                (() => {
+                  const inType = (results.angles || []).filter(a => (a.type || 'Emotional') === activeTab);
+                  if (inType.length === 0) {
+                    return <p className="text-gray-500 text-sm font-medium py-8 text-center">No {activeTab} angles generated for this input.</p>;
+                  }
+                  return inType.map(a => renderAngleCard(a));
+                })()
+              )}
+
               {activeTab === 'Hooks & Scripts' && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
                   {['Ads', 'Organic', 'Funnel'].map(platform => (

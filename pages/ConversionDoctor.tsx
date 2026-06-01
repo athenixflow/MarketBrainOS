@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { 
+import AnimatedSection from '../components/AnimatedSection';
+import {
   PageHeader, 
   Card, 
   Input, 
@@ -26,6 +27,7 @@ import { AuditResult, TOKEN_COSTS } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { copyToClipboard, downloadAsText, printAsPDF, formatConversionDoctorExport } from '../services/exportService';
 import { SecurityEngine } from '../services/securityEngine';
+import { getScoreBand } from '../services/scoreBands';
 
 const ConversionDoctor: React.FC = () => {
   const { user, profile, refreshProfile } = useAuth();
@@ -205,12 +207,14 @@ const ConversionDoctor: React.FC = () => {
       />
 
       <div className="space-y-24">
-        <PageHeader 
-          title="Conversion Doctor: Landing Page Audit" 
-          subtitle="Identify conversion blockers, friction points, and messaging gaps. Clinical diagnostic tools for high-performance landing pages." 
-        />
+        <AnimatedSection index={0}>
+          <PageHeader
+            title="Conversion Doctor: Landing Page Audit"
+            subtitle="Identify conversion blockers, friction points, and messaging gaps. Clinical diagnostic tools for high-performance landing pages."
+          />
+        </AnimatedSection>
 
-        <div className="max-w-4xl mx-auto w-full">
+        <AnimatedSection index={1} className="max-w-4xl mx-auto w-full">
           <Card className="shadow-2xl">
             {isSuspended && <div className="mb-12"><ErrorMessage message="SECURITY PROTOCOL ACTIVE: Account suspended due to risk threshold violations." /></div>}
             {error && <div className="mb-12"><ErrorMessage message={error} action={{ label: "Start Over", onClick: handleReset }} /></div>}
@@ -295,7 +299,7 @@ const ConversionDoctor: React.FC = () => {
               </form>
             )}
           </Card>
-        </div>
+        </AnimatedSection>
 
         {loading && <LoadingState message="Extracting psychological signals..." isTakingLong={isTakingLong} onCancel={() => setLoading(false)} />}
 
@@ -331,6 +335,14 @@ const ConversionDoctor: React.FC = () => {
               <Card className="lg:col-span-1 flex flex-col justify-center items-center py-20 bg-gray-50/30" accent>
                  <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-[0.4em] mb-10">Conversion Grade</p>
                  <div className="text-8xl font-black tracking-tighter mb-4 text-[#0B0B0B]">{result.score}</div>
+                 {(() => {
+                   const b = getScoreBand(result.score);
+                   return (
+                     <span className={`text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full border mb-3 ${b.bgClass} ${b.textClass}`}>
+                       {b.band}
+                     </span>
+                   );
+                 })()}
                  <p className="font-bold text-gray-400 text-[10px] tracking-[0.2em] uppercase">Intelligence Confidence: High</p>
               </Card>
 

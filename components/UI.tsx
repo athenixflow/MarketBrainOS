@@ -5,6 +5,7 @@ import { SecurityEngine } from '../services/securityEngine';
 import { useAuth } from '../context/AuthContext';
 import { UserTier, ActionLogEntry, PaymentRecord } from '../types';
 import { getUserActionLogs, getUserPaymentHistory } from '../services/persistenceService';
+import { downloadAsCSV, paymentsToCSV } from '../services/exportService';
 
 // 1. PRIMARY ACTION BUTTON
 export const PrimaryButton: React.FC<{
@@ -358,11 +359,9 @@ export const UsageLimitModal: React.FC<{
   const isFree = tier === 'free';
 
   const handlePrimaryAction = () => {
-    if (isFree) {
-      window.open('https://ai.google.dev/gemini-api/docs/billing', '_blank');
-    } else {
-      navigate('/'); // Go to dashboard for top-up
-    }
+    // Both upgrade (free) and top-up (pro) are handled in-app on the dashboard.
+    navigate('/');
+    onClose();
   };
 
   let content = {
@@ -446,8 +445,8 @@ export const TokenStatusBanner: React.FC<{
         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
           You’re on the Free plan. Upgrade to Pro to get 200 tokens every month.
         </p>
-        <button 
-          onClick={() => window.open('https://ai.google.dev/gemini-api/docs/billing', '_blank')}
+        <button
+          onClick={() => navigate('/')}
           className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest hover:text-white transition-colors"
         >
           Upgrade to Pro →
@@ -499,9 +498,10 @@ export const UpgradeCard: React.FC<{ onClick: () => void }> = ({ onClick }) => (
 export const ExportControls: React.FC<{
   onCopy: () => void;
   onExportText?: () => void;
+  onExportCSV?: () => void;
   onExportPDF?: () => void;
   isPro: boolean;
-}> = ({ onCopy, onExportText, onExportPDF, isPro }) => {
+}> = ({ onCopy, onExportText, onExportCSV, onExportPDF, isPro }) => {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -522,14 +522,25 @@ export const ExportControls: React.FC<{
       {isPro && (
         <>
           <div className="w-[1px] h-3 bg-gray-200" />
-          <button 
+          <button
             onClick={onExportText}
             className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors"
           >
             Export TXT
           </button>
+          {onExportCSV && (
+            <>
+              <div className="w-[1px] h-3 bg-gray-200" />
+              <button
+                onClick={onExportCSV}
+                className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors"
+              >
+                Export CSV
+              </button>
+            </>
+          )}
           <div className="w-[1px] h-3 bg-gray-200" />
-          <button 
+          <button
             onClick={onExportPDF}
             className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors"
           >
@@ -773,6 +784,14 @@ export const PaymentHistoryModal: React.FC<{ onClose: () => void }> = ({ onClose
         </div>
         
         <div className="pt-8 mt-4 border-t border-gray-100 text-center shrink-0">
+          {payments.length > 0 && (
+            <button
+              onClick={() => downloadAsCSV('MarketBrainOS_Billing_History', paymentsToCSV(payments))}
+              className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors mb-4"
+            >
+              Export CSV
+            </button>
+          )}
           <p className="text-[10px] text-gray-400 mb-1">Top-ups add extra tokens and do not affect your monthly token reset.</p>
           <p className="text-[9px] text-gray-300">Transaction records are immutable.</p>
         </div>

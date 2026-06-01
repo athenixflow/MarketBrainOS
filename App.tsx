@@ -1,18 +1,31 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { NavigationItem } from './types';
-import Dashboard from './pages/Dashboard';
-import AngleMinerX from './pages/AngleMinerX';
-import ConversionDoctor from './pages/ConversionDoctor';
-import Workflow from './pages/Workflow';
-import TestLabPro from './pages/TestLabPro';
-import Documentation from './pages/Documentation';
-import AdminDashboard from './pages/AdminDashboard';
+// Eager: first-paint surfaces (logged-out landing + auth).
 import AuthPage from './pages/Auth';
 import LandingPage from './pages/LandingPage';
+// Lazy-loaded route targets (code-split — see vite.config manualChunks). §78
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const AngleMinerX = lazy(() => import('./pages/AngleMinerX'));
+const ConversionDoctor = lazy(() => import('./pages/ConversionDoctor'));
+const Workflow = lazy(() => import('./pages/Workflow'));
+const TestLabPro = lazy(() => import('./pages/TestLabPro'));
+const Documentation = lazy(() => import('./pages/Documentation'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const Features = lazy(() => import('./pages/Features'));
+const Pricing = lazy(() => import('./pages/Pricing'));
+const About = lazy(() => import('./pages/About'));
+const FAQ = lazy(() => import('./pages/FAQ'));
+const ToolPage = lazy(() => import('./components/ToolPage'));
+const History = lazy(() => import('./pages/History'));
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ScopeProvider } from './context/ScopeContext';
 import { Honeypot, LoadingState } from './components/UI';
 import { SecurityEngine } from './services/securityEngine';
+import OnboardingOverlay from './components/OnboardingOverlay';
+import NotificationCenter from './components/NotificationCenter';
+import ScopeSwitcher from './components/ScopeSwitcher';
+import { TOOL_CONFIG_LIST, NAV_SUITES } from './config/toolConfigs';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -26,14 +39,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const isAdminRole = profile?.role === 'super_admin' || profile?.role === 'ops_admin';
   // STRICT CHECK: Only show admin layout if user is actually an admin
   const isAdminPath = location.pathname.startsWith('/admin') && isAdminRole;
-
-  const navItems: { label: NavigationItem; path: string }[] = [
-    { label: 'Dashboard', path: '/' },
-    { label: 'AngleMiner X', path: '/angle-miner' },
-    { label: 'TestLab Pro', path: '/test-lab' },
-    { label: 'Conversion Doctor', path: '/conversion-doctor' },
-    { label: 'Workflow', path: '/workflow' },
-  ];
 
   // Overlay for mobile
   const MobileOverlay = () => (
@@ -110,24 +115,62 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         </div>
 
         <nav className="flex-grow py-8 px-6 lg:py-16 lg:px-8 overflow-y-auto">
-          {navItems.map((item) => {
-            const isActive = location.pathname === item.path;
+          {/* Dashboard home */}
+          {(() => {
+            const isActive = location.pathname === '/';
             return (
               <Link
-                key={item.label}
-                to={item.path}
+                to="/"
                 onClick={onClose}
                 className={`flex items-center gap-5 px-6 py-5 text-[13px] font-bold tracking-widest uppercase rounded-2xl transition-all duration-500 mb-4 lg:mb-3 group ${
-                  isActive 
-                    ? 'bg-[#121212] text-white shadow-lg shadow-black/20' 
-                    : 'text-gray-500 hover:text-white'
+                  isActive ? 'bg-[#121212] text-white shadow-lg shadow-black/20' : 'text-gray-500 hover:text-white'
                 }`}
               >
                 <div className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${isActive ? 'bg-[#FF0000]' : 'bg-transparent group-hover:bg-gray-800'}`} />
-                {item.label}
+                Dashboard
               </Link>
             );
-          })}
+          })()}
+
+          {/* Analysis history */}
+          {(() => {
+            const isActive = location.pathname === '/history';
+            return (
+              <Link
+                to="/history"
+                onClick={onClose}
+                className={`flex items-center gap-5 px-6 py-5 text-[13px] font-bold tracking-widest uppercase rounded-2xl transition-all duration-500 mb-4 lg:mb-3 group ${
+                  isActive ? 'bg-[#121212] text-white shadow-lg shadow-black/20' : 'text-gray-500 hover:text-white'
+                }`}
+              >
+                <div className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${isActive ? 'bg-[#FF0000]' : 'bg-transparent group-hover:bg-gray-800'}`} />
+                History
+              </Link>
+            );
+          })()}
+
+          {/* Tool suites (V1 Tool Architecture grouping) */}
+          {NAV_SUITES.map((group) => (
+            <div key={group.suite} className="mt-8">
+              <p className="px-6 mb-4 text-[9px] font-bold text-gray-600 uppercase tracking-[0.3em]">{group.suite}</p>
+              {group.items.map((item) => {
+                const isActive = location.pathname === item.path;
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={onClose}
+                    className={`flex items-center gap-5 px-6 py-4 text-[12px] font-bold tracking-widest uppercase rounded-2xl transition-all duration-500 mb-2 group ${
+                      isActive ? 'bg-[#121212] text-white shadow-lg shadow-black/20' : 'text-gray-500 hover:text-white'
+                    }`}
+                  >
+                    <div className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${isActive ? 'bg-[#FF0000]' : 'bg-transparent group-hover:bg-gray-800'}`} />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
         <div className="p-8 lg:p-12 border-t border-gray-900/30">
           {isAdminRole && (
@@ -201,7 +244,7 @@ const Header: React.FC<{ onToggleSidebar?: () => void }> = ({ onToggleSidebar })
       <div className="ml-auto flex items-center gap-6 lg:gap-12">
         <div className="flex gap-6 lg:gap-10 text-[11px] font-bold tracking-[0.1em] text-gray-500 uppercase">
           {!isAdminPath && profile?.tier === 'free' && (
-            <span onClick={() => window.open('https://ai.google.dev/gemini-api/docs/billing', '_blank')} className="text-[#FF0000] animate-pulse cursor-pointer hidden sm:block">Upgrade to Pro</span>
+            <Link to="/" className="text-[#FF0000] animate-pulse cursor-pointer hidden sm:block">Upgrade to Pro</Link>
           )}
           <Link to="/documentation" className="hover:text-white cursor-pointer transition-colors hidden sm:block">Docs</Link>
           <Link to="/documentation" className="hover:text-white cursor-pointer transition-colors sm:hidden">?</Link>
@@ -212,6 +255,8 @@ const Header: React.FC<{ onToggleSidebar?: () => void }> = ({ onToggleSidebar })
             <Link to="/auth" className="hover:text-white cursor-pointer transition-colors">Sign In</Link>
           )}
         </div>
+        {user && !isAdminPath && <ScopeSwitcher />}
+        {user && !isAdminPath && <NotificationCenter />}
         <div className={`w-1.5 h-1.5 rounded-full animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.3)] ${isEmergency ? 'bg-red-500' : 'bg-green-500/80'}`} />
       </div>
     </header>
@@ -246,16 +291,27 @@ const AppRoutes: React.FC = () => {
   if (loading) return null;
 
   return (
+    <Suspense fallback={<LoadingState message="Loading..." />}>
     <Routes>
       {/* Route root: If user logged in, Dashboard. If not, LandingPage. */}
       <Route path="/" element={user ? <Dashboard /> : <LandingPage />} />
       
       {/* Protected Routes */}
+      <Route path="/history" element={user ? <History /> : <Navigate to="/auth" />} />
       <Route path="/angle-miner" element={user ? <AngleMinerX /> : <Navigate to="/auth" />} />
       <Route path="/test-lab" element={user ? <TestLabPro /> : <Navigate to="/auth" />} />
       <Route path="/conversion-doctor" element={user ? <ConversionDoctor /> : <Navigate to="/auth" />} />
       <Route path="/workflow" element={user ? <Workflow /> : <Navigate to="/auth" />} />
-      
+
+      {/* PRD §14–22 analysis tools */}
+      {TOOL_CONFIG_LIST.map((tool) => (
+        <Route
+          key={tool.slug}
+          path={`/${tool.slug}`}
+          element={user ? <ToolPage config={tool} /> : <Navigate to="/auth" />}
+        />
+      ))}
+
       {/* SECURE ADMIN ROUTE */}
       <Route path="/admin" element={
         <AdminGuard>
@@ -265,8 +321,13 @@ const AppRoutes: React.FC = () => {
       
       {/* Public Routes */}
       <Route path="/documentation" element={<Documentation />} />
+      <Route path="/features" element={<Features />} />
+      <Route path="/pricing" element={<Pricing />} />
+      <Route path="/about" element={<About />} />
+      <Route path="/faq" element={<FAQ />} />
       <Route path="/auth" element={user ? <Navigate to="/" /> : <AuthPage />} />
     </Routes>
+    </Suspense>
   );
 };
 
@@ -274,7 +335,7 @@ const AppContainer: React.FC = () => {
   const [isEmergency, setIsEmergency] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   useEffect(() => {
     const check = async () => setIsEmergency(await SecurityEngine.isSystemLocked());
@@ -283,8 +344,13 @@ const AppContainer: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Use layout logic: If user is logged in, show sidebar. If not, show full width layout (no sidebar margin).
-  const showSidebar = !!user;
+  // Public marketing pages carry their own chrome (PublicLayout) and must render full-width,
+  // even for logged-in users — otherwise the app sidebar/header double up with the public nav.
+  const PUBLIC_ROUTES = ['/features', '/pricing', '/about', '/faq'];
+  const isPublicRoute = PUBLIC_ROUTES.includes(location.pathname);
+
+  // Use layout logic: If user is logged in (and not on a public marketing page), show sidebar.
+  const showSidebar = !!user && !isPublicRoute;
 
   return (
     <div className="min-h-screen bg-[#0B0B0B] text-white selection:bg-[#FF0000] selection:text-white antialiased">
@@ -308,6 +374,9 @@ const AppContainer: React.FC = () => {
         )}
         <Honeypot />
       </main>
+
+      {/* First-login onboarding (§5) — shown until the user finishes or skips */}
+      {user && profile && !profile.onboarded && <OnboardingOverlay />}
     </div>
   );
 };
@@ -315,9 +384,11 @@ const AppContainer: React.FC = () => {
 const App: React.FC = () => {
   return (
     <AuthProvider>
-      <HashRouter>
-        <AppContainer />
-      </HashRouter>
+      <ScopeProvider>
+        <HashRouter>
+          <AppContainer />
+        </HashRouter>
+      </ScopeProvider>
     </AuthProvider>
   );
 };

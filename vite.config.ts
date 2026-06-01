@@ -12,9 +12,6 @@ interface ImportMetaEnv {
   readonly FIREBASE_MESSAGING_SENDER_ID?: string;
   readonly FIREBASE_APP_ID?: string;
   readonly FIREBASE_MEASUREMENT_ID?: string;
-  readonly SUPABASE_URL?: string;
-  readonly SUPABASE_ANON_KEY?: string;
-  readonly SUPABASE_SERVICE_ROLE_KEY?: string;
   // Add other environment variables as needed
 }
 
@@ -41,6 +38,22 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    build: {
+      rollupOptions: {
+        output: {
+          // Split heavy vendors into separately-cached chunks (§78). Route code is
+          // additionally code-split via React.lazy in App.tsx.
+          manualChunks: (id: string) => {
+            if (id.includes('node_modules')) {
+              if (id.includes('react-router') || id.includes('/react/') || id.includes('/react-dom/')) return 'vendor-react';
+              if (id.includes('firebase')) return 'vendor-firebase';
+              if (id.includes('framer-motion')) return 'vendor-motion';
+              if (id.includes('@google/generative-ai')) return 'vendor-ai';
+            }
+          },
+        },
+      },
+    },
     define: {
       // Expose the specific Google API key requested to import.meta.env
       'import.meta.env.Google_api': JSON.stringify(googleApi),

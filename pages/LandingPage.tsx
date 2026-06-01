@@ -2,13 +2,17 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { PrimaryButton, SecondaryButton } from '../components/UI';
+import AnimatedSection from '../components/AnimatedSection';
+import PublicLayout from '../components/PublicLayout';
+import FaqAccordion from '../components/FaqAccordion';
+import { FAQ_ITEMS, TESTIMONIALS } from '../config/marketingContent';
 
 const LandingPage: React.FC = () => {
   return (
-    <div className="bg-[#0B0B0B] text-gray-300 font-sans selection:bg-[#FF0000] selection:text-white">
-      
+    <PublicLayout>
+
       {/* 1. HERO SECTION */}
-      <header className="relative pt-32 pb-24 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" role="banner">
+      <AnimatedSection as="section" index={0} className="relative pt-32 pb-24 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" role="banner">
         <div className="max-w-4xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-gray-800 bg-gray-900/50 mb-8">
             <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000] animate-pulse" />
@@ -31,10 +35,10 @@ const LandingPage: React.FC = () => {
             </Link>
           </div>
         </div>
-      </header>
+      </AnimatedSection>
 
       {/* 2. PROBLEM SECTION */}
-      <section className="py-24 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" aria-labelledby="problem-heading">
+      <AnimatedSection as="section" index={1} className="py-24 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" aria-labelledby="problem-heading">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-16">
           <div>
             <span className="text-sm font-bold text-[#FF0000] uppercase tracking-[0.2em] mb-6 block">The Deployment Problem</span>
@@ -63,10 +67,10 @@ const LandingPage: React.FC = () => {
             </div>
           </div>
         </div>
-      </section>
+      </AnimatedSection>
 
       {/* 3. WHAT IS MARKETBRAINOS */}
-      <section className="py-24 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" aria-labelledby="about-heading">
+      <AnimatedSection as="section" index={2} className="py-24 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" aria-labelledby="about-heading">
         <div className="max-w-3xl">
           <span className="text-sm font-bold text-gray-500 uppercase tracking-[0.2em] mb-6 block">Platform Definition</span>
           <h2 id="about-heading" className="text-4xl font-bold text-white mb-8">What is MarketBrainOS?</h2>
@@ -77,10 +81,10 @@ const LandingPage: React.FC = () => {
             Unlike generative writing tools that simply produce text, MarketBrainOS is built to <strong>audit, score, and refine</strong>. It uses Google's Gemini AI models to simulate how a human audience interacts with your marketing assets, allowing you to optimize conversion rates (CRO) before a campaign goes live.
           </p>
         </div>
-      </section>
+      </AnimatedSection>
 
       {/* 4. HOW IT WORKS */}
-      <section className="py-24 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50 bg-[#0F0F0F]" aria-labelledby="workflow-heading">
+      <AnimatedSection as="section" index={3} className="py-24 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50 bg-[#0F0F0F]" aria-labelledby="workflow-heading">
         <h2 id="workflow-heading" className="text-center text-sm font-bold text-white uppercase tracking-[0.2em] mb-16">The Intelligence Workflow</h2>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {[
@@ -96,11 +100,14 @@ const LandingPage: React.FC = () => {
             </div>
           ))}
         </div>
-      </section>
+      </AnimatedSection>
 
       {/* 5. CORE FEATURES */}
-      <section className="py-32 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" aria-labelledby="features-heading">
-        <h2 id="features-heading" className="text-3xl font-bold text-white mb-20 text-center">Core Capabilities</h2>
+      <AnimatedSection as="section" index={4} className="py-32 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" aria-labelledby="features-heading">
+        <h2 id="features-heading" className="text-3xl font-bold text-white mb-4 text-center">Core Capabilities</h2>
+        <p className="text-center text-gray-500 font-medium mb-20 max-w-2xl mx-auto">
+          A few highlights from a suite of <Link to="/features" className="text-white underline decoration-[#FF0000]/40 underline-offset-4 hover:decoration-[#FF0000]">13 specialized analyzers</Link> spanning marketing, sales, strategy, and operations.
+        </p>
         
         <div className="space-y-32">
           {/* Feature 1 */}
@@ -109,7 +116,7 @@ const LandingPage: React.FC = () => {
               <span className="text-[#FF0000] font-bold text-xs uppercase tracking-[0.3em] mb-4 block">Psychological Profiling</span>
               <h3 className="text-4xl font-bold text-white mb-6">AngleMiner X</h3>
               <p className="text-lg text-gray-400 mb-8 leading-relaxed">
-                Marketing isn't just about words; it's about angles. AngleMiner X extracts deep psychological triggers from your product description. It identifies "Prime" (high probability), "Supporting" (trust-building), and "Exploratory" (pattern interrupt) angles to diversify your messaging strategy.
+                Marketing isn't just about words; it's about angles. AngleMiner X extracts deep psychological triggers from your product description across eight angle types — Emotional, Fear, Aspiration, Curiosity, Authority, Differentiation, Story, and Contrarian — to diversify your messaging strategy.
               </p>
               <ul className="space-y-3 text-sm font-bold text-gray-500 uppercase tracking-widest">
                 <li className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#FF0000]" />Audience Trigger Extraction</li>
@@ -195,10 +202,10 @@ const LandingPage: React.FC = () => {
             </div>
           </div>
         </div>
-      </section>
+      </AnimatedSection>
 
       {/* 6. WHAT IT IS NOT */}
-      <section className="py-24 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" aria-labelledby="distinctions-heading">
+      <AnimatedSection as="section" index={5} className="py-24 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" aria-labelledby="distinctions-heading">
         <div className="bg-[#1A1A1A] p-12 rounded-[32px] border border-gray-800 text-center max-w-3xl mx-auto">
           <h2 id="distinctions-heading" className="text-2xl font-bold text-white mb-6">Important Distinctions</h2>
           <p className="text-gray-400 mb-8 font-medium">To maintain professional integrity, we are transparent about platform limitations.</p>
@@ -221,10 +228,10 @@ const LandingPage: React.FC = () => {
             </div>
           </div>
         </div>
-      </section>
+      </AnimatedSection>
 
       {/* 7. WHO IT IS FOR */}
-      <section className="py-24 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" aria-labelledby="audience-heading">
+      <AnimatedSection as="section" index={6} className="py-24 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" aria-labelledby="audience-heading">
          <h2 id="audience-heading" className="text-3xl font-bold text-white mb-12">Who Uses MarketBrainOS?</h2>
          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="p-8 border border-gray-800 rounded-2xl bg-[#0F0F0F]">
@@ -246,10 +253,10 @@ const LandingPage: React.FC = () => {
               </p>
             </div>
          </div>
-      </section>
+      </AnimatedSection>
 
       {/* 8. PRICING */}
-      <section className="py-24 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" aria-labelledby="pricing-heading">
+      <AnimatedSection as="section" index={7} className="py-24 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" aria-labelledby="pricing-heading">
         <h2 id="pricing-heading" className="text-center text-3xl font-bold text-white mb-16">Simple, Fair Access</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
           <div className="p-10 border border-gray-800 rounded-3xl bg-[#0B0B0B] flex flex-col">
@@ -274,20 +281,47 @@ const LandingPage: React.FC = () => {
             <p className="text-gray-500 text-sm mb-8">For serious deployment validation.</p>
             <div className="text-4xl font-black text-white mb-8">$7<span className="text-lg font-medium text-gray-600">/mo</span></div>
             <ul className="space-y-4 mb-12 flex-grow">
-              <li className="flex items-center gap-3 text-sm text-white"><div className="w-1.5 h-1.5 bg-[#FF0000] rounded-full" />50 Analysis Credits / Mo</li>
+              <li className="flex items-center gap-3 text-sm text-white"><div className="w-1.5 h-1.5 bg-[#FF0000] rounded-full" />200 Analysis Credits / Mo</li>
               <li className="flex items-center gap-3 text-sm text-white"><div className="w-1.5 h-1.5 bg-[#FF0000] rounded-full" />Full TestLab Pro Access</li>
               <li className="flex items-center gap-3 text-sm text-white"><div className="w-1.5 h-1.5 bg-[#FF0000] rounded-full" />Conversion Doctor Elite</li>
               <li className="flex items-center gap-3 text-sm text-white"><div className="w-1.5 h-1.5 bg-[#FF0000] rounded-full" />PDF Report Exports</li>
             </ul>
-            <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noreferrer" className="w-full">
-              <PrimaryButton className="w-full">Upgrade Access</PrimaryButton>
-            </a>
+            <Link to="/auth" className="w-full block">
+              <PrimaryButton className="w-full">Get Started with Pro</PrimaryButton>
+            </Link>
           </div>
         </div>
-      </section>
+      </AnimatedSection>
+
+      {/* 8b. TESTIMONIALS (illustrative samples) */}
+      <AnimatedSection as="section" index={8} className="py-24 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" aria-labelledby="testimonials-heading">
+        <h2 id="testimonials-heading" className="text-center text-3xl font-bold text-white mb-4">What operators say</h2>
+        <p className="text-center text-[10px] text-gray-600 uppercase tracking-widest mb-16">Illustrative samples — replace with real customer quotes before launch</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {TESTIMONIALS.map((t, i) => (
+            <div key={i} className="p-8 border border-gray-800 rounded-2xl bg-[#0F0F0F] flex flex-col">
+              <div className="text-[#FF0000] text-4xl font-black leading-none mb-6">“</div>
+              <p className="text-gray-300 leading-relaxed font-medium mb-8 flex-grow">{t.quote}</p>
+              <div>
+                <p className="text-white font-bold text-sm">{t.name}</p>
+                <p className="text-gray-500 text-xs">{t.role}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </AnimatedSection>
+
+      {/* 8c. FAQ (top items; full list at /faq) */}
+      <AnimatedSection as="section" index={9} className="py-24 px-6 md:px-12 max-w-3xl mx-auto border-b border-gray-900/50" aria-labelledby="faq-heading">
+        <h2 id="faq-heading" className="text-center text-3xl font-bold text-white mb-16">Frequently asked questions</h2>
+        <FaqAccordion items={FAQ_ITEMS.slice(0, 4)} />
+        <div className="text-center mt-10">
+          <Link to="/faq" className="text-[11px] font-bold text-gray-400 hover:text-white uppercase tracking-widest transition-colors border-b border-gray-700 pb-1">See all questions</Link>
+        </div>
+      </AnimatedSection>
 
       {/* 9. CTA */}
-      <section className="py-32 px-6 md:px-12 text-center">
+      <AnimatedSection as="section" index={10} className="py-32 px-6 md:px-12 text-center">
         <h2 className="text-4xl md:text-5xl font-black text-white tracking-tight mb-8">Stop guessing. Start validating.</h2>
         <p className="text-xl text-gray-500 mb-12 max-w-2xl mx-auto">
           The most expensive decision in marketing is launching without intelligence. Calibrate your strategy with MarketBrainOS.
@@ -296,41 +330,8 @@ const LandingPage: React.FC = () => {
           <PrimaryButton className="!px-16 !py-6 !text-base shadow-2xl shadow-red-900/20">Launch Intelligence Engine</PrimaryButton>
         </Link>
         <p className="mt-8 text-xs text-gray-600 uppercase tracking-widest">No credit card required for entry</p>
-      </section>
-
-      {/* FOOTER */}
-      <footer className="border-t border-gray-900/50 py-16 px-6 md:px-12">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start gap-12">
-          <div>
-            <div className="w-8 h-8 bg-[#FF0000] rounded-lg flex items-center justify-center font-bold text-white text-xs mb-6">M</div>
-            <p className="text-gray-500 text-sm max-w-xs">
-              MarketBrainOS is the decision-support system for high-stakes marketing. Built for executives, founders, and growth leaders.
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-16">
-            <div>
-              <h4 className="text-white font-bold mb-6">Platform</h4>
-              <ul className="space-y-4 text-sm text-gray-500">
-                <li><Link to="/auth" className="hover:text-white transition-colors">Sign In</Link></li>
-                <li><Link to="/angle-miner" className="hover:text-white transition-colors">AngleMiner X</Link></li>
-                <li><Link to="/test-lab" className="hover:text-white transition-colors">TestLab Pro</Link></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="text-white font-bold mb-6">Resources</h4>
-              <ul className="space-y-4 text-sm text-gray-500">
-                <li><Link to="/documentation" className="hover:text-white transition-colors">Documentation</Link></li>
-                <li><Link to="/documentation" className="hover:text-white transition-colors">Methodology</Link></li>
-              </ul>
-            </div>
-          </div>
-        </div>
-        <div className="max-w-7xl mx-auto mt-16 pt-8 border-t border-gray-900/50 text-xs text-gray-700 flex justify-between">
-          <p>© 2024 MarketBrainOS Intelligence.</p>
-          <p>System Status: Operational</p>
-        </div>
-      </footer>
-    </div>
+      </AnimatedSection>
+    </PublicLayout>
   );
 };
 

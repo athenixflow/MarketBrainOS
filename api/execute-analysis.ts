@@ -73,12 +73,17 @@ const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // --- NORMALIZERS ---
 
+const ANGLE_TYPE_SET = ['Emotional', 'Fear', 'Aspiration', 'Curiosity', 'Authority', 'Differentiation', 'Story', 'Contrarian'];
+
 const normalizeAngleMinerResponse = (raw: any) => {
   const cleanAngle = (item: any) => {
     if (!item) return null;
     const hook = safeStr(item.hook || item.angle || item.text);
     if (!hook) return null;
-    return { 
+    const rawType = safeStr(item.type);
+    const type = ANGLE_TYPE_SET.find(t => t.toLowerCase() === rawType.toLowerCase()) || 'Emotional';
+    return {
+      type,
       title: safeStr(item.title) || 'Insight',
       hook,
       rational: safeStr(item.rational || item.reason) || 'AI Analysis',
@@ -88,16 +93,19 @@ const normalizeAngleMinerResponse = (raw: any) => {
     };
   };
 
-  const prime = safeArray(raw?.prime).map(cleanAngle).filter((x: any) => x !== null);
-  const supporting = safeArray(raw?.supporting).map(cleanAngle).filter((x: any) => x !== null);
-  const exploratory = safeArray(raw?.exploratory).map(cleanAngle).filter((x: any) => x !== null);
+  // Accept the new flat `angles` shape, or fall back to legacy prime/supporting/exploratory.
+  const source = Array.isArray(raw?.angles)
+    ? raw.angles
+    : [...safeArray(raw?.prime), ...safeArray(raw?.supporting), ...safeArray(raw?.exploratory)];
+  const angles = source.map(cleanAngle).filter((x: any) => x !== null);
+
   const hooks = safeArray(raw?.hooks).map((h: any) => ({
     platform: safeStr(h?.platform) || 'General',
     short: safeStr(h?.short || h?.hook),
     expanded: safeStr(h?.expanded || h?.description)
   })).filter((h: any) => h.short);
 
-  return { prime, supporting, exploratory, hooks };
+  return { angles, hooks };
 };
 
 const normalizeTestLabResponse = (raw: any) => {
@@ -147,6 +155,101 @@ const normalizeAuditResponse = (raw: any) => {
 };
 
 
+// --- PRD §14–22 GENERIC TOOL PROMPTS ---
+
+interface ToolPromptConfig {
+  instruction: string;
+  sections: string[];
+  scored: boolean;
+}
+
+const TOOL_PROMPTS: Record<string, ToolPromptConfig> = {
+  'StrategyLab_Analyze': {
+    instruction: "Evaluate whether the described idea/initiative is worth pursuing. Assess feasibility, opportunity, risk, competition, and execution difficulty.",
+    sections: ['Strengths', 'Weaknesses', 'Opportunities', 'Threats', 'Recommendation'],
+    scored: true,
+  },
+  'OfferAnalyzer_Analyze': {
+    instruction: "Assess how compelling this offer is. Evaluate value perception, pricing logic, competitive position, and clarity/appeal.",
+    sections: ['Offer Breakdown', 'Improvement Opportunities', 'Pricing Feedback', 'Action Steps'],
+    scored: true,
+  },
+  'AudienceIntel_Analyze': {
+    instruction: "Analyze the target audience. Map demographics, psychographics, pain points, desires, objections, and buying motivations.",
+    sections: ['Primary Persona', 'Secondary Personas', 'Pain Points', 'Desires & Motivations', 'Opportunity Map'],
+    scored: false,
+  },
+  'MarketIntel_Analyze': {
+    instruction: "Analyze the market for opportunities. Cover trends, market size, emerging opportunities, gaps, and threats.",
+    sections: ['Market Overview', 'Trend Report', 'Opportunity Report', 'Risk Areas', 'Recommendations'],
+    scored: false,
+  },
+  'Competitor_Analyze': {
+    instruction: "Compare the business against its competitors. Identify strengths, weaknesses, market position, and differentiation.",
+    sections: ['Competitor Summary', 'Comparison Matrix', 'Advantage Opportunities', 'Differentiation'],
+    scored: false,
+  },
+  'Messaging_Analyze': {
+    instruction: "Evaluate how effectively this messaging persuades. Assess clarity, persuasion, trust, emotion, and credibility.",
+    sections: ['Messaging Review', 'Problem Areas', 'Optimization Suggestions'],
+    scored: true,
+  },
+  'ContentStrategy_Analyze': {
+    instruction: "Build a content strategy. Define content pillars, topic ideas, themes, and distribution.",
+    sections: ['Content Roadmap', 'Content Pillars', 'Topic Ideas', 'Publishing Strategy', 'Growth Opportunities'],
+    scored: false,
+  },
+  'Campaign_Analyze': {
+    instruction: "Audit this campaign and find ways to improve performance. Identify weaknesses, optimizations, and scaling opportunities.",
+    sections: ['Campaign Audit', 'Weaknesses', 'Improvement Plan', 'Scaling Strategy'],
+    scored: true,
+  },
+  'Growth_Analyze': {
+    instruction: "Identify where the business can grow fastest. Surface growth opportunities, expansion ideas, and revenue opportunities.",
+    sections: ['Growth Audit', 'Opportunity Map', 'Revenue Expansion Plan', 'Strategic Recommendations'],
+    scored: true,
+  },
+  'Workflow_Analyze': {
+    instruction: "Analyze the described business workflow/process. Identify where time, money, and effort are wasted: bottlenecks, inefficiencies, redundancies, and automation opportunities.",
+    sections: ['Bottlenecks', 'Inefficiencies', 'Redundancies', 'Automation Opportunities'],
+    scored: false,
+  },
+};
+
+// Canonical universal result sections (PRD §23 / V1 Tool Architecture). `summary`
+// carries the Executive Summary; these eight follow in this exact order for every tool.
+const UNIVERSAL_SECTIONS = [
+  'Key Findings', 'Strengths', 'Weaknesses', 'Opportunities',
+  'Risks', 'Recommendations', 'Action Plan', 'Next Steps'
+];
+
+const buildToolPrompt = (cfg: ToolPromptConfig, input: any): string => {
+  const { _context, ...cleanInput } = (input || {});
+  return [
+    "Return strictly valid JSON. No prose outside JSON.",
+    `Task: ${cfg.instruction}`,
+    `Inputs: ${JSON.stringify(cleanInput).slice(0, 4000)}`,
+    _context ? `Use this related prior analysis as supporting context — build on it, do not just repeat it: ${String(_context).slice(0, 3000)}` : "",
+    cfg.scored ? "Include a numeric 'score' (0-100) and a short 'verdict' label." : "",
+    `Provide a 'summary' (the Executive Summary) plus a 'sections' array that includes EVERY one of these sections, in this exact order: ${UNIVERSAL_SECTIONS.join(', ')}.`,
+    "Each section: {title: string, items: string[]} with 3-6 specific, actionable items. Tailor the content of each section to the task above.",
+    "Schema: {score?:number, verdict?:string, summary:string, sections:[{title:string, items:string[]}]}"
+  ].filter(Boolean).join(" ");
+};
+
+const normalizeToolResult = (raw: any) => ({
+  score: safeNum(raw?.score),
+  verdict: safeStr(raw?.verdict),
+  summary: safeStr(raw?.summary || raw?.overview),
+  sections: safeArray(raw?.sections).map((s: any) => ({
+    title: safeStr(s?.title) || 'Section',
+    items: safeArray(s?.items)
+      .map((i: any) => (typeof i === 'string' ? i.trim() : safeStr(i?.text || i?.point || i?.item)))
+      .filter(Boolean)
+  })).filter((s: any) => s.items.length > 0)
+});
+
+
 // --- HANDLER ---
 
 export default async function handler(request: Request) {
@@ -174,13 +277,15 @@ export default async function handler(request: Request) {
     if (module === 'AngleMiner_Generate') {
       prompt = [
         "Return strictly valid JSON.",
-        `Product: ${(input.product || '').slice(0,800)}`,
-        `Industry: ${input.industry}`,
-        `Target: ${input.target}`,
-        "Schema: {prime:[{title,hook,rational,score}],supporting:[{title,hook,rational,score}],exploratory:[{title,hook,rational,score}],hooks:[{platform,short,expanded}]}"
+        `Product Name: ${(input.productName || '').slice(0,200)}`,
+        `Description: ${(input.product || '').slice(0,800)}`,
+        `Market: ${input.market || input.industry}`,
+        `Audience: ${input.target}`,
+        "Generate angles across these 8 types: Emotional, Fear, Aspiration, Curiosity, Authority, Differentiation, Story, Contrarian (at least one of each).",
+        "Schema: {angles:[{type,title,hook,rational,score}],hooks:[{platform,short,expanded}]}"
       ].join(" ");
       normalizer = normalizeAngleMinerResponse;
-    } 
+    }
     else if (module === 'AngleMiner_Improve') {
       prompt = `Refine hook for conversion: "${(input || '').slice(0,300)}"`;
       normalizer = (d: any) => d; 
@@ -215,6 +320,10 @@ export default async function handler(request: Request) {
       ].join(" ");
 
       normalizer = (raw: any) => ({ headline: safeStr(raw?.headline), cta: safeStr(raw?.cta), offer: safeStr(raw?.offer) });
+    }
+    else if (TOOL_PROMPTS[module]) {
+      prompt = buildToolPrompt(TOOL_PROMPTS[module], input);
+      normalizer = normalizeToolResult;
     }
     else {
       return new Response(JSON.stringify({ success: false, error: "Invalid module" }), { status: 400, headers: { 'Content-Type': 'application/json' } });

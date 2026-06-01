@@ -2,36 +2,24 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader, Card, PrimaryButton, UpgradeCard, TokenStatusBanner, TokenHistoryModal, PaymentHistoryModal } from '../components/UI';
+import AnimatedSection from '../components/AnimatedSection';
+import SubscriptionPanel from '../components/SubscriptionPanel';
 import { useAuth } from '../context/AuthContext';
-import { callConfirmTopUp } from '../services/persistenceService';
+import { callConfirmTopUp, replayOnboarding, createNotification } from '../services/persistenceService';
+import { NAV_SUITES } from '../config/toolConfigs';
 
 const Dashboard: React.FC = () => {
-  const { profile, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
+
+  const handleReplayTour = async () => {
+    if (!user) return;
+    await replayOnboarding(user.uid);
+    await refreshProfile();
+  };
   const [topUpStatus, setTopUpStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
   const [feedbackMsg, setFeedbackMsg] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const [showReceipts, setShowReceipts] = useState(false);
-
-  const modules = [
-    {
-      name: 'AngleMiner X',
-      purpose: 'Generate high-conversion psychological angles and marketing hooks.',
-      path: '/angle-miner',
-      accent: true
-    },
-    {
-      name: 'TestLab Pro',
-      purpose: 'Simulate ad performance and predict winning variations before launch.',
-      path: '/test-lab',
-      accent: false
-    },
-    {
-      name: 'Conversion Doctor',
-      purpose: 'Audit landing pages for conversion blockers and friction points.',
-      path: '/conversion-doctor',
-      accent: false
-    }
-  ];
 
   const handleTopUp = async () => {
     if (profile?.tier !== 'pro') return;
@@ -51,6 +39,7 @@ const Dashboard: React.FC = () => {
       
       setTopUpStatus('success');
       setFeedbackMsg('100 tokens credited successfully.');
+      if (user) createNotification(user.uid, 'Token', 'Top-up successful', '100 tokens have been added to your balance.');
       
       // Reset state after delay
       setTimeout(() => {
@@ -85,13 +74,15 @@ const Dashboard: React.FC = () => {
       {showReceipts && <PaymentHistoryModal onClose={() => setShowReceipts(false)} />}
       
       <div className="space-y-24">
-        <PageHeader 
-          title="Predictive Marketing Intelligence" 
-          subtitle="MarketBrainOS is an executive-grade software platform for pre-validating marketing assets. It utilizes AI to audit conversion funnels, simulate campaign performance, and generate psychological profiles." 
-        />
-        
+        <AnimatedSection index={0}>
+          <PageHeader
+            title="Predictive Marketing Intelligence"
+            subtitle="MarketBrainOS is an executive-grade software platform for pre-validating marketing assets. It utilizes AI to audit conversion funnels, simulate campaign performance, and generate psychological profiles."
+          />
+        </AnimatedSection>
+
         {/* OPERATIONAL RESOURCES & TOKENS */}
-        <section>
+        <AnimatedSection as="section" index={1}>
           <div className="flex justify-between items-end mb-6">
             <h2 className="text-xs font-bold text-gray-500 uppercase tracking-[0.4em]">Operational Resources</h2>
             <div className="flex gap-6">
@@ -103,6 +94,12 @@ const Dashboard: React.FC = () => {
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
+              </button>
+              <button
+                onClick={handleReplayTour}
+                className="text-[10px] font-bold text-gray-400 hover:text-white uppercase tracking-widest transition-colors"
+              >
+                Replay Tour
               </button>
               {profile?.tier === 'pro' && (
                 <button 
@@ -135,7 +132,7 @@ const Dashboard: React.FC = () => {
               </div>
               {profile?.tier === 'free' && (
                 <p className="text-xs text-gray-500 mt-4 max-w-md">
-                  Free tier is limited to 4 credits/mo. Upgrade to Pro for 50 credits/mo and top-up capability.
+                  Free tier is limited to 4 credits/mo. Upgrade to Pro for 200 credits/mo and top-up capability.
                 </p>
               )}
             </div>
@@ -169,44 +166,58 @@ const Dashboard: React.FC = () => {
                 </div>
               ) : (
                 <div className="flex flex-col items-end gap-4">
-                  <button 
-                    onClick={() => window.open('https://ai.google.dev/gemini-api/docs/billing', '_blank')}
-                    className="w-full md:w-auto px-8 py-4 bg-[#FF0000] text-white rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-[#D40000] transition-all shadow-lg shadow-red-900/20"
-                  >
-                    Upgrade to Pro
-                  </button>
-                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Unlock Top-Ups & Higher Limits</p>
+                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest text-right">Manage your plan below to unlock<br className="hidden md:block" /> top-ups & higher limits</p>
                 </div>
               )}
             </div>
           </Card>
-        </section>
-        
-        <div className="grid grid-cols-1 gap-12">
-          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-[0.4em] mb-4">Intelligence Modules</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-            {modules.map((mod) => (
-              <Card key={mod.name} accent={mod.accent} className="group hover:shadow-2xl hover:shadow-black/10 duration-500">
-                <div className="flex flex-col h-full justify-between">
-                  <div>
-                    <h3 className="text-2xl font-bold text-[#0B0B0B] tracking-tight mb-4 group-hover:text-[#FF0000] transition-colors duration-500">{mod.name}</h3>
-                    <p className="text-gray-500 font-medium leading-relaxed mb-12">
-                      {mod.purpose}
-                    </p>
-                  </div>
-                  <Link to={mod.path}>
-                    <PrimaryButton className="w-full !px-0 !py-3.5 !text-xs">Open Module</PrimaryButton>
-                  </Link>
-                </div>
-              </Card>
-            ))}
-            {profile?.tier === 'free' && (
-              <UpgradeCard onClick={() => window.open('https://ai.google.dev/gemini-api/docs/billing', '_blank')} />
-            )}
-          </div>
-        </div>
+        </AnimatedSection>
 
-        <div className="pt-12">
+        {/* SUBSCRIPTION MANAGEMENT (§30–32) */}
+        <AnimatedSection as="section" index={2}>
+          <SubscriptionPanel />
+        </AnimatedSection>
+
+        <AnimatedSection index={3} className="grid grid-cols-1 gap-12">
+          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-[0.4em] mb-4">Intelligence Suites</h2>
+          {NAV_SUITES.map((group, gi) => (
+            <div key={group.suite} className="mb-4">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-8 h-[2px] bg-[#FF0000] rounded-full" />
+                <h3 className="text-sm font-bold text-white uppercase tracking-[0.3em]">{group.suite}</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+                {group.items.map((tool, ti) => (
+                  <Card key={tool.path} accent={gi === 0 && ti === 0} className="group hover:shadow-2xl hover:shadow-black/10 duration-500">
+                    <div className="flex flex-col h-full justify-between">
+                      <div>
+                        <div className="flex items-start justify-between gap-3 mb-4">
+                          <h3 className="text-2xl font-bold text-[#0B0B0B] tracking-tight group-hover:text-[#FF0000] transition-colors duration-500">{tool.label}</h3>
+                          {typeof tool.cost === 'number' && (
+                            <span className="shrink-0 mt-1 px-2.5 py-1 rounded-full bg-gray-100 text-gray-500 text-[9px] font-bold uppercase tracking-widest">{tool.cost} {tool.cost === 1 ? 'Token' : 'Tokens'}</span>
+                          )}
+                        </div>
+                        <p className="text-gray-500 font-medium leading-relaxed mb-12">
+                          {tool.description}
+                        </p>
+                      </div>
+                      <Link to={tool.path}>
+                        <PrimaryButton className="w-full !px-0 !py-3.5 !text-xs">Open Module</PrimaryButton>
+                      </Link>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          ))}
+          {profile?.tier === 'free' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+              <UpgradeCard onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />
+            </div>
+          )}
+        </AnimatedSection>
+
+        <AnimatedSection index={3} className="pt-12">
           <Card className="!bg-[#0D0D0D] !border-gray-900 !text-white !p-16">
             <div className="max-w-xl">
               <p className="text-[#FF0000] text-xs font-bold uppercase tracking-[0.3em] mb-6">System Status</p>
@@ -226,7 +237,7 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
           </Card>
-        </div>
+        </AnimatedSection>
       </div>
     </div>
   );

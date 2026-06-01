@@ -19,6 +19,15 @@ const firebaseConfig = {
   measurementId: process.env.FIREBASE_MEASUREMENT_ID || "G-JE1NN5VX00"
 };
 
+// Base URL for HTTP (onRequest) Cloud Functions, e.g. `executeAnalysis`.
+// Derived from the project config; overridable via env for non-default regions
+// or local emulators. (`process.env` is polyfilled to `{}` by vite, so a missing
+// override reads as undefined rather than throwing.)
+const functionsRegion = process.env.FIREBASE_FUNCTIONS_REGION || 'us-central1';
+export const functionsBaseUrl =
+  (process.env.FIREBASE_FUNCTIONS_URL as string | undefined) ||
+  `https://${functionsRegion}-${firebaseConfig.projectId}.cloudfunctions.net`;
+
 let app: FirebaseApp;
 let auth: Auth;
 let googleProvider: GoogleAuthProvider;
@@ -78,3 +87,4 @@ try {
 }
 
 export { auth, googleProvider, db, functions, analytics, isFirebaseInitialized };
+// functionsBaseUrl is exported at its declaration above.

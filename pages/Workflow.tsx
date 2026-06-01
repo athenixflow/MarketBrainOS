@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { 
+import AnimatedSection from '../components/AnimatedSection';
+import {
   PageHeader, 
   Card, 
   Input, 
@@ -276,7 +277,7 @@ const Workflow: React.FC = () => {
         onClose={() => setShowUsageModal(false)} 
       />
 
-      <div className="flex justify-between items-center mb-8">
+      <AnimatedSection index={0} className="flex justify-between items-center mb-8">
         <div className="flex items-center gap-6">
           <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2 bg-[#121212] rounded-full border border-gray-900">
             Step {Math.max(1, step)} of 6
@@ -296,7 +297,7 @@ const Workflow: React.FC = () => {
             Exit Workflow
           </button>
         )}
-      </div>
+      </AnimatedSection>
 
       {error && <div className="max-w-4xl mx-auto"><ErrorMessage message={error} action={{ label: "Retry", onClick: () => setError(null) }} /></div>}
       
@@ -325,13 +326,13 @@ const Workflow: React.FC = () => {
       ) : null}
 
       {step === 0 && (
-        <div className="max-w-2xl mx-auto text-center py-24 animate-in fade-in zoom-in duration-1000">
-          <PageHeader 
-            title="Integrated Campaign Workflow" 
-            subtitle="Connect ideation, testing, and auditing into one seamless executive process. Build and validate your marketing before you launch." 
+        <AnimatedSection index={1} className="max-w-2xl mx-auto text-center py-24">
+          <PageHeader
+            title="Integrated Campaign Workflow"
+            subtitle="Connect ideation, testing, and auditing into one seamless executive process. Build and validate your marketing before you launch."
           />
           <PrimaryButton onClick={() => setStep(1)} className="!px-16 !py-6 !text-lg">Start Workflow</PrimaryButton>
-        </div>
+        </AnimatedSection>
       )}
 
       {step === 1 && !loading && !executionError && (
@@ -381,7 +382,7 @@ const Workflow: React.FC = () => {
         <div className="max-w-4xl mx-auto space-y-12 animate-in slide-in-from-bottom-8 duration-700">
           <SectionHeader title="Step 2: Selection" subtitle="Choose hooks to enter performance simulator (Max 3)." />
           <div className="grid grid-cols-1 gap-6">
-            {(minerResults.prime || []).map((angle, i) => (
+            {[...(minerResults.angles || [])].sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 6).map((angle, i) => (
               <button 
                 key={i} 
                 onClick={() => toggleAngleSelection(angle.hook)}

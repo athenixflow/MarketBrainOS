@@ -14,7 +14,18 @@ const COSTS: Record<string, number> = {
   'AngleMiner_Improve': 1,
   'ConversionDoctor_Audit': 4,
   'TestLab_Simulation': 5,
-  'Workflow_ImproveAssets': 6
+  'Workflow_ImproveAssets': 6,
+  // PRD §14–22 analysis tools
+  'StrategyLab_Analyze': 5,
+  'OfferAnalyzer_Analyze': 4,
+  'AudienceIntel_Analyze': 4,
+  'MarketIntel_Analyze': 5,
+  'Competitor_Analyze': 4,
+  'Messaging_Analyze': 3,
+  'ContentStrategy_Analyze': 4,
+  'Campaign_Analyze': 4,
+  'Growth_Analyze': 5,
+  'Workflow_Analyze': 5
 };
 
 const MODULE_MAPPING: Record<string, string> = {
@@ -22,7 +33,18 @@ const MODULE_MAPPING: Record<string, string> = {
   'AngleMiner_Improve': 'AngleMiner',
   'ConversionDoctor_Audit': 'ConversionDoctor',
   'TestLab_Simulation': 'TestLabPro',
-  'Workflow_ImproveAssets': 'Workflow'
+  'Workflow_ImproveAssets': 'Workflow',
+  // PRD §14–22 analysis tools
+  'StrategyLab_Analyze': 'StrategyLab',
+  'OfferAnalyzer_Analyze': 'OfferAnalyzer',
+  'AudienceIntel_Analyze': 'AudienceIntel',
+  'MarketIntel_Analyze': 'MarketIntel',
+  'Competitor_Analyze': 'Competitor',
+  'Messaging_Analyze': 'Messaging',
+  'ContentStrategy_Analyze': 'ContentStrategy',
+  'Campaign_Analyze': 'Campaign',
+  'Growth_Analyze': 'Growth',
+  'Workflow_Analyze': 'WorkflowAnalyzer'
 };
 
 const RATE_LIMIT_RULES = {
@@ -47,6 +69,27 @@ const systemInstruction = `
 You are the MarketBrainOS Intelligence Engine.
 Core Mission: Provide high-confidence marketing angles, conversion audits, and performance simulations.
 `;
+
+// Canonical universal result sections (PRD §23 / V1 Tool Architecture). `summary`
+// carries the Executive Summary; these eight follow in this exact order for every tool.
+const UNIVERSAL_SECTIONS = [
+  'Key Findings', 'Strengths', 'Weaknesses', 'Opportunities',
+  'Risks', 'Recommendations', 'Action Plan', 'Next Steps'
+];
+
+// PRD §14–22 generic analysis tools — instruction + expected result sections.
+const TOOL_PROMPTS: Record<string, { instruction: string; sections: string[]; scored: boolean }> = {
+  'StrategyLab_Analyze': { instruction: "Evaluate whether the described idea/initiative is worth pursuing. Assess feasibility, opportunity, risk, competition, and execution difficulty.", sections: ['Strengths', 'Weaknesses', 'Opportunities', 'Threats', 'Recommendation'], scored: true },
+  'OfferAnalyzer_Analyze': { instruction: "Assess how compelling this offer is. Evaluate value perception, pricing logic, competitive position, and clarity/appeal.", sections: ['Offer Breakdown', 'Improvement Opportunities', 'Pricing Feedback', 'Action Steps'], scored: true },
+  'AudienceIntel_Analyze': { instruction: "Analyze the target audience. Map demographics, psychographics, pain points, desires, objections, and buying motivations.", sections: ['Primary Persona', 'Secondary Personas', 'Pain Points', 'Desires & Motivations', 'Opportunity Map'], scored: false },
+  'MarketIntel_Analyze': { instruction: "Analyze the market for opportunities. Cover trends, market size, emerging opportunities, gaps, and threats.", sections: ['Market Overview', 'Trend Report', 'Opportunity Report', 'Risk Areas', 'Recommendations'], scored: false },
+  'Competitor_Analyze': { instruction: "Compare the business against its competitors. Identify strengths, weaknesses, market position, and differentiation.", sections: ['Competitor Summary', 'Comparison Matrix', 'Advantage Opportunities', 'Differentiation'], scored: false },
+  'Messaging_Analyze': { instruction: "Evaluate how effectively this messaging persuades. Assess clarity, persuasion, trust, emotion, and credibility.", sections: ['Messaging Review', 'Problem Areas', 'Optimization Suggestions'], scored: true },
+  'ContentStrategy_Analyze': { instruction: "Build a content strategy. Define content pillars, topic ideas, themes, and distribution.", sections: ['Content Roadmap', 'Content Pillars', 'Topic Ideas', 'Publishing Strategy', 'Growth Opportunities'], scored: false },
+  'Campaign_Analyze': { instruction: "Audit this campaign and find ways to improve performance. Identify weaknesses, optimizations, and scaling opportunities.", sections: ['Campaign Audit', 'Weaknesses', 'Improvement Plan', 'Scaling Strategy'], scored: true },
+  'Growth_Analyze': { instruction: "Identify where the business can grow fastest. Surface growth opportunities, expansion ideas, and revenue opportunities.", sections: ['Growth Audit', 'Opportunity Map', 'Revenue Expansion Plan', 'Strategic Recommendations'], scored: false },
+  'Workflow_Analyze': { instruction: "Analyze the described business workflow/process. Identify where time, money, and effort are wasted: bottlenecks, inefficiencies, redundancies, and automation opportunities.", sections: ['Bottlenecks', 'Inefficiencies', 'Redundancies', 'Automation Opportunities'], scored: false },
+};
 
 const cleanJSON = (text: string) => {
   const clean = text.replace(/```json\n?|\n?```/g, '').trim();
@@ -271,8 +314,10 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
 
       if (module === 'AngleMiner_Generate') {
         const prompt = `
-          Analyze: Product: ${input.product}, Industry: ${input.industry}, Target: ${input.target}, Goal: ${input.goal}, Tones: ${input.tones?.join(', ')}.
-          Return strict JSON: { prime: [{title, hook, rational, score}], supporting: [...], exploratory: [...], hooks: [{platform, short, expanded}] }
+          Generate marketing angles. Product Name: ${input.productName || ''}, Description: ${input.product}, Audience: ${input.target}, Market: ${input.market || input.industry}, Goal: ${input.goal}, Tones: ${input.tones?.join(', ')}.
+          Produce angles across these 8 types: Emotional, Fear, Aspiration, Curiosity, Authority, Differentiation, Story, Contrarian (at least one of each, more for the strongest).
+          Each angle: { type (one of the 8 exact labels), title, hook, rational, score (0-100) }.
+          Return strict JSON: { angles: [{type, title, hook, rational, score}], hooks: [{platform, short, expanded}] }
         `;
         const result = await model.generateContent({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -302,6 +347,24 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
       }
       else if (module === 'Workflow_ImproveAssets') {
         const prompt = `Refine angle "${input.angle}" based on issues: ${input.issues?.join(', ')}. Return JSON: { headline, cta, offer }`;
+        const result = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: 'application/json' }
+        });
+        responseText = result.response.text();
+      }
+      else if (TOOL_PROMPTS[module]) {
+        const cfg = TOOL_PROMPTS[module];
+        const { _context, ...cleanInput } = (input || {});
+        const prompt = [
+          `Task: ${cfg.instruction}`,
+          `Inputs: ${JSON.stringify(cleanInput).slice(0, 4000)}`,
+          _context ? `Use this related prior analysis as supporting context — build on it, do not just repeat it: ${String(_context).slice(0, 3000)}` : "",
+          cfg.scored ? "Include a numeric 'score' (0-100) and a short 'verdict' label." : "",
+          `Provide a 'summary' (the Executive Summary) plus a 'sections' array that includes EVERY one of these sections, in this exact order: ${UNIVERSAL_SECTIONS.join(', ')}.`,
+          "Each section: {title, items:[string]} with 3-6 specific, actionable items. Tailor the content of each section to the task above.",
+          "Return strict JSON: { score?, verdict?, summary, sections: [{title, items:[string]}] }"
+        ].filter(Boolean).join(' ');
         const result = await model.generateContent({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: { responseMimeType: 'application/json' }
@@ -430,7 +493,7 @@ export const manageUser = functions.https.onCall(async (data: any, context: any)
           break;
 
         case 'resetTokens':
-          const defaultTokens = userData.tier === 'pro' ? 50 : 4;
+          const defaultTokens = userData.tier === 'pro' ? 200 : 4;
           t.update(targetRef, { tokens: defaultTokens });
           break;
 
@@ -614,3 +677,138 @@ export const confirmTopUp = functions.https.onCall(async (data: any, context: an
     throw new functions.https.HttpsError('internal', error.message || 'Top-up transaction failed.');
   }
 });
+
+// --- SUBSCRIPTION LIFECYCLE FUNCTION (§30) ---
+// Simulated billing: server-authoritative transitions. A real provider (Stripe) would
+// verify payment before `upgrade`/`renew` — that check is the documented seam below.
+const PRO_MONTHLY_TOKENS = 200;
+const RENEWAL_DAYS = 30;
+
+export const changeSubscription = functions.https.onCall(async (data: any, context: any) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
+  }
+  const uid = context.auth.uid;
+  const action = data?.action as 'upgrade' | 'cancel' | 'downgrade' | 'renew';
+  if (!['upgrade', 'cancel', 'downgrade', 'renew'].includes(action)) {
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid subscription action.');
+  }
+
+  const userRef = db.collection('users').doc(uid);
+
+  try {
+    let result: any = {};
+    await db.runTransaction(async (t: admin.firestore.Transaction) => {
+      const userDoc = await t.get(userRef);
+      if (!userDoc.exists) throw new functions.https.HttpsError('not-found', 'User profile not found.');
+      const userData = userDoc.data()!;
+      if (userData.is_suspended) throw new functions.https.HttpsError('permission-denied', 'Account suspended.');
+
+      const now = new Date();
+      const renewsAt = new Date(now.getTime() + RENEWAL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+      if (action === 'upgrade' || action === 'renew') {
+        // SEAM: verify payment with provider here before granting (simulated as success).
+        const currentTokens = userData.tokens || 0;
+        t.update(userRef, {
+          tier: 'pro',
+          subscription_status: 'active',
+          plan_renews_at: renewsAt,
+          subscription_started_at: userData.subscription_started_at || now.toISOString(),
+          // Renewal/upgrade grants the monthly Pro allocation.
+          tokens: action === 'upgrade' ? currentTokens + PRO_MONTHLY_TOKENS : PRO_MONTHLY_TOKENS,
+        });
+
+        // Payment record (immutable) — subscription type.
+        const payRef = db.collection('payments').doc();
+        t.set(payRef, {
+          uid,
+          payment_reference: `sub_${action}_${now.getTime()}`,
+          amount_paid: 7,
+          tokens_credited: PRO_MONTHLY_TOKENS,
+          type: 'subscription',
+          provider: 'stripe_simulated',
+          status: 'completed',
+          created_at: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        const logRef = db.collection('action_logs').doc();
+        t.set(logRef, { uid, action: `subscription_${action}`, amount_paid: 7, created_at: admin.firestore.FieldValue.serverTimestamp() });
+        result = { status: 'active', plan_renews_at: renewsAt };
+      } else if (action === 'cancel') {
+        // Cancelled but retains access/tokens until period end (status reflects intent).
+        t.update(userRef, { subscription_status: 'cancelled' });
+        const logRef = db.collection('action_logs').doc();
+        t.set(logRef, { uid, action: 'subscription_cancel', created_at: admin.firestore.FieldValue.serverTimestamp() });
+        result = { status: 'cancelled' };
+      } else if (action === 'downgrade') {
+        t.update(userRef, { tier: 'free', subscription_status: 'free', plan_renews_at: admin.firestore.FieldValue.delete() });
+        const logRef = db.collection('action_logs').doc();
+        t.set(logRef, { uid, action: 'subscription_downgrade', created_at: admin.firestore.FieldValue.serverTimestamp() });
+        result = { status: 'free' };
+      }
+    });
+
+    return { success: true, ...result };
+  } catch (error: any) {
+    console.error('Subscription change failed:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', error.message || 'Subscription change failed.');
+  }
+});
+
+// --- MONTHLY TOKEN REFRESH (§64) ---
+// Scheduled monthly grant of the Pro allowance. Runs at 00:00 UTC on the 1st of each
+// month. DEPLOY-TIME: only fires once deployed (`firebase deploy --only functions`) on
+// the Blaze plan, which provisions Cloud Scheduler. Token reset uses the SAME rule as the
+// `renew` branch of changeSubscription (set to PRO_MONTHLY_TOKENS) so there is one source
+// of truth for the monthly allowance.
+export const monthlyTokenRefresh = functions.pubsub
+  .schedule('0 0 1 * *')
+  .timeZone('UTC')
+  .onRun(async () => {
+    const now = new Date();
+    const renewsAt = new Date(now.getTime() + RENEWAL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+    // Pro users whose subscription still entitles them to the monthly allowance.
+    // 'cancelled' retains access until period end, so they are refreshed too.
+    const snap = await db.collection('users').where('tier', '==', 'pro').get();
+    const eligible = snap.docs.filter((d: admin.firestore.QueryDocumentSnapshot) => {
+      const s = d.data().subscription_status;
+      return s === 'active' || s === 'cancelled' || s === undefined;
+    });
+
+    let refreshed = 0;
+    // Firestore batches cap at 500 ops; each user costs up to 3 writes (user + log + notification).
+    const CHUNK = 150;
+    for (let i = 0; i < eligible.length; i += CHUNK) {
+      const batch = db.batch();
+      for (const userDoc of eligible.slice(i, i + CHUNK)) {
+        batch.update(userDoc.ref, {
+          tokens: PRO_MONTHLY_TOKENS,
+          plan_renews_at: renewsAt,
+        });
+        const logRef = db.collection('action_logs').doc();
+        batch.set(logRef, {
+          uid: userDoc.id,
+          action: 'monthly_refresh',
+          tokens_added: PRO_MONTHLY_TOKENS,
+          created_at: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        const noteRef = db.collection('notifications').doc();
+        batch.set(noteRef, {
+          uid: userDoc.id,
+          category: 'Token',
+          title: 'Monthly tokens refreshed',
+          body: `Your Pro plan was topped up to ${PRO_MONTHLY_TOKENS} tokens for the new cycle.`,
+          read: false,
+          created_at: now.toISOString(),
+        });
+        refreshed++;
+      }
+      await batch.commit();
+    }
+
+    console.log(`monthlyTokenRefresh: refreshed ${refreshed} Pro account(s).`);
+    return null;
+  });

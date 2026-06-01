@@ -1,12 +1,14 @@
 
-import { auth } from "./firebase";
-import { 
+import { auth, functionsBaseUrl } from "./firebase";
+import {
   saveAngleMinerResult,
   saveTestLabResult,
   saveConversionDoctorResult,
-  saveWorkflowRun
+  saveWorkflowRun,
+  saveGenericAnalysis,
+  createNotification
 } from "./persistenceService";
-import { AngleMinerResults, TestLabResults, AuditResult, MarketingAngle, TestLabVariant } from "../types";
+import { AngleMinerResults, TestLabResults, AuditResult, MarketingAngle, TestLabVariant, ToolAnalysisResult, Scope } from "../types";
 
 export const MAX_INPUT_CHARS = 12000;
 
@@ -25,7 +27,7 @@ export const SystemContracts: Record<string, {
 }> = {
   AngleMiner: {
     inputValidator: (input: any) => { if (!input) throw new Error("Invalid Input"); },
-    outputValidator: (output: any) => { if (!output || !Array.isArray(output.prime)) throw new Error("Invalid Output Schema"); }
+    outputValidator: (output: any) => { if (!output || !Array.isArray(output.angles)) throw new Error("Invalid Output Schema"); }
   },
   TestLab: {
     inputValidator: (input: any) => { if (!input) throw new Error("Invalid Input"); },
@@ -43,135 +45,55 @@ export const SystemContracts: Record<string, {
 
 const wait = (ms: number) => new Promise(res => setTimeout(res, ms));
 
+// Analysis runs synchronously on the Firebase `executeAnalysis` HTTP function,
+// which owns auth, admin/maintenance gating, rate-limiting, token billing
+// (deduct + auto-refund on failure), Gemini execution, and audit logging.
+// We issue one authenticated POST and surface the server's error message
+// verbatim so the UI error-classifiers (rate limit / maintenance / network)
+// and "no tokens deducted" messaging keep working.
+const ANALYSIS_TIMEOUT_MS = 70000;
+
 const executeAsyncJob = async (module: string, input: any): Promise<any> => {
   const user = auth.currentUser;
   if (!user) throw new Error("ERR_AUTH_REQUIRED: User must be logged in.");
-  
-  const token = await user.getIdToken();
-  const headers = {
-    "Content-Type": "application/json",
-    "Authorization": `Bearer ${token}`
-  };
 
-  // 1. FAST START
-  let startRes;
+  const token = await user.getIdToken();
+
+  let res: Response;
   try {
-    startRes = await fetch("/api/analysis/start", {
-      method: "POST", 
-      headers, 
+    res = await fetch(`${functionsBaseUrl}/executeAnalysis`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
       body: JSON.stringify({ module, input }),
-      signal: AbortSignal.timeout(10000) // 10s timeout for start request
+      signal: AbortSignal.timeout(ANALYSIS_TIMEOUT_MS)
     });
   } catch (e: any) {
     if (e.name === 'AbortError') {
-      throw new Error("ERR_NETWORK_TIMEOUT: Start request timed out after 10s.");
+      throw new Error("Network timeout: the analysis took too long to respond. Please check your connection and try again.");
     }
-    throw new Error(`ERR_NETWORK: Failed to start analysis job. ${e.message}`);
+    throw new Error(`Network error: failed to reach the analysis engine. ${e.message || ''}`.trim());
   }
-  
-  if (!startRes.ok) {
-     let errorMessage = "ERR_API_START_FAILED: Failed to initialize analysis job.";
-     try {
-       const err = await startRes.json().catch(() => ({}));
-       if (err.error) errorMessage = `ERR_API_START_FAILED: ${err.error}`;
-       if (err.meta?.details) errorMessage += ` Details: ${err.meta.details}`;
-     } catch (e: any) {
-       // Ignore JSON parsing errors
-     }
-     throw new Error(errorMessage);
-  }
-  
-  let startData;
+
+  let data: any = null;
   try {
-    startData = await startRes.json();
-  } catch (e) {
-    throw new Error("ERR_API_PARSE_FAILED: Failed to parse start response.");
-  }
-  
-  const jobId = startData.data?.jobId;
-  
-  if (!jobId) throw new Error("ERR_API_NO_JOB_ID: No Job ID returned from server.");
-
-  // 2. POLLING & EXECUTION LOOP
-  let attempts = 0;
-  const maxAttempts = 30; // 60s timeout
-  let lastError = null;
-  
-  while (attempts < maxAttempts) {
-    attempts++;
-    
-    // Trigger Execution (Non-Blocking fire & forget attempt)
-    // We catch errors here because the polling status check is the authority on failure
-    fetch("/api/analysis/run", {
-      method: "POST", 
-      headers, 
-      body: JSON.stringify({ jobId }),
-      signal: AbortSignal.timeout(5000) // 5s timeout for run request
-    }).catch(e => console.warn("Background run trigger failed (safe to ignore):", e));
-
-    // Wait for work to happen
-    await wait(2000);
-
-    // Check Status
-    let statusRes;
-    try {
-      statusRes = await fetch(`/api/analysis/status?jobId=${jobId}`, { 
-        headers,
-        signal: AbortSignal.timeout(10000) // 10s timeout for status request
-      });
-    } catch (e: any) {
-      if (e.name === 'AbortError') {
-        lastError = "ERR_NETWORK_TIMEOUT: Status check timed out after 10s.";
-        continue; // Try again
-      }
-      lastError = `ERR_NETWORK: Failed to check status. ${e.message}`;
-      continue; // Try again
-    }
-    
-    if (statusRes.ok) {
-      let statusData;
-      try {
-        statusData = await statusRes.json();
-      } catch (e: any) {
-        lastError = "ERR_API_PARSE_FAILED: Failed to parse status response.";
-        continue; // Try again
-      }
-      
-      const job = statusData.data;
-
-      if (job.status === 'completed') {
-        if (!job.result) {
-          throw new Error("ERR_API_NO_RESULT: Job completed but returned no result.");
-        }
-        return job.result;
-      }
-      
-      if (job.status === 'failed') {
-        let errorMessage = "ERR_API_JOB_FAILED: Analysis job failed on server.";
-        if (job.error) errorMessage = `ERR_API_JOB_FAILED: ${job.error}`;
-        if (job.meta?.details) errorMessage += ` Details: ${job.meta.details}`;
-        throw new Error(errorMessage);
-      }
-      
-      if (job.status === 'blocked') {
-        throw new Error("ERR_API_BLOCKED: Request was blocked by security engine.");
-      }
-    } else {
-      try {
-        const errorData = await statusRes.json();
-        lastError = `ERR_API_STATUS_FAILED: Status check failed with ${statusRes.status}. ${errorData.error || ''}`;
-      } catch (e: any) {
-        lastError = `ERR_API_STATUS_FAILED: Status check failed with ${statusRes.status}.`;
-      }
-    }
+    data = await res.json();
+  } catch {
+    throw new Error(`Analysis failed (HTTP ${res.status}). Received an unreadable response from the analysis engine.`);
   }
 
-  // If we get here, we timed out
-  let timeoutMessage = "ERR_TIMEOUT: Analysis timed out after 60s. Please try again.";
-  if (lastError) {
-    timeoutMessage += ` Last error: ${lastError}`;
+  if (!res.ok || data?.error) {
+    const msg = data?.error?.message || `Analysis failed (HTTP ${res.status}).`;
+    throw new Error(msg);
   }
-  throw new Error(timeoutMessage);
+
+  if (data.result === undefined || data.result === null) {
+    throw new Error("Analysis completed but returned no result.");
+  }
+
+  return data.result;
 };
 
 export const analyzeMarketingAngle = async (params: any, userId?: string) => {
@@ -206,5 +128,51 @@ export const improveWorkflowAssets = async (angle: string, issues: string[], use
   const result = await executeAsyncJob('Workflow_ImproveAssets', { angle, issues });
   SystemContracts.Workflow.outputValidator(result);
   if (userId) await saveWorkflowRun(userId, angle, testScore || 0, auditScore || 0, result);
+  return result;
+};
+
+// --- GENERIC ANALYSIS TOOLS (PRD §14–22) ---
+// All §14–22 tools share the ToolAnalysisResult shape and route through the same
+// job pipeline as the existing tools. `module` selects the server-side prompt.
+export const runToolAnalysis = async (
+  module: string,
+  inputs: Record<string, string>,
+  userId?: string,
+  contextText?: string,
+  scope?: Scope
+): Promise<ToolAnalysisResult> => {
+  if (!inputs || Object.keys(inputs).length === 0) throw new Error("Invalid Input");
+  // Connected-ecosystem wiring: a related prior analysis is injected as `_context`,
+  // which the server prompt builders treat as background, not raw input.
+  const payload = contextText ? { ...inputs, _context: contextText } : inputs;
+  const raw = await executeAsyncJob(module, payload);
+
+  // Defensive normalization — server may return a partial/loose shape.
+  const result: ToolAnalysisResult = {
+    score: typeof raw?.score === 'number' ? raw.score : undefined,
+    verdict: typeof raw?.verdict === 'string' ? raw.verdict : undefined,
+    summary: typeof raw?.summary === 'string' ? raw.summary : '',
+    sections: Array.isArray(raw?.sections)
+      ? raw.sections
+          .map((s: any) => ({
+            title: typeof s?.title === 'string' ? s.title : 'Section',
+            items: Array.isArray(s?.items)
+              ? s.items.map((i: any) => (typeof i === 'string' ? i : (i?.text || i?.point || ''))).filter(Boolean)
+              : []
+          }))
+          .filter((s: any) => s.items.length > 0)
+      : []
+  };
+
+  if (!result.summary && result.sections.length === 0) {
+    throw new Error("Invalid Output Schema");
+  }
+
+  if (userId) {
+    const saved = await saveGenericAnalysis(userId, module, inputs, result, scope);
+    if (saved && (saved as any).id) result.savedId = (saved as any).id;
+    // §39 Analysis notification (best-effort).
+    createNotification(userId, 'Analysis', 'Analysis complete', `Your ${module.replace(/_.*/, '')} analysis is ready to view.`);
+  }
   return result;
 };

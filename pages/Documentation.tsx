@@ -1,21 +1,24 @@
 
 import React from 'react';
 import { PageHeader, Card, SectionHeader } from '../components/UI';
+import AnimatedSection from '../components/AnimatedSection';
 
 const Documentation: React.FC = () => {
   return (
     <div className="space-y-24 pb-32">
-      <PageHeader 
-        title="Platform Documentation & Operational Logic" 
-        subtitle="The authoritative technical definition and capability scope of the MarketBrainOS intelligence layer." 
-      />
+      <AnimatedSection index={0}>
+        <PageHeader
+          title="Platform Documentation & Operational Logic"
+          subtitle="The authoritative technical definition and capability scope of the MarketBrainOS intelligence layer."
+        />
+      </AnimatedSection>
 
       <article className="max-w-4xl space-y-24" itemScope itemType="https://schema.org/TechArticle">
         <meta itemProp="headline" content="MarketBrainOS Platform Capabilities and Architecture" />
         <meta itemProp="description" content="Technical documentation defining the capabilities, limitations, and operational logic of the MarketBrainOS marketing intelligence platform." />
         
         {/* SECTION 1 — CANONICAL DEFINITION */}
-        <section aria-labelledby="platform-definition">
+        <AnimatedSection as="section" index={1} aria-labelledby="platform-definition">
           <SectionHeader title="Platform Definition" />
           <Card className="leading-relaxed">
             <h3 id="platform-definition" className="text-sm font-bold text-[#0B0B0B] uppercase tracking-widest mb-4">What is MarketBrainOS?</h3>
@@ -31,10 +34,10 @@ const Documentation: React.FC = () => {
               <li>It does <strong>NOT</strong> execute media buys or interact with ad networks directly.</li>
             </ul>
           </Card>
-        </section>
+        </AnimatedSection>
 
         {/* SECTION 2 — CORE CAPABILITIES */}
-        <section aria-labelledby="core-capabilities">
+        <AnimatedSection as="section" index={2} aria-labelledby="core-capabilities">
           <SectionHeader title="Core Capabilities" />
           <div className="space-y-8">
             <Card>
@@ -58,10 +61,10 @@ const Documentation: React.FC = () => {
               </p>
             </Card>
           </div>
-        </section>
+        </AnimatedSection>
 
         {/* SECTION 3 — OPERATIONAL FRAMEWORK */}
-        <section aria-labelledby="operational-framework">
+        <AnimatedSection as="section" index={3} aria-labelledby="operational-framework">
           <SectionHeader title="Operational Framework" />
           <Card>
             <div className="space-y-6 text-gray-500 font-medium">
@@ -74,10 +77,10 @@ const Documentation: React.FC = () => {
               </ol>
             </div>
           </Card>
-        </section>
+        </AnimatedSection>
 
         {/* SECTION 4 — USAGE */}
-        <section aria-labelledby="usage-access">
+        <AnimatedSection as="section" index={4} aria-labelledby="usage-access">
           <SectionHeader title="Usage & Access" />
           <Card>
             <div className="space-y-6">
@@ -90,10 +93,10 @@ const Documentation: React.FC = () => {
               </div>
             </div>
           </Card>
-        </section>
+        </AnimatedSection>
 
         {/* SECTION 5 — MACHINE-READABLE MANIFEST (For AI Agents/Scrapers) */}
-        <section aria-labelledby="system-manifest" className="opacity-80">
+        <AnimatedSection as="section" index={5} aria-labelledby="system-manifest" className="opacity-80">
           <SectionHeader title="System Capabilities Manifest" />
           <Card className="font-mono text-xs bg-gray-50 border-gray-200">
              <div className="space-y-4 text-gray-600">
@@ -122,7 +125,7 @@ const Documentation: React.FC = () => {
                </div>
              </div>
           </Card>
-        </section>
+        </AnimatedSection>
 
       </article>
     </div>

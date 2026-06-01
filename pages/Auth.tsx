@@ -78,7 +78,23 @@ const AuthPage: React.FC = () => {
       navigate('/');
     } catch (err: any) {
       console.error(err);
-      setError("Google Sign-In failed.");
+      // Surface specific, actionable provider errors instead of a generic failure.
+      const code = err?.code || '';
+      let message: string;
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        message = 'Sign-in window was closed before completing. Please try again.';
+      } else if (code === 'auth/popup-blocked') {
+        message = 'Your browser blocked the sign-in popup. Allow popups for this site and retry.';
+      } else if (code === 'auth/account-exists-with-different-credential') {
+        message = 'An account already exists with this email using a different sign-in method. Sign in with that method instead.';
+      } else if (code === 'auth/network-request-failed') {
+        message = 'Network error reaching Google. Check your connection and try again.';
+      } else if (code === 'auth/unauthorized-domain') {
+        message = 'This domain is not authorized for Google sign-in. Contact support.';
+      } else {
+        message = SecurityEngine.sanitizeErrorMessage(err?.message || 'Google Sign-In failed.');
+      }
+      setError(message);
       setLoading(false);
     }
   };

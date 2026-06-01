@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { 
+import AnimatedSection from '../components/AnimatedSection';
+import {
   PageHeader, 
   Card, 
   Input, 
@@ -196,12 +197,14 @@ const TestLabPro: React.FC = () => {
       />
 
       <div className="space-y-24">
-        <PageHeader 
-          title="TestLab Pro: Performance Simulation" 
-          subtitle="Simulate performance outcomes for headlines, hooks, and ad copy. Compare variations and predict the winning asset." 
-        />
+        <AnimatedSection index={0}>
+          <PageHeader
+            title="TestLab Pro: Performance Simulation"
+            subtitle="Simulate performance outcomes for headlines, hooks, and ad copy. Compare variations and predict the winning asset."
+          />
+        </AnimatedSection>
 
-        <div className="max-w-4xl mx-auto w-full">
+        <AnimatedSection index={1} className="max-w-4xl mx-auto w-full">
           <Card className="shadow-2xl">
             {error && <div className="mb-12"><ErrorMessage message={error} action={{ label: "Dismiss", onClick: () => setError(null) }} /></div>}
             
@@ -272,7 +275,7 @@ const TestLabPro: React.FC = () => {
               </div>
             </form>
           </Card>
-        </div>
+        </AnimatedSection>
 
         {loading && <LoadingState message="Predicting market performance..." isTakingLong={isTakingLong} onCancel={() => setLoading(false)} />}
 
