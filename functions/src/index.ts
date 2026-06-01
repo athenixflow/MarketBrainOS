@@ -1459,8 +1459,27 @@ export const manageEnterprise = functions.https.onCall(async (data: any, context
   if (action === 'link') {
     if (!entCanManage(member.role)) throw new functions.https.HttpsError('permission-denied', 'Insufficient role.');
     const updates: any = { updated_at: new Date().toISOString() };
-    if (Array.isArray(payload.linked_workspaces)) updates.linked_workspaces = payload.linked_workspaces;
-    if (Array.isArray(payload.linked_agencies)) updates.linked_agencies = payload.linked_agencies;
+    // IDOR guard: the linker must actually hold authority over each container they expose to
+    // the enterprise (owner/admin of a workspace; owner/director of an agency). Reject the
+    // whole call on any unauthorized id so a member can't aggregate another tenant's data.
+    if (Array.isArray(payload.linked_workspaces)) {
+      for (const wid of payload.linked_workspaces) {
+        const m = await getWorkspaceMemberDoc(String(wid), uid);
+        if (!m || (m.role !== 'owner' && m.role !== 'admin')) {
+          throw new functions.https.HttpsError('permission-denied', `Not authorized to link workspace ${wid}.`);
+        }
+      }
+      updates.linked_workspaces = payload.linked_workspaces;
+    }
+    if (Array.isArray(payload.linked_agencies)) {
+      for (const aId of payload.linked_agencies) {
+        const m = await getAgencyMemberDoc(String(aId), uid);
+        if (!m || (m.role !== 'agency_owner' && m.role !== 'agency_director')) {
+          throw new functions.https.HttpsError('permission-denied', `Not authorized to link agency ${aId}.`);
+        }
+      }
+      updates.linked_agencies = payload.linked_agencies;
+    }
     await entRef.update(updates);
     return { success: true };
   }
@@ -1617,6 +1636,7 @@ export const runEnterpriseAggregation = functions.https.onCall(async (data: any,
   const entSnap = await db.collection('enterprises').doc(eid).get();
   if (!entSnap.exists) throw new functions.https.HttpsError('not-found', 'Enterprise not found.');
   const ent = entSnap.data()!;
+  const ownerId = ent.owner_id;
   const linkedWorkspaces: string[] = ent.linked_workspaces || [];
 
   // Aggregate recent action_logs for the linked workspaces.
@@ -1624,6 +1644,10 @@ export const runEnterpriseAggregation = functions.https.onCall(async (data: any,
   const users = new Set<string>();
   let totalAnalyses = 0;
   for (const wid of linkedWorkspaces.slice(0, 50)) {
+    // Re-verify linkage authority at read time: the enterprise owner must still hold
+    // owner/admin membership of the workspace. A revoked link stops contributing data.
+    const ownerMember = await getWorkspaceMemberDoc(wid, ownerId);
+    if (!ownerMember || (ownerMember.role !== 'owner' && ownerMember.role !== 'admin')) continue;
     const logs = await db.collection('action_logs').where('workspace_id', '==', wid).limit(500).get();
     logs.forEach((d: any) => {
       const x = d.data();
