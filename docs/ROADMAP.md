@@ -187,22 +187,85 @@ and the org-section nav/dashboards (ship with their pages).
 **Deploy-time:** `firebase deploy --only firestore:rules` — **emulator/staging-test first** (see
 [OPERATIONS.md](./OPERATIONS.md)); rules replace the prior no-rules posture.
 
-### Phase 6.1 — Team Workspace ⛔ NEXT
-Collections `workspaces`/`workspace_members`/`workspace_activity`/`workspace_comments`/
-`workspace_permissions`; create-workspace + invite→accept (`manageWorkspace`/`manageMembership`), 5 roles,
-Team dashboard/members/shared-library/reports/settings/analytics/activity, Private↔Workspace visibility
-toggle on ToolPage, simulated **Team** tier + seats, scope-owner token deduction. (§79–80)
+### Phase 6.1 — Team Workspace ✅ COMPLETE (2026-06-01)
 
-### Phase 6.2 — Agency Client Manager ⛔
-Agencies as containers of client-workspaces (reuse 6.1 primitives scoped by `client_id`); `manageClient`;
-client directory/workspace/notes/assignments/analytics; client-level permissions; simulated **Agency**
-tier + client limits. (§81–82)
+Collaborative workspaces on the 6.0 spine (build green after each task):
+- **Data layer** — `Workspace`/`WorkspaceMember`/`WorkspaceInvitation`/`WorkspaceActivity`/
+  `WorkspaceComment` types; readers + comment/activity helpers + callable wrappers
+  ([services/persistenceService.ts](../services/persistenceService.ts), [types.ts](../types.ts)).
+- **Cloud Functions (deploy-time)** — `manageWorkspace` (create/update/archive/transfer) and
+  `manageMembership` (invite/accept/updateRole/remove/revoke), server role-checked, writing
+  `workspace_activity` ([functions/src/index.ts](../functions/src/index.ts)). Creating a workspace
+  **simulated-upgrades** Free/Pro → **Team** (+pooled token grant on the owner's wallet). `executeAnalysis`
+  now does **scope-owner billing**: team-scoped runs deduct from the owner's wallet (membership-verified)
+  and stamp `workspace_id`/`actor`/`billing_uid` on the action log. `firestore.rules` extended with
+  `workspace_invitations` (invitee-readable) + member-gated activity writes.
+- **UI** — [pages/TeamWorkspace.tsx](../pages/TeamWorkspace.tsx) container (create/upgrade pitch, pending-
+  invite acceptance, multi-workspace selector, tabs) + panels under [components/team/](../components/team/):
+  Overview (stats/activity/intelligence/quick-actions), Members (invite/role/remove via `can()`), Shared
+  Analysis Library (search/filter/sort/view) with **threaded comments** (add/reply/edit/delete), Reports,
+  Analytics, Activity feed, Settings (rename/archive/transfer). **Private↔Workspace toggle on ToolPage**
+  when in team scope. "Team Workspace" sidebar entry + `/team` route.
 
-### Phase 6.3 — Enterprise Analytics Suite ⛔
-Read-only aggregation layer; Enterprise Analytics Engine + AI Executive Insights/Briefings; departments/
-brands/forecasts/health-scores; simulated **Enterprise** tier. (§83–85)
+**Deploy-time:** `firebase deploy --only functions,firestore:rules` to activate `manageWorkspace`/
+`manageMembership` + the invitations rules. Email delivery of invites remains the §67 seam (invitees accept
+in-app). (§79–80)
+
+### Phase 6.2 — Agency Client Manager ✅ COMPLETE (2026-06-01)
+
+Multi-client management on the 6.0 spine, reusing 6.1 patterns (build green after each task):
+- **Data layer** — `Agency`/`AgencyClient`/`ClientAssignment`/`ClientNote`/`ClientActivity`/
+  `AgencyInvitation` types + readers (access-aware client loading) + note/activity helpers + callable
+  wrappers; `canAccessClient` in [services/permissionService.ts](../services/permissionService.ts).
+- **Cloud Functions (deploy-time)** — `manageAgency` (create/update/archive/transfer), `manageClient`
+  (create/update/archive/**assign/unassign**/tag), `manageAgencyMember` (invite/accept/role/remove)
+  ([functions/src/index.ts](../functions/src/index.ts)). Creating an agency simulated-upgrades →
+  **Agency** (+pooled tokens). `executeAnalysis` extended for **client-scope billing** (agency owner's
+  wallet; verifies agency membership + client assignment). `firestore.rules` enforce **strict per-client
+  isolation**: `canAccessClient(agency, client)` gates `agency_clients`/`client_*` reads and the `client`
+  visibility branch of `canSeeStamped` — a member sees only assigned clients (owners/directors see all).
+- **UI** — [pages/AgencyHub.tsx](../pages/AgencyHub.tsx) (create/upgrade, pending-invite accept, tabs:
+  Dashboard/Clients/Members/Analytics/Settings) + [components/agency/](../components/agency/): Agency
+  Dashboard (client-health/intelligence/quick-actions), Client Directory (search/filter/**add client**),
+  **Client Workspace** (Overview/Analyses/Notes/Activity/**Team assignments**/Settings with tags + archive
+  — sets `client` scope so analyses stay isolated), Agency Members (invite/role/remove), Agency Analytics.
+  "Agency Hub" sidebar entry (team-tier+ / agency members) + `/agency` route.
+
+**Deploy-time:** `firebase deploy --only functions,firestore:rules`. No cross-client data leakage
+(server-enforced). (§81–82)
+
+### Phase 6.3 — Enterprise Analytics Suite ✅ COMPLETE (2026-06-01)
+
+The top, **read-only aggregation** layer (build green after each task):
+- **Data layer** — `Enterprise`/`EnterpriseDepartment`/`EnterpriseBrand`/`EnterpriseHealthScore`/
+  `EnterpriseAnalyticsSnapshot`/`EnterpriseForecast`/`EnterpriseBriefing`/`EnterpriseInvitation` types +
+  readers (latest engine outputs) + callable wrappers ([services/persistenceService.ts](../services/persistenceService.ts)).
+- **Cloud Functions (deploy-time)** — `manageEnterprise` (create/update/archive/transfer/**link**),
+  `manageDepartment`, `manageBrand`, `manageEnterpriseMember`; **`runEnterpriseAggregation`** (the engine —
+  rolls up `action_logs` across linked workspaces + enterprise-visibility analyses into a 0–100 **health
+  score** + analytics snapshot + forecasts, never mutating source data); **`generateExecutiveBriefing`**
+  (Gemini synthesizes aggregates into wins/risks/opportunities/recommendations) ([functions/src/index.ts](../functions/src/index.ts)).
+  Creating an enterprise simulated-upgrades → **Enterprise** tier. `firestore.rules` member-gate all
+  `enterprise_*` reads + invitations.
+- **UI** — [pages/EnterpriseSuite.tsx](../pages/EnterpriseSuite.tsx) (create/upgrade, pending-invite accept,
+  tabs) + [components/enterprise/](../components/enterprise/): **Dashboard** (health-score gauge + exec
+  overview + Refresh Analytics), **Executive Intelligence Center** (opportunities/risks/recommendations +
+  forecasts), **Performance** (tool usage + departments/brands), **Briefings Center** (generate + read AI
+  briefings), **Structure** (departments/brands CRUD), **Members**, **Settings** (rename/archive/transfer +
+  link teams/agencies into the aggregation scope). "Enterprise Suite" sidebar entry + `/enterprise` route.
+
+**Deploy-time:** `firebase deploy --only functions,firestore:rules`. The analytics engine + AI briefings
+run server-side, so dashboards show empty/"run aggregation" states until deployed.
 
 **Satisfies:** §79–90. **Depends on:** Phases 0–5.
+
+---
+
+## Phase 6 — status: ✅ ALL LAYERS COMPLETE (foundation + Team + Agency + Enterprise)
+
+The full master plan is delivered: one unified platform with progressive unlocks (Free→Pro→Team→Agency→
+Enterprise), server-enforced isolation, simulated tier billing, and zero V1 regressions. Remaining PRD
+expansion items (white-label §84-ish, marketplace §86, AI model expansion §87, BI layer §88) are future.
 
 ---
 

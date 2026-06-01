@@ -35,7 +35,29 @@ import {
   VisibilityType,
   OwnershipStamp,
   UserMembership,
-  Report
+  Report,
+  Workspace,
+  WorkspaceMember,
+  WorkspaceActivity,
+  WorkspaceComment,
+  WorkspaceInvitation,
+  WorkspaceRole,
+  ActivityType,
+  Agency,
+  AgencyClient,
+  ClientAssignment,
+  ClientNote,
+  ClientActivity,
+  AgencyInvitation,
+  Enterprise,
+  EnterpriseDepartment,
+  EnterpriseBrand,
+  EnterpriseHealthScore,
+  EnterpriseAnalyticsSnapshot,
+  EnterpriseForecast,
+  EnterpriseBriefing,
+  EnterpriseInvitation,
+  BriefingPeriod
 } from '../types';
 import { SecurityEngine } from './securityEngine';
 
@@ -562,6 +584,389 @@ export const getUserMemberships = async (userId: string): Promise<UserMembership
     }
   }
   return out;
+};
+
+// ============================================================
+// PHASE 6.1 — TEAM WORKSPACE DATA LAYER
+// Privileged mutations (create workspace, invite/role/remove) go through Cloud Functions
+// (callables below); reads + collaborative writes (comments, activity) use the client SDK
+// under firestore.rules membership enforcement.
+// ============================================================
+
+export const getWorkspace = async (workspaceId: string): Promise<Workspace | null> => {
+  if (!isFirebaseInitialized || !workspaceId) return null;
+  try {
+    const snap = await getDoc(doc(db, 'workspaces', workspaceId));
+    return snap.exists() ? ({ id: snap.id, ...(snap.data() as any) } as Workspace) : null;
+  } catch (e) { console.error('Failed to load workspace', e); return null; }
+};
+
+export const getWorkspaceMembers = async (workspaceId: string): Promise<WorkspaceMember[]> => {
+  if (!isFirebaseInitialized || !workspaceId) return [];
+  try {
+    const snap = await getDocs(query(collection(db, 'workspace_members'), where('container_id', '==', workspaceId)));
+    return snap.docs
+      .map(d => ({ id: d.id, ...(d.data() as any) }) as WorkspaceMember)
+      .filter(m => m.status !== 'removed')
+      .sort((a, b) => (a.email || '').localeCompare(b.email || ''));
+  } catch (e) { console.error('Failed to load members', e); return []; }
+};
+
+export const getWorkspaceActivity = async (workspaceId: string, max = 50): Promise<WorkspaceActivity[]> => {
+  if (!isFirebaseInitialized || !workspaceId) return [];
+  try {
+    const snap = await getDocs(query(collection(db, 'workspace_activity'), where('workspace_id', '==', workspaceId)));
+    return snap.docs
+      .map(d => ({ id: d.id, ...(d.data() as any) }) as WorkspaceActivity)
+      .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+      .slice(0, max);
+  } catch (e) { console.error('Failed to load activity', e); return []; }
+};
+
+// Members log their own activity (rules permit create when actor_uid === auth.uid).
+export const logWorkspaceActivity = async (
+  workspaceId: string,
+  type: ActivityType,
+  actorUid: string,
+  actorName: string,
+  summary: string
+): Promise<void> => {
+  if (!isFirebaseInitialized || !workspaceId) return;
+  try {
+    await addDoc(collection(db, 'workspace_activity'), {
+      workspace_id: workspaceId, type, actor_uid: actorUid, actor_name: actorName,
+      summary, created_at: new Date().toISOString(),
+    });
+  } catch (e) { console.error('Failed to log activity', e); }
+};
+
+// --- Comments on shared analyses ---
+export const getAnalysisComments = async (workspaceId: string, analysisId: string): Promise<WorkspaceComment[]> => {
+  if (!isFirebaseInitialized) return [];
+  try {
+    const snap = await getDocs(query(
+      collection(db, 'workspace_comments'),
+      where('workspace_id', '==', workspaceId),
+      where('analysis_id', '==', analysisId),
+    ));
+    return snap.docs
+      .map(d => ({ id: d.id, ...(d.data() as any) }) as WorkspaceComment)
+      .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
+  } catch (e) { console.error('Failed to load comments', e); return []; }
+};
+
+export const createWorkspaceComment = async (
+  c: { workspace_id: string; analysis_id: string; parent_id?: string | null; author_uid: string; author_name?: string; content: string }
+): Promise<WorkspaceComment | null> => {
+  if (!isFirebaseInitialized) return null;
+  try {
+    const data = { ...c, parent_id: c.parent_id ?? null, created_at: new Date().toISOString() };
+    const ref = await addDoc(collection(db, 'workspace_comments'), data);
+    return { id: ref.id, ...data } as WorkspaceComment;
+  } catch (e) { console.error('Failed to add comment', e); return null; }
+};
+
+export const updateWorkspaceComment = async (id: string, content: string): Promise<void> => {
+  if (!isFirebaseInitialized) return;
+  try { await updateDoc(doc(db, 'workspace_comments', id), { content, updated_at: new Date().toISOString() }); }
+  catch (e) { console.error('Failed to edit comment', e); }
+};
+
+export const deleteWorkspaceComment = async (id: string): Promise<void> => {
+  if (!isFirebaseInitialized) return;
+  try { await deleteDoc(doc(db, 'workspace_comments', id)); } catch (e) { console.error('Failed to delete comment', e); }
+};
+
+// --- Invitations (the invitee sees pending invites on login and accepts) ---
+export const getPendingInvitations = async (email: string): Promise<WorkspaceInvitation[]> => {
+  if (!isFirebaseInitialized || !email) return [];
+  try {
+    const snap = await getDocs(query(
+      collection(db, 'workspace_invitations'),
+      where('email', '==', email.toLowerCase()),
+      where('status', '==', 'pending'),
+    ));
+    return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }) as WorkspaceInvitation);
+  } catch (e) { console.error('Failed to load invitations', e); return []; }
+};
+
+// --- Privileged mutations via Cloud Functions (server-enforced) ---
+export const callManageWorkspace = async (
+  action: 'create' | 'update' | 'delete' | 'transfer',
+  payload: any
+) => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  const fn = httpsCallable(functions, 'manageWorkspace');
+  try { return (await fn({ action, payload })).data as any; }
+  catch (error: any) { throw new Error(error.message || 'Workspace action failed.'); }
+};
+
+export const callManageMembership = async (
+  action: 'invite' | 'accept' | 'updateRole' | 'remove' | 'revoke',
+  payload: any
+) => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  const fn = httpsCallable(functions, 'manageMembership');
+  try { return (await fn({ action, payload })).data as any; }
+  catch (error: any) { throw new Error(error.message || 'Membership action failed.'); }
+};
+
+// ============================================================
+// PHASE 6.2 — AGENCY CLIENT MANAGER DATA LAYER
+// ============================================================
+
+export const getAgency = async (agencyId: string): Promise<Agency | null> => {
+  if (!isFirebaseInitialized || !agencyId) return null;
+  try {
+    const snap = await getDoc(doc(db, 'agencies', agencyId));
+    return snap.exists() ? ({ id: snap.id, ...(snap.data() as any) } as Agency) : null;
+  } catch (e) { console.error('Failed to load agency', e); return null; }
+};
+
+export const getAgencyClients = async (agencyId: string): Promise<AgencyClient[]> => {
+  if (!isFirebaseInitialized || !agencyId) return [];
+  try {
+    const snap = await getDocs(query(collection(db, 'agency_clients'), where('agency_id', '==', agencyId)));
+    return snap.docs
+      .map(d => ({ id: d.id, ...(d.data() as any) }) as AgencyClient)
+      .filter(c => c.status !== 'archived')
+      .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  } catch (e) { console.error('Failed to load clients', e); return []; }
+};
+
+export const getClient = async (clientId: string): Promise<AgencyClient | null> => {
+  if (!isFirebaseInitialized || !clientId) return null;
+  try {
+    const snap = await getDoc(doc(db, 'agency_clients', clientId));
+    return snap.exists() ? ({ id: snap.id, ...(snap.data() as any) } as AgencyClient) : null;
+  } catch (e) { console.error('Failed to load client', e); return null; }
+};
+
+export const getClientAssignments = async (clientId: string): Promise<ClientAssignment[]> => {
+  if (!isFirebaseInitialized || !clientId) return [];
+  try {
+    const snap = await getDocs(query(collection(db, 'client_assignments'), where('client_id', '==', clientId)));
+    return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }) as ClientAssignment);
+  } catch (e) { console.error('Failed to load assignments', e); return []; }
+};
+
+// Clients the current user is explicitly assigned to (for access filtering in the directory).
+export const getUserClientAssignments = async (uid: string): Promise<ClientAssignment[]> => {
+  if (!isFirebaseInitialized || !uid) return [];
+  try {
+    const snap = await getDocs(query(collection(db, 'client_assignments'), where('uid', '==', uid)));
+    return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }) as ClientAssignment);
+  } catch (e) { console.error('Failed to load my assignments', e); return []; }
+};
+
+export const getAgencyMembers = async (agencyId: string): Promise<WorkspaceMember[]> => {
+  if (!isFirebaseInitialized || !agencyId) return [];
+  try {
+    const snap = await getDocs(query(collection(db, 'agency_members'), where('container_id', '==', agencyId)));
+    return snap.docs
+      .map(d => ({ id: d.id, ...(d.data() as any) }) as WorkspaceMember)
+      .filter(m => m.status !== 'removed')
+      .sort((a, b) => (a.email || '').localeCompare(b.email || ''));
+  } catch (e) { console.error('Failed to load agency members', e); return []; }
+};
+
+// --- Client notes ---
+export const getClientNotes = async (clientId: string): Promise<ClientNote[]> => {
+  if (!isFirebaseInitialized || !clientId) return [];
+  try {
+    const snap = await getDocs(query(collection(db, 'client_notes'), where('client_id', '==', clientId)));
+    return snap.docs
+      .map(d => ({ id: d.id, ...(d.data() as any) }) as ClientNote)
+      .sort((a, b) => (Number(b.pinned) - Number(a.pinned)) || (new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()));
+  } catch (e) { console.error('Failed to load notes', e); return []; }
+};
+
+export const createClientNote = async (
+  n: { client_id: string; agency_id: string; author_uid: string; author_name?: string; content: string; tags?: string[] }
+): Promise<ClientNote | null> => {
+  if (!isFirebaseInitialized) return null;
+  try {
+    const data = { ...n, pinned: false, created_at: new Date().toISOString() };
+    const ref = await addDoc(collection(db, 'client_notes'), data);
+    return { id: ref.id, ...data } as ClientNote;
+  } catch (e) { console.error('Failed to add note', e); return null; }
+};
+
+export const updateClientNote = async (id: string, patch: Partial<Pick<ClientNote, 'content' | 'pinned' | 'tags'>>): Promise<void> => {
+  if (!isFirebaseInitialized) return;
+  try { await updateDoc(doc(db, 'client_notes', id), { ...patch, updated_at: new Date().toISOString() }); }
+  catch (e) { console.error('Failed to update note', e); }
+};
+
+export const deleteClientNote = async (id: string): Promise<void> => {
+  if (!isFirebaseInitialized) return;
+  try { await deleteDoc(doc(db, 'client_notes', id)); } catch (e) { console.error('Failed to delete note', e); }
+};
+
+// --- Client activity ---
+export const getClientActivity = async (clientId: string, max = 50): Promise<ClientActivity[]> => {
+  if (!isFirebaseInitialized || !clientId) return [];
+  try {
+    const snap = await getDocs(query(collection(db, 'client_activity'), where('client_id', '==', clientId)));
+    return snap.docs
+      .map(d => ({ id: d.id, ...(d.data() as any) }) as ClientActivity)
+      .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+      .slice(0, max);
+  } catch (e) { console.error('Failed to load client activity', e); return []; }
+};
+
+export const logClientActivity = async (
+  clientId: string, agencyId: string, type: string, actorUid: string, actorName: string, summary: string
+): Promise<void> => {
+  if (!isFirebaseInitialized || !clientId) return;
+  try {
+    await addDoc(collection(db, 'client_activity'), {
+      client_id: clientId, agency_id: agencyId, type, actor_uid: actorUid, actor_name: actorName,
+      summary, created_at: new Date().toISOString(),
+    });
+  } catch (e) { console.error('Failed to log client activity', e); }
+};
+
+export const getAgencyInvitations = async (email: string): Promise<AgencyInvitation[]> => {
+  if (!isFirebaseInitialized || !email) return [];
+  try {
+    const snap = await getDocs(query(
+      collection(db, 'agency_invitations'),
+      where('email', '==', email.toLowerCase()),
+      where('status', '==', 'pending'),
+    ));
+    return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }) as AgencyInvitation);
+  } catch (e) { console.error('Failed to load agency invitations', e); return []; }
+};
+
+// --- Privileged mutations via Cloud Functions ---
+export const callManageAgency = async (action: 'create' | 'update' | 'archive' | 'transfer', payload: any) => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  const fn = httpsCallable(functions, 'manageAgency');
+  try { return (await fn({ action, payload })).data as any; }
+  catch (error: any) { throw new Error(error.message || 'Agency action failed.'); }
+};
+
+export const callManageClient = async (
+  action: 'create' | 'update' | 'archive' | 'assign' | 'unassign' | 'tag',
+  payload: any
+) => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  const fn = httpsCallable(functions, 'manageClient');
+  try { return (await fn({ action, payload })).data as any; }
+  catch (error: any) { throw new Error(error.message || 'Client action failed.'); }
+};
+
+export const callManageAgencyMember = async (
+  action: 'invite' | 'accept' | 'updateRole' | 'remove' | 'revoke',
+  payload: any
+) => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  const fn = httpsCallable(functions, 'manageAgencyMember');
+  try { return (await fn({ action, payload })).data as any; }
+  catch (error: any) { throw new Error(error.message || 'Agency membership action failed.'); }
+};
+
+// ============================================================
+// PHASE 6.3 — ENTERPRISE ANALYTICS SUITE DATA LAYER
+// UI reads engine-produced aggregates (health/analytics/forecast/briefing); never raw data.
+// ============================================================
+
+export const getEnterprise = async (id: string): Promise<Enterprise | null> => {
+  if (!isFirebaseInitialized || !id) return null;
+  try { const s = await getDoc(doc(db, 'enterprises', id)); return s.exists() ? ({ id: s.id, ...(s.data() as any) } as Enterprise) : null; }
+  catch (e) { console.error('Failed to load enterprise', e); return null; }
+};
+
+export const getEnterpriseMembers = async (enterpriseId: string): Promise<WorkspaceMember[]> => {
+  if (!isFirebaseInitialized || !enterpriseId) return [];
+  try {
+    const snap = await getDocs(query(collection(db, 'enterprise_members'), where('container_id', '==', enterpriseId)));
+    return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }) as WorkspaceMember).filter(m => m.status !== 'removed');
+  } catch (e) { console.error('Failed to load enterprise members', e); return []; }
+};
+
+export const getEnterpriseDepartments = async (enterpriseId: string): Promise<EnterpriseDepartment[]> => {
+  if (!isFirebaseInitialized || !enterpriseId) return [];
+  try { const s = await getDocs(query(collection(db, 'enterprise_departments'), where('enterprise_id', '==', enterpriseId))); return s.docs.map(d => ({ id: d.id, ...(d.data() as any) })); }
+  catch (e) { console.error(e); return []; }
+};
+
+export const getEnterpriseBrands = async (enterpriseId: string): Promise<EnterpriseBrand[]> => {
+  if (!isFirebaseInitialized || !enterpriseId) return [];
+  try { const s = await getDocs(query(collection(db, 'enterprise_brands'), where('enterprise_id', '==', enterpriseId))); return s.docs.map(d => ({ id: d.id, ...(d.data() as any) })); }
+  catch (e) { console.error(e); return []; }
+};
+
+// Latest engine outputs (sorted client-side, newest first).
+const latestDoc = async <T,>(coll: string, enterpriseId: string): Promise<T | null> => {
+  if (!isFirebaseInitialized) return null;
+  try {
+    const s = await getDocs(query(collection(db, coll), where('enterprise_id', '==', enterpriseId)));
+    const rows = s.docs.map(d => ({ id: d.id, ...(d.data() as any) }))
+      .sort((a: any, b: any) => new Date(b.computed_at || b.created_at || 0).getTime() - new Date(a.computed_at || a.created_at || 0).getTime());
+    return (rows[0] as T) || null;
+  } catch (e) { console.error(`Failed to read ${coll}`, e); return null; }
+};
+
+export const getLatestHealthScore = (eid: string) => latestDoc<EnterpriseHealthScore>('enterprise_health_scores', eid);
+export const getLatestAnalyticsSnapshot = (eid: string) => latestDoc<EnterpriseAnalyticsSnapshot>('enterprise_analytics', eid);
+
+export const getEnterpriseForecasts = async (enterpriseId: string): Promise<EnterpriseForecast[]> => {
+  if (!isFirebaseInitialized || !enterpriseId) return [];
+  try { const s = await getDocs(query(collection(db, 'enterprise_forecasts'), where('enterprise_id', '==', enterpriseId))); return s.docs.map(d => ({ id: d.id, ...(d.data() as any) })); }
+  catch (e) { console.error(e); return []; }
+};
+
+export const getEnterpriseBriefings = async (enterpriseId: string): Promise<EnterpriseBriefing[]> => {
+  if (!isFirebaseInitialized || !enterpriseId) return [];
+  try {
+    const s = await getDocs(query(collection(db, 'enterprise_briefings'), where('enterprise_id', '==', enterpriseId)));
+    return s.docs.map(d => ({ id: d.id, ...(d.data() as any) }) as EnterpriseBriefing)
+      .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+  } catch (e) { console.error(e); return []; }
+};
+
+export const getEnterpriseInvitations = async (email: string): Promise<EnterpriseInvitation[]> => {
+  if (!isFirebaseInitialized || !email) return [];
+  try {
+    const s = await getDocs(query(collection(db, 'enterprise_invitations'), where('email', '==', email.toLowerCase()), where('status', '==', 'pending')));
+    return s.docs.map(d => ({ id: d.id, ...(d.data() as any) }) as EnterpriseInvitation);
+  } catch (e) { console.error(e); return []; }
+};
+
+// --- Privileged mutations + engine triggers via Cloud Functions ---
+export const callManageEnterprise = async (action: 'create' | 'update' | 'archive' | 'transfer' | 'link', payload: any) => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  try { return (await httpsCallable(functions, 'manageEnterprise')({ action, payload })).data as any; }
+  catch (error: any) { throw new Error(error.message || 'Enterprise action failed.'); }
+};
+export const callManageDepartment = async (action: 'create' | 'update' | 'delete', payload: any) => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  try { return (await httpsCallable(functions, 'manageDepartment')({ action, payload })).data as any; }
+  catch (error: any) { throw new Error(error.message || 'Department action failed.'); }
+};
+export const callManageBrand = async (action: 'create' | 'update' | 'delete', payload: any) => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  try { return (await httpsCallable(functions, 'manageBrand')({ action, payload })).data as any; }
+  catch (error: any) { throw new Error(error.message || 'Brand action failed.'); }
+};
+export const callManageEnterpriseMember = async (action: 'invite' | 'accept' | 'updateRole' | 'remove' | 'revoke', payload: any) => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  try { return (await httpsCallable(functions, 'manageEnterpriseMember')({ action, payload })).data as any; }
+  catch (error: any) { throw new Error(error.message || 'Enterprise membership action failed.'); }
+};
+// Engine: recompute aggregates/health (server-side, Admin SDK). Deploy-time.
+export const callRunEnterpriseAggregation = async (enterpriseId: string) => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  try { return (await httpsCallable(functions, 'runEnterpriseAggregation')({ enterpriseId })).data as any; }
+  catch (error: any) { throw new Error(error.message || 'Aggregation failed.'); }
+};
+// AI Executive Insights: generate a briefing for a period (server-side Gemini). Deploy-time.
+export const callGenerateExecutiveBriefing = async (enterpriseId: string, period: BriefingPeriod) => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  try { return (await httpsCallable(functions, 'generateExecutiveBriefing')({ enterpriseId, period })).data as any; }
+  catch (error: any) { throw new Error(error.message || 'Briefing generation failed.'); }
 };
 
 // --- NOTIFICATIONS (§39) ---

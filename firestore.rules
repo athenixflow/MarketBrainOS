@@ -46,11 +46,27 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/enterprise_members/$(eid + '_' + request.auth.uid));
     }
 
+    // Agency client-level access (Phase 6.2): owner/director see all clients; others only
+    // the clients they are assigned to (client_assignments doc id `${cid}_${uid}`).
+    function agencyRole(aid) {
+      return get(/databases/$(database)/documents/agency_members/$(aid + '_' + request.auth.uid)).data.role;
+    }
+    function isAgencyManagerPlus(aid) {
+      return isAgencyMember(aid) && (agencyRole(aid) == 'agency_owner' || agencyRole(aid) == 'agency_director');
+    }
+    function isAssignedToClient(cid) {
+      return isSignedIn() && cid != null
+        && exists(/databases/$(database)/documents/client_assignments/$(cid + '_' + request.auth.uid));
+    }
+    function canAccessClient(aid, cid) {
+      return isAgencyMember(aid) && (isAgencyManagerPlus(aid) || isAssignedToClient(cid));
+    }
+
     // Can the requester see a stamped doc (analysis/report) under visibility rules?
     function canSeeStamped(d) {
       return (d.creator_user_id == request.auth.uid || d.user_id == request.auth.uid)
         || (d.visibility_type == 'team' && isWorkspaceMember(d.workspace_id))
-        || (d.visibility_type == 'client' && isAgencyMember(d.agency_id))
+        || (d.visibility_type == 'client' && canAccessClient(d.agency_id, d.client_id))
         || (d.visibility_type == 'enterprise' && isEnterpriseMember(d.enterprise_id));
     }
 
@@ -142,11 +158,25 @@ service cloud.firestore {
       allow write: if false;
     }
     match /workspace_members/{id} {
-      allow read:  if isSignedIn();   // members list visible to authenticated app; UI filters
+      // Readable only by members of the same workspace (member docs carry emails).
+      allow read:  if isWorkspaceMember(resource.data.container_id) || isPlatformAdmin();
       allow write: if false;
     }
     match /workspace_permissions/{id} { allow read: if isSignedIn(); allow write: if false; }
-    match /workspace_activity/{id}    { allow read: if isSignedIn(); allow write: if false; }
+    // Members log their own activity (actor_uid must be the caller); immutable thereafter.
+    match /workspace_activity/{id} {
+      allow read:   if isSignedIn();
+      allow create: if isWorkspaceMember(request.resource.data.workspace_id)
+                    && request.resource.data.actor_uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+    // Invitations: the invitee may read invites addressed to their email; all writes go
+    // through the manageMembership callable (invite / accept / revoke).
+    match /workspace_invitations/{id} {
+      allow read:  if isSignedIn()
+        && (resource.data.email == request.auth.token.email || isPlatformAdmin());
+      allow write: if false;
+    }
     match /workspace_comments/{id} {
       allow read:   if isWorkspaceMember(resource.data.workspace_id) || isPlatformAdmin();
       allow create: if isWorkspaceMember(request.resource.data.workspace_id)
@@ -155,28 +185,48 @@ service cloud.firestore {
     }
 
     match /agencies/{aid}        { allow read: if isAgencyMember(aid) || isPlatformAdmin(); allow write: if false; }
-    match /agency_members/{id}   { allow read: if isSignedIn(); allow write: if false; }
-    match /agency_clients/{id}   { allow read: if isSignedIn(); allow write: if false; }
+    match /agency_members/{id}   { allow read: if isAgencyMember(resource.data.container_id) || isPlatformAdmin(); allow write: if false; }
+    // A client is visible to owner/director or members assigned to it.
+    match /agency_clients/{cid}  { allow read: if canAccessClient(resource.data.agency_id, cid) || isPlatformAdmin(); allow write: if false; }
     match /client_workspaces/{id}{ allow read: if isSignedIn(); allow write: if false; }
-    match /client_assignments/{id}{ allow read: if isSignedIn(); allow write: if false; }
-    match /client_activity/{id}  { allow read: if isSignedIn(); allow write: if false; }
-    match /client_reports/{id}   { allow read: if isSignedIn(); allow write: if false; }
+    match /client_assignments/{id} {
+      allow read:  if isSignedIn()
+        && (resource.data.uid == request.auth.uid
+            || canAccessClient(resource.data.agency_id, resource.data.client_id)
+            || isPlatformAdmin());
+      allow write: if false;
+    }
+    match /client_activity/{id} {
+      allow read:   if canAccessClient(resource.data.agency_id, resource.data.client_id) || isPlatformAdmin();
+      allow create: if canAccessClient(request.resource.data.agency_id, request.resource.data.client_id)
+                    && request.resource.data.actor_uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+    match /client_reports/{id}   { allow read: if canAccessClient(resource.data.agency_id, resource.data.client_id) || isPlatformAdmin(); allow write: if false; }
+    match /agency_invitations/{id} {
+      allow read:  if isSignedIn() && (resource.data.email == request.auth.token.email || isPlatformAdmin());
+      allow write: if false;
+    }
     match /client_notes/{id} {
-      allow read:   if isAgencyMember(resource.data.agency_id) || isPlatformAdmin();
-      allow create: if isAgencyMember(request.resource.data.agency_id)
+      allow read:   if canAccessClient(resource.data.agency_id, resource.data.client_id) || isPlatformAdmin();
+      allow create: if canAccessClient(request.resource.data.agency_id, request.resource.data.client_id)
                     && request.resource.data.author_uid == request.auth.uid;
       allow update, delete: if isSignedIn() && resource.data.author_uid == request.auth.uid;
     }
 
     match /enterprises/{eid}            { allow read: if isEnterpriseMember(eid) || isPlatformAdmin(); allow write: if false; }
-    match /enterprise_members/{id}      { allow read: if isSignedIn(); allow write: if false; }
-    match /enterprise_departments/{id}  { allow read: if isSignedIn(); allow write: if false; }
-    match /enterprise_brands/{id}       { allow read: if isSignedIn(); allow write: if false; }
-    match /enterprise_reports/{id}      { allow read: if isSignedIn(); allow write: if false; }
-    match /enterprise_briefings/{id}    { allow read: if isSignedIn(); allow write: if false; }
-    match /enterprise_forecasts/{id}    { allow read: if isSignedIn(); allow write: if false; }
-    match /enterprise_analytics/{id}    { allow read: if isSignedIn(); allow write: if false; }
-    match /enterprise_health_scores/{id}{ allow read: if isSignedIn(); allow write: if false; }
+    match /enterprise_members/{id}      { allow read: if isEnterpriseMember(resource.data.container_id) || isPlatformAdmin(); allow write: if false; }
+    match /enterprise_departments/{id}  { allow read: if isEnterpriseMember(resource.data.enterprise_id) || isPlatformAdmin(); allow write: if false; }
+    match /enterprise_brands/{id}       { allow read: if isEnterpriseMember(resource.data.enterprise_id) || isPlatformAdmin(); allow write: if false; }
+    match /enterprise_reports/{id}      { allow read: if isEnterpriseMember(resource.data.enterprise_id) || isPlatformAdmin(); allow write: if false; }
+    match /enterprise_briefings/{id}    { allow read: if isEnterpriseMember(resource.data.enterprise_id) || isPlatformAdmin(); allow write: if false; }
+    match /enterprise_forecasts/{id}    { allow read: if isEnterpriseMember(resource.data.enterprise_id) || isPlatformAdmin(); allow write: if false; }
+    match /enterprise_analytics/{id}    { allow read: if isEnterpriseMember(resource.data.enterprise_id) || isPlatformAdmin(); allow write: if false; }
+    match /enterprise_health_scores/{id}{ allow read: if isEnterpriseMember(resource.data.enterprise_id) || isPlatformAdmin(); allow write: if false; }
+    match /enterprise_invitations/{id} {
+      allow read:  if isSignedIn() && (resource.data.email == request.auth.token.email || isPlatformAdmin());
+      allow write: if false;
+    }
 
     // ---------- V1 bespoke-tool result collections (creator-owned) ----------
     match /angleminer_results/{id}        { allow read, write: if isSignedIn() && (resource == null || resource.data.user_id == request.auth.uid); }

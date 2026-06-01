@@ -121,6 +121,17 @@ export const can = (action: PermissionAction, membership?: Membership | null): b
   }
 };
 
+// Agency client-level access (Phase 6.2): owners/directors see every client; everyone else
+// only the clients they are explicitly assigned to (via client_assignments).
+export const canAccessClient = (
+  agencyRole: AgencyRole | undefined,
+  hasAssignment: boolean
+): boolean => {
+  if (!agencyRole) return false;
+  if (agencyRole === 'agency_owner' || agencyRole === 'agency_director') return true;
+  return hasAssignment;
+};
+
 /** All actions a membership grants (handy for UI gating / debugging). */
 export const permissionsFor = (membership?: Membership | null): PermissionAction[] => {
   if (!membership) return [];

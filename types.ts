@@ -83,6 +83,267 @@ export interface UserMembership {
   agencyId?: string;
 }
 
+// --- PHASE 6.1: TEAM WORKSPACE ---
+
+export interface Workspace {
+  id: string;
+  name: string;
+  description?: string;
+  logo?: string;            // data URL or hosted URL (optional)
+  owner_id: string;
+  status: 'active' | 'archived';
+  member_count?: number;
+  created_at: string;
+  updated_at?: string;
+}
+
+// Membership record. Doc id convention: `${container_id}_${uid}` (firestore.rules depend
+// on this). `container_id`/`name`/`role`/`status` are the generic fields read by
+// getUserMemberships across all org layers.
+// Generic membership record across all org layers (workspace/agency/enterprise). Doc id
+// convention: `${container_id}_${uid}`. `role` spans the families so the same shape and
+// readers serve every layer.
+export interface WorkspaceMember {
+  id: string;
+  uid: string;
+  container_id: string;     // = workspace / agency / enterprise id
+  name?: string;            // denormalized container name (cheap membership reads)
+  email: string;
+  role: WorkspaceRole | AgencyRole | EnterpriseRole;
+  status: 'active' | 'invited' | 'removed';
+  joined_at?: string;
+  last_active?: string;
+}
+
+export interface WorkspaceInvitation {
+  id: string;
+  workspace_id: string;
+  workspace_name: string;
+  email: string;
+  role: WorkspaceRole;
+  invited_by: string;       // uid of inviter
+  status: 'pending' | 'accepted' | 'revoked';
+  created_at: string;
+}
+
+export type ActivityType =
+  | 'workspace_created'
+  | 'analysis_created'
+  | 'report_generated'
+  | 'member_added'
+  | 'member_removed'
+  | 'role_changed'
+  | 'comment_added'
+  | 'settings_updated';
+
+export interface WorkspaceActivity {
+  id: string;
+  workspace_id: string;
+  type: ActivityType;
+  actor_uid: string;
+  actor_name?: string;
+  summary: string;
+  created_at: string;       // ISO
+}
+
+export interface WorkspaceComment {
+  id: string;
+  workspace_id: string;
+  analysis_id: string;
+  parent_id?: string | null; // set for replies
+  author_uid: string;
+  author_name?: string;
+  content: string;
+  created_at: string;       // ISO
+  updated_at?: string;
+}
+
+// --- PHASE 6.2: AGENCY CLIENT MANAGER ---
+// An Agency contains Clients. Each client's intelligence is isolated via the `client`
+// visibility/scope from Phase 6.0 (analyses stamp client_id + agency_id). Agency members
+// access a client only when they are the owner/director OR assigned to it.
+
+export type AgencyClientStatus = 'active' | 'growing' | 'at_risk' | 'inactive' | 'archived';
+export type ClientAssignmentRole = 'account_manager' | 'strategist' | 'analyst' | 'support';
+
+export interface Agency {
+  id: string;
+  name: string;
+  description?: string;
+  logo?: string;
+  owner_id: string;
+  status: 'active' | 'archived';
+  client_count?: number;
+  member_count?: number;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface AgencyClient {
+  id: string;
+  agency_id: string;
+  name: string;
+  industry?: string;
+  website?: string;
+  description?: string;
+  primary_contact?: string;
+  email?: string;
+  phone?: string;
+  status: AgencyClientStatus;
+  tags?: string[];
+  analysis_count?: number;
+  last_activity?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+// Doc id convention: `${client_id}_${uid}` (firestore.rules depends on it).
+export interface ClientAssignment {
+  id: string;
+  client_id: string;
+  agency_id: string;
+  uid: string;
+  email: string;
+  assignment_role: ClientAssignmentRole;
+  created_at: string;
+}
+
+export interface ClientNote {
+  id: string;
+  client_id: string;
+  agency_id: string;
+  author_uid: string;
+  author_name?: string;
+  content: string;
+  pinned?: boolean;
+  tags?: string[];
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface ClientActivity {
+  id: string;
+  client_id: string;
+  agency_id: string;
+  type: string;             // client_created | analysis_created | note_added | member_assigned | ...
+  actor_uid: string;
+  actor_name?: string;
+  summary: string;
+  created_at: string;
+}
+
+export interface AgencyInvitation {
+  id: string;
+  agency_id: string;
+  agency_name: string;
+  email: string;
+  role: AgencyRole;
+  invited_by: string;
+  status: 'pending' | 'accepted' | 'revoked';
+  created_at: string;
+}
+
+// --- PHASE 6.3: ENTERPRISE ANALYTICS SUITE ---
+// The highest layer. READ-ONLY aggregation: it summarizes intelligence across teams/agencies
+// but NEVER mutates underlying analyses/reports. The Enterprise Analytics Engine (server)
+// writes the snapshot/health/forecast/briefing docs the UI reads.
+
+export type EnterpriseHealthBand = 'critical' | 'weak' | 'stable' | 'strong' | 'excellent';
+export type BriefingPeriod = 'weekly' | 'monthly' | 'quarterly' | 'annual';
+
+export interface Enterprise {
+  id: string;
+  name: string;
+  description?: string;
+  logo?: string;
+  owner_id: string;
+  status: 'active' | 'archived';
+  member_count?: number;
+  department_count?: number;
+  brand_count?: number;
+  // Containers the enterprise aggregates over (registered by the owner).
+  linked_workspaces?: string[];
+  linked_agencies?: string[];
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface EnterpriseDepartment {
+  id: string;
+  enterprise_id: string;
+  name: string;
+  type?: string;            // Marketing | Sales | Operations | Strategy | Product | ...
+  linked_workspaces?: string[];
+  linked_agencies?: string[];
+  created_at: string;
+}
+
+export interface EnterpriseBrand {
+  id: string;
+  enterprise_id: string;
+  name: string;
+  description?: string;
+  linked_workspaces?: string[];
+  linked_agencies?: string[];
+  created_at: string;
+}
+
+// Engine outputs (server-written; UI reads these, never raw cross-tenant data).
+export interface EnterpriseHealthScore {
+  id: string;
+  enterprise_id: string;
+  score: number;            // 0–100
+  band: EnterpriseHealthBand;
+  signals: { label: string; value: number }[];
+  computed_at: string;
+}
+
+export interface EnterpriseAnalyticsSnapshot {
+  id: string;
+  enterprise_id: string;
+  total_analyses: number;
+  total_reports: number;
+  active_users: number;
+  by_module: { module: string; count: number }[];
+  by_department?: { department: string; count: number }[];
+  computed_at: string;
+}
+
+export interface EnterpriseForecast {
+  id: string;
+  enterprise_id: string;
+  type: string;             // revenue | growth | activity | expansion
+  label: string;
+  projection: string;       // human-readable projection
+  trend: 'up' | 'flat' | 'down';
+  computed_at: string;
+}
+
+export interface EnterpriseBriefing {
+  id: string;
+  enterprise_id: string;
+  period: BriefingPeriod;
+  title: string;
+  summary: string;
+  wins: string[];
+  risks: string[];
+  opportunities: string[];
+  recommendations: string[];
+  created_at: string;
+  created_by: string;
+}
+
+export interface EnterpriseInvitation {
+  id: string;
+  enterprise_id: string;
+  enterprise_name: string;
+  email: string;
+  role: EnterpriseRole;
+  invited_by: string;
+  status: 'pending' | 'accepted' | 'revoked';
+  created_at: string;
+}
+
 export type PermissionScope = 
   | 'analysis:execute' 
   | 'audit:execute' 

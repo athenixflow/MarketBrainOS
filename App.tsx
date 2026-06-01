@@ -18,8 +18,11 @@ const About = lazy(() => import('./pages/About'));
 const FAQ = lazy(() => import('./pages/FAQ'));
 const ToolPage = lazy(() => import('./components/ToolPage'));
 const History = lazy(() => import('./pages/History'));
+const TeamWorkspace = lazy(() => import('./pages/TeamWorkspace'));
+const AgencyHub = lazy(() => import('./pages/AgencyHub'));
+const EnterpriseSuite = lazy(() => import('./pages/EnterpriseSuite'));
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { ScopeProvider } from './context/ScopeContext';
+import { ScopeProvider, useScope } from './context/ScopeContext';
 import { Honeypot, LoadingState } from './components/UI';
 import { SecurityEngine } from './services/securityEngine';
 import OnboardingOverlay from './components/OnboardingOverlay';
@@ -35,6 +38,7 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const location = useLocation();
   const { profile } = useAuth();
+  const { memberships } = useScope();
   
   const isAdminRole = profile?.role === 'super_admin' || profile?.role === 'ops_admin';
   // STRICT CHECK: Only show admin layout if user is actually an admin
@@ -145,6 +149,57 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               >
                 <div className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${isActive ? 'bg-[#FF0000]' : 'bg-transparent group-hover:bg-gray-800'}`} />
                 History
+              </Link>
+            );
+          })()}
+
+          {/* Team Workspace (Phase 6.1) — gateway for all users; upgrades on first create */}
+          {(() => {
+            const isActive = location.pathname === '/team';
+            return (
+              <Link
+                to="/team"
+                onClick={onClose}
+                className={`flex items-center gap-5 px-6 py-5 text-[13px] font-bold tracking-widest uppercase rounded-2xl transition-all duration-500 mb-4 lg:mb-3 group ${
+                  isActive ? 'bg-[#121212] text-white shadow-lg shadow-black/20' : 'text-gray-500 hover:text-white'
+                }`}
+              >
+                <div className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${isActive ? 'bg-[#FF0000]' : 'bg-transparent group-hover:bg-gray-800'}`} />
+                Team Workspace
+              </Link>
+            );
+          })()}
+
+          {/* Agency Hub (Phase 6.2) — shown to agency-tier users and agency members */}
+          {(profile?.tier === 'team' || profile?.tier === 'agency' || profile?.tier === 'enterprise' || memberships.some(m => m.family === 'agency')) && (() => {
+            const isActive = location.pathname === '/agency';
+            return (
+              <Link
+                to="/agency"
+                onClick={onClose}
+                className={`flex items-center gap-5 px-6 py-5 text-[13px] font-bold tracking-widest uppercase rounded-2xl transition-all duration-500 mb-4 lg:mb-3 group ${
+                  isActive ? 'bg-[#121212] text-white shadow-lg shadow-black/20' : 'text-gray-500 hover:text-white'
+                }`}
+              >
+                <div className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${isActive ? 'bg-[#FF0000]' : 'bg-transparent group-hover:bg-gray-800'}`} />
+                Agency Hub
+              </Link>
+            );
+          })()}
+
+          {/* Enterprise Suite (Phase 6.3) — shown to enterprise-tier users and enterprise members */}
+          {(profile?.tier === 'enterprise' || profile?.tier === 'agency' || memberships.some(m => m.family === 'enterprise')) && (() => {
+            const isActive = location.pathname === '/enterprise';
+            return (
+              <Link
+                to="/enterprise"
+                onClick={onClose}
+                className={`flex items-center gap-5 px-6 py-5 text-[13px] font-bold tracking-widest uppercase rounded-2xl transition-all duration-500 mb-4 lg:mb-3 group ${
+                  isActive ? 'bg-[#121212] text-white shadow-lg shadow-black/20' : 'text-gray-500 hover:text-white'
+                }`}
+              >
+                <div className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${isActive ? 'bg-[#FF0000]' : 'bg-transparent group-hover:bg-gray-800'}`} />
+                Enterprise Suite
               </Link>
             );
           })()}
@@ -298,6 +353,9 @@ const AppRoutes: React.FC = () => {
       
       {/* Protected Routes */}
       <Route path="/history" element={user ? <History /> : <Navigate to="/auth" />} />
+      <Route path="/team" element={user ? <TeamWorkspace /> : <Navigate to="/auth" />} />
+      <Route path="/agency" element={user ? <AgencyHub /> : <Navigate to="/auth" />} />
+      <Route path="/enterprise" element={user ? <EnterpriseSuite /> : <Navigate to="/auth" />} />
       <Route path="/angle-miner" element={user ? <AngleMinerX /> : <Navigate to="/auth" />} />
       <Route path="/test-lab" element={user ? <TestLabPro /> : <Navigate to="/auth" />} />
       <Route path="/conversion-doctor" element={user ? <ConversionDoctor /> : <Navigate to="/auth" />} />

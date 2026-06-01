@@ -55,6 +55,11 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
   const [actionMsg, setActionMsg] = useState<string>('');
   const [deleted, setDeleted] = useState(false);
 
+  // Phase 6.1: when acting inside a team workspace, let the user choose per-run whether the
+  // result is shared with the team or kept private to themselves.
+  const inTeamScope = scope.level === 'team' && !!scope.workspaceId;
+  const [visibilityChoice, setVisibilityChoice] = useState<'workspace' | 'private'>('workspace');
+
   const cost = TOKEN_COSTS[config.costKey];
   const primaryField = config.inputs.find(f => f.primary) || config.inputs.find(f => f.multiline) || config.inputs[0];
 
@@ -151,8 +156,9 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
     setActionMsg('');
     setDeleted(false);
     try {
-      // Stamp the active scope so the result lands in the right container (personal → private).
-      const data = await runToolAnalysis(config.module, values, user?.uid, contextText, scope);
+      // Stamp the chosen scope: in a team workspace the user can keep a run Private.
+      const effectiveScope = inTeamScope && visibilityChoice === 'private' ? { level: 'personal' as const } : scope;
+      const data = await runToolAnalysis(config.module, values, user?.uid, contextText, effectiveScope);
       setResult(data);
       setActiveTab(data.sections[0]?.title || '');
       if (user) await refreshProfile();
@@ -246,6 +252,24 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
                   <p className="mt-3 text-[10px] font-medium text-gray-400 leading-relaxed">
                     Feeds a related saved analysis into this tool for connected intelligence.
                   </p>
+                </div>
+              )}
+
+              {inTeamScope && (
+                <div className="mb-8">
+                  <label className="block text-xs font-bold text-[#0B0B0B] mb-3 tracking-widest uppercase opacity-40">Save this analysis as</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['workspace', 'private'] as const).map(opt => (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => setVisibilityChoice(opt)}
+                        className={`px-4 py-3 rounded-xl text-xs font-bold transition-all ${visibilityChoice === opt ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}
+                      >
+                        {opt === 'workspace' ? 'Shared with team' : 'Private to me'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
 

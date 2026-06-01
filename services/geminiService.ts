@@ -53,7 +53,7 @@ const wait = (ms: number) => new Promise(res => setTimeout(res, ms));
 // and "no tokens deducted" messaging keep working.
 const ANALYSIS_TIMEOUT_MS = 70000;
 
-const executeAsyncJob = async (module: string, input: any): Promise<any> => {
+const executeAsyncJob = async (module: string, input: any, scope?: Scope): Promise<any> => {
   const user = auth.currentUser;
   if (!user) throw new Error("ERR_AUTH_REQUIRED: User must be logged in.");
 
@@ -67,7 +67,8 @@ const executeAsyncJob = async (module: string, input: any): Promise<any> => {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${token}`
       },
-      body: JSON.stringify({ module, input }),
+      // `scope` lets the server bill the workspace owner's pooled wallet for team analyses.
+      body: JSON.stringify({ module, input, scope: scope || null }),
       signal: AbortSignal.timeout(ANALYSIS_TIMEOUT_MS)
     });
   } catch (e: any) {
@@ -145,7 +146,7 @@ export const runToolAnalysis = async (
   // Connected-ecosystem wiring: a related prior analysis is injected as `_context`,
   // which the server prompt builders treat as background, not raw input.
   const payload = contextText ? { ...inputs, _context: contextText } : inputs;
-  const raw = await executeAsyncJob(module, payload);
+  const raw = await executeAsyncJob(module, payload, scope);
 
   // Defensive normalization — server may return a partial/loose shape.
   const result: ToolAnalysisResult = {
