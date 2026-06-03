@@ -21,6 +21,9 @@ const History = lazy(() => import('./pages/History'));
 const TeamWorkspace = lazy(() => import('./pages/TeamWorkspace'));
 const AgencyHub = lazy(() => import('./pages/AgencyHub'));
 const EnterpriseSuite = lazy(() => import('./pages/EnterpriseSuite'));
+const Reports = lazy(() => import('./pages/Reports'));
+const Settings = lazy(() => import('./pages/Settings'));
+const Support = lazy(() => import('./pages/Support'));
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ScopeProvider, useScope } from './context/ScopeContext';
 import { Honeypot, LoadingState } from './components/UI';
@@ -29,6 +32,7 @@ import OnboardingOverlay from './components/OnboardingOverlay';
 import NotificationCenter from './components/NotificationCenter';
 import ScopeSwitcher from './components/ScopeSwitcher';
 import { TOOL_CONFIG_LIST, NAV_SUITES } from './config/toolConfigs';
+import { NAV_CORE, NAV_COLLABORATION, NAV_ACCOUNT, visibleLinks, NavLink } from './config/access';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -43,6 +47,28 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const isAdminRole = profile?.role === 'super_admin' || profile?.role === 'ops_admin';
   // STRICT CHECK: Only show admin layout if user is actually an admin
   const isAdminPath = location.pathname.startsWith('/admin') && isAdminRole;
+
+  // Centralized feature visibility (config/access.ts) — a user only sees what their plan or
+  // membership grants. Same context powers the Dashboard quick-actions, so hidden = hidden everywhere.
+  const accessCtx = { profile, memberships };
+
+  const renderNavLink = (link: NavLink, size: 'lg' | 'sm' = 'lg') => {
+    const isActive = link.exact ? location.pathname === link.path : location.pathname === link.path;
+    const pad = size === 'lg' ? 'py-5 text-[13px]' : 'py-4 text-[12px]';
+    return (
+      <Link
+        key={link.path}
+        to={link.path}
+        onClick={onClose}
+        className={`flex items-center gap-5 px-6 ${pad} font-bold tracking-widest uppercase rounded-2xl transition-all duration-500 mb-3 group ${
+          isActive ? 'bg-[#121212] text-white shadow-lg shadow-black/20' : 'text-gray-500 hover:text-white'
+        }`}
+      >
+        <div className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${isActive ? 'bg-[#FF0000]' : 'bg-transparent group-hover:bg-gray-800'}`} />
+        {link.label}
+      </Link>
+    );
+  };
 
   // Overlay for mobile
   const MobileOverlay = () => (
@@ -119,113 +145,34 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         </div>
 
         <nav className="flex-grow py-8 px-6 lg:py-16 lg:px-8 overflow-y-auto">
-          {/* Dashboard home */}
-          {(() => {
-            const isActive = location.pathname === '/';
-            return (
-              <Link
-                to="/"
-                onClick={onClose}
-                className={`flex items-center gap-5 px-6 py-5 text-[13px] font-bold tracking-widest uppercase rounded-2xl transition-all duration-500 mb-4 lg:mb-3 group ${
-                  isActive ? 'bg-[#121212] text-white shadow-lg shadow-black/20' : 'text-gray-500 hover:text-white'
-                }`}
-              >
-                <div className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${isActive ? 'bg-[#FF0000]' : 'bg-transparent group-hover:bg-gray-800'}`} />
-                Dashboard
-              </Link>
-            );
-          })()}
+          {/* Core — Dashboard, History, Reports (always visible to a signed-in user) */}
+          {visibleLinks(NAV_CORE, accessCtx).map((link) => renderNavLink(link, 'lg'))}
 
-          {/* Analysis history */}
-          {(() => {
-            const isActive = location.pathname === '/history';
-            return (
-              <Link
-                to="/history"
-                onClick={onClose}
-                className={`flex items-center gap-5 px-6 py-5 text-[13px] font-bold tracking-widest uppercase rounded-2xl transition-all duration-500 mb-4 lg:mb-3 group ${
-                  isActive ? 'bg-[#121212] text-white shadow-lg shadow-black/20' : 'text-gray-500 hover:text-white'
-                }`}
-              >
-                <div className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${isActive ? 'bg-[#FF0000]' : 'bg-transparent group-hover:bg-gray-800'}`} />
-                History
-              </Link>
-            );
-          })()}
-
-          {/* Team Workspace (Phase 6.1) — gateway for all users; upgrades on first create */}
-          {(() => {
-            const isActive = location.pathname === '/team';
-            return (
-              <Link
-                to="/team"
-                onClick={onClose}
-                className={`flex items-center gap-5 px-6 py-5 text-[13px] font-bold tracking-widest uppercase rounded-2xl transition-all duration-500 mb-4 lg:mb-3 group ${
-                  isActive ? 'bg-[#121212] text-white shadow-lg shadow-black/20' : 'text-gray-500 hover:text-white'
-                }`}
-              >
-                <div className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${isActive ? 'bg-[#FF0000]' : 'bg-transparent group-hover:bg-gray-800'}`} />
-                Team Workspace
-              </Link>
-            );
-          })()}
-
-          {/* Agency Hub (Phase 6.2) — shown to agency-tier users and agency members */}
-          {(profile?.tier === 'team' || profile?.tier === 'agency' || profile?.tier === 'enterprise' || memberships.some(m => m.family === 'agency')) && (() => {
-            const isActive = location.pathname === '/agency';
-            return (
-              <Link
-                to="/agency"
-                onClick={onClose}
-                className={`flex items-center gap-5 px-6 py-5 text-[13px] font-bold tracking-widest uppercase rounded-2xl transition-all duration-500 mb-4 lg:mb-3 group ${
-                  isActive ? 'bg-[#121212] text-white shadow-lg shadow-black/20' : 'text-gray-500 hover:text-white'
-                }`}
-              >
-                <div className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${isActive ? 'bg-[#FF0000]' : 'bg-transparent group-hover:bg-gray-800'}`} />
-                Agency Hub
-              </Link>
-            );
-          })()}
-
-          {/* Enterprise Suite (Phase 6.3) — shown to enterprise-tier users and enterprise members */}
-          {(profile?.tier === 'enterprise' || profile?.tier === 'agency' || memberships.some(m => m.family === 'enterprise')) && (() => {
-            const isActive = location.pathname === '/enterprise';
-            return (
-              <Link
-                to="/enterprise"
-                onClick={onClose}
-                className={`flex items-center gap-5 px-6 py-5 text-[13px] font-bold tracking-widest uppercase rounded-2xl transition-all duration-500 mb-4 lg:mb-3 group ${
-                  isActive ? 'bg-[#121212] text-white shadow-lg shadow-black/20' : 'text-gray-500 hover:text-white'
-                }`}
-              >
-                <div className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${isActive ? 'bg-[#FF0000]' : 'bg-transparent group-hover:bg-gray-800'}`} />
-                Enterprise Suite
-              </Link>
-            );
-          })()}
-
-          {/* Tool suites (V1 Tool Architecture grouping) */}
+          {/* Analysis Tools — data-driven suites (V1 Tool Architecture grouping) */}
           {NAV_SUITES.map((group) => (
             <div key={group.suite} className="mt-8">
               <p className="px-6 mb-4 text-[9px] font-bold text-gray-600 uppercase tracking-[0.3em]">{group.suite}</p>
-              {group.items.map((item) => {
-                const isActive = location.pathname === item.path;
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    onClick={onClose}
-                    className={`flex items-center gap-5 px-6 py-4 text-[12px] font-bold tracking-widest uppercase rounded-2xl transition-all duration-500 mb-2 group ${
-                      isActive ? 'bg-[#121212] text-white shadow-lg shadow-black/20' : 'text-gray-500 hover:text-white'
-                    }`}
-                  >
-                    <div className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${isActive ? 'bg-[#FF0000]' : 'bg-transparent group-hover:bg-gray-800'}`} />
-                    {item.label}
-                  </Link>
-                );
-              })}
+              {group.items.map((item) => renderNavLink({ label: item.label, path: item.path }, 'sm'))}
             </div>
           ))}
+
+          {/* Collaboration — Team / Agency / Enterprise, gated by plan or membership */}
+          {(() => {
+            const links = visibleLinks(NAV_COLLABORATION, accessCtx);
+            if (links.length === 0) return null;
+            return (
+              <div className="mt-8">
+                <p className="px-6 mb-4 text-[9px] font-bold text-gray-600 uppercase tracking-[0.3em]">{NAV_COLLABORATION.heading}</p>
+                {links.map((link) => renderNavLink(link, 'sm'))}
+              </div>
+            );
+          })()}
+
+          {/* Account — Billing / Settings / Support */}
+          <div className="mt-8">
+            <p className="px-6 mb-4 text-[9px] font-bold text-gray-600 uppercase tracking-[0.3em]">{NAV_ACCOUNT.heading}</p>
+            {visibleLinks(NAV_ACCOUNT, accessCtx).map((link) => renderNavLink(link, 'sm'))}
+          </div>
         </nav>
         <div className="p-8 lg:p-12 border-t border-gray-900/30">
           {isAdminRole && (
@@ -299,7 +246,7 @@ const Header: React.FC<{ onToggleSidebar?: () => void }> = ({ onToggleSidebar })
       <div className="ml-auto flex items-center gap-6 lg:gap-12">
         <div className="flex gap-6 lg:gap-10 text-[11px] font-bold tracking-[0.1em] text-gray-500 uppercase">
           {!isAdminPath && profile?.tier === 'free' && (
-            <Link to="/" className="text-[#FF0000] animate-pulse cursor-pointer hidden sm:block">Upgrade to Pro</Link>
+            <Link to="/pricing" className="text-[#FF0000] animate-pulse cursor-pointer hidden sm:block">Upgrade to Pro</Link>
           )}
           <Link to="/documentation" className="hover:text-white cursor-pointer transition-colors hidden sm:block">Docs</Link>
           <Link to="/documentation" className="hover:text-white cursor-pointer transition-colors sm:hidden">?</Link>
@@ -353,6 +300,9 @@ const AppRoutes: React.FC = () => {
       
       {/* Protected Routes */}
       <Route path="/history" element={user ? <History /> : <Navigate to="/auth" />} />
+      <Route path="/reports" element={user ? <Reports /> : <Navigate to="/auth" />} />
+      <Route path="/settings" element={user ? <Settings /> : <Navigate to="/auth" />} />
+      <Route path="/support" element={user ? <Support /> : <Navigate to="/auth" />} />
       <Route path="/team" element={user ? <TeamWorkspace /> : <Navigate to="/auth" />} />
       <Route path="/agency" element={user ? <AgencyHub /> : <Navigate to="/auth" />} />
       <Route path="/enterprise" element={user ? <EnterpriseSuite /> : <Navigate to="/auth" />} />

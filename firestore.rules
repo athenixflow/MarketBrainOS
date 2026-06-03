@@ -82,13 +82,16 @@ service cloud.firestore {
         && (request.resource.data.role == 'user'
             || request.auth.token.email == 'admin@marketbrainos.com');
 
-      // Client updates may NOT change economy/authority fields (server-only via functions).
+      // Client updates may change ONLY profile/preference fields (strict allowlist). Economy
+      // and authority fields (tokens, tier, role, is_suspended, subscription_status,
+      // is_verified_admin, permissions, risk_score, …) are server-only via Cloud Functions —
+      // any write touching a key outside this list is denied.
       allow update: if self(uid)
-        && request.resource.data.tokens == resource.data.tokens
-        && request.resource.data.tier == resource.data.tier
-        && request.resource.data.role == resource.data.role
-        && request.resource.data.get('is_suspended', false) == resource.data.get('is_suspended', false)
-        && request.resource.data.get('subscription_status', 'free') == resource.data.get('subscription_status', 'free');
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+             'first_name', 'last_name', 'company_name', 'job_title', 'bio',
+             'username', 'timezone', 'language', 'avatar_url', 'notification_prefs',
+             'onboarded', 'last_active'
+           ]);
 
       allow delete: if false; // never from the client
     }

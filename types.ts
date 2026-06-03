@@ -428,7 +428,34 @@ export interface UserProfile {
   subscription_status?: SubscriptionStatus;
   plan_renews_at?: string;
   subscription_started_at?: string;
+  // Profile / account (client-editable via Settings — NOT economy/authority fields).
+  first_name?: string;
+  last_name?: string;
+  company_name?: string;
+  job_title?: string;
+  bio?: string;
+  username?: string;
+  timezone?: string;
+  language?: string;
+  avatar_url?: string;
+  notification_prefs?: NotificationPrefs;
 }
+
+// Per-category notification opt-ins (stored on the user doc, edited in Settings → Notifications).
+export interface NotificationPrefs {
+  analysis?: boolean;   // analysis complete
+  token?: boolean;      // token / balance alerts
+  product?: boolean;    // product updates
+  workspace?: boolean;  // workspace / org events
+  email?: boolean;      // email channel master switch
+}
+
+// The exact set of profile fields a client may write to its own /users doc. Mirrors the
+// firestore.rules allowlist — economy/authority fields are NEVER in here.
+export const EDITABLE_PROFILE_FIELDS = [
+  'first_name', 'last_name', 'company_name', 'job_title', 'bio',
+  'username', 'timezone', 'language', 'avatar_url', 'notification_prefs',
+] as const;
 
 export type SubscriptionStatus = 'free' | 'active' | 'past_due' | 'cancelled' | 'expired';
 

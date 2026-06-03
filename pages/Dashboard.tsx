@@ -1,185 +1,349 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader, Card, PrimaryButton, UpgradeCard, TokenStatusBanner, TokenHistoryModal, PaymentHistoryModal } from '../components/UI';
+import {
+  PageHeader, Card, PrimaryButton, UpgradeCard, LockedFeatureCard,
+  TokenStatusBanner, TokenHistoryModal, PaymentHistoryModal, EmptyState,
+} from '../components/UI';
 import AnimatedSection from '../components/AnimatedSection';
 import SubscriptionPanel from '../components/SubscriptionPanel';
 import { useAuth } from '../context/AuthContext';
-import { callConfirmTopUp, replayOnboarding, createNotification } from '../services/persistenceService';
-import { NAV_SUITES } from '../config/toolConfigs';
+import { useScope } from '../context/ScopeContext';
+import {
+  callConfirmTopUp, replayOnboarding, createNotification,
+  getUserToolAnalyses, getReportsForScope, getUserActionLogs,
+  ToolAnalysisRecord,
+} from '../services/persistenceService';
+import { Report, ActionLogEntry } from '../types';
+import { NAV_SUITES, TOOL_CONFIG_LIST, getToolMeta } from '../config/toolConfigs';
+import { canSeeFeature, tierAtLeast } from '../config/access';
+
+// Resolve a server module key to a friendly tool label (covers generic + bespoke modules).
+const moduleLabel = (m: string): string =>
+  getToolMeta(m)?.label || m.replace(/_.*/, '').replace(/([A-Z])/g, ' $1').trim() || m;
+
+// Small stat tile used across the metrics rows.
+const Stat: React.FC<{ label: string; value: React.ReactNode; hint?: string }> = ({ label, value, hint }) => (
+  <Card className="!p-8">
+    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-4">{label}</p>
+    <p className="text-4xl font-black text-[#0B0B0B] leading-none">{value}</p>
+    {hint && <p className="text-[11px] font-medium text-gray-400 mt-3">{hint}</p>}
+  </Card>
+);
 
 const Dashboard: React.FC = () => {
   const { user, profile, refreshProfile } = useAuth();
+  const { memberships } = useScope();
+  const accessCtx = { profile, memberships };
+
+  const [topUpStatus, setTopUpStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
+  const [feedbackMsg, setFeedbackMsg] = useState('');
+  const [showHistory, setShowHistory] = useState(false);
+  const [showReceipts, setShowReceipts] = useState(false);
+
+  // Intelligence data (personal scope — the user's own profile).
+  const [analyses, setAnalyses] = useState<ToolAnalysisRecord[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [logs, setLogs] = useState<ActionLogEntry[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    if (!user) return;
+    setLoadingData(true);
+    Promise.all([
+      getUserToolAnalyses(user.uid),
+      getReportsForScope(user.uid, { level: 'personal' }),
+      getUserActionLogs(user.uid),
+    ])
+      .then(([a, r, l]) => {
+        if (!active) return;
+        setAnalyses(a); setReports(r); setLogs(l);
+      })
+      .catch(console.error)
+      .finally(() => { if (active) setLoadingData(false); });
+    return () => { active = false; };
+  }, [user]);
 
   const handleReplayTour = async () => {
     if (!user) return;
     await replayOnboarding(user.uid);
     await refreshProfile();
   };
-  const [topUpStatus, setTopUpStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
-  const [feedbackMsg, setFeedbackMsg] = useState('');
-  const [showHistory, setShowHistory] = useState(false);
-  const [showReceipts, setShowReceipts] = useState(false);
 
   const handleTopUp = async () => {
     if (profile?.tier !== 'pro') return;
     setTopUpStatus('processing');
     setFeedbackMsg('');
-    
     try {
-      // In a real environment, this would be the result of a Stripe/Payment Provider interaction.
-      // We simulate a unique payment reference here which the server validates.
       const mockPaymentRef = `tx_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-      
-      // Authoritative Server Call
       await callConfirmTopUp(mockPaymentRef);
-      
-      // Update Local State from Server Source of Truth
       await refreshProfile();
-      
       setTopUpStatus('success');
       setFeedbackMsg('100 tokens credited successfully.');
       if (user) createNotification(user.uid, 'Token', 'Top-up successful', '100 tokens have been added to your balance.');
-      
-      // Reset state after delay
-      setTimeout(() => {
-        setTopUpStatus('idle');
-        setFeedbackMsg('');
-      }, 4000);
-
+      setTimeout(() => { setTopUpStatus('idle'); setFeedbackMsg(''); }, 4000);
     } catch (e: any) {
       setTopUpStatus('error');
-      setFeedbackMsg(e.message || "Transaction failed. No tokens charged.");
+      setFeedbackMsg(e.message || 'Transaction failed. No tokens charged.');
     }
   };
 
-  const getUsageColor = (tokens: number) => {
-    if (tokens === 0) return 'text-red-500';
-    if (tokens < 10) return 'text-orange-500';
-    if (tokens < 50) return 'text-yellow-500';
-    return 'text-green-500';
-  };
+  // --- Derived intelligence (client-side rollups; no backend work) ---
+  const metrics = useMemo(() => {
+    const moduleCounts = new Map<string, number>();
+    analyses.forEach(a => moduleCounts.set(a.module, (moduleCounts.get(a.module) || 0) + 1));
+    const mostUsed = [...moduleCounts.entries()]
+      .map(([module, count]) => ({ module, count, label: moduleLabel(module) }))
+      .sort((x, y) => y.count - x.count);
 
-  const getUsageMessage = (tokens: number) => {
-    if (tokens === 0) return "Allowance exhausted.";
-    if (tokens < 10) return "Critical level. Top up recommended.";
-    if (tokens < 50) return "Running low.";
-    return "Operational.";
-  };
+    const tokensUsed = logs.reduce(
+      (n, l) => n + (l.status !== 'failed_refunded' && l.tokens_used ? l.tokens_used : 0), 0);
+
+    const insightsGenerated = analyses.reduce(
+      (n, a) => n + (Array.isArray(a.result?.sections) ? a.result.sections.length : 0), 0);
+
+    const usedModules = new Set(analyses.map(a => a.module));
+    const unusedTool = TOOL_CONFIG_LIST.find(t => !usedModules.has(t.module));
+
+    const topModule = mostUsed[0]?.module;
+    const recommended = topModule
+      ? (TOOL_CONFIG_LIST.find(t => t.worksWith.includes(topModule) && !usedModules.has(t.module))
+         || TOOL_CONFIG_LIST.find(t => t.worksWith.includes(topModule)))
+      : TOOL_CONFIG_LIST[0];
+
+    // Latest "Recommendations" section, if any, from the most recent analysis.
+    const latest = analyses[0];
+    const recSection = Array.isArray(latest?.result?.sections)
+      ? latest.result.sections.find((s: any) => /recommend/i.test(s.title))
+      : null;
+
+    return { mostUsed, tokensUsed, insightsGenerated, unusedTool, recommended, recSection, topLabel: mostUsed[0]?.label };
+  }, [analyses, logs]);
+
+  const recentActivity = useMemo(() => {
+    const items: { kind: string; label: string; ts: number }[] = [];
+    analyses.slice(0, 6).forEach(a => items.push({ kind: 'Analysis', label: moduleLabel(a.module), ts: new Date(a.timestamp || 0).getTime() }));
+    reports.slice(0, 6).forEach(r => items.push({ kind: 'Report', label: r.title || 'Report', ts: r.created_at ? new Date(r.created_at).getTime() : 0 }));
+    return items.sort((a, b) => b.ts - a.ts).slice(0, 6);
+  }, [analyses, reports]);
+
+  const displayName = profile?.email ? profile.email.split('@')[0] : 'there';
+  const tier = profile?.tier || 'free';
+  const tierLabel = tier.charAt(0).toUpperCase() + tier.slice(1);
+  const hasData = analyses.length > 0 || reports.length > 0;
+
+  // Next collaboration tier the user has NOT unlocked yet → upsell card.
+  const lockedFeature =
+    !canSeeFeature('teamWorkspace', accessCtx) ? { title: 'Team Workspace', planLabel: 'Team', description: 'Unlock shared workspaces, member roles, and team analytics to collaborate on intelligence.' }
+    : !canSeeFeature('agencyHub', accessCtx) ? { title: 'Agency Hub', planLabel: 'Agency', description: 'Manage multiple clients with isolated workspaces, assignments, and per-client reporting.' }
+    : !canSeeFeature('enterpriseSuite', accessCtx) ? { title: 'Enterprise Suite', planLabel: 'Enterprise', description: 'Aggregate organization-wide intelligence with health scores, forecasts, and executive briefings.' }
+    : null;
+
+  const scrollToTools = () => document.getElementById('tools-section')?.scrollIntoView({ behavior: 'smooth' });
+
+  // Gated quick actions (hidden = hidden everywhere — same access context as the sidebar).
+  const quickActions: { label: string; onClick?: () => void; to?: string; primary?: boolean }[] = [
+    { label: 'Run New Analysis', onClick: scrollToTools, primary: true },
+    { label: 'View History', to: '/history' },
+    { label: 'Open Reports', to: '/reports' },
+    ...(tier === 'pro' ? [{ label: 'Buy Tokens', onClick: handleTopUp }] : []),
+    ...(!tierAtLeast(tier, 'team') ? [{ label: 'Upgrade Plan', to: '/pricing' }] : []),
+  ];
 
   return (
     <div className="space-y-12">
       {profile && <TokenStatusBanner tier={profile.tier} tokens={profile.tokens} />}
       {showHistory && <TokenHistoryModal onClose={() => setShowHistory(false)} />}
       {showReceipts && <PaymentHistoryModal onClose={() => setShowReceipts(false)} />}
-      
-      <div className="space-y-24">
+
+      <div className="space-y-20">
+        {/* ===================== ROW 1 — WELCOME ===================== */}
         <AnimatedSection index={0}>
           <PageHeader
-            title="Predictive Marketing Intelligence"
-            subtitle="MarketBrainOS is an executive-grade software platform for pre-validating marketing assets. It utilizes AI to audit conversion funnels, simulate campaign performance, and generate psychological profiles."
+            title={`Welcome back, ${displayName}`}
+            subtitle="Your command center for predictive marketing intelligence — track activity, surface insights, and launch your next analysis."
           />
+
+          <Card className="!p-10 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-8 bg-[#121212] border-gray-900">
+            <div className="flex flex-wrap items-center gap-x-12 gap-y-6">
+              <div>
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-2">Plan</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl font-black text-white">{tierLabel}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest ${tier === 'free' ? 'bg-gray-700 text-white' : 'bg-[#FF0000] text-white'}`}>
+                    {tier === 'free' ? 'Free' : 'Active'}
+                  </span>
+                </div>
+              </div>
+              <div>
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-2">Token Balance</p>
+                <span className={`text-2xl font-black ${(profile?.tokens || 0) === 0 ? 'text-red-500' : 'text-white'}`}>{profile?.tokens ?? 0}</span>
+              </div>
+              <div className="hidden sm:flex gap-8">
+                <div>
+                  <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-2">Analyses</p>
+                  <span className="text-2xl font-black text-white">{analyses.length}</span>
+                </div>
+                <div>
+                  <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-2">Reports</p>
+                  <span className="text-2xl font-black text-white">{reports.length}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick actions (gated) */}
+            <div className="flex flex-wrap gap-3 lg:justify-end">
+              {quickActions.map((qa) => {
+                const cls = qa.primary
+                  ? 'px-6 py-3 rounded-xl bg-[#FF0000] text-white text-[10px] font-bold uppercase tracking-widest hover:bg-[#D40000] transition-all'
+                  : 'px-6 py-3 rounded-xl bg-white/5 border border-gray-800 text-gray-300 text-[10px] font-bold uppercase tracking-widest hover:text-white hover:border-gray-600 transition-all';
+                return qa.to
+                  ? <Link key={qa.label} to={qa.to} className={cls}>{qa.label}</Link>
+                  : <button key={qa.label} onClick={qa.onClick} className={cls}>{qa.label}</button>;
+              })}
+            </div>
+          </Card>
+
+          {/* Top-up feedback (pro) */}
+          {feedbackMsg && (
+            <p className={`mt-4 text-[10px] font-bold uppercase tracking-widest ${topUpStatus === 'error' ? 'text-red-500' : 'text-green-500'}`}>{feedbackMsg}</p>
+          )}
+          <div className="mt-4 flex gap-6">
+            <button onClick={() => setShowHistory(true)} className="text-[10px] font-bold text-gray-500 hover:text-white uppercase tracking-widest transition-colors">View Usage History</button>
+            {tier === 'pro' && <button onClick={() => setShowReceipts(true)} className="text-[10px] font-bold text-gray-500 hover:text-white uppercase tracking-widest transition-colors">View Receipts</button>}
+            <button onClick={handleReplayTour} className="text-[10px] font-bold text-gray-500 hover:text-white uppercase tracking-widest transition-colors">Replay Tour</button>
+          </div>
         </AnimatedSection>
 
-        {/* OPERATIONAL RESOURCES & TOKENS */}
+        {/* ===================== ROW 2 — AI INSIGHTS ===================== */}
         <AnimatedSection as="section" index={1}>
-          <div className="flex justify-between items-end mb-6">
-            <h2 className="text-xs font-bold text-gray-500 uppercase tracking-[0.4em]">Operational Resources</h2>
-            <div className="flex gap-6">
-              <button 
-                onClick={() => setShowHistory(true)}
-                className="text-[10px] font-bold text-gray-400 hover:text-white uppercase tracking-widest transition-colors flex items-center gap-2"
-              >
-                View Usage History
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </button>
-              <button
-                onClick={handleReplayTour}
-                className="text-[10px] font-bold text-gray-400 hover:text-white uppercase tracking-widest transition-colors"
-              >
-                Replay Tour
-              </button>
-              {profile?.tier === 'pro' && (
-                <button 
-                  onClick={() => setShowReceipts(true)}
-                  className="text-[10px] font-bold text-gray-400 hover:text-white uppercase tracking-widest transition-colors flex items-center gap-2"
-                >
-                  View Receipts
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-                  </svg>
-                </button>
-              )}
+          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-[0.4em] mb-6">AI Insights</h2>
+          {hasData ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <Card accent className="!p-8">
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-3">Most Active Tool</p>
+                <p className="text-xl font-bold text-[#0B0B0B] tracking-tight">{metrics.topLabel || '—'}</p>
+                <p className="text-[11px] text-gray-400 mt-2 font-medium">Your most-used analysis so far.</p>
+              </Card>
+              <Card className="!p-8">
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-3">Recommended Next</p>
+                {metrics.recommended ? (
+                  <Link to={`/${metrics.recommended.slug}`} className="text-xl font-bold text-[#0B0B0B] tracking-tight hover:text-[#FF0000] transition-colors">{metrics.recommended.navLabel}</Link>
+                ) : <p className="text-xl font-bold text-[#0B0B0B]">—</p>}
+                <p className="text-[11px] text-gray-400 mt-2 font-medium">Pairs well with your recent work.</p>
+              </Card>
+              <Card className="!p-8">
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-3">Unused Opportunity</p>
+                {metrics.unusedTool ? (
+                  <Link to={`/${metrics.unusedTool.slug}`} className="text-xl font-bold text-[#0B0B0B] tracking-tight hover:text-[#FF0000] transition-colors">{metrics.unusedTool.navLabel}</Link>
+                ) : <p className="text-xl font-bold text-[#0B0B0B]">All tools explored</p>}
+                <p className="text-[11px] text-gray-400 mt-2 font-medium">A tool you haven't tried yet.</p>
+              </Card>
             </div>
-          </div>
-          <Card className="!p-10 flex flex-col md:flex-row items-center justify-between gap-12 bg-[#121212] border-gray-900">
-            
-            {/* BALANCE DISPLAY */}
-            <div className="flex-grow">
-              <div className="flex items-center gap-4 mb-2">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Available Intelligence Credits</p>
-                {profile?.tier === 'pro' && <span className="px-2 py-0.5 rounded-full bg-[#FF0000] text-white text-[9px] font-bold uppercase tracking-widest">PRO</span>}
-                {profile?.tier === 'free' && <span className="px-2 py-0.5 rounded-full bg-gray-700 text-white text-[9px] font-bold uppercase tracking-widest">FREE</span>}
+          ) : (
+            <Card>
+              <EmptyState
+                message="Run your first analysis to begin building your business intelligence profile"
+                submessage="As you use the tools, this space fills with personalized recommendations and strategic suggestions."
+              />
+              <div className="flex justify-center">
+                <button onClick={scrollToTools} className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest hover:opacity-60 transition-opacity border-b border-[#FF0000]/20 pb-1">Browse tools →</button>
               </div>
-              
-              <div className="flex items-baseline gap-4">
-                <span className="text-5xl font-black text-white">{profile?.tokens || 0}</span>
-                <span className={`text-sm font-bold uppercase tracking-widest ${getUsageColor(profile?.tokens || 0)}`}>
-                  {getUsageMessage(profile?.tokens || 0)}
-                </span>
-              </div>
-              {profile?.tier === 'free' && (
-                <p className="text-xs text-gray-500 mt-4 max-w-md">
-                  Free tier is limited to 4 credits/mo. Upgrade to Pro for 200 credits/mo and top-up capability.
-                </p>
-              )}
-            </div>
+            </Card>
+          )}
+        </AnimatedSection>
 
-            {/* ACTIONS */}
-            <div className="w-full md:w-auto flex flex-col items-end gap-4">
-              {profile?.tier === 'pro' ? (
-                <div className="flex flex-col items-end gap-3 w-full md:w-auto">
-                  <button 
-                    onClick={handleTopUp}
-                    disabled={topUpStatus === 'processing' || topUpStatus === 'success'}
-                    className={`
-                      w-full md:w-auto px-8 py-4 rounded-xl font-bold text-sm uppercase tracking-widest transition-all
-                      ${topUpStatus === 'success' ? 'bg-green-500 text-white cursor-default' : 'bg-white text-[#0B0B0B] hover:bg-gray-200 active:scale-95'}
-                      disabled:opacity-50 disabled:cursor-not-allowed
-                    `}
-                  >
-                    {topUpStatus === 'processing' ? 'Processing...' : topUpStatus === 'success' ? 'Credited' : 'Top Up Tokens'}
-                  </button>
-                  <div className="flex justify-between w-full md:w-auto gap-6 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-                    <span>Price: $5.00</span>
-                    <span>Credits: +100</span>
-                  </div>
-                  
-                  {/* FEEDBACK MESSAGES */}
-                  {feedbackMsg && (
-                    <p className={`text-[10px] font-bold uppercase tracking-widest animate-in fade-in ${topUpStatus === 'error' ? 'text-red-500' : 'text-green-500'}`}>
-                      {feedbackMsg}
-                    </p>
-                  )}
-                </div>
+        {/* ===================== ROW 3 — PERFORMANCE METRICS ===================== */}
+        <AnimatedSection as="section" index={2}>
+          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-[0.4em] mb-6">Performance Metrics</h2>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+            <Stat label="Analyses Generated" value={analyses.length} />
+            <Stat label="Reports Generated" value={reports.length} />
+            <Stat label="Tokens Used" value={metrics.tokensUsed} />
+            <Stat label="Insights Generated" value={metrics.insightsGenerated} />
+          </div>
+        </AnimatedSection>
+
+        {/* ===================== ROW 4 — BI SUMMARY ===================== */}
+        <AnimatedSection as="section" index={3}>
+          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-[0.4em] mb-6">Business Intelligence Summary</h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card className="!p-8" title="Most Used Tools">
+              {metrics.mostUsed.length === 0 ? (
+                <p className="text-sm text-gray-400 font-medium py-8 text-center">No tool usage yet.</p>
               ) : (
-                <div className="flex flex-col items-end gap-4">
-                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest text-right">Manage your plan below to unlock<br className="hidden md:block" /> top-ups & higher limits</p>
+                <div className="space-y-4">
+                  {metrics.mostUsed.slice(0, 5).map((m) => {
+                    const pct = Math.round((m.count / metrics.mostUsed[0].count) * 100);
+                    return (
+                      <div key={m.module}>
+                        <div className="flex justify-between text-xs font-bold text-[#0B0B0B] mb-1.5">
+                          <span>{m.label}</span><span className="text-gray-400">{m.count}</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                          <div className="h-full bg-[#FF0000] rounded-full" style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
-            </div>
+            </Card>
+            <Card className="!p-8" title="Recent Recommendations">
+              {metrics.recSection && Array.isArray(metrics.recSection.items) && metrics.recSection.items.length > 0 ? (
+                <ul className="space-y-4">
+                  {metrics.recSection.items.slice(0, 4).map((it: string, i: number) => (
+                    <li key={i} className="flex gap-3 text-sm text-gray-600 font-medium leading-relaxed">
+                      <span className="mt-2 w-1.5 h-1.5 rounded-full bg-[#FF0000] shrink-0" />{it}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-gray-400 font-medium py-8 text-center">Recommendations from your analyses will appear here.</p>
+              )}
+            </Card>
+          </div>
+        </AnimatedSection>
+
+        {/* ===================== ROW 5 — RECENT ACTIVITY ===================== */}
+        <AnimatedSection as="section" index={4}>
+          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-[0.4em] mb-6">Recent Activity</h2>
+          <Card className="!p-8">
+            {loadingData ? (
+              <p className="text-sm text-gray-400 font-medium py-8 text-center">Loading activity…</p>
+            ) : recentActivity.length === 0 ? (
+              <EmptyState message="No activity yet" submessage="Your latest analyses and reports will show up here as you work." />
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {recentActivity.map((a, i) => (
+                  <div key={i} className="flex items-center justify-between py-4 first:pt-0 last:pb-0">
+                    <div className="flex items-center gap-4">
+                      <span className="px-2.5 py-1 rounded-full bg-gray-100 text-gray-500 text-[9px] font-bold uppercase tracking-widest">{a.kind}</span>
+                      <span className="text-sm font-bold text-[#0B0B0B]">{a.label}</span>
+                    </div>
+                    <span className="text-[11px] font-medium text-gray-400">{a.ts ? new Date(a.ts).toLocaleDateString() : ''}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
         </AnimatedSection>
 
-        {/* SUBSCRIPTION MANAGEMENT (§30–32) */}
-        <AnimatedSection as="section" index={2}>
+        {/* ===================== SUBSCRIPTION + UPSELL ===================== */}
+        <AnimatedSection as="section" index={5} className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
           <SubscriptionPanel />
+          {lockedFeature
+            ? <LockedFeatureCard title={lockedFeature.title} planLabel={lockedFeature.planLabel} description={lockedFeature.description} />
+            : tier === 'free'
+              ? <UpgradeCard onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />
+              : null}
         </AnimatedSection>
 
-        <AnimatedSection index={3} className="grid grid-cols-1 gap-12">
-          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-[0.4em] mb-4">Intelligence Suites</h2>
+        {/* ===================== ANALYSIS TOOLS ===================== */}
+        <AnimatedSection index={6} className="grid grid-cols-1 gap-12">
+          <div id="tools-section" />
+          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-[0.4em] mb-4">Analysis Tools</h2>
           {NAV_SUITES.map((group, gi) => (
             <div key={group.suite} className="mb-4">
               <div className="flex items-center gap-4 mb-8">
@@ -197,9 +361,7 @@ const Dashboard: React.FC = () => {
                             <span className="shrink-0 mt-1 px-2.5 py-1 rounded-full bg-gray-100 text-gray-500 text-[9px] font-bold uppercase tracking-widest">{tool.cost} {tool.cost === 1 ? 'Token' : 'Tokens'}</span>
                           )}
                         </div>
-                        <p className="text-gray-500 font-medium leading-relaxed mb-12">
-                          {tool.description}
-                        </p>
+                        <p className="text-gray-500 font-medium leading-relaxed mb-12">{tool.description}</p>
                       </div>
                       <Link to={tool.path}>
                         <PrimaryButton className="w-full !px-0 !py-3.5 !text-xs">Open Module</PrimaryButton>
@@ -210,33 +372,6 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
           ))}
-          {profile?.tier === 'free' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-              <UpgradeCard onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />
-            </div>
-          )}
-        </AnimatedSection>
-
-        <AnimatedSection index={3} className="pt-12">
-          <Card className="!bg-[#0D0D0D] !border-gray-900 !text-white !p-16">
-            <div className="max-w-xl">
-              <p className="text-[#FF0000] text-xs font-bold uppercase tracking-[0.3em] mb-6">System Status</p>
-              <h3 className="text-3xl font-bold tracking-tight mb-6">Intelligence Engine Active</h3>
-              <p className="text-gray-400 font-medium leading-relaxed mb-10">
-                The neural processing core is online. All modules are calibrated for decision-grade analysis and performance simulation.
-              </p>
-              <div className="flex items-center gap-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]" />
-                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Neural Stability: 100%</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-[#FF0000] shadow-[0_0_10px_rgba(255,0,0,0.5)]" />
-                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Latency: 14ms</span>
-                </div>
-              </div>
-            </div>
-          </Card>
         </AnimatedSection>
       </div>
     </div>

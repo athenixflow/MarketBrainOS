@@ -7,7 +7,6 @@ import {
   PrimaryButton,
   IntelligenceIndicator,
   EmptyState,
-  LoadingState,
   ErrorMessage,
   AnalysisFailureState,
   ExportControls,
@@ -20,9 +19,10 @@ import { useAuth } from '../context/AuthContext';
 import { useScope } from '../context/ScopeContext';
 import { copyToClipboard, downloadAsText, printToolResultPDF, formatToolResult, downloadAsCSV, toolResultToCSV } from '../services/exportService';
 import { SecurityEngine } from '../services/securityEngine';
-import { ToolConfig, getToolMeta } from '../config/toolConfigs';
+import { ToolConfig, getToolMeta, getToolGuide } from '../config/toolConfigs';
 import { getUserToolAnalyses, ToolAnalysisRecord, deleteGenericAnalysis } from '../services/persistenceService';
 import { getScoreBand } from '../services/scoreBands';
+import { ExpectedOutcome, AnalysisPreview, RunProgress, CharCounter, RunStage } from './ToolGuide';
 
 const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
   const { user, profile, refreshProfile } = useAuth();
@@ -38,6 +38,7 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
   const [honeypotValue, setHoneypotValue] = useState('');
 
   const [loading, setLoading] = useState(false);
+  const [runStage, setRunStage] = useState<RunStage>('queued');
   const [isTakingLong, setIsTakingLong] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [executionError, setExecutionError] = useState<string | null>(null);
@@ -62,6 +63,7 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
 
   const cost = TOKEN_COSTS[config.costKey];
   const primaryField = config.inputs.find(f => f.primary) || config.inputs.find(f => f.multiline) || config.inputs[0];
+  const guide = getToolGuide(config);
 
   // Reset state when switching between tools (shared component instance).
   useEffect(() => {
@@ -150,15 +152,20 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
     }
 
     setLoading(true);
+    setRunStage('queued');
     setError(null);
     setExecutionError(null);
     setResult(null);
     setActionMsg('');
     setDeleted(false);
     try {
+      // Brief "queued" beat before the request so the staged progress reads naturally.
+      await new Promise((r) => setTimeout(r, 450));
+      setRunStage('running');
       // Stamp the chosen scope: in a team workspace the user can keep a run Private.
       const effectiveScope = inTeamScope && visibilityChoice === 'private' ? { level: 'personal' as const } : scope;
       const data = await runToolAnalysis(config.module, values, user?.uid, contextText, effectiveScope);
+      setRunStage('completed');
       setResult(data);
       setActiveTab(data.sections[0]?.title || '');
       if (user) await refreshProfile();
@@ -196,7 +203,9 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
 
   return (
     <div className="space-y-10">
-      <PageHeader title={config.title} subtitle={config.subtitle} />
+      <PageHeader title={config.title} subtitle={guide.purpose} />
+
+      <ExpectedOutcome outcomes={guide.outcomes} estimatedTime={guide.estimatedTime} analyzes={guide.description} />
 
       <div className="grid lg:grid-cols-2 gap-10">
         {/* INPUT PANEL */}
@@ -221,14 +230,23 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
                     </div>
                   </div>
                 ) : (
-                  <Input
-                    key={field.key}
-                    label={field.label}
-                    placeholder={field.placeholder}
-                    value={values[field.key] || ''}
-                    onChange={(e) => setField(field.key, e.target.value)}
-                    multiline={field.multiline}
-                  />
+                  <div key={field.key}>
+                    <Input
+                      label={field.label}
+                      placeholder={field.placeholder}
+                      value={values[field.key] || ''}
+                      onChange={(e) => setField(field.key, e.target.value)}
+                      multiline={field.multiline}
+                    />
+                    {(field.description || field.example) && (
+                      <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-400 leading-relaxed">
+                        {field.description}{field.example ? <span className="text-gray-300"> e.g. {field.example}</span> : null}
+                      </p>
+                    )}
+                    {field.multiline && (
+                      <CharCounter value={values[field.key] || ''} max={field.maxLength || MAX_INPUT_CHARS} />
+                    )}
+                  </div>
                 )
               ))}
 
@@ -275,6 +293,13 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
 
               <HoneypotField value={honeypotValue} onChange={setHoneypotValue} />
 
+              <AnalysisPreview
+                inputs={config.inputs.map(f => ({ label: f.label, value: values[f.key] || '' }))}
+                analysisType={guide.analysisType}
+                deliverables={guide.outcomes.length}
+                cost={cost}
+              />
+
               {error && <div className="mb-8"><ErrorMessage message={error} /></div>}
 
               <PrimaryButton onClick={handleRun} disabled={loading} className="w-full">
@@ -287,7 +312,7 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
         {/* RESULT PANEL */}
         <div className="space-y-6">
           {executionError && <AnalysisFailureState message={executionError} onRetry={handleRun} />}
-          {loading && <LoadingState message="Running deep analysis..." isTakingLong={isTakingLong} />}
+          {loading && <RunProgress stage={runStage} isTakingLong={isTakingLong} />}
           {!loading && !result && !executionError && (
             <EmptyState
               message={deleted ? 'Analysis deleted.' : 'Your analysis will appear here.'}

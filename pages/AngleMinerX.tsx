@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
 import AnimatedSection from '../components/AnimatedSection';
+import { ExpectedOutcome } from '../components/ToolGuide';
 import {
-  PageHeader, 
-  Card, 
-  Input, 
+  PageHeader,
+  Card,
+  Input,
   PrimaryButton, 
   IntelligenceIndicator, 
   EmptyState, 
@@ -273,6 +274,11 @@ const AngleMinerX: React.FC = () => {
           <PageHeader
             title="AngleMiner X: Psychological Profiling"
             subtitle="Generate marketing angles and psychological hooks. Extract audience triggers to refine your messaging positioning before deployment."
+          />
+          <ExpectedOutcome
+            estimatedTime="30–60 seconds"
+            analyzes="Maps your product and audience to high-conversion psychological angles and platform-ready hooks."
+            outcomes={['Opportunity Angles', 'Emotional & Fear Angles', 'Differentiation Angles', 'Positioning Recommendations', 'Platform Hooks (Ads / Organic / Funnel)']}
           />
         </AnimatedSection>
 

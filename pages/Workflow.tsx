@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
 import AnimatedSection from '../components/AnimatedSection';
+import { ExpectedOutcome } from '../components/ToolGuide';
 import {
-  PageHeader, 
-  Card, 
+  PageHeader,
+  Card,
   Input, 
   PrimaryButton, 
   SecondaryButton,
@@ -331,6 +332,13 @@ const Workflow: React.FC = () => {
             title="Integrated Campaign Workflow"
             subtitle="Connect ideation, testing, and auditing into one seamless executive process. Build and validate your marketing before you launch."
           />
+          <div className="mb-12 text-left">
+            <ExpectedOutcome
+              estimatedTime="2–3 minutes"
+              analyzes="Chains four tools into one guided pipeline: ideation → selection → simulation → audit."
+              outcomes={['Marketing Angles (AngleMiner)', 'Hook Selection', 'Performance Simulation (TestLab)', 'Conversion Audit (Conversion Doctor)']}
+            />
+          </div>
           <PrimaryButton onClick={() => setStep(1)} className="!px-16 !py-6 !text-lg">Start Workflow</PrimaryButton>
         </AnimatedSection>
       )}

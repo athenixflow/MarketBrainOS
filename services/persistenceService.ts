@@ -57,7 +57,8 @@ import {
   EnterpriseForecast,
   EnterpriseBriefing,
   EnterpriseInvitation,
-  BriefingPeriod
+  BriefingPeriod,
+  EDITABLE_PROFILE_FIELDS
 } from '../types';
 import { SecurityEngine } from './securityEngine';
 
@@ -231,9 +232,37 @@ export const getUserProfile = async (userId: string): Promise<UserProfile | null
       onboarded: data.onboarded ?? false,
       subscription_status: data.subscription_status || (data.tier === 'pro' ? 'active' : 'free'),
       plan_renews_at: data.plan_renews_at,
-      subscription_started_at: data.subscription_started_at
+      subscription_started_at: data.subscription_started_at,
+      // Profile / account fields (client-editable via Settings)
+      first_name: data.first_name,
+      last_name: data.last_name,
+      company_name: data.company_name,
+      job_title: data.job_title,
+      bio: data.bio,
+      username: data.username,
+      timezone: data.timezone,
+      language: data.language,
+      avatar_url: data.avatar_url,
+      notification_prefs: data.notification_prefs,
     };
   } catch { return null; }
+};
+
+// Update the caller's own profile fields. Writes ONLY the allowlisted profile/preference fields
+// (EDITABLE_PROFILE_FIELDS) — economy/authority fields are server-only and rejected by rules.
+export const updateUserProfile = async (
+  userId: string,
+  fields: Partial<Pick<UserProfile,
+    'first_name' | 'last_name' | 'company_name' | 'job_title' | 'bio' |
+    'username' | 'timezone' | 'language' | 'avatar_url' | 'notification_prefs'>>
+): Promise<void> => {
+  if (!isFirebaseInitialized) throw new Error('Database not connected');
+  const allowed: Record<string, any> = {};
+  for (const key of EDITABLE_PROFILE_FIELDS) {
+    if (key in fields && (fields as any)[key] !== undefined) allowed[key] = (fields as any)[key];
+  }
+  if (Object.keys(allowed).length === 0) return;
+  await updateDoc(doc(db, 'users', userId), allowed);
 };
 
 export const setOnboarded = async (userId: string) => {

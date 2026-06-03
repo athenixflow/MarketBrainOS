@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
 import AnimatedSection from '../components/AnimatedSection';
+import { ExpectedOutcome } from '../components/ToolGuide';
 import {
-  PageHeader, 
-  Card, 
+  PageHeader,
+  Card,
   Input, 
   PrimaryButton, 
   IntelligenceIndicator, 
@@ -201,6 +202,11 @@ const TestLabPro: React.FC = () => {
           <PageHeader
             title="TestLab Pro: Performance Simulation"
             subtitle="Simulate performance outcomes for headlines, hooks, and ad copy. Compare variations and predict the winning asset."
+          />
+          <ExpectedOutcome
+            estimatedTime="30–60 seconds"
+            analyzes="Scores each variation and predicts the strongest performer before you spend a cent on testing."
+            outcomes={['Variation Scores', 'Predicted Winner', 'Performance Rationale', 'Optimization Notes']}
           />
         </AnimatedSection>
 

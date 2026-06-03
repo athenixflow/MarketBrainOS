@@ -37,6 +37,10 @@ export interface ToolInputField {
   multiline?: boolean;
   options?: string[];   // when present, render a single-select button group
   primary?: boolean;    // the field used for the min-length quality check
+  // Guided-experience extras (all optional — the UI degrades gracefully when absent).
+  description?: string; // helper text under the field
+  example?: string;     // a concrete example value
+  maxLength?: number;   // for the character counter (defaults to MAX_INPUT_CHARS)
 }
 
 export interface ToolConfig {
@@ -51,7 +55,28 @@ export interface ToolConfig {
   suite: Suite;                 // sidebar / dashboard grouping
   worksWith: string[];          // module keys whose saved results can be injected as context
   inputs: ToolInputField[];
+  // Guided-experience metadata (optional — getToolGuide derives sensible defaults).
+  purpose?: string;             // one-line purpose shown in the header
+  description?: string;         // longer description
+  expectedOutcomes?: string[];  // the deliverables this analysis produces
+  estimatedTime?: string;       // e.g. "30–60 seconds"
 }
+
+// Derives the guided-experience content for a tool, falling back to sensible defaults so every
+// tool gets a header purpose, an "expected outcome" list, and an estimated time without bespoke
+// copy. Generic tools emit the universal result contract, so that IS the deliverable list.
+export const getToolGuide = (c: ToolConfig): {
+  purpose: string; description: string; estimatedTime: string; outcomes: string[]; analysisType: string;
+} => {
+  const scoredLead = c.scored ? ['Intelligence Grade (0–100)'] : [];
+  return {
+    purpose: c.purpose || c.subtitle,
+    description: c.description || c.subtitle,
+    estimatedTime: c.estimatedTime || '30–60 seconds',
+    outcomes: c.expectedOutcomes || [...scoredLead, ...UNIVERSAL_RESULT_SECTIONS],
+    analysisType: c.scored ? 'Scored analysis' : 'Strategic analysis',
+  };
+};
 
 // The nine generic analysis tools. Every one emits the universal result contract;
 // `worksWith` encodes the connected-ecosystem relationships from the V1 doc.
@@ -66,10 +91,12 @@ export const TOOL_CONFIGS: Record<string, ToolConfig> = {
     scored: false,
     ctaVerb: 'Analyze Audience',
     suite: 'Marketing Intelligence',
+    purpose: 'Understand what your audience really wants — personas, pain points, and buying motivations.',
+    estimatedTime: '30–60 seconds',
     worksWith: [],
     inputs: [
-      { key: 'audience', label: 'Audience Description', placeholder: 'Describe your target audience in detail...', multiline: true, primary: true },
-      { key: 'product', label: 'Product', placeholder: 'What are you selling?' },
+      { key: 'audience', label: 'Audience Description', placeholder: 'Describe your target audience in detail...', multiline: true, primary: true, description: 'The more specific you are, the sharper the personas.', example: 'Busy founders of 5–20 person SaaS teams who struggle to keep marketing consistent.' },
+      { key: 'product', label: 'Product', placeholder: 'What are you selling?', description: 'The product or service this audience would buy.' },
       { key: 'industry', label: 'Industry', placeholder: 'e.g. Fitness, Fintech' },
       { key: 'businessType', label: 'Business Type', placeholder: 'e.g. B2B SaaS, E-commerce' },
     ],

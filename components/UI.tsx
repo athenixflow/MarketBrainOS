@@ -494,6 +494,37 @@ export const UpgradeCard: React.FC<{ onClick: () => void }> = ({ onClick }) => (
   </Card>
 );
 
+// 15b. LOCKED FEATURE CARD (upgrade prompt shown in place of a hidden feature)
+export const LockedFeatureCard: React.FC<{
+  title: string;          // e.g. "Team Workspace"
+  planLabel: string;      // e.g. "Team"
+  description: string;    // what unlocks
+  onUpgrade?: () => void;
+}> = ({ title, planLabel, description, onUpgrade }) => {
+  const navigate = useNavigate();
+  const go = onUpgrade || (() => navigate('/pricing'));
+  return (
+    <div
+      onClick={go}
+      className="bg-[#121212] text-white p-10 rounded-[32px] border border-gray-800 relative overflow-hidden cursor-pointer hover:border-[#FF0000]/40 transition-all duration-500 group"
+    >
+      <div className="flex items-center gap-3 mb-6">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-gray-500">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+        </svg>
+        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-[0.4em]">Locked</p>
+      </div>
+      <h3 className="text-xl font-bold tracking-tight mb-3">{title}</h3>
+      <p className="text-sm text-gray-400 font-medium leading-relaxed mb-8">{description}</p>
+      <div className="flex items-center gap-3">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-[#FF0000] border-b border-[#FF0000]/30 pb-1 group-hover:text-white transition-colors">
+          Upgrade to {planLabel} →
+        </span>
+      </div>
+    </div>
+  );
+};
+
 // 16. EXPORT CONTROLS
 export const ExportControls: React.FC<{
   onCopy: () => void;

@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
 import AnimatedSection from '../components/AnimatedSection';
+import { ExpectedOutcome } from '../components/ToolGuide';
 import {
-  PageHeader, 
-  Card, 
+  PageHeader,
+  Card,
   Input, 
   PrimaryButton, 
   EmptyState, 
@@ -211,6 +212,11 @@ const ConversionDoctor: React.FC = () => {
           <PageHeader
             title="Conversion Doctor: Landing Page Audit"
             subtitle="Identify conversion blockers, friction points, and messaging gaps. Clinical diagnostic tools for high-performance landing pages."
+          />
+          <ExpectedOutcome
+            estimatedTime="30–60 seconds"
+            analyzes="Diagnoses your landing page or funnel for the issues quietly costing you conversions."
+            outcomes={['Conversion Score', 'Critical Blockers', 'Friction Points', 'Prioritized Fixes', 'Rewrite Suggestions']}
           />
         </AnimatedSection>
 
