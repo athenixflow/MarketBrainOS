@@ -138,6 +138,13 @@ service cloud.firestore {
     }
 
     // ---------- platform settings / security ledgers ----------
+    // System lockdown state. Every signed-in client reads this on each access/login check
+    // (securityEngine.isSystemLocked); platform admins toggle emergency lockdown from the
+    // admin console (updateSystemEmergency does a client-side merge write).
+    match /system_settings/{id} {
+      allow read:  if isSignedIn();
+      allow write: if isPlatformAdmin();
+    }
     match /admin_settings/{id} {
       allow read:  if isSignedIn();   // module flags gate the UI
       allow write: if false;          // updateSystemSettings only
@@ -158,8 +165,10 @@ service cloud.firestore {
       allow write: if false;
     }
     match /workspace_members/{id} {
-      // Readable only by members of the same workspace (member docs carry emails).
-      allow read:  if isWorkspaceMember(resource.data.container_id) || isPlatformAdmin();
+      // A user may always read their own membership rows (getUserMemberships queries by uid);
+      // fellow members may read the rest of the roster (member docs carry emails).
+      allow read:  if resource.data.uid == request.auth.uid
+                   || isWorkspaceMember(resource.data.container_id) || isPlatformAdmin();
       allow write: if false;
     }
     match /workspace_permissions/{id} { allow read: if isSignedIn(); allow write: if false; }
@@ -185,7 +194,7 @@ service cloud.firestore {
     }
 
     match /agencies/{aid}        { allow read: if isAgencyMember(aid) || isPlatformAdmin(); allow write: if false; }
-    match /agency_members/{id}   { allow read: if isAgencyMember(resource.data.container_id) || isPlatformAdmin(); allow write: if false; }
+    match /agency_members/{id}   { allow read: if resource.data.uid == request.auth.uid || isAgencyMember(resource.data.container_id) || isPlatformAdmin(); allow write: if false; }
     // A client is visible to owner/director or members assigned to it.
     match /agency_clients/{cid}  { allow read: if canAccessClient(resource.data.agency_id, cid) || isPlatformAdmin(); allow write: if false; }
     match /client_workspaces/{id}{ allow read: if isSignedIn(); allow write: if false; }
@@ -215,7 +224,7 @@ service cloud.firestore {
     }
 
     match /enterprises/{eid}            { allow read: if isEnterpriseMember(eid) || isPlatformAdmin(); allow write: if false; }
-    match /enterprise_members/{id}      { allow read: if isEnterpriseMember(resource.data.container_id) || isPlatformAdmin(); allow write: if false; }
+    match /enterprise_members/{id}      { allow read: if resource.data.uid == request.auth.uid || isEnterpriseMember(resource.data.container_id) || isPlatformAdmin(); allow write: if false; }
     match /enterprise_departments/{id}  { allow read: if isEnterpriseMember(resource.data.enterprise_id) || isPlatformAdmin(); allow write: if false; }
     match /enterprise_brands/{id}       { allow read: if isEnterpriseMember(resource.data.enterprise_id) || isPlatformAdmin(); allow write: if false; }
     match /enterprise_reports/{id}      { allow read: if isEnterpriseMember(resource.data.enterprise_id) || isPlatformAdmin(); allow write: if false; }
