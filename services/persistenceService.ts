@@ -1115,9 +1115,10 @@ export const adminGetPlatformStats = async (): Promise<PlatformStats> => {
 
 export const adminGetAllUsers = async (): Promise<UserProfile[]> => {
   if (!isFirebaseInitialized) return [];
+  try {
   const q = query(collection(db, 'users'), orderBy('last_active', 'desc'));
   const snapshot = await getDocs(q);
-  
+
   return snapshot.docs.map(doc => {
     const data = doc.data();
     return {
@@ -1137,6 +1138,7 @@ export const adminGetAllUsers = async (): Promise<UserProfile[]> => {
       company_name: data.company_name,
     } as UserProfile & { created_at?: string };
   });
+  } catch (e) { console.error('Failed to fetch users', e); return []; }
 };
 
 // All payments across the platform (admin-only; rules allow isPlatformAdmin to list). Powers the

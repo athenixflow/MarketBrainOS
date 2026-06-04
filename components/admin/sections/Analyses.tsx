@@ -3,7 +3,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { useAdmin } from '../AdminContext';
-import { AdminSectionHeader, AdminTable, KpiCard, Pill, Column } from '../primitives';
+import { AdminSectionHeader, AdminTable, KpiCard, Pill, Column, SampledNote } from '../primitives';
 import { ActionLogEntry } from '../../../types';
 import { fmtDateTime, tsToMillis } from '../util';
 
@@ -37,7 +37,8 @@ const Analyses: React.FC = () => {
 
   return (
     <div className="space-y-12">
-      <AdminSectionHeader title="Analyses" subtitle="Execution ledger across all users, workspaces, agencies, and enterprises." />
+      <AdminSectionHeader title="Analyses" subtitle="Recent execution ledger across all users, workspaces, agencies, and enterprises."
+        actions={<SampledNote n={analyses.length} />} />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
         <KpiCard label="Total (sampled)" value={stats.total} accent />

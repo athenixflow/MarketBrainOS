@@ -203,6 +203,14 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
         return;
       }
       const wsSnap = await db.collection('workspaces').doc(scope.workspaceId).get();
+      const wsStatus = wsSnap.exists ? wsSnap.data()!.status : null;
+      if (wsStatus === 'suspended' || wsStatus === 'archived') {
+        await db.collection('action_logs').add({
+          uid, module, tokens_used: 0, status: 'blocked', error_code: 'WORKSPACE_SUSPENDED', created_at: admin.firestore.FieldValue.serverTimestamp()
+        });
+        res.status(403).json({ error: { message: 'This workspace has been suspended by an administrator.', code: 'permission-denied' } });
+        return;
+      }
       if (wsSnap.exists && wsSnap.data()!.owner_id) {
         billingUid = wsSnap.data()!.owner_id;
         billedWorkspaceId = scope.workspaceId;
@@ -224,9 +232,39 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
         }
       }
       const agSnap = await db.collection('agencies').doc(scope.agencyId).get();
+      const agStatus = agSnap.exists ? agSnap.data()!.status : null;
+      if (agStatus === 'suspended' || agStatus === 'archived') {
+        await db.collection('action_logs').add({
+          uid, module, tokens_used: 0, status: 'blocked', error_code: 'AGENCY_SUSPENDED', created_at: admin.firestore.FieldValue.serverTimestamp()
+        });
+        res.status(403).json({ error: { message: 'This agency has been suspended by an administrator.', code: 'permission-denied' } });
+        return;
+      }
       if (agSnap.exists && agSnap.data()!.owner_id) {
         billingUid = agSnap.data()!.owner_id;  // agency owner's pooled wallet
         billedClientId = scope.clientId;
+      }
+    }
+
+    // SUSPENSION ENFORCEMENT (server-authoritative) — a disabled runner, or a disabled billing
+    // owner whose pooled wallet funds the run, may not execute. Mirrors the client-side block so
+    // admin "Disable account" / "Suspend organization" are enforced at the engine, not cosmetic.
+    const runnerSnap = await db.collection('users').doc(uid).get();
+    if (runnerSnap.exists && runnerSnap.data()!.is_suspended) {
+      await db.collection('action_logs').add({
+        uid, module, tokens_used: 0, status: 'blocked', error_code: 'ACCOUNT_SUSPENDED', created_at: admin.firestore.FieldValue.serverTimestamp()
+      });
+      res.status(403).json({ error: { message: 'Account access has been suspended.', code: 'permission-denied' } });
+      return;
+    }
+    if (billingUid !== uid) {
+      const ownerSnap = await db.collection('users').doc(billingUid).get();
+      if (ownerSnap.exists && ownerSnap.data()!.is_suspended) {
+        await db.collection('action_logs').add({
+          uid, module, tokens_used: 0, status: 'blocked', error_code: 'OWNER_SUSPENDED', created_at: admin.firestore.FieldValue.serverTimestamp()
+        });
+        res.status(403).json({ error: { message: 'The owning account for this workspace is suspended.', code: 'permission-denied' } });
+        return;
       }
     }
 

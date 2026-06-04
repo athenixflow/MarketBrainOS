@@ -6,7 +6,7 @@ import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../../UI';
 import { useAdmin } from '../AdminContext';
-import { AdminSectionHeader, AdminTable, KpiCard, Pill, ComingSoon, Column } from '../primitives';
+import { AdminSectionHeader, AdminTable, KpiCard, Pill, ComingSoon, Column, SampledNote } from '../primitives';
 
 interface ToolRow { id: string; module: string; runs: number; success: number; failed: number; tokens: number; }
 
@@ -41,7 +41,8 @@ const Tools: React.FC = () => {
 
   return (
     <div className="space-y-12">
-      <AdminSectionHeader title="Tools" subtitle="Per-tool performance across the platform." />
+      <AdminSectionHeader title="Tools" subtitle="Per-tool performance from recent activity."
+        actions={<SampledNote n={a.metrics.sampleSize} />} />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
         <KpiCard label="Tools Used" value={rows.length} accent />

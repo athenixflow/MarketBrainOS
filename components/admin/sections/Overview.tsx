@@ -6,7 +6,7 @@ import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../../UI';
 import { useAdmin } from '../AdminContext';
-import { KpiCard, AdminSectionHeader, Pill } from '../primitives';
+import { KpiCard, AdminSectionHeader, Pill, SampledNote } from '../primitives';
 import { LineChart, BarChart, cumulativeByDay, bucketByDay } from '../Charts';
 import { tsToMillis } from '../util';
 import GlobalSearch from '../GlobalSearch';
@@ -96,8 +96,8 @@ const Overview: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card title="User Growth (14d)"><LineChart data={derived.userGrowth} /></Card>
         <Card title="Revenue (14d)"><LineChart data={derived.revenueByDay} valueFormat={money} /></Card>
-        <Card title="Analyses (14d)"><LineChart data={derived.analysisGrowth} /></Card>
-        <Card title="Top Tools by Volume"><BarChart data={derived.topModules} /></Card>
+        <Card title="Analyses · recent sample"><div className="mb-4"><SampledNote n={a.actionLogs.length} /></div><LineChart data={derived.analysisGrowth} /></Card>
+        <Card title="Top Tools · recent sample"><div className="mb-4"><SampledNote n={a.actionLogs.length} /></div><BarChart data={derived.topModules} /></Card>
       </div>
 
       {/* INSIGHTS + ACTIVITY */}

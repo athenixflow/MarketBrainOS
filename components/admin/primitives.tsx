@@ -27,6 +27,14 @@ export const AdminSectionHeader: React.FC<{ title: string; subtitle?: string; ac
   </div>
 );
 
+// Honesty marker for metrics derived from the recent action_logs sample (not platform totals).
+export const SampledNote: React.FC<{ n: number; className?: string }> = ({ n, className }) => (
+  <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-yellow-50 border border-yellow-100 ${className || ''}`}>
+    <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
+    <span className="text-[9px] font-bold text-yellow-700 uppercase tracking-widest">Recent sample · last {n} events</span>
+  </div>
+);
+
 export const ComingSoon: React.FC<{ title: string; description: string }> = ({ title, description }) => (
   <div className="p-6 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-between gap-4">
     <div>

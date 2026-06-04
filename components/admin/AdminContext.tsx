@@ -19,6 +19,11 @@ import {
 } from '../../types';
 import { Card, Input, PrimaryButton, ErrorMessage } from '../UI';
 
+// How many recent action_logs we sample for client-side analytics. Section metrics derived from
+// this are a RECENT sample (not platform totals) — sections label them as such. Platform totals
+// come from server aggregation (adminGetPlatformStats).
+export const SAMPLE_SIZE = 500;
+
 export interface ConfirmRequest {
   warningTitle: string;
   warningMessage: string;
@@ -53,6 +58,7 @@ interface AdminContextValue {
   lastFailure: string | null;
   chainValid: boolean | null;
   verifyingChain: boolean;
+  loadError: string | null;
   refresh: () => Promise<void>;
   confirm: (req: ConfirmRequest) => void;
   runManualIntegrityCheck: () => void;
@@ -85,6 +91,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [lastFailure, setLastFailure] = useState<string | null>(null);
   const [chainValid, setChainValid] = useState<boolean | null>(null);
   const [verifyingChain, setVerifyingChain] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Confirm + step-up modal state
   const [confirmReq, setConfirmReq] = useState<ConfirmRequest | null>(null);
@@ -96,27 +103,33 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const refresh = async () => {
     setLoading(true);
-    const [u, logs, sLogs, aLogs, settings, admSettings, stats, pays, ws, ag, en, reps] = await Promise.all([
-      adminGetAllUsers(), adminGetAuditLogs(), adminGetSecurityLogs(), adminGetActionLogs(200),
-      getSystemSettings(), getAdminSettings(), adminGetPlatformStats(), adminGetAllPayments(),
-      adminGetWorkspaces(), adminGetAgencies(), adminGetEnterprises(), adminGetAllReports(),
-    ]);
-    setUsers(u); setAuditLogs(logs); setSecurityLogs(sLogs); setActionLogs(aLogs);
-    setSystemSettings(settings); setAdminSettings(admSettings); setPlatformStats(stats); setPayments(pays);
-    setWorkspaces(ws); setAgencies(ag); setEnterprises(en); setReports(reps);
+    setLoadError(null);
+    try {
+      const [u, logs, sLogs, aLogs, settings, admSettings, stats, pays, ws, ag, en, reps] = await Promise.all([
+        adminGetAllUsers(), adminGetAuditLogs(), adminGetSecurityLogs(), adminGetActionLogs(SAMPLE_SIZE),
+        getSystemSettings(), getAdminSettings(), adminGetPlatformStats(), adminGetAllPayments(),
+        adminGetWorkspaces(), adminGetAgencies(), adminGetEnterprises(), adminGetAllReports(),
+      ]);
+      setUsers(u); setAuditLogs(logs); setSecurityLogs(sLogs); setActionLogs(aLogs);
+      setSystemSettings(settings); setAdminSettings(admSettings); setPlatformStats(stats); setPayments(pays);
+      setWorkspaces(ws); setAgencies(ag); setEnterprises(en); setReports(reps);
 
-    const recent = aLogs.filter(l => {
-      const t = l.created_at ? l.created_at.toMillis() : new Date(l.timestamp || 0).getTime();
-      return (Date.now() - t) < 86400000;
-    });
-    const failures = recent.filter(l => l.status === 'failed_refunded');
-    setFailureRate(recent.length ? (failures.length / recent.length) * 100 : 0);
-    const lf = aLogs.find(l => l.status === 'failed_refunded');
-    setLastFailure(lf ? (lf.created_at ? new Date(lf.created_at.toMillis()).toLocaleString() : new Date(lf.timestamp!).toLocaleString()) : null);
+      const recent = aLogs.filter(l => {
+        const t = l.created_at ? l.created_at.toMillis() : new Date(l.timestamp || 0).getTime();
+        return (Date.now() - t) < 86400000;
+      });
+      const failures = recent.filter(l => l.status === 'failed_refunded');
+      setFailureRate(recent.length ? (failures.length / recent.length) * 100 : 0);
+      const lf = aLogs.find(l => l.status === 'failed_refunded');
+      setLastFailure(lf ? (lf.created_at ? new Date(lf.created_at.toMillis()).toLocaleString() : new Date(lf.timestamp!).toLocaleString()) : null);
 
-    setLoading(false);
-    const verify = await SecurityEngine.verifyChainIntegrity(logs);
-    setChainValid(verify.valid);
+      const verify = await SecurityEngine.verifyChainIntegrity(logs);
+      setChainValid(verify.valid);
+    } catch (e: any) {
+      setLoadError(e?.message || 'Failed to load admin data. Check your connection and clearance.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { if (profile && profile.role !== 'user') refresh(); /* eslint-disable-next-line */ }, [profile]);
@@ -174,7 +187,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     loading, profile, users, auditLogs, securityLogs, actionLogs, payments,
     systemSettings, adminSettings, platformStats, workspaces, agencies, enterprises, reports,
     metrics, isEmergencyActive,
-    failureRate, lastFailure, chainValid, verifyingChain, refresh, confirm, runManualIntegrityCheck,
+    failureRate, lastFailure, chainValid, verifyingChain, loadError, refresh, confirm, runManualIntegrityCheck,
   };
 
   return (

@@ -4,7 +4,7 @@
 import React, { useMemo } from 'react';
 import { Card } from '../../UI';
 import { useAdmin } from '../AdminContext';
-import { AdminSectionHeader, AdminTable, KpiCard, ComingSoon, Column } from '../primitives';
+import { AdminSectionHeader, AdminTable, KpiCard, ComingSoon, Column, SampledNote } from '../primitives';
 import { BarChart } from '../Charts';
 import { UserProfile } from '../../../types';
 
@@ -40,7 +40,7 @@ const Tokens: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card title="Consumption by Tool"><BarChart data={derived.toolUsage} /></Card>
+        <Card title="Consumption by Tool · recent sample"><div className="mb-4"><SampledNote n={a.metrics.sampleSize} /></div><BarChart data={derived.toolUsage} /></Card>
         <Card title="Manual Adjustments">
           <p className="text-sm text-gray-500 font-medium mb-6">Add, remove, refund, or grant bonus tokens with a reason (fully audited).</p>
           <div className="space-y-3">

@@ -4,7 +4,7 @@
 import React, { useMemo } from 'react';
 import { Card } from '../../UI';
 import { useAdmin } from '../AdminContext';
-import { AdminSectionHeader, KpiCard, Pill, ComingSoon } from '../primitives';
+import { AdminSectionHeader, KpiCard, Pill, ComingSoon, SampledNote } from '../primitives';
 import { DonutChart } from '../Charts';
 
 const AIOps: React.FC = () => {
@@ -19,7 +19,8 @@ const AIOps: React.FC = () => {
 
   return (
     <div className="space-y-12">
-      <AdminSectionHeader title="AI Operations" subtitle="Request analytics across the neural engine. Provider/queue/model telemetry is on the roadmap." />
+      <AdminSectionHeader title="AI Operations" subtitle="Request analytics from recent activity. Provider/queue/model telemetry is on the roadmap."
+        actions={<SampledNote n={m.sampleSize} />} />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
         <KpiCard label="AI Requests (sampled)" value={m.sampleSize} accent />

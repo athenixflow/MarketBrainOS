@@ -38,7 +38,16 @@ const AdminPortalInner: React.FC = () => {
   const a = useAdmin();
   const clearance = a.profile?.is_verified_admin ? 'Level 2: VERIFIED' : 'Level 1: READ_ONLY';
 
-  if (a.loading && a.users.length === 0) return <LoadingState message="Synchronizing Strategic Ledger..." />;
+  if (a.loading && a.users.length === 0 && !a.loadError) return <LoadingState message="Synchronizing Strategic Ledger..." />;
+
+  if (a.loadError && a.users.length === 0) return (
+    <div className="py-32 flex flex-col items-center text-center">
+      <div className="w-12 h-12 bg-red-100 text-red-500 rounded-full flex items-center justify-center mb-6">!</div>
+      <h3 className="text-xl font-bold text-white mb-2">Could not load the control center</h3>
+      <p className="text-sm text-gray-400 max-w-md mb-8">{a.loadError}</p>
+      <button onClick={() => a.refresh()} className="px-8 py-3 rounded-2xl bg-[#FF0000] text-white text-[10px] font-bold uppercase tracking-widest hover:bg-[#D40000]">Retry</button>
+    </div>
+  );
 
   return (
     <div className="space-y-12 pb-32 relative">
