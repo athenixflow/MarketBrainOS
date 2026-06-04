@@ -2,20 +2,20 @@
 // quick actions, and a global search. All derived client-side from the data the AdminProvider
 // already loaded (users, payments, action logs, platform stats) — no extra backend.
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../../UI';
 import { useAdmin } from '../AdminContext';
 import { KpiCard, AdminSectionHeader, Pill } from '../primitives';
 import { LineChart, BarChart, cumulativeByDay, bucketByDay } from '../Charts';
 import { tsToMillis } from '../util';
+import GlobalSearch from '../GlobalSearch';
 
 const money = (n: number) => `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
 const Overview: React.FC = () => {
   const a = useAdmin();
   const navigate = useNavigate();
-  const [q, setQ] = useState('');
 
   const derived = useMemo(() => {
     const proUsers = a.users.filter(u => u.tier === 'pro' || (u.subscription_status === 'active'));
@@ -55,12 +55,6 @@ const Overview: React.FC = () => {
     return { activePro, revenueTotal, mrr, arr, newToday, userGrowth, revenueByDay, analysisGrowth, topModules, proCount: proUsers.length };
   }, [a.users, a.payments, a.actionLogs]);
 
-  const searchResults = useMemo(() => {
-    if (!q.trim()) return [];
-    const n = q.toLowerCase();
-    return a.users.filter(u => (u.email || '').toLowerCase().includes(n) || (u.id || '').toLowerCase().includes(n) || (u.company_name || '').toLowerCase().includes(n)).slice(0, 6);
-  }, [q, a.users]);
-
   const recentActivity = useMemo(() => {
     const items: { kind: string; label: string; ts: number; tone: any }[] = [];
     a.users.slice(0, 8).forEach(u => { const t = tsToMillis((u as any).created_at); if (t) items.push({ kind: 'User', label: u.email, ts: t, tone: 'blue' }); });
@@ -85,22 +79,8 @@ const Overview: React.FC = () => {
     <div className="space-y-12">
       <AdminSectionHeader title="Platform Overview" subtitle="Live health of the MarketBrain OS ecosystem — users, revenue, activity, and reliability at a glance." />
 
-      {/* GLOBAL SEARCH */}
-      <div className="relative">
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search users by email, company, or ID…"
-          className="w-full bg-[#121212] border border-gray-800 rounded-2xl px-6 py-4 text-sm text-white outline-none focus:border-[#FF0000]/40 placeholder:text-gray-600" />
-        {searchResults.length > 0 && (
-          <div className="absolute z-20 mt-2 w-full bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden">
-            {searchResults.map(u => (
-              <button key={u.id} onClick={() => { setQ(''); navigate(`/admin/users/${u.id}`); }}
-                className="w-full text-left px-6 py-4 hover:bg-gray-50 flex items-center justify-between border-b border-gray-50 last:border-0">
-                <span className="text-sm font-bold text-[#0B0B0B]">{u.email}</span>
-                <Pill tone={u.tier === 'pro' ? 'red' : 'gray'}>{u.tier}</Pill>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* UNIFIED GLOBAL SEARCH */}
+      <GlobalSearch />
 
       {/* KPI CARDS */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-5">

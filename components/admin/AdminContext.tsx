@@ -8,13 +8,14 @@ import { useAuth } from '../../context/AuthContext';
 import {
   adminGetAllUsers, adminGetAuditLogs, adminGetSecurityLogs, adminGetActionLogs,
   adminGetPlatformStats, adminGetAllPayments, getSystemSettings, getAdminSettings,
+  adminGetWorkspaces, adminGetAgencies, adminGetEnterprises, adminGetAllReports,
   callAdminUserAction, updateSystemEmergency, callUpdateSystemSettings,
   computeSystemMetrics, PlatformStats, AdminUserAction, SystemMetrics,
 } from '../../services/persistenceService';
 import { SecurityEngine } from '../../services/securityEngine';
 import {
   UserProfile, AuditLogEntry, SecurityEvent, SystemSettings, AdminSettings, ActionLogEntry,
-  PaymentRecord, PermissionScope,
+  PaymentRecord, PermissionScope, Workspace, Agency, Enterprise, Report,
 } from '../../types';
 import { Card, Input, PrimaryButton, ErrorMessage } from '../UI';
 
@@ -42,6 +43,10 @@ interface AdminContextValue {
   systemSettings: SystemSettings | null;
   adminSettings: AdminSettings | null;
   platformStats: PlatformStats | null;
+  workspaces: Workspace[];
+  agencies: Agency[];
+  enterprises: Enterprise[];
+  reports: Report[];
   metrics: SystemMetrics;
   isEmergencyActive: boolean;
   failureRate: number;
@@ -72,6 +77,10 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
   const [adminSettings, setAdminSettings] = useState<AdminSettings | null>(null);
   const [platformStats, setPlatformStats] = useState<PlatformStats | null>(null);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [agencies, setAgencies] = useState<Agency[]>([]);
+  const [enterprises, setEnterprises] = useState<Enterprise[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
   const [failureRate, setFailureRate] = useState(0);
   const [lastFailure, setLastFailure] = useState<string | null>(null);
   const [chainValid, setChainValid] = useState<boolean | null>(null);
@@ -87,12 +96,14 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const refresh = async () => {
     setLoading(true);
-    const [u, logs, sLogs, aLogs, settings, admSettings, stats, pays] = await Promise.all([
+    const [u, logs, sLogs, aLogs, settings, admSettings, stats, pays, ws, ag, en, reps] = await Promise.all([
       adminGetAllUsers(), adminGetAuditLogs(), adminGetSecurityLogs(), adminGetActionLogs(200),
       getSystemSettings(), getAdminSettings(), adminGetPlatformStats(), adminGetAllPayments(),
+      adminGetWorkspaces(), adminGetAgencies(), adminGetEnterprises(), adminGetAllReports(),
     ]);
     setUsers(u); setAuditLogs(logs); setSecurityLogs(sLogs); setActionLogs(aLogs);
     setSystemSettings(settings); setAdminSettings(admSettings); setPlatformStats(stats); setPayments(pays);
+    setWorkspaces(ws); setAgencies(ag); setEnterprises(en); setReports(reps);
 
     const recent = aLogs.filter(l => {
       const t = l.created_at ? l.created_at.toMillis() : new Date(l.timestamp || 0).getTime();
@@ -161,7 +172,8 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const value: AdminContextValue = {
     loading, profile, users, auditLogs, securityLogs, actionLogs, payments,
-    systemSettings, adminSettings, platformStats, metrics, isEmergencyActive,
+    systemSettings, adminSettings, platformStats, workspaces, agencies, enterprises, reports,
+    metrics, isEmergencyActive,
     failureRate, lastFailure, chainValid, verifyingChain, refresh, confirm, runManualIntegrityCheck,
   };
 

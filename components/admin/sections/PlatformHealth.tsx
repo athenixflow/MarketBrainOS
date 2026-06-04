@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import { Card, PrimaryButton } from '../../UI';
 import { useAdmin } from '../AdminContext';
-import { KpiCard, AdminSectionHeader } from '../primitives';
+import { KpiCard, AdminSectionHeader, ComingSoon, Pill } from '../primitives';
 import { BarChart, DonutChart } from '../Charts';
 import { DiagnosisEngine } from '../../../services/diagnosisService';
 import { DiagnosticResult } from '../../../types';
@@ -26,12 +26,34 @@ const PlatformHealth: React.FC = () => {
     <div className="space-y-12">
       <AdminSectionHeader title="Platform Health" subtitle={`Operational health from the most recent ${m.sampleSize} system events.`} />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
-        <KpiCard label="24h Failure Rate" value={`${a.failureRate.toFixed(1)}%`} tone={a.failureRate > 5 ? 'danger' : 'good'} hint={a.failureRate > 5 ? 'Degraded' : 'Healthy'} />
-        <KpiCard label="Events Sampled" value={m.sampleSize} />
-        <KpiCard label="Successful" value={m.statusCounts.success} tone="good" />
-        <KpiCard label="Failed / Blocked" value={m.statusCounts.failed + m.statusCounts.blocked} tone={m.statusCounts.failed ? 'danger' : 'default'} />
-      </div>
+      {(() => {
+        const score = Math.max(0, Math.min(100, Math.round(100 - a.failureRate * 4)));
+        const band = score >= 90 ? 'good' : score >= 70 ? 'default' : 'danger';
+        return (
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-5">
+            <KpiCard label="Health Score" value={`${score}/100`} tone={band as any} accent hint={score >= 90 ? 'Healthy' : score >= 70 ? 'Warning' : 'Degraded'} />
+            <KpiCard label="24h Failure Rate" value={`${a.failureRate.toFixed(1)}%`} tone={a.failureRate > 5 ? 'danger' : 'good'} />
+            <KpiCard label="Events Sampled" value={m.sampleSize} />
+            <KpiCard label="Successful" value={m.statusCounts.success} tone="good" />
+            <KpiCard label="Failed / Blocked" value={m.statusCounts.failed + m.statusCounts.blocked} tone={m.statusCounts.failed ? 'danger' : 'default'} />
+          </div>
+        );
+      })()}
+
+      <Card title="Infrastructure">
+        <div className="flex items-center justify-between mb-6">
+          <span className="text-sm font-bold text-[#0B0B0B]">Authentication & Analysis API</span>
+          <Pill tone={a.failureRate > 5 ? 'red' : 'green'}>{a.failureRate > 5 ? 'Degraded' : 'Operational'}</Pill>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <ComingSoon title="Database Health" description="Read/write ops, query performance, storage." />
+          <ComingSoon title="Queue Health" description="Queued / processing / failed jobs, queue time." />
+          <ComingSoon title="Storage & Bandwidth" description="Storage usage and growth." />
+          <ComingSoon title="Uptime & Latency" description="API uptime and response-time SLOs." />
+          <ComingSoon title="System Resources" description="CPU / memory / bandwidth." />
+          <ComingSoon title="Incident Management" description="Track outages and incidents to resolution." />
+        </div>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card title="Status Distribution">

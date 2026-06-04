@@ -19,8 +19,15 @@ import AIOps from './sections/AIOps';
 import PlatformHealth from './sections/PlatformHealth';
 import FeatureFlags from './sections/FeatureFlags';
 import OrgList from './sections/OrgList';
+import WorkspaceDetail from './sections/WorkspaceDetail';
+import AgencyDetail from './sections/AgencyDetail';
+import ClientDetail from './sections/ClientDetail';
+import EnterpriseDetail from './sections/EnterpriseDetail';
 import Revenue from './sections/Revenue';
+import Transactions from './sections/Transactions';
+import Refunds from './sections/Refunds';
 import Reports from './sections/Reports';
+import ReportDetail from './sections/ReportDetail';
 import Audit from './sections/Audit';
 import Security from './sections/Security';
 import AdminSettings from './sections/AdminSettings';
@@ -71,10 +78,17 @@ const AdminPortalInner: React.FC = () => {
           <Route path="health" element={<PlatformHealth />} />
           <Route path="flags" element={<FeatureFlags />} />
           <Route path="workspaces" element={<OrgList kind="workspace" />} />
+          <Route path="workspaces/:id" element={<WorkspaceDetail />} />
           <Route path="agencies" element={<OrgList kind="agency" />} />
+          <Route path="agencies/:id" element={<AgencyDetail />} />
+          <Route path="clients/:id" element={<ClientDetail />} />
           <Route path="enterprise" element={<OrgList kind="enterprise" />} />
+          <Route path="enterprise/:id" element={<EnterpriseDetail />} />
           <Route path="revenue" element={<Revenue />} />
+          <Route path="transactions" element={<Transactions />} />
+          <Route path="refunds" element={<Refunds />} />
           <Route path="reports" element={<Reports />} />
+          <Route path="reports/:id" element={<ReportDetail />} />
           <Route path="audit" element={<Audit />} />
           <Route path="security" element={<Security />} />
           <Route path="notifications" element={<AdminNotifications />} />

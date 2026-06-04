@@ -4,7 +4,7 @@
 import React from 'react';
 import { Card } from '../../UI';
 import { useAdmin } from '../AdminContext';
-import { AdminSectionHeader } from '../primitives';
+import { AdminSectionHeader, ComingSoon } from '../primitives';
 
 const MODULE_LABELS: Record<string, string> = {
   AngleMiner: 'Angle Miner', ConversionDoctor: 'Conversion Doctor', TestLabPro: 'TestLab Pro', Workflow: 'Workflow',
@@ -59,6 +59,16 @@ const FeatureFlags: React.FC = () => {
       <p className="text-right text-xs text-gray-500 font-mono mt-6">
         Last update: {settings.last_updated ? new Date(settings.last_updated).toLocaleString() : 'Never'} by {settings.updated_by || 'System'}
       </p>
+
+      <Card title="Controlled Rollout" className="mt-8">
+        <p className="text-sm text-gray-500 font-medium mb-6">Audience targeting and staged releases (internal → beta → limited → full).</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <ComingSoon title="Audience Targeting" description="Enable per plan / workspace / agency / specific users." />
+          <ComingSoon title="Beta Testing Center" description="Beta participants and feedback." />
+          <ComingSoon title="Early Access Program" description="Invitation / subscription / admin-granted access." />
+          <ComingSoon title="Feature Status (Beta / Deprecated)" description="Lifecycle states beyond on/off." />
+        </div>
+      </Card>
     </div>
   );
 };

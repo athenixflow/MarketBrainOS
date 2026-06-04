@@ -729,6 +729,91 @@ export const adminCreateUser = functions.https.onCall(async (data: any, context:
   }
 });
 
+// --- ADMIN: organization administration (suspend / restore / archive / transfer) ---
+export const adminManageOrg = functions.https.onCall(async (data: any, context: any) => {
+  const caller = await assertAdmin(context);
+  const { kind, orgId, action, payload } = data;
+  const COLL: Record<string, string> = { workspace: 'workspaces', agency: 'agencies', enterprise: 'enterprises' };
+  const coll = COLL[kind];
+  if (!coll || !orgId) throw new functions.https.HttpsError('invalid-argument', 'kind and orgId required');
+  const ref = db.collection(coll).doc(orgId);
+  try {
+    const doc = await ref.get();
+    if (!doc.exists) throw new functions.https.HttpsError('not-found', 'Organization not found');
+    let upd: any = {};
+    switch (action) {
+      case 'suspend': upd = { status: 'suspended' }; break;
+      case 'restore': upd = { status: 'active' }; break;
+      case 'archive': upd = { status: 'archived' }; break;
+      case 'transfer':
+        if (!payload?.newOwnerId) throw new functions.https.HttpsError('invalid-argument', 'newOwnerId required');
+        upd = { owner_id: payload.newOwnerId };
+        break;
+      default: throw new functions.https.HttpsError('invalid-argument', 'Unknown org action');
+    }
+    upd.updated_at = new Date().toISOString();
+    await ref.update(upd);
+    await logAdminAudit(caller.uid, caller.email, `ORG_${kind.toUpperCase()}_${action.toUpperCase()}`, orgId, { ...upd, name: doc.data()?.name });
+    return { success: true };
+  } catch (e: any) {
+    if (e instanceof functions.https.HttpsError) throw e;
+    throw new functions.https.HttpsError('internal', e.message || 'Organization action failed');
+  }
+});
+
+// --- ADMIN: issue a refund (records a refund entry; simulated provider — no external settlement) ---
+export const adminRefund = functions.https.onCall(async (data: any, context: any) => {
+  const caller = await assertAdmin(context);
+  const { paymentId, uid, amount, reason } = data || {};
+  const amt = Math.abs(Number(amount) || 0);
+  if (!uid || amt <= 0) throw new functions.https.HttpsError('invalid-argument', 'uid and a positive amount required');
+  try {
+    const ref = db.collection('payments').doc();
+    await ref.set({
+      uid,
+      payment_reference: `refund_${Date.now()}`,
+      original_payment_id: paymentId || null,
+      amount_paid: -amt,
+      tokens_credited: 0,
+      provider: 'admin_refund',
+      status: 'refunded',
+      type: 'refund',
+      reason: (reason || '').toString().slice(0, 280),
+      refunded_by: caller.email,
+      created_at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    await logAdminAudit(caller.uid, caller.email, 'REFUND_ISSUED', uid, { amount: amt, paymentId: paymentId || null, reason });
+    return { success: true };
+  } catch (e: any) {
+    if (e instanceof functions.https.HttpsError) throw e;
+    throw new functions.https.HttpsError('internal', e.message || 'Refund failed');
+  }
+});
+
+// --- ADMIN: report management (archive / delete / restore) ---
+export const adminManageReport = functions.https.onCall(async (data: any, context: any) => {
+  const caller = await assertAdmin(context);
+  const { reportId, action } = data || {};
+  if (!reportId) throw new functions.https.HttpsError('invalid-argument', 'reportId required');
+  const ref = db.collection('reports').doc(reportId);
+  try {
+    if (action === 'delete') {
+      await ref.delete();
+    } else if (action === 'archive') {
+      await ref.update({ status: 'archived' });
+    } else if (action === 'restore') {
+      await ref.update({ status: 'active' });
+    } else {
+      throw new functions.https.HttpsError('invalid-argument', 'Unknown report action');
+    }
+    await logAdminAudit(caller.uid, caller.email, `REPORT_${action.toUpperCase()}`, reportId, {});
+    return { success: true };
+  } catch (e: any) {
+    if (e instanceof functions.https.HttpsError) throw e;
+    throw new functions.https.HttpsError('internal', e.message || 'Report action failed');
+  }
+});
+
 // --- ADMIN CONTROLS FUNCTION ---
 
 export const updateSystemSettings = functions.https.onCall(async (data: any, context: any) => {

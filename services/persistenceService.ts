@@ -1177,6 +1177,17 @@ export const adminGetEnterprises = async (): Promise<Enterprise[]> => {
   } catch (e) { console.error('Failed to fetch enterprises', e); return []; }
 };
 
+// All reports platform-wide (admin Report Management). Requires the firestore.rules admin-read
+// addition (|| isPlatformAdmin() on reports read) to return data; otherwise returns [].
+export const adminGetAllReports = async (): Promise<Report[]> => {
+  if (!isFirebaseInitialized) return [];
+  try {
+    const snap = await getDocs(collection(db, 'reports'));
+    const rows = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }) as Report);
+    return rows.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+  } catch (e) { console.error('Failed to fetch reports', e); return []; }
+};
+
 export const adminGetAuditLogs = async (): Promise<AuditLogEntry[]> => {
   if (!isFirebaseInitialized) return [];
   const q = query(collection(db, 'admin_audit_logs'), orderBy('timestamp', 'desc'));
@@ -1389,6 +1400,29 @@ export const callAdminCreateUser = async (email: string, password: string, tier?
   const fn = httpsCallable(functions, 'adminCreateUser');
   try { return (await fn({ email, password, tier })).data as { success: boolean; uid: string }; }
   catch (e: any) { throw new Error(e.message || 'User creation failed.'); }
+};
+
+export type AdminOrgKind = 'workspace' | 'agency' | 'enterprise';
+export type AdminOrgAction = 'suspend' | 'restore' | 'archive' | 'transfer';
+export const callAdminManageOrg = async (kind: AdminOrgKind, orgId: string, action: AdminOrgAction, payload?: any) => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  const fn = httpsCallable(functions, 'adminManageOrg');
+  try { return (await fn({ kind, orgId, action, payload })).data; }
+  catch (e: any) { throw new Error(e.message || 'Organization action failed.'); }
+};
+
+export const callAdminRefund = async (payload: { paymentId?: string; uid?: string; amount?: number; reason?: string }) => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  const fn = httpsCallable(functions, 'adminRefund');
+  try { return (await fn(payload)).data; }
+  catch (e: any) { throw new Error(e.message || 'Refund failed.'); }
+};
+
+export const callAdminManageReport = async (reportId: string, action: 'archive' | 'delete' | 'restore') => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  const fn = httpsCallable(functions, 'adminManageReport');
+  try { return (await fn({ reportId, action })).data; }
+  catch (e: any) { throw new Error(e.message || 'Report action failed.'); }
 };
 
 export const updateUserRiskProfile = async (userId: string, riskScore: number, isSuspended: boolean, reason?: string) => {

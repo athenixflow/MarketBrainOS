@@ -100,7 +100,9 @@ service cloud.firestore {
     match /tool_analysis_results/{id} {
       allow create: if isSignedIn()
         && request.resource.data.creator_user_id == request.auth.uid;
-      allow read:   if isSignedIn() && canSeeStamped(resource.data);
+      // Platform admins may read all analyses (admin Analysis/Report management); everyone else
+      // is limited to creator-owned + scope-visible records.
+      allow read:   if isSignedIn() && (canSeeStamped(resource.data) || isPlatformAdmin());
       // Mutations limited to the creator (role-based shared deletes go through functions).
       allow update, delete: if isSignedIn()
         && (resource.data.creator_user_id == request.auth.uid
@@ -111,7 +113,8 @@ service cloud.firestore {
     match /reports/{id} {
       allow create: if isSignedIn()
         && request.resource.data.creator_user_id == request.auth.uid;
-      allow read:   if isSignedIn() && canSeeStamped(resource.data);
+      // Platform admins may read all reports (admin Report Management).
+      allow read:   if isSignedIn() && (canSeeStamped(resource.data) || isPlatformAdmin());
       allow update, delete: if isSignedIn()
         && resource.data.creator_user_id == request.auth.uid;
     }

@@ -45,6 +45,8 @@ export const ADMIN_SECTIONS: AdminSectionDef[] = [
   { key: 'enterprise',    label: 'Enterprise',     group: 'Organizations',  viewScope: 'admin:read' },
 
   { key: 'revenue',       label: 'Revenue',        group: 'Business',       viewScope: 'admin:read' },
+  { key: 'transactions',  label: 'Transactions',   group: 'Business',       viewScope: 'admin:read' },
+  { key: 'refunds',       label: 'Refunds',        group: 'Business',       viewScope: 'admin:read' },
   { key: 'reports',       label: 'Reports',        group: 'Business',       viewScope: 'admin:read' },
 
   { key: 'audit',         label: 'Audit Logs',     group: 'Trust & Safety', viewScope: 'admin:read' },
@@ -72,3 +74,42 @@ export const visibleAdminSections = (role: UserRole | undefined): { group: Admin
 /** The section definition for a route key (defaults to Overview). */
 export const sectionForKey = (key: string | undefined): AdminSectionDef =>
   ADMIN_SECTIONS.find(s => s.key === (key || '')) || ADMIN_SECTIONS[0];
+
+// ============================================================
+// UNIFIED PERMISSION ENGINE (Prompt 7) — capability matrix
+// One place that answers "can this admin role perform <capability> in <category>?". Components
+// MUST call adminCan(...) instead of hardcoding role checks. Server roles stay super_admin/
+// ops_admin; this matrix is the UI permission engine and is ready for finer roles later.
+// ============================================================
+
+export type PermissionCategory =
+  | 'userMgmt' | 'subscription' | 'revenue' | 'refund' | 'token' | 'tool'
+  | 'security' | 'audit' | 'content' | 'support' | 'featureFlag' | 'org';
+
+export type Capability = 'view' | 'create' | 'edit' | 'delete' | 'approve' | 'suspend' | 'restore' | 'export';
+
+const ALL: Capability[] = ['view', 'create', 'edit', 'delete', 'approve', 'suspend', 'restore', 'export'];
+
+// ops_admin: broad operational control, but NOT financial approvals (refunds), destructive deletes,
+// or security overrides. super_admin: everything.
+const OPS_MATRIX: Record<PermissionCategory, Capability[]> = {
+  userMgmt:     ['view', 'create', 'edit', 'suspend', 'restore', 'export'],
+  subscription: ['view', 'edit', 'create', 'export'],
+  revenue:      ['view', 'export'],
+  refund:       ['view'],                          // can see, cannot approve
+  token:        ['view', 'edit', 'create', 'export'],
+  tool:         ['view', 'edit', 'export'],
+  security:     ['view', 'export'],                // no security overrides
+  audit:        ['view', 'export'],
+  content:      ['view'],
+  support:      ['view', 'edit'],
+  featureFlag:  ['view', 'edit'],
+  org:          ['view', 'suspend', 'restore', 'export'],  // no delete/transfer
+};
+
+/** Core check: may this admin role perform the capability in the category? */
+export const adminCan = (role: UserRole | undefined, category: PermissionCategory, capability: Capability): boolean => {
+  if (role === 'super_admin') return ALL.includes(capability);
+  if (role === 'ops_admin') return (OPS_MATRIX[category] || []).includes(capability);
+  return false;
+};
