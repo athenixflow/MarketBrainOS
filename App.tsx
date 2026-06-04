@@ -11,7 +11,7 @@ const ConversionDoctor = lazy(() => import('./pages/ConversionDoctor'));
 const Workflow = lazy(() => import('./pages/Workflow'));
 const TestLabPro = lazy(() => import('./pages/TestLabPro'));
 const Documentation = lazy(() => import('./pages/Documentation'));
-const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const AdminPortal = lazy(() => import('./components/admin/AdminPortal'));
 const Features = lazy(() => import('./pages/Features'));
 const Pricing = lazy(() => import('./pages/Pricing'));
 const About = lazy(() => import('./pages/About'));
@@ -33,6 +33,7 @@ import NotificationCenter from './components/NotificationCenter';
 import ScopeSwitcher from './components/ScopeSwitcher';
 import { TOOL_CONFIG_LIST, NAV_SUITES } from './config/toolConfigs';
 import { NAV_CORE, NAV_COLLABORATION, NAV_ACCOUNT, visibleLinks, NavLink } from './config/access';
+import { visibleAdminSections, adminPath } from './config/adminAccess';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -104,26 +105,38 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
              </button>
           </div>
 
-          <nav className="flex-grow py-8 px-6 lg:py-16 lg:px-8 overflow-y-auto">
-            <div className="px-6 pb-8 mb-8 border-b border-gray-900/50">
-               <p className="text-[10px] font-bold text-red-500 uppercase tracking-[0.3em]">Operational Area</p>
+          <nav className="flex-grow py-8 px-6 lg:py-12 lg:px-8 overflow-y-auto">
+            <div className="px-6 pb-6 mb-6 border-b border-gray-900/50">
+               <p className="text-[10px] font-bold text-red-500 uppercase tracking-[0.3em]">Control Center</p>
             </div>
-            <Link
-              to="/admin"
-              onClick={onClose}
-              className="flex items-center gap-5 px-6 py-5 text-[13px] font-bold tracking-widest uppercase rounded-2xl bg-[#121212] text-white shadow-lg shadow-black/20 mb-3"
-            >
-              <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
-              Control Center
-            </Link>
-            <Link
-              to="/"
-              onClick={onClose}
-              className="flex items-center gap-5 px-6 py-5 text-[13px] font-bold tracking-widest uppercase rounded-2xl text-gray-500 hover:text-white transition-all"
-            >
-              <div className="w-1.5 h-1.5 rounded-full bg-transparent" />
-              Exit Admin
-            </Link>
+            {visibleAdminSections(profile?.role).map((grp) => (
+              <div key={grp.group} className="mb-6">
+                <p className="px-6 mb-3 text-[9px] font-bold text-gray-600 uppercase tracking-[0.3em]">{grp.group}</p>
+                {grp.items.map((item) => {
+                  const path = adminPath(item.key);
+                  const isActive = location.pathname === path || (item.key === '' && location.pathname === '/admin');
+                  return (
+                    <Link
+                      key={item.key || 'overview'}
+                      to={path}
+                      onClick={onClose}
+                      className={`flex items-center gap-4 px-6 py-3 text-[12px] font-bold tracking-widest uppercase rounded-2xl transition-all duration-300 mb-1 group ${
+                        isActive ? 'bg-[#121212] text-white shadow-lg shadow-black/20' : 'text-gray-500 hover:text-white'
+                      }`}
+                    >
+                      <div className={`w-1.5 h-1.5 rounded-full transition-all ${isActive ? 'bg-[#FF0000]' : 'bg-transparent group-hover:bg-gray-800'}`} />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            ))}
+            <div className="pt-4 mt-2 border-t border-gray-900/50">
+              <Link to="/" onClick={onClose} className="flex items-center gap-4 px-6 py-3 text-[12px] font-bold tracking-widest uppercase rounded-2xl text-gray-500 hover:text-white transition-all">
+                <div className="w-1.5 h-1.5 rounded-full bg-transparent" />
+                Exit Admin
+              </Link>
+            </div>
           </nav>
         </aside>
       </>
@@ -320,10 +333,10 @@ const AppRoutes: React.FC = () => {
         />
       ))}
 
-      {/* SECURE ADMIN ROUTE */}
-      <Route path="/admin" element={
+      {/* SECURE ADMIN ROUTE — dedicated multi-section portal (nested routes inside AdminPortal) */}
+      <Route path="/admin/*" element={
         <AdminGuard>
-          <AdminDashboard />
+          <AdminPortal />
         </AdminGuard>
       } />
       

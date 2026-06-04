@@ -570,6 +570,165 @@ export const manageUser = functions.https.onCall(async (data: any, context: any)
   }
 });
 
+// --- ADMIN: assert caller is a platform admin (shared by the admin mutations below) ---
+const assertAdmin = async (context: any): Promise<{ uid: string; email: string; data: any }> => {
+  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
+  const uid = context.auth.uid;
+  const email = context.auth.token.email || 'unknown';
+  const snap = await db.collection('users').doc(uid).get();
+  if (!snap.exists) throw new functions.https.HttpsError('permission-denied', 'Caller profile missing');
+  const data = snap.data();
+  if (data?.role !== 'super_admin' && data?.role !== 'ops_admin') {
+    throw new functions.https.HttpsError('permission-denied', 'Insufficient privileges');
+  }
+  return { uid, email, data };
+};
+
+const writeServerActionLog = (t: admin.firestore.Transaction, entry: any) => {
+  const ref = db.collection('action_logs').doc();
+  t.set(ref, { created_at: admin.firestore.FieldValue.serverTimestamp(), ...entry });
+};
+
+// --- ADMIN: token adjustments (add / remove / refund / bonus / reset) ---
+export const adminManageTokens = functions.https.onCall(async (data: any, context: any) => {
+  const caller = await assertAdmin(context);
+  const { action, targetUserId, payload } = data;
+  if (!targetUserId) throw new functions.https.HttpsError('invalid-argument', 'Target User ID required');
+  const amount = Math.abs(Number(payload?.amount) || 0);
+  const reason = (payload?.reason || '').toString().slice(0, 280);
+  if (['add', 'remove', 'refund', 'bonus'].includes(action) && amount <= 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'A positive amount is required');
+  }
+  const targetRef = db.collection('users').doc(targetUserId);
+  try {
+    let delta = 0; let newBalance = 0;
+    await db.runTransaction(async (t: admin.firestore.Transaction) => {
+      const doc = await t.get(targetRef);
+      if (!doc.exists) throw new functions.https.HttpsError('not-found', 'Target user not found');
+      const u = doc.data()!;
+      const current = Number(u.tokens) || 0;
+      switch (action) {
+        case 'add': case 'bonus': case 'refund': delta = amount; break;
+        case 'remove': delta = -Math.min(amount, current); break;
+        case 'reset': delta = (u.tier === 'pro' ? 200 : 4) - current; break;
+        default: throw new functions.https.HttpsError('invalid-argument', 'Unknown token action');
+      }
+      newBalance = Math.max(0, current + delta);
+      t.update(targetRef, { tokens: newBalance });
+      writeServerActionLog(t, {
+        uid: targetUserId, action: `admin_token_${action}`, module: 'AdminTokens',
+        tokens_added: delta, status: 'success', admin_uid: caller.uid, reason,
+      });
+    });
+    await logAdminAudit(caller.uid, caller.email, `TOKENS_${action.toUpperCase()}`, targetUserId, { amount, delta, newBalance, reason });
+    return { success: true, newBalance };
+  } catch (e: any) {
+    if (e instanceof functions.https.HttpsError) throw e;
+    throw new functions.https.HttpsError('internal', e.message || 'Token adjustment failed');
+  }
+});
+
+// --- ADMIN: subscription management (grant / trial / extend / cancel / changePlan) ---
+export const adminManageSubscription = functions.https.onCall(async (data: any, context: any) => {
+  const caller = await assertAdmin(context);
+  const { action, targetUserId, payload } = data;
+  if (!targetUserId) throw new functions.https.HttpsError('invalid-argument', 'Target User ID required');
+  const targetRef = db.collection('users').doc(targetUserId);
+  const days = Math.max(0, Number(payload?.days) || 0);
+  try {
+    await db.runTransaction(async (t: admin.firestore.Transaction) => {
+      const doc = await t.get(targetRef);
+      if (!doc.exists) throw new functions.https.HttpsError('not-found', 'Target user not found');
+      const u = doc.data()!;
+      const now = Date.now();
+      const renews = (extra: number) => new Date(now + extra * 86400000).toISOString();
+      switch (action) {
+        case 'grant':
+        case 'changePlan': {
+          const plan = payload?.plan;
+          if (!['free', 'pro', 'team', 'agency', 'enterprise'].includes(plan)) throw new functions.https.HttpsError('invalid-argument', 'Invalid plan');
+          const upd: any = { tier: plan, subscription_status: plan === 'free' ? 'free' : 'active' };
+          if (plan !== 'free') upd.plan_renews_at = renews(30);
+          if (plan === 'pro' && (Number(u.tokens) || 0) < 200) upd.tokens = 200;
+          t.update(targetRef, upd);
+          break;
+        }
+        case 'trial': {
+          if (days <= 0) throw new functions.https.HttpsError('invalid-argument', 'Trial days required');
+          t.update(targetRef, { tier: 'pro', subscription_status: 'active', plan_renews_at: renews(days), tokens: Math.max(Number(u.tokens) || 0, 200) });
+          break;
+        }
+        case 'extend': {
+          if (days <= 0) throw new functions.https.HttpsError('invalid-argument', 'Extension days required');
+          const base = u.plan_renews_at ? new Date(u.plan_renews_at).getTime() : now;
+          t.update(targetRef, { plan_renews_at: new Date(Math.max(base, now) + days * 86400000).toISOString() });
+          break;
+        }
+        case 'cancel':
+          t.update(targetRef, { subscription_status: 'cancelled' });
+          break;
+        default:
+          throw new functions.https.HttpsError('invalid-argument', 'Unknown subscription action');
+      }
+    });
+    await logAdminAudit(caller.uid, caller.email, `SUBSCRIPTION_${action.toUpperCase()}`, targetUserId, payload || {});
+    return { success: true };
+  } catch (e: any) {
+    if (e instanceof functions.https.HttpsError) throw e;
+    throw new functions.https.HttpsError('internal', e.message || 'Subscription action failed');
+  }
+});
+
+// --- ADMIN: bulk operations over a set of users ---
+export const adminBulkAction = functions.https.onCall(async (data: any, context: any) => {
+  const caller = await assertAdmin(context);
+  const { action, targetUserIds, payload } = data;
+  if (!Array.isArray(targetUserIds) || targetUserIds.length === 0) throw new functions.https.HttpsError('invalid-argument', 'targetUserIds required');
+  if (targetUserIds.length > 400) throw new functions.https.HttpsError('invalid-argument', 'Limit 400 users per bulk action');
+  try {
+    const batch = db.batch();
+    for (const uid of targetUserIds) {
+      const ref = db.collection('users').doc(uid);
+      if (action === 'suspend') batch.update(ref, { is_suspended: true, suspension_reason: 'Bulk administrative action' });
+      else if (action === 'unsuspend') batch.update(ref, { is_suspended: false, suspension_reason: admin.firestore.FieldValue.delete() });
+      else if (action === 'grantTokens') batch.update(ref, { tokens: admin.firestore.FieldValue.increment(Math.abs(Number(payload?.amount) || 0)) });
+      else if (action === 'changePlan') { if (!['free', 'pro'].includes(payload?.plan)) throw new functions.https.HttpsError('invalid-argument', 'Invalid plan'); batch.update(ref, { tier: payload.plan }); }
+      else if (action === 'notify') {
+        const nref = db.collection('notifications').doc();
+        batch.set(nref, { uid, category: 'System', title: (payload?.title || 'Announcement').slice(0, 120), body: (payload?.body || '').slice(0, 500), read: false, created_at: new Date().toISOString() });
+      } else throw new functions.https.HttpsError('invalid-argument', 'Unknown bulk action');
+    }
+    await batch.commit();
+    await logAdminAudit(caller.uid, caller.email, `BULK_${action.toUpperCase()}`, `${targetUserIds.length} users`, { count: targetUserIds.length, payload });
+    return { success: true, count: targetUserIds.length };
+  } catch (e: any) {
+    if (e instanceof functions.https.HttpsError) throw e;
+    throw new functions.https.HttpsError('internal', e.message || 'Bulk action failed');
+  }
+});
+
+// --- ADMIN: create a new user (Auth + profile) ---
+export const adminCreateUser = functions.https.onCall(async (data: any, context: any) => {
+  const caller = await assertAdmin(context);
+  const { email, password, tier } = data || {};
+  if (!email || !password) throw new functions.https.HttpsError('invalid-argument', 'Email and password required');
+  if (String(password).length < 6) throw new functions.https.HttpsError('invalid-argument', 'Password must be at least 6 characters');
+  try {
+    const userRecord = await admin.auth().createUser({ email, password });
+    const plan = ['free', 'pro'].includes(tier) ? tier : 'free';
+    await db.collection('users').doc(userRecord.uid).set({
+      id: userRecord.uid, email, tokens: plan === 'pro' ? 200 : 4, tier: plan,
+      role: 'user', onboarded: false, subscription_status: plan === 'pro' ? 'active' : 'free',
+      created_at: new Date().toISOString(), last_active: new Date().toISOString(),
+    });
+    await logAdminAudit(caller.uid, caller.email, 'CREATE_USER', userRecord.uid, { email, tier: plan });
+    return { success: true, uid: userRecord.uid };
+  } catch (e: any) {
+    if (e instanceof functions.https.HttpsError) throw e;
+    throw new functions.https.HttpsError('internal', e.message || 'User creation failed');
+  }
+});
+
 // --- ADMIN CONTROLS FUNCTION ---
 
 export const updateSystemSettings = functions.https.onCall(async (data: any, context: any) => {

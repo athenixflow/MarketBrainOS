@@ -1128,9 +1128,53 @@ export const adminGetAllUsers = async (): Promise<UserProfile[]> => {
       role: data.email === 'admin@marketbrainos.com' ? 'super_admin' : (data.role || 'user'),
       last_active: data.last_active,
       is_suspended: data.is_suspended,
-      risk_score: data.risk_score
-    } as UserProfile;
+      risk_score: data.risk_score,
+      // Extra fields for the admin directory + growth charts (all optional).
+      created_at: (data as any).created_at,
+      subscription_status: data.subscription_status || (data.tier === 'pro' ? 'active' : 'free'),
+      first_name: data.first_name,
+      last_name: data.last_name,
+      company_name: data.company_name,
+    } as UserProfile & { created_at?: string };
   });
+};
+
+// All payments across the platform (admin-only; rules allow isPlatformAdmin to list). Powers the
+// Revenue + Token-purchase metrics. Sorted newest-first client-side.
+export const adminGetAllPayments = async (): Promise<PaymentRecord[]> => {
+  if (!isFirebaseInitialized) return [];
+  try {
+    const snap = await getDocs(collection(db, 'payments'));
+    const rows = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }) as PaymentRecord);
+    return rows.sort((a, b) => {
+      const ta = a.created_at ? (a.created_at.toMillis ? a.created_at.toMillis() : new Date(a.created_at).getTime()) : 0;
+      const tb = b.created_at ? (b.created_at.toMillis ? b.created_at.toMillis() : new Date(b.created_at).getTime()) : 0;
+      return tb - ta;
+    });
+  } catch (e) { console.error('Failed to fetch payments', e); return []; }
+};
+
+// Admin read-only listings of org containers (rules allow isPlatformAdmin to list).
+export const adminGetWorkspaces = async (): Promise<Workspace[]> => {
+  if (!isFirebaseInitialized) return [];
+  try {
+    const snap = await getDocs(collection(db, 'workspaces'));
+    return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }) as Workspace);
+  } catch (e) { console.error('Failed to fetch workspaces', e); return []; }
+};
+export const adminGetAgencies = async (): Promise<Agency[]> => {
+  if (!isFirebaseInitialized) return [];
+  try {
+    const snap = await getDocs(collection(db, 'agencies'));
+    return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }) as Agency);
+  } catch (e) { console.error('Failed to fetch agencies', e); return []; }
+};
+export const adminGetEnterprises = async (): Promise<Enterprise[]> => {
+  if (!isFirebaseInitialized) return [];
+  try {
+    const snap = await getDocs(collection(db, 'enterprises'));
+    return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }) as Enterprise);
+  } catch (e) { console.error('Failed to fetch enterprises', e); return []; }
 };
 
 export const adminGetAuditLogs = async (): Promise<AuditLogEntry[]> => {
@@ -1314,6 +1358,37 @@ export const callAdminUserAction = async (action: AdminUserAction, targetUserId:
   } catch (error: any) {
     throw new Error(error.message || "Admin action failed on server.");
   }
+};
+
+// --- New admin mutations (require `firebase deploy --only functions` to be live) ---
+export type AdminTokenAction = 'add' | 'remove' | 'refund' | 'bonus' | 'reset';
+export const callAdminManageTokens = async (action: AdminTokenAction, targetUserId: string, payload: { amount?: number; reason?: string }) => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  const fn = httpsCallable(functions, 'adminManageTokens');
+  try { return (await fn({ action, targetUserId, payload })).data as { success: boolean; newBalance?: number }; }
+  catch (e: any) { throw new Error(e.message || 'Token adjustment failed.'); }
+};
+
+export type AdminSubAction = 'grant' | 'trial' | 'extend' | 'cancel' | 'changePlan';
+export const callAdminManageSubscription = async (action: AdminSubAction, targetUserId: string, payload: { plan?: string; days?: number }) => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  const fn = httpsCallable(functions, 'adminManageSubscription');
+  try { return (await fn({ action, targetUserId, payload })).data; }
+  catch (e: any) { throw new Error(e.message || 'Subscription action failed.'); }
+};
+
+export const callAdminBulkAction = async (action: string, targetUserIds: string[], payload?: any) => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  const fn = httpsCallable(functions, 'adminBulkAction');
+  try { return (await fn({ action, targetUserIds, payload })).data as { success: boolean; count: number }; }
+  catch (e: any) { throw new Error(e.message || 'Bulk action failed.'); }
+};
+
+export const callAdminCreateUser = async (email: string, password: string, tier?: string) => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  const fn = httpsCallable(functions, 'adminCreateUser');
+  try { return (await fn({ email, password, tier })).data as { success: boolean; uid: string }; }
+  catch (e: any) { throw new Error(e.message || 'User creation failed.'); }
 };
 
 export const updateUserRiskProfile = async (userId: string, riskScore: number, isSuspended: boolean, reason?: string) => {
