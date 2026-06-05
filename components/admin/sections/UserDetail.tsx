@@ -7,7 +7,7 @@ import { Card, PrimaryButton } from '../../UI';
 import { useAdmin } from '../AdminContext';
 import { AdminSectionHeader, KpiCard, Pill } from '../primitives';
 import { getUserActionLogs, getUserPaymentHistory, callAdminManageTokens, callAdminManageSubscription, AdminTokenAction } from '../../../services/persistenceService';
-import { ActionLogEntry, PaymentRecord } from '../../../types';
+import { ActionLogEntry, PaymentRecord, UserTier } from '../../../types';
 import { fmtDate, fmtDateTime } from '../util';
 
 const UserDetail: React.FC = () => {
@@ -22,6 +22,7 @@ const UserDetail: React.FC = () => {
   const [tokAmount, setTokAmount] = useState('');
   const [tokReason, setTokReason] = useState('');
   const [trialDays, setTrialDays] = useState('14');
+  const [planSel, setPlanSel] = useState<UserTier>(u?.tier ?? 'free');
 
   useEffect(() => {
     if (!uid) return;
@@ -42,7 +43,11 @@ const UserDetail: React.FC = () => {
   logs.forEach(l => { if (l.module) moduleCounts.set(l.module, (moduleCounts.get(l.module) || 0) + 1); });
   const mostUsed = [...moduleCounts.entries()].sort((x, y) => y[1] - x[1])[0]?.[0] || '—';
 
-  const changePlan = () => a.confirm({ type: 'changePlan', userId: u.id, payload: { plan: u.tier === 'free' ? 'pro' : 'free' }, warningTitle: 'CHANGE TIER', warningMessage: `Switch ${u.email} to ${u.tier === 'free' ? 'PRO' : 'FREE'}.`, keyword: 'CONFIRM' });
+  const changePlan = () => a.confirm({
+    scope: 'admin:user_management', keyword: 'CONFIRM', warningTitle: 'CHANGE TIER',
+    warningMessage: `Switch ${u.email} to ${u.tier === 'free' ? 'PRO' : 'FREE'}.`,
+    run: async () => { await callAdminManageSubscription('changePlan', u.id!, { plan: u.tier === 'free' ? 'pro' : 'free' }); },
+  });
   const resetTokens = () => a.confirm({ type: 'resetTokens', userId: u.id, warningTitle: 'RESET TOKENS', warningMessage: `Reset ${u.email} to plan default.`, keyword: 'RESET' });
   const toggleStatus = () => a.confirm({ type: 'toggleStatus', userId: u.id, payload: { targetStatus: u.is_suspended ? 'active' : 'disabled' }, warningTitle: u.is_suspended ? 'RESTORE ACCESS' : 'DISABLE ACCESS', warningMessage: `${u.email}`, keyword: u.is_suspended ? 'RESTORE' : 'DISABLE' });
 
@@ -61,10 +66,10 @@ const UserDetail: React.FC = () => {
     warningMessage: `Grant ${u.email} a ${Number(trialDays) || 0}-day Pro trial.`,
     run: async () => { await callAdminManageSubscription('trial', u.id!, { days: Number(trialDays) || 0 }); },
   });
-  const grantPro = () => a.confirm({
-    scope: 'admin:user_management', keyword: 'CONFIRM', warningTitle: 'GRANT PRO',
-    warningMessage: `Grant ${u.email} Pro access.`,
-    run: async () => { await callAdminManageSubscription('grant', u.id!, { plan: 'pro' }); },
+  const applyPlan = () => a.confirm({
+    scope: 'admin:user_management', keyword: 'CONFIRM', warningTitle: 'SET PLAN',
+    warningMessage: `Set ${u.email}'s subscription to ${planSel.toUpperCase()}.${planSel !== 'free' ? ' Status → active, renewal in 30 days.' : ''}`,
+    run: async () => { await callAdminManageSubscription('changePlan', u.id!, { plan: planSel }); },
   });
 
   return (
@@ -114,16 +119,23 @@ const UserDetail: React.FC = () => {
           </div>
           <input value={tokReason} onChange={e => setTokReason(e.target.value)} placeholder="Reason (audited)" className="w-full bg-[#FBFBFB] border border-gray-200 rounded-xl px-4 py-3 text-sm text-[#0B0B0B] outline-none mb-4" />
           <PrimaryButton onClick={adjustTokens} className="!px-6 !py-3 !text-xs">Apply Adjustment</PrimaryButton>
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-3">Requires the new admin function to be deployed.</p>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-3">Every adjustment is recorded in the audit log.</p>
         </Card>
         <Card title="Subscription">
-          <div className="flex flex-wrap items-center gap-3 mb-4">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Set Plan</p>
+          <div className="flex flex-wrap items-center gap-3 mb-6">
+            <select value={planSel} onChange={e => setPlanSel(e.target.value as UserTier)} className="bg-[#FBFBFB] border border-gray-200 rounded-xl px-4 py-3 text-sm text-[#0B0B0B] outline-none">
+              <option value="free">Free</option><option value="pro">Pro</option><option value="team">Team</option><option value="agency">Agency</option><option value="enterprise">Enterprise</option>
+            </select>
+            <PrimaryButton onClick={applyPlan} className="!px-6 !py-3 !text-xs">Apply Plan</PrimaryButton>
+          </div>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Promotional Trial</p>
+          <div className="flex flex-wrap items-center gap-3">
             <input value={trialDays} onChange={e => setTrialDays(e.target.value.replace(/[^0-9]/g, ''))} className="w-24 bg-[#FBFBFB] border border-gray-200 rounded-xl px-4 py-3 text-sm text-[#0B0B0B] outline-none" />
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">day trial</span>
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">day Pro trial</span>
             <button onClick={grantTrial} className="px-5 py-3 rounded-2xl text-xs font-bold uppercase tracking-widest bg-[#0B0B0B] text-white hover:bg-black">Grant Trial</button>
           </div>
-          <button onClick={grantPro} className="px-5 py-3 rounded-2xl text-xs font-bold uppercase tracking-widest border border-gray-200 text-gray-500 hover:text-[#0B0B0B]">Grant Pro Access</button>
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-3">Requires the new admin function to be deployed.</p>
+          <p className="text-[10px] font-medium text-gray-400 mt-4">Setting team/agency/enterprise grants the entitlement; the user creates their workspace/agency/enterprise from their own account.</p>
         </Card>
       </div>
 
