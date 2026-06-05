@@ -1,5 +1,9 @@
 
-import * as functions from 'firebase-functions';
+// Pinned to the v1 (gen1) API on purpose: this file uses the v1 surface throughout
+// (https.onCall((data, context) => …), https.onRequest, pubsub.schedule). firebase-functions v7's
+// bare 'firebase-functions' import defaults to v2, which removes pubsub.schedule and changes the
+// callable handler signature — do NOT "simplify" this back to 'firebase-functions'.
+import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import * as crypto from 'crypto';
