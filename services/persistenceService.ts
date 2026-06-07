@@ -340,15 +340,25 @@ export const logSecurityViolation = async (event: Omit<SecurityEvent, 'id' | 'ti
   await addDoc(collection(db, 'security_audit_logs'), { ...event, timestamp, previous_hash: prevHash, hash });
 };
 
+// Best-effort client-side audit breadcrumb. The authoritative, tamper-evident audit trail is
+// written SERVER-SIDE by logAdminAudit (Cloud Functions); admin_audit_logs is server-only by
+// security rules, so this client write may be denied — and that's fine. It must NEVER throw or it
+// would abort the caller (e.g. the step-up verify→execute flow would skip the actual mutation).
 export const logAdminAction = async (admin: UserProfile, action: string, target: string, metadata?: any) => {
   if (!isFirebaseInitialized) return;
-  const prevHash = await safeGetLastHash('admin_audit_logs');
-  const timestamp = new Date().toISOString();
-  const entry = { admin_email: admin.email, admin_role: admin.role, action_type: action, target, metadata };
-  const content = JSON.stringify({ ...entry, timestamp });
-  const hash = await generateHash(content, prevHash);
-  
-  await addDoc(collection(db, 'admin_audit_logs'), { ...entry, timestamp, previous_hash: prevHash, hash });
+  try {
+    // Firestore rejects `undefined`; strip it and default to {} so addDoc never fails on shape.
+    const safeMetadata = JSON.parse(JSON.stringify(metadata ?? {}));
+    const prevHash = await safeGetLastHash('admin_audit_logs');
+    const timestamp = new Date().toISOString();
+    const entry = { admin_email: admin.email, admin_role: admin.role, action_type: action, target, metadata: safeMetadata };
+    const content = JSON.stringify({ ...entry, timestamp });
+    const hash = await generateHash(content, prevHash);
+
+    await addDoc(collection(db, 'admin_audit_logs'), { ...entry, timestamp, previous_hash: prevHash, hash });
+  } catch (e) {
+    console.warn('logAdminAction (client breadcrumb) skipped:', e);
+  }
 };
 
 // --- ARTIFACT PERSISTENCE ---
