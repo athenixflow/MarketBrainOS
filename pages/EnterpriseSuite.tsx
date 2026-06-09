@@ -193,7 +193,7 @@ const EnterpriseSuite: React.FC = () => {
                 <div className="flex flex-wrap gap-2 mb-5">
                   {linkableWorkspaces.map(w => {
                     const on = (enterprise.linked_workspaces || []).includes(w.containerId);
-                    return <button key={w.containerId} onClick={() => toggleLink('workspace', w.containerId)} className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors ${on ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>{w.name}</button>;
+                    return <button key={w.containerId} onClick={() => toggleLink('workspace', w.containerId)} className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors ${on ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}>{w.name}</button>;
                   })}
                 </div>
               )}
@@ -202,7 +202,7 @@ const EnterpriseSuite: React.FC = () => {
                 <div className="flex flex-wrap gap-2">
                   {linkableAgencies.map(a => {
                     const on = (enterprise.linked_agencies || []).includes(a.containerId);
-                    return <button key={a.containerId} onClick={() => toggleLink('agency', a.containerId)} className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors ${on ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>{a.name}</button>;
+                    return <button key={a.containerId} onClick={() => toggleLink('agency', a.containerId)} className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors ${on ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}>{a.name}</button>;
                   })}
                 </div>
               )}
@@ -211,7 +211,7 @@ const EnterpriseSuite: React.FC = () => {
               <Card title="Ownership & lifecycle">
                 <div className="space-y-6">
                   <div>
-                    <label className="block text-xs font-bold text-[#0B0B0B] mb-3 tracking-widest uppercase opacity-40">Transfer ownership</label>
+                    <label className="block text-xs font-bold text-gray-700 mb-3 tracking-widest uppercase">Transfer ownership</label>
                     <div className="flex gap-2">
                       <select value={transferTo} onChange={(e) => setTransferTo(e.target.value)} className="flex-grow bg-[#FBFBFB] border border-gray-100 p-4 rounded-2xl text-sm outline-none">
                         <option value="">Select a member…</option>

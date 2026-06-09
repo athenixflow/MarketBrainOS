@@ -95,10 +95,10 @@ export const TOOL_CONFIGS: Record<string, ToolConfig> = {
     estimatedTime: '30–60 seconds',
     worksWith: [],
     inputs: [
-      { key: 'audience', label: 'Audience Description', placeholder: 'Describe your target audience in detail...', multiline: true, primary: true, description: 'The more specific you are, the sharper the personas.', example: 'Busy founders of 5–20 person SaaS teams who struggle to keep marketing consistent.' },
-      { key: 'product', label: 'Product', placeholder: 'What are you selling?', description: 'The product or service this audience would buy.' },
-      { key: 'industry', label: 'Industry', placeholder: 'e.g. Fitness, Fintech' },
-      { key: 'businessType', label: 'Business Type', placeholder: 'e.g. B2B SaaS, E-commerce' },
+      { key: 'audience', label: 'Audience Description', placeholder: 'Describe your target audience in detail...', multiline: true, primary: true, description: 'Who they are, what they struggle with, and how they currently solve it. The more specific you are, the sharper the personas.', example: 'Busy founders of 5–20 person SaaS teams who struggle to keep marketing consistent.' },
+      { key: 'product', label: 'Product', placeholder: 'What are you selling?', description: 'The product or service this audience would buy from you.', example: 'A done-for-you content marketing subscription.' },
+      { key: 'industry', label: 'Industry', placeholder: 'e.g. Fitness, Fintech', description: 'The sector your audience operates in — shapes their norms and language.', example: 'B2B SaaS, DTC fitness, professional services.' },
+      { key: 'businessType', label: 'Business Type', placeholder: 'e.g. B2B SaaS, E-commerce', description: 'Your business model — affects how this audience evaluates and buys.', example: 'B2B SaaS, E-commerce, Agency, Coaching.' },
     ],
   },
 
@@ -114,9 +114,9 @@ export const TOOL_CONFIGS: Record<string, ToolConfig> = {
     suite: 'Marketing Intelligence',
     worksWith: [],
     inputs: [
-      { key: 'market', label: 'Market / Industry', placeholder: 'Describe the market you operate in...', multiline: true, primary: true },
-      { key: 'businessModel', label: 'Business Model', placeholder: 'e.g. Subscription, Marketplace' },
-      { key: 'targetSegment', label: 'Target Segment', placeholder: 'Which segment are you targeting?' },
+      { key: 'market', label: 'Market / Industry', placeholder: 'Describe the market you operate in...', multiline: true, primary: true, description: 'The market, its size and maturity, key trends, and where you play within it.', example: 'Mid-market HR software in North America — growing but crowded with legacy incumbents.' },
+      { key: 'businessModel', label: 'Business Model', placeholder: 'e.g. Subscription, Marketplace', description: 'How you make (or plan to make) money in this market.', example: 'Subscription, Marketplace, Usage-based, One-time.' },
+      { key: 'targetSegment', label: 'Target Segment', placeholder: 'Which segment are you targeting?', description: 'The specific slice of the market you focus on.', example: 'HR teams at 100–500 employee tech companies.' },
     ],
   },
 
@@ -132,9 +132,9 @@ export const TOOL_CONFIGS: Record<string, ToolConfig> = {
     suite: 'Marketing Intelligence',
     worksWith: [],
     inputs: [
-      { key: 'competitors', label: 'Competitor Information', placeholder: 'List and describe your main competitors...', multiline: true, primary: true },
-      { key: 'business', label: 'Your Business', placeholder: 'Describe your own business / positioning' },
-      { key: 'industry', label: 'Industry', placeholder: 'e.g. Project management software' },
+      { key: 'competitors', label: 'Competitor Information', placeholder: 'List and describe your main competitors...', multiline: true, primary: true, description: 'List your main competitors with a line on each — what they offer, their pricing, and how they position.', example: 'Asana (broad PM), Monday (visual workflows), ClickUp (all-in-one, low price).' },
+      { key: 'business', label: 'Your Business', placeholder: 'Describe your own business / positioning', description: 'Your own offering and how you position against these competitors.', example: 'A lightweight project tool built specifically for design agencies.' },
+      { key: 'industry', label: 'Industry', placeholder: 'e.g. Project management software', description: 'The category you all compete in.', example: 'Project management software.' },
     ],
   },
 
@@ -150,9 +150,9 @@ export const TOOL_CONFIGS: Record<string, ToolConfig> = {
     suite: 'Marketing Intelligence',
     worksWith: ['AudienceIntel_Analyze'],
     inputs: [
-      { key: 'copyType', label: 'Copy Type', placeholder: '', options: ['Sales Copy', 'Ad Copy', 'Landing Page', 'Email'] },
-      { key: 'copy', label: 'Copy / Messaging', placeholder: 'Paste the copy you want analyzed...', multiline: true, primary: true },
-      { key: 'audience', label: 'Target Audience', placeholder: 'Who is this written for?' },
+      { key: 'copyType', label: 'Copy Type', placeholder: '', options: ['Sales Copy', 'Ad Copy', 'Landing Page', 'Email'], description: 'The format of the copy — sets the benchmarks used to score it.' },
+      { key: 'copy', label: 'Copy / Messaging', placeholder: 'Paste the copy you want analyzed...', multiline: true, primary: true, description: 'Paste the full copy exactly as written — headline, body, and call-to-action.', example: 'Your landing page headline + subhead + 3 benefit bullets + button text.' },
+      { key: 'audience', label: 'Target Audience', placeholder: 'Who is this written for?', description: 'Who the copy is meant to persuade.', example: 'First-time SaaS founders comparing analytics tools.' },
     ],
   },
 
@@ -168,10 +168,10 @@ export const TOOL_CONFIGS: Record<string, ToolConfig> = {
     suite: 'Marketing Intelligence',
     worksWith: ['AudienceIntel_Analyze', 'MarketIntel_Analyze'],
     inputs: [
-      { key: 'objectives', label: 'Objectives', placeholder: 'What do you want your content to achieve...', multiline: true, primary: true },
-      { key: 'businessType', label: 'Business Type', placeholder: 'e.g. Agency, SaaS, Creator' },
-      { key: 'industry', label: 'Industry', placeholder: 'e.g. Marketing, Health' },
-      { key: 'audience', label: 'Audience', placeholder: 'Who are you trying to reach?' },
+      { key: 'objectives', label: 'Objectives', placeholder: 'What do you want your content to achieve...', multiline: true, primary: true, description: 'What the content should achieve, plus any constraints (team size, cadence, budget).', example: 'Grow organic signups 3× in 6 months with a one-person content team.' },
+      { key: 'businessType', label: 'Business Type', placeholder: 'e.g. Agency, SaaS, Creator', description: 'Your business model — shapes the right content mix.', example: 'Agency, SaaS, Creator, E-commerce.' },
+      { key: 'industry', label: 'Industry', placeholder: 'e.g. Marketing, Health', description: 'Your sector — guides topics, tone, and channels.', example: 'Marketing, Health & wellness, Fintech.' },
+      { key: 'audience', label: 'Audience', placeholder: 'Who are you trying to reach?', description: 'The people you want the content to reach and influence.', example: 'Marketing managers at early-stage startups.' },
     ],
   },
 
@@ -187,10 +187,10 @@ export const TOOL_CONFIGS: Record<string, ToolConfig> = {
     suite: 'Marketing Intelligence',
     worksWith: ['AudienceIntel_Analyze', 'Messaging_Analyze'],
     inputs: [
-      { key: 'campaign', label: 'Campaign Details', placeholder: 'Describe the campaign in detail...', multiline: true, primary: true },
-      { key: 'goals', label: 'Goals', placeholder: 'e.g. Leads, sales, awareness' },
-      { key: 'audience', label: 'Audience', placeholder: 'Who is being targeted?' },
-      { key: 'channels', label: 'Channels', placeholder: 'e.g. Meta Ads, Email, SEO' },
+      { key: 'campaign', label: 'Campaign Details', placeholder: 'Describe the campaign in detail...', multiline: true, primary: true, description: 'Describe the campaign end-to-end — offer, creative, timing, and current results if any.', example: 'Black Friday push: email sequence + Meta ads offering 30% off annual plans.' },
+      { key: 'goals', label: 'Goals', placeholder: 'e.g. Leads, sales, awareness', description: 'The primary outcomes you’re optimizing for.', example: 'Leads, Sales, Awareness, App installs.' },
+      { key: 'audience', label: 'Audience', placeholder: 'Who is being targeted?', description: 'Who the campaign is aimed at.', example: 'Lapsed customers who haven’t purchased in 90 days.' },
+      { key: 'channels', label: 'Channels', placeholder: 'e.g. Meta Ads, Email, SEO', description: 'Where the campaign runs.', example: 'Meta Ads, Google Search, Email, SEO.' },
     ],
   },
 
@@ -206,11 +206,11 @@ export const TOOL_CONFIGS: Record<string, ToolConfig> = {
     suite: 'Sales Intelligence',
     worksWith: ['Competitor_Analyze', 'AudienceIntel_Analyze'],
     inputs: [
-      { key: 'offer', label: 'Offer Description', placeholder: 'Describe the core offer...', multiline: true, primary: true },
-      { key: 'pricing', label: 'Pricing', placeholder: 'e.g. $49/mo, $499 one-time' },
-      { key: 'bonuses', label: 'Bonuses', placeholder: 'Any bonuses or add-ons included' },
-      { key: 'guarantees', label: 'Guarantees', placeholder: 'e.g. 30-day money-back' },
-      { key: 'audience', label: 'Target Audience', placeholder: 'Who is this offer for?' },
+      { key: 'offer', label: 'Offer Description', placeholder: 'Describe the core offer...', multiline: true, primary: true, description: 'What the buyer gets and the main promise — the core transformation or result.', example: 'A 12-week coaching program that gets founders their first 10 paying customers.' },
+      { key: 'pricing', label: 'Pricing', placeholder: 'e.g. $49/mo, $499 one-time', description: 'Your price and how it’s structured.', example: '$49/mo, $499 one-time, or 3 × $199.' },
+      { key: 'bonuses', label: 'Bonuses', placeholder: 'Any bonuses or add-ons included', description: 'Extras included to raise the perceived value.', example: 'Free onboarding call, template library, private community.' },
+      { key: 'guarantees', label: 'Guarantees', placeholder: 'e.g. 30-day money-back', description: 'The risk-reversal you offer to lower buying friction.', example: '30-day money-back, or results-or-refund.' },
+      { key: 'audience', label: 'Target Audience', placeholder: 'Who is this offer for?', description: 'Who the offer is designed for.', example: 'Solo, bootstrapped founders who are pre-revenue.' },
     ],
   },
 
@@ -226,10 +226,10 @@ export const TOOL_CONFIGS: Record<string, ToolConfig> = {
     suite: 'Business Strategy',
     worksWith: ['MarketIntel_Analyze', 'Competitor_Analyze'],
     inputs: [
-      { key: 'type', label: 'What are you evaluating?', placeholder: '', options: ['Business Idea', 'Campaign Concept', 'Growth Initiative', 'Expansion Plan'] },
-      { key: 'concept', label: 'Description', placeholder: 'Describe the idea, concept, or initiative in detail...', multiline: true, primary: true },
-      { key: 'industry', label: 'Industry / Market', placeholder: 'e.g. B2B SaaS, DTC skincare' },
-      { key: 'objective', label: 'Primary Objective', placeholder: 'e.g. Reach $10k MRR in 6 months' },
+      { key: 'type', label: 'What are you evaluating?', placeholder: '', options: ['Business Idea', 'Campaign Concept', 'Growth Initiative', 'Expansion Plan'], description: 'The kind of decision you’re pressure-testing — sets the evaluation lens.' },
+      { key: 'concept', label: 'Description', placeholder: 'Describe the idea, concept, or initiative in detail...', multiline: true, primary: true, description: 'Describe the idea in detail — what it is, why now, and what makes it work. More context means a sharper verdict.', example: 'Launch a self-serve $29/mo tier of our enterprise product to reach smaller teams.' },
+      { key: 'industry', label: 'Industry / Market', placeholder: 'e.g. B2B SaaS, DTC skincare', description: 'The market this idea plays in.', example: 'B2B SaaS, DTC skincare.' },
+      { key: 'objective', label: 'Primary Objective', placeholder: 'e.g. Reach $10k MRR in 6 months', description: 'The specific outcome you’re aiming for, with a timeframe.', example: 'Reach $10k MRR within 6 months.' },
     ],
   },
 
@@ -245,9 +245,9 @@ export const TOOL_CONFIGS: Record<string, ToolConfig> = {
     suite: 'Business Strategy',
     worksWith: ['MarketIntel_Analyze', 'AudienceIntel_Analyze', 'StrategyLab_Analyze'],
     inputs: [
-      { key: 'business', label: 'Business Information', placeholder: 'Describe your business and current state...', multiline: true, primary: true },
-      { key: 'performance', label: 'Current Performance', placeholder: 'e.g. $20k MRR, 5% MoM growth' },
-      { key: 'objectives', label: 'Growth Objectives', placeholder: 'What growth are you targeting?' },
+      { key: 'business', label: 'Business Information', placeholder: 'Describe your business and current state...', multiline: true, primary: true, description: 'Your model, stage, and what’s working vs. stuck right now.', example: 'B2B SaaS at $20k MRR with strong retention but weak top-of-funnel.' },
+      { key: 'performance', label: 'Current Performance', placeholder: 'e.g. $20k MRR, 5% MoM growth', description: 'Your current metrics and trajectory.', example: '$20k MRR, 5% MoM growth, 3% monthly churn.' },
+      { key: 'objectives', label: 'Growth Objectives', placeholder: 'What growth are you targeting?', description: 'The growth you’re aiming for, and by when.', example: 'Double MRR within 9 months.' },
     ],
   },
 
@@ -263,10 +263,10 @@ export const TOOL_CONFIGS: Record<string, ToolConfig> = {
     suite: 'Operations Intelligence',
     worksWith: [],
     inputs: [
-      { key: 'workflow', label: 'Workflow Description', placeholder: 'Describe the process or workflow end-to-end...', multiline: true, primary: true },
-      { key: 'steps', label: 'Process Steps', placeholder: 'List the key steps, in order' },
-      { key: 'team', label: 'Team / Roles', placeholder: 'Who is involved at each step?' },
-      { key: 'objectives', label: 'Objectives', placeholder: 'What is this workflow meant to achieve?' },
+      { key: 'workflow', label: 'Workflow Description', placeholder: 'Describe the process or workflow end-to-end...', multiline: true, primary: true, description: 'Describe the process end-to-end — what triggers it and what the final outcome is.', example: 'Inbound lead → qualification → demo → proposal → closed deal.' },
+      { key: 'steps', label: 'Process Steps', placeholder: 'List the key steps, in order', description: 'The key steps in the order they happen.', example: '1) Form fill 2) SDR call 3) Demo 4) Proposal 5) Contract.' },
+      { key: 'team', label: 'Team / Roles', placeholder: 'Who is involved at each step?', description: 'Who owns each step — roles and handoffs.', example: 'SDR qualifies, AE runs the demo, Ops sends the contract.' },
+      { key: 'objectives', label: 'Objectives', placeholder: 'What is this workflow meant to achieve?', description: 'What a better version of this workflow should achieve.', example: 'Cut time-to-close from 30 days to 15.' },
     ],
   },
 };

@@ -5,7 +5,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdmin } from '../AdminContext';
 import { AdminSectionHeader, AdminTable, Pill, Column } from '../primitives';
-import { UserProfile } from '../../../types';
+import { UserProfile, UserTier } from '../../../types';
+import { callAdminManageSubscription } from '../../../services/persistenceService';
 import { fmtDate } from '../util';
 
 const Users: React.FC = () => {
@@ -18,9 +19,10 @@ const Users: React.FC = () => {
     (tierFilter === 'all' || u.tier === tierFilter) &&
     (statusFilter === 'all' || (statusFilter === 'suspended' ? u.is_suspended : !u.is_suspended)));
 
-  const changePlan = (u: UserProfile) => a.confirm({
-    type: 'changePlan', userId: u.id, payload: { plan: u.tier === 'free' ? 'pro' : 'free' },
-    warningTitle: 'CHANGE SUBSCRIPTION TIER', warningMessage: `Switch ${u.email} to ${u.tier === 'free' ? 'PRO' : 'FREE'}.`, keyword: 'CONFIRM',
+  const changePlan = (u: UserProfile, plan: UserTier) => a.confirm({
+    scope: 'admin:user_management', keyword: 'CONFIRM', warningTitle: 'SET PLAN',
+    warningMessage: `Set ${u.email}'s subscription to ${plan.toUpperCase()}.${plan !== 'free' ? ' Status → active, renewal in 30 days.' : ''}`,
+    run: async () => { await callAdminManageSubscription('changePlan', u.id!, { plan }); },
   });
   const resetTokens = (u: UserProfile) => a.confirm({
     type: 'resetTokens', userId: u.id, warningTitle: 'RESET TOKEN BALANCE', warningMessage: `Reset ${u.email} to plan default.`, keyword: 'RESET',
@@ -43,7 +45,11 @@ const Users: React.FC = () => {
       </button>
     ) },
     { key: 'plan', header: 'Plan', render: u => (
-      <button onClick={() => changePlan(u)} disabled={a.isEmergencyActive}><Pill tone={u.tier === 'free' ? 'gray' : 'red'}>{u.tier}</Pill></button>
+      <select value={u.tier} disabled={a.isEmergencyActive}
+        onChange={e => { const plan = e.target.value as UserTier; if (plan !== u.tier) changePlan(u, plan); }}
+        className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1.5 rounded-lg bg-gray-50 text-gray-600 border border-gray-200 outline-none hover:text-[#0B0B0B] disabled:opacity-30 cursor-pointer">
+        <option value="free">Free</option><option value="pro">Pro</option><option value="team">Team</option><option value="agency">Agency</option><option value="enterprise">Enterprise</option>
+      </select>
     ) },
     { key: 'role', header: 'Role', render: u => <span className={`text-[10px] font-bold uppercase tracking-widest ${u.role !== 'user' ? 'text-blue-600' : 'text-gray-400'}`}>{u.role === 'user' ? 'User' : u.role.replace('_', ' ')}</span> },
     { key: 'tokens', header: 'Tokens', render: u => <span className="text-sm font-bold text-[#0B0B0B]">{u.tokens}</span> },

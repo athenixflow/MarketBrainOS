@@ -56,7 +56,7 @@ const TeamMembers: React.FC<{ workspace: Workspace; membership: Membership | nul
               <Input label="Email" placeholder="teammate@company.com" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} />
             </div>
             <div>
-              <label className="block text-xs font-bold text-[#0B0B0B] mb-3 tracking-widest uppercase opacity-40">Role</label>
+              <label className="block text-xs font-bold text-gray-700 mb-3 tracking-widest uppercase">Role</label>
               <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as WorkspaceRole)}
                 className="bg-[#FBFBFB] border border-gray-100 p-4 rounded-2xl text-sm outline-none">
                 {ASSIGNABLE_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}

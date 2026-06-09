@@ -234,7 +234,7 @@ const ClientWorkspace: React.FC<{
                 <Input label="Name" placeholder="Client name" value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
                 <Input label="Industry" placeholder="Industry" value={edit.industry} onChange={(e) => setEdit({ ...edit, industry: e.target.value })} />
                 <div>
-                  <label className="block text-xs font-bold text-[#0B0B0B] mb-3 tracking-widest uppercase opacity-40">Status</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-3 tracking-widest uppercase">Status</label>
                   <select value={edit.status} onChange={(e) => setEdit({ ...edit, status: e.target.value as any })} className="w-full bg-[#FBFBFB] border border-gray-100 p-4 rounded-2xl text-sm outline-none">
                     <option value="active">Active</option><option value="growing">Growing</option><option value="at_risk">At Risk</option><option value="inactive">Inactive</option>
                   </select>

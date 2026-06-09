@@ -25,7 +25,7 @@ const LANGUAGES = ['English', 'Spanish', 'French', 'German', 'Portuguese', 'Arab
 const Select: React.FC<{ label: string; value: string; options: string[]; onChange: (v: string) => void; placeholder?: string }> =
   ({ label, value, options, onChange, placeholder }) => (
     <div className="flex flex-col mb-8">
-      <label className="text-xs font-bold text-[#0B0B0B] mb-5 tracking-widest uppercase opacity-40">{label}</label>
+      <label className="text-xs font-bold text-gray-700 mb-5 tracking-widest uppercase">{label}</label>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}

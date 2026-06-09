@@ -215,14 +215,14 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
               {config.inputs.map(field => (
                 field.options ? (
                   <div key={field.key} className="mb-12">
-                    <label className="block text-xs font-bold text-[#0B0B0B] mb-5 tracking-widest uppercase opacity-40">{field.label}</label>
+                    <label className="block text-xs font-bold text-gray-700 mb-5 tracking-widest uppercase">{field.label}</label>
                     <div className="grid grid-cols-2 gap-2">
                       {field.options.map(opt => (
                         <button
                           key={opt}
                           type="button"
                           onClick={() => setField(field.key, opt)}
-                          className={`px-4 py-3 rounded-xl text-xs font-bold transition-all ${values[field.key] === opt ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}
+                          className={`px-4 py-3 rounded-xl text-xs font-bold transition-all ${values[field.key] === opt ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
                         >
                           {opt}
                         </button>
@@ -239,8 +239,8 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
                       multiline={field.multiline}
                     />
                     {(field.description || field.example) && (
-                      <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-400 leading-relaxed">
-                        {field.description}{field.example ? <span className="text-gray-300"> e.g. {field.example}</span> : null}
+                      <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">
+                        {field.description}{field.example ? <span className="text-gray-500"> e.g. {field.example}</span> : null}
                       </p>
                     )}
                     {field.multiline && (
@@ -252,7 +252,7 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
 
               {priorAnalyses.length > 0 && (
                 <div className="mb-12">
-                  <label className="block text-xs font-bold text-[#0B0B0B] mb-5 tracking-widest uppercase opacity-40">
+                  <label className="block text-xs font-bold text-gray-700 mb-5 tracking-widest uppercase">
                     Add context from a prior analysis (optional)
                   </label>
                   <select
@@ -267,7 +267,7 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
                       </option>
                     ))}
                   </select>
-                  <p className="mt-3 text-[10px] font-medium text-gray-400 leading-relaxed">
+                  <p className="mt-3 text-[10px] font-medium text-gray-600 leading-relaxed">
                     Feeds a related saved analysis into this tool for connected intelligence.
                   </p>
                 </div>
@@ -275,14 +275,14 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
 
               {inTeamScope && (
                 <div className="mb-8">
-                  <label className="block text-xs font-bold text-[#0B0B0B] mb-3 tracking-widest uppercase opacity-40">Save this analysis as</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-3 tracking-widest uppercase">Save this analysis as</label>
                   <div className="grid grid-cols-2 gap-2">
                     {(['workspace', 'private'] as const).map(opt => (
                       <button
                         key={opt}
                         type="button"
                         onClick={() => setVisibilityChoice(opt)}
-                        className={`px-4 py-3 rounded-xl text-xs font-bold transition-all ${visibilityChoice === opt ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}
+                        className={`px-4 py-3 rounded-xl text-xs font-bold transition-all ${visibilityChoice === opt ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
                       >
                         {opt === 'workspace' ? 'Shared with team' : 'Private to me'}
                       </button>

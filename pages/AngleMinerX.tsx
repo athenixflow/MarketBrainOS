@@ -331,7 +331,7 @@ const AngleMinerX: React.FC = () => {
                   />
                   
                   <div className="mb-12">
-                    <label className="text-xs font-bold text-[#0B0B0B] mb-5 tracking-widest uppercase opacity-40 block">Goal</label>
+                    <label className="text-xs font-bold text-gray-700 mb-5 tracking-widest uppercase block">Goal</label>
                     <div className="flex flex-wrap gap-3">
                       {goals.map(g => (
                         <button
@@ -339,7 +339,7 @@ const AngleMinerX: React.FC = () => {
                           type="button"
                           onClick={() => setGoal(g)}
                           className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
-                            goal === g ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+                            goal === g ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
                           }`}
                         >
                           {g}
@@ -349,7 +349,7 @@ const AngleMinerX: React.FC = () => {
                   </div>
 
                   <div className="mb-12">
-                    <label className="text-xs font-bold text-[#0B0B0B] mb-5 tracking-widest uppercase opacity-40 block">Tone Profile</label>
+                    <label className="text-xs font-bold text-gray-700 mb-5 tracking-widest uppercase block">Tone Profile</label>
                     <div className="flex flex-wrap gap-3">
                       {tones.map(t => (
                         <button
@@ -357,7 +357,7 @@ const AngleMinerX: React.FC = () => {
                           type="button"
                           onClick={() => handleToggleTone(t)}
                           className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
-                            selectedTones.includes(t) ? 'bg-[#FF0000] text-white shadow-md shadow-[#FF0000]/20' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+                            selectedTones.includes(t) ? 'bg-[#FF0000] text-white shadow-md shadow-[#FF0000]/20' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
                           }`}
                         >
                           {t}

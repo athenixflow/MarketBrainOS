@@ -110,12 +110,12 @@ export const Input: React.FC<{
   name?: string;
 }> = ({ label, placeholder, value, onChange, multiline, error, disabled, name }) => (
   <div className="flex flex-col mb-12">
-    <label className="text-xs font-bold text-[#0B0B0B] mb-5 tracking-widest uppercase opacity-40">{label}</label>
+    <label className="text-xs font-bold text-gray-700 mb-5 tracking-widest uppercase">{label}</label>
     {multiline ? (
       <textarea
         name={name}
         disabled={disabled}
-        className={`bg-[#FBFBFB] border ${error ? 'border-[#FF0000]/20' : 'border-gray-100'} p-8 rounded-[32px] focus:ring-4 focus:ring-[#FF0000]/5 focus:border-[#FF0000]/20 outline-none min-h-[180px] transition-all text-lg text-[#0B0B0B] placeholder:text-gray-300 leading-relaxed disabled:opacity-50`}
+        className={`bg-[#FBFBFB] border ${error ? 'border-[#FF0000]/20' : 'border-gray-100'} p-8 rounded-[32px] focus:ring-4 focus:ring-[#FF0000]/5 focus:border-[#FF0000]/20 outline-none min-h-[180px] transition-all text-lg text-[#0B0B0B] placeholder:text-gray-400 leading-relaxed disabled:opacity-50`}
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e)}
@@ -124,7 +124,7 @@ export const Input: React.FC<{
       <input
         name={name}
         disabled={disabled}
-        className={`bg-[#FBFBFB] border ${error ? 'border-[#FF0000]/20' : 'border-gray-100'} p-8 rounded-[32px] focus:ring-4 focus:ring-[#FF0000]/5 focus:border-[#FF0000]/20 outline-none transition-all text-lg text-[#0B0B0B] placeholder:text-gray-300 disabled:opacity-50`}
+        className={`bg-[#FBFBFB] border ${error ? 'border-[#FF0000]/20' : 'border-gray-100'} p-8 rounded-[32px] focus:ring-4 focus:ring-[#FF0000]/5 focus:border-[#FF0000]/20 outline-none transition-all text-lg text-[#0B0B0B] placeholder:text-gray-400 disabled:opacity-50`}
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e)}

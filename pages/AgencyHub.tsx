@@ -189,7 +189,7 @@ const AgencyHub: React.FC = () => {
               <Card title="Ownership & lifecycle">
                 <div className="space-y-6">
                   <div>
-                    <label className="block text-xs font-bold text-[#0B0B0B] mb-3 tracking-widest uppercase opacity-40">Transfer ownership</label>
+                    <label className="block text-xs font-bold text-gray-700 mb-3 tracking-widest uppercase">Transfer ownership</label>
                     <div className="flex gap-2">
                       <select value={transferTo} onChange={(e) => setTransferTo(e.target.value)} className="flex-grow bg-[#FBFBFB] border border-gray-100 p-4 rounded-2xl text-sm outline-none">
                         <option value="">Select a member…</option>

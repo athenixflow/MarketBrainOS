@@ -39,7 +39,7 @@ const AgencyMembers: React.FC<{
           <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-end">
             <div className="flex-grow"><Input label="Email" placeholder="colleague@agency.com" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
             <div>
-              <label className="block text-xs font-bold text-[#0B0B0B] mb-3 tracking-widest uppercase opacity-40">Role</label>
+              <label className="block text-xs font-bold text-gray-700 mb-3 tracking-widest uppercase">Role</label>
               <select value={role} onChange={(e) => setRole(e.target.value as AgencyRole)} className="bg-[#FBFBFB] border border-gray-100 p-4 rounded-2xl text-sm outline-none">
                 {ASSIGNABLE.map(r => <option key={r} value={r}>{ROLE_LABELS[r] || r}</option>)}
               </select>

@@ -217,7 +217,7 @@ const TestLabPro: React.FC = () => {
             <form onSubmit={(e) => { e.preventDefault(); handleRunTest(); }}>
               <HoneypotField value={honeypotValue} onChange={setHoneypotValue} />
               <div className="mb-12">
-                <label className="text-xs font-bold text-[#0B0B0B] mb-5 tracking-widest uppercase opacity-40 block">Comparison Type</label>
+                <label className="text-xs font-bold text-gray-700 mb-5 tracking-widest uppercase block">Comparison Type</label>
                 <div className="flex flex-wrap gap-3">
                   {comparisonTypes.map(t => (
                     <button
@@ -225,7 +225,7 @@ const TestLabPro: React.FC = () => {
                       type="button"
                       onClick={() => setComparisonType(t)}
                       className={`px-6 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
-                        comparisonType === t ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+                        comparisonType === t ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
                       }`}
                     >
                       {t}

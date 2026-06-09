@@ -267,7 +267,7 @@ const ConversionDoctor: React.FC = () => {
                 </div>
                 
                 <div className="mb-12">
-                  <label className="text-xs font-bold text-[#0B0B0B] mb-5 tracking-widest uppercase opacity-40 block">Page Context</label>
+                  <label className="text-xs font-bold text-gray-700 mb-5 tracking-widest uppercase block">Page Context</label>
                   <div className="flex flex-wrap gap-3">
                     {contexts.map(c => (
                       <button
@@ -275,7 +275,7 @@ const ConversionDoctor: React.FC = () => {
                         type="button"
                         onClick={() => setContext(c)}
                         className={`px-6 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
-                          context === c ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+                          context === c ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
                         }`}
                       >
                         {c}
