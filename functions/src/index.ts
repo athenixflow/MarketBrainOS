@@ -403,9 +403,11 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
 
       if (module === 'AngleMiner_Generate') {
         const prompt = `
-          Generate marketing angles. Product Name: ${input.productName || ''}, Description: ${input.product}, Audience: ${input.target}, Market: ${input.market || input.industry}, Goal: ${input.goal}, Tones: ${input.tones?.join(', ')}.
-          Produce angles across these 8 types: Emotional, Fear, Aspiration, Curiosity, Authority, Differentiation, Story, Contrarian (at least one of each, more for the strongest).
-          Each angle: { type (one of the 8 exact labels), title, hook, rational, score (0-100) }.
+          As a senior direct-response copywriter, generate high-converting marketing angles.
+          Product Name: ${input.productName || ''}. Description: ${input.product}. Audience: ${input.target}. Market: ${input.market || input.industry}. Goal: ${input.goal}. Tones: ${input.tones?.join(', ')}.
+          Produce angles across these 8 types: Emotional, Fear, Aspiration, Curiosity, Authority, Differentiation, Story, Contrarian (at least one of each; more for the strongest).
+          For each angle: 'type' (one of the 8 exact labels), 'title' (the angle name), 'hook' (a ready-to-use headline/opening line, written in the chosen tone and specific to THIS product and audience), 'rational' (2-3 sentences on the psychology of why it works for this audience and when to use it), 'score' (0-100 estimated strength).
+          Also produce 'hooks': 3-5 platform-ready variations, each { platform (e.g. Meta, Google, Email, LinkedIn), short (a punchy hook under 15 words), expanded (a 1-2 sentence version) }.
           Return strict JSON: { angles: [{type, title, hook, rational, score}], hooks: [{platform, short, expanded}] }
         `;
         const result = await model.generateContent({
@@ -419,7 +421,7 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
         responseText = result.response.text();
       }
       else if (module === 'TestLab_Simulation') {
-        const prompt = `Compare variants for ${input.type}: ${input.variants?.join(', ')}. Return JSON: { variants: [{label, text, score}], winnerLabel, explanation }`;
+        const prompt = `As a senior performance-marketing analyst, predict how these ${input.type} variants would perform and explain why. Variants: ${input.variants?.join(' | ')}. For each variant give { label, text (the variant, lightly cleaned), score (0-100 predicted performance) }. Pick 'winnerLabel'. Write a detailed 'explanation' (3-5 sentences): why the winner wins, the key clarity/psychology differences between variants, and one concrete way to make the winner even stronger. Return strict JSON: { variants: [{label, text, score}], winnerLabel, explanation }`;
         const result = await model.generateContent({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: { responseMimeType: 'application/json' }
@@ -427,7 +429,16 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
         responseText = result.response.text();
       }
       else if (module === 'ConversionDoctor_Audit') {
-        const prompt = `Audit ${input.context}: "${input.input}". Return JSON: { score, summary, issues: [{blocker, impact}], fixes: [{what, how, expectedResult}] }`;
+        const prompt = [
+          `As a senior conversion-rate-optimization (CRO) expert, audit this ${input.context}.`,
+          `Page or copy: "${String(input.input || '').slice(0, 16000)}".`,
+          input.audience ? `Target audience: ${input.audience}.` : '',
+          input.goal ? `Primary conversion goal: ${input.goal}.` : '',
+          input.trafficSource ? `Traffic source: ${input.trafficSource}.` : '',
+          `Give a 'score' (0-100) and a 1-2 sentence 'summary'. Identify the real conversion blockers (most impactful first) and concrete, specific fixes.`,
+          `Return strict JSON: { score, summary, issues: [{ blocker, impact, severity }], fixes: [{ what, how, expectedResult, priority }] } with 4-7 issues and 4-7 fixes.`,
+          `'severity' = Critical|High|Medium|Low; 'impact' = why it costs conversions; 'how' = exactly how to implement it; 'expectedResult' = the likely lift; 'priority' = High|Medium|Low.`,
+        ].filter(Boolean).join(' ');
         const result = await model.generateContent({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: { responseMimeType: 'application/json' }
@@ -435,7 +446,7 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
         responseText = result.response.text();
       }
       else if (module === 'Workflow_ImproveAssets') {
-        const prompt = `Refine angle "${input.angle}" based on issues: ${input.issues?.join(', ')}. Return JSON: { headline, cta, offer }`;
+        const prompt = `As a senior conversion copywriter, refine these campaign assets. Base angle: "${input.angle}". Issues to fix: ${input.issues?.join(', ')}. Produce a stronger 'headline' (specific, benefit-led), a high-converting 'cta' (action-oriented), and a sharpened 'offer' (the value proposition stated compellingly) — each directly addressing the issues above. Return strict JSON: { headline, cta, offer }`;
         const result = await model.generateContent({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: { responseMimeType: 'application/json' }

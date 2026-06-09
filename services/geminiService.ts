@@ -117,9 +117,9 @@ export const runTestLabComparison = async (type: string, variants: string[], use
   return result;
 };
 
-export const auditConversion = async (input: string, context: string, userId?: string) => {
+export const auditConversion = async (input: string, context: string, userId?: string, extra?: Record<string, string>) => {
   SystemContracts.ConversionDoctor.inputValidator({ input, context });
-  const result = await executeAsyncJob('ConversionDoctor_Audit', { input, context });
+  const result = await executeAsyncJob('ConversionDoctor_Audit', { input, context, ...(extra || {}) });
   SystemContracts.ConversionDoctor.outputValidator(result);
   if (userId) await saveConversionDoctorResult(userId, input, result.score, result);
   return result;

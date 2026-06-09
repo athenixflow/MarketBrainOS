@@ -608,12 +608,14 @@ export interface TestLabResults {
 export interface AuditIssue {
   blocker: string;
   impact: string;
+  severity?: string;   // 'Critical' | 'High' | 'Medium' | 'Low'
 }
 
 export interface AuditFix {
   what: string;
   how: string;
   expectedResult: string;
+  priority?: string;   // 'High' | 'Medium' | 'Low' — what to do first
 }
 
 export interface AuditRewrite {

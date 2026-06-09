@@ -34,6 +34,10 @@ const ConversionDoctor: React.FC = () => {
   const { user, profile, refreshProfile } = useAuth();
   const [input, setInput] = useState('');
   const [context, setContext] = useState('Landing Page');
+  const [audience, setAudience] = useState('');
+  const [goal, setGoal] = useState('');
+  const [trafficSource, setTrafficSource] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isTakingLong, setIsTakingLong] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -148,7 +152,7 @@ const ConversionDoctor: React.FC = () => {
     setExecutionError(null);
     setResult(null);
     try {
-      const data = await auditConversion(trimmedInput, context, user?.uid);
+      const data = await auditConversion(trimmedInput, context, user?.uid, { audience, goal, trafficSource });
       setResult({ ...data, auditedUrl: trimmedInput.startsWith('http') ? trimmedInput : undefined });
       
       if (user) await refreshProfile();
@@ -284,6 +288,25 @@ const ConversionDoctor: React.FC = () => {
                   </div>
                 </div>
 
+                <div className="mb-10">
+                  <button type="button" onClick={() => setShowAdvanced(v => !v)}
+                    className="flex items-center gap-2 text-[10px] font-bold text-gray-600 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">
+                    <span className="text-base leading-none w-4 text-center">{showAdvanced ? '−' : '+'}</span>
+                    Advanced context (optional)
+                  </button>
+                  <p className="mt-2 mb-6 text-[11px] font-medium text-gray-500 leading-relaxed pl-6">Add context for a sharper, more tailored audit. All optional.</p>
+                  {showAdvanced && (
+                    <div>
+                      <Input label="Target Audience" placeholder="Who is this page for?" value={audience} onChange={(e) => setAudience(e.target.value)} />
+                      <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">Who you’re trying to convert — the audit weighs friction differently per audience.<span className="text-gray-500"> e.g. First-time visitors from cold Meta ads.</span></p>
+                      <Input label="Conversion Goal" placeholder="The one action you want" value={goal} onChange={(e) => setGoal(e.target.value)} />
+                      <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">The single action this page should drive.<span className="text-gray-500"> e.g. Start a free trial.</span></p>
+                      <Input label="Traffic Source" placeholder="Where visitors come from" value={trafficSource} onChange={(e) => setTrafficSource(e.target.value)} />
+                      <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">How people arrive — intent differs by source.<span className="text-gray-500"> e.g. Google search, cold ads, email list.</span></p>
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex flex-col gap-6">
                   <PrimaryButton 
                     type="submit"
@@ -374,6 +397,64 @@ const ConversionDoctor: React.FC = () => {
                 </div>
               </Card>
             </div>
+
+            {/* Conversion blockers */}
+            {result.issues && result.issues.length > 0 && (
+              <Card className="mt-12">
+                <div className="flex items-center gap-4 mb-8">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000]" />
+                  <h2 className="text-lg font-bold tracking-tight text-[#0B0B0B] uppercase tracking-[0.1em]">Conversion Blockers</h2>
+                </div>
+                <div className="space-y-3">
+                  {result.issues.map((issue, i) => (
+                    <div key={i} className="p-5 bg-gray-50 rounded-2xl border border-gray-100">
+                      <div className="flex items-start gap-3">
+                        <div className="w-1.5 h-1.5 rounded-full mt-2 bg-[#FF0000] shrink-0" />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <p className="text-sm text-[#0B0B0B] leading-relaxed font-bold">{issue.blocker}</p>
+                            {issue.severity && (
+                              <span className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-red-50 text-red-500">{issue.severity}</span>
+                            )}
+                          </div>
+                          {issue.impact && <p className="mt-2 text-sm text-gray-600 leading-relaxed font-medium">{issue.impact}</p>}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {/* Prioritized fixes */}
+            {result.fixes && result.fixes.length > 0 && (
+              <Card className="mt-12">
+                <div className="flex items-center gap-4 mb-8">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000]" />
+                  <h2 className="text-lg font-bold tracking-tight text-[#0B0B0B] uppercase tracking-[0.1em]">Prioritized Fixes</h2>
+                </div>
+                <div className="space-y-3">
+                  {result.fixes.map((fix, i) => (
+                    <div key={i} className="p-5 bg-gray-50 rounded-2xl border border-gray-100">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <p className="text-sm text-[#0B0B0B] leading-relaxed font-bold">{fix.what}</p>
+                        {fix.priority && (
+                          <span className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-gray-200 text-gray-600">{fix.priority} priority</span>
+                        )}
+                      </div>
+                      {fix.how && (
+                        <div className="mt-3"><span className="text-[9px] font-black uppercase tracking-widest text-gray-500">How</span>
+                          <p className="mt-1 text-sm text-gray-600 leading-relaxed font-medium">{fix.how}</p></div>
+                      )}
+                      {fix.expectedResult && (
+                        <div className="mt-3"><span className="text-[9px] font-black uppercase tracking-widest text-[#FF0000]">Expected result</span>
+                          <p className="mt-1 text-sm text-gray-700 leading-relaxed font-semibold">{fix.expectedResult}</p></div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
           </ResultContainer>
         )}
       </div>

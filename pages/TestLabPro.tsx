@@ -234,10 +234,12 @@ const TestLabPro: React.FC = () => {
                 </div>
               </div>
 
+              <p className="mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">Paste 2–5 versions you want to test against each other — we predict a winner and explain why.<span className="text-gray-500"> e.g. two headline options, or two ad primary texts.</span></p>
+
               <div className="space-y-2">
                 {variants.map((v, i) => (
                   <div key={i}>
-                    <Input 
+                    <Input
                       label={`Variant ${String.fromCharCode(65 + i)}`}
                       placeholder={`Enter ${comparisonType.toLowerCase()} content...`}
                       value={v}

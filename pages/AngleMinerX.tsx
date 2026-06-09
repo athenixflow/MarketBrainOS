@@ -298,6 +298,7 @@ const AngleMinerX: React.FC = () => {
                       value={productName}
                       onChange={(e) => { setProductName(e.target.value); setError(null); }}
                     />
+                    <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">The name of what you’re selling.<span className="text-gray-500"> e.g. MarketBrain OS.</span></p>
                   </div>
                   <div className="md:col-span-2">
                     <Input
@@ -307,28 +308,38 @@ const AngleMinerX: React.FC = () => {
                       onChange={(e) => { setProduct(e.target.value); setError(null); }}
                       multiline
                     />
-                    <p className={`text-right text-[9px] font-bold uppercase tracking-widest ${product.length > MAX_INPUT_CHARS ? 'text-[#FF0000]' : 'text-gray-300'}`}>
+                    <p className={`text-right text-[9px] font-bold uppercase tracking-widest ${product.length > MAX_INPUT_CHARS ? 'text-[#FF0000]' : 'text-gray-400'}`}>
                       {product.length} / {MAX_INPUT_CHARS} characters
                     </p>
+                    <p className="mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">What it does and the core benefit — the more specific, the sharper the angles.<span className="text-gray-500"> e.g. A done-for-you content marketing subscription for busy founders.</span></p>
                   </div>
-                  <Input
-                    label="Industry"
-                    placeholder="e.g. SaaS, E-commerce, Real Estate"
-                    value={industry}
-                    onChange={(e) => { setIndustry(e.target.value); setError(null); }}
-                  />
-                  <Input
-                    label="Market"
-                    placeholder="e.g. North America SMBs, Gen-Z creators"
-                    value={market}
-                    onChange={(e) => { setMarket(e.target.value); setError(null); }}
-                  />
-                  <Input
-                    label="Target Audience"
-                    placeholder="Who is this for? Be specific."
-                    value={target}
-                    onChange={(e) => { setTarget(e.target.value); setError(null); }}
-                  />
+                  <div>
+                    <Input
+                      label="Industry"
+                      placeholder="e.g. SaaS, E-commerce, Real Estate"
+                      value={industry}
+                      onChange={(e) => { setIndustry(e.target.value); setError(null); }}
+                    />
+                    <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">Your sector — shapes language and proof.<span className="text-gray-500"> e.g. B2B SaaS.</span></p>
+                  </div>
+                  <div>
+                    <Input
+                      label="Market"
+                      placeholder="e.g. North America SMBs, Gen-Z creators"
+                      value={market}
+                      onChange={(e) => { setMarket(e.target.value); setError(null); }}
+                    />
+                    <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">The segment you’re targeting.<span className="text-gray-500"> e.g. North America SMBs.</span></p>
+                  </div>
+                  <div>
+                    <Input
+                      label="Target Audience"
+                      placeholder="Who is this for? Be specific."
+                      value={target}
+                      onChange={(e) => { setTarget(e.target.value); setError(null); }}
+                    />
+                    <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">The exact person you’re speaking to.<span className="text-gray-500"> e.g. Solo founders running lean teams.</span></p>
+                  </div>
                   
                   <div className="mb-12">
                     <label className="text-xs font-bold text-gray-700 mb-5 tracking-widest uppercase block">Goal</label>
