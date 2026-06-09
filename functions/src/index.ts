@@ -440,7 +440,7 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
         const { _context, ...cleanInput } = (input || {});
         const prompt = [
           `Task: ${cfg.instruction}`,
-          `Inputs: ${JSON.stringify(cleanInput).slice(0, 4000)}`,
+          `Inputs: ${JSON.stringify(cleanInput).slice(0, 16000)}`,
           _context ? `Use this related prior analysis as supporting context — build on it, do not just repeat it: ${String(_context).slice(0, 3000)}` : "",
           cfg.scored ? "Include a numeric 'score' (0-100) and a short 'verdict' label." : "",
           `Provide a 'summary' (the Executive Summary) plus a 'sections' array that includes EVERY one of these sections, in this exact order: ${UNIVERSAL_SECTIONS.join(', ')}.`,

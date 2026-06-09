@@ -36,6 +36,7 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
 
   const [values, setValues] = useState<Record<string, string>>(initialValues);
   const [honeypotValue, setHoneypotValue] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [runStage, setRunStage] = useState<RunStage>('queued');
@@ -64,6 +65,54 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
   const cost = TOKEN_COSTS[config.costKey];
   const primaryField = config.inputs.find(f => f.primary) || config.inputs.find(f => f.multiline) || config.inputs[0];
   const guide = getToolGuide(config);
+
+  // Institutional forms: essentials stay visible; `advanced` fields collapse under a disclosure.
+  const essentialFields = config.inputs.filter(f => f.group !== 'advanced');
+  const advancedFields = config.inputs.filter(f => f.group === 'advanced');
+
+  // One renderer for both groups (option button-group OR text Input + helper/example + counter).
+  const renderField = (field: ToolConfig['inputs'][number]) => (
+    field.options ? (
+      <div key={field.key} className="mb-12">
+        <label className="block text-xs font-bold text-gray-700 mb-5 tracking-widest uppercase">{field.label}</label>
+        <div className="grid grid-cols-2 gap-2">
+          {field.options.map(opt => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => setField(field.key, opt)}
+              className={`px-4 py-3 rounded-xl text-xs font-bold transition-all ${values[field.key] === opt ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+        {(field.description || field.example) && (
+          <p className="mt-4 text-[11px] font-medium text-gray-600 leading-relaxed">
+            {field.description}{field.example ? <span className="text-gray-500"> e.g. {field.example}</span> : null}
+          </p>
+        )}
+      </div>
+    ) : (
+      <div key={field.key}>
+        <Input
+          label={field.label}
+          placeholder={field.placeholder}
+          value={values[field.key] || ''}
+          onChange={(e) => setField(field.key, e.target.value)}
+          multiline={field.multiline}
+        />
+        {(field.description || field.example) && (
+          <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">
+            {field.description}{field.example ? <span className="text-gray-500"> e.g. {field.example}</span> : null}
+          </p>
+        )}
+        {field.multiline && (
+          <CharCounter value={values[field.key] || ''} max={field.maxLength || MAX_INPUT_CHARS} />
+        )}
+      </div>
+    )
+  );
 
   // Reset state when switching between tools (shared component instance).
   useEffect(() => {
@@ -212,43 +261,24 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
         <AnimatedSection index={0}>
           <Card>
             <div className="space-y-2">
-              {config.inputs.map(field => (
-                field.options ? (
-                  <div key={field.key} className="mb-12">
-                    <label className="block text-xs font-bold text-gray-700 mb-5 tracking-widest uppercase">{field.label}</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {field.options.map(opt => (
-                        <button
-                          key={opt}
-                          type="button"
-                          onClick={() => setField(field.key, opt)}
-                          className={`px-4 py-3 rounded-xl text-xs font-bold transition-all ${values[field.key] === opt ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
-                        >
-                          {opt}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div key={field.key}>
-                    <Input
-                      label={field.label}
-                      placeholder={field.placeholder}
-                      value={values[field.key] || ''}
-                      onChange={(e) => setField(field.key, e.target.value)}
-                      multiline={field.multiline}
-                    />
-                    {(field.description || field.example) && (
-                      <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">
-                        {field.description}{field.example ? <span className="text-gray-500"> e.g. {field.example}</span> : null}
-                      </p>
-                    )}
-                    {field.multiline && (
-                      <CharCounter value={values[field.key] || ''} max={field.maxLength || MAX_INPUT_CHARS} />
-                    )}
-                  </div>
-                )
-              ))}
+              {essentialFields.map(renderField)}
+
+              {advancedFields.length > 0 && (
+                <div className="mb-10">
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvanced(v => !v)}
+                    className="flex items-center gap-2 text-[10px] font-bold text-gray-600 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors"
+                  >
+                    <span className="text-base leading-none w-4 text-center">{showAdvanced ? '−' : '+'}</span>
+                    Advanced context (optional)
+                  </button>
+                  <p className="mt-2 mb-6 text-[11px] font-medium text-gray-500 leading-relaxed pl-6">
+                    The more context you add here, the deeper and more tailored your analysis. All optional.
+                  </p>
+                  {showAdvanced && <div className="space-y-2">{advancedFields.map(renderField)}</div>}
+                </div>
+              )}
 
               {priorAnalyses.length > 0 && (
                 <div className="mb-12">
