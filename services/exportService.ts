@@ -1,5 +1,21 @@
 
-import { AngleMinerResults, TestLabResults, AuditResult, ToolAnalysisResult, PaymentRecord } from '../types';
+import { AngleMinerResults, TestLabResults, AuditResult, ToolAnalysisResult, ResultItem, PaymentRecord } from '../types';
+
+// Result items are either plain strings (legacy) or structured { insight, evidence, action }.
+// These flatten them for each export format.
+const itemToText = (item: ResultItem): string => {
+  if (typeof item === 'string') return item;
+  const parts = [item.insight || ''];
+  if (item.evidence) parts.push(`Why: ${item.evidence}`);
+  if (item.action) parts.push(`Action: ${item.action}`);
+  return parts.filter(Boolean).join(' — ');
+};
+const itemToHtml = (item: ResultItem, esc: (s: string) => string): string => {
+  if (typeof item === 'string') return `<li>${esc(item)}</li>`;
+  const why = item.evidence ? `<div style="color:#555;margin-top:4px"><strong>Why it matters:</strong> ${esc(item.evidence)}</div>` : '';
+  const act = item.action ? `<div style="color:#111;margin-top:4px"><strong>Do this:</strong> ${esc(item.action)}</div>` : '';
+  return `<li><strong>${esc(item.insight || '')}</strong>${why}${act}</li>`;
+};
 
 /**
  * Clean formatting for professional export.
@@ -57,7 +73,7 @@ export const toolResultToCSV = (result: ToolAnalysisResult): (string | number)[]
   if (result.verdict) rows.push(['Verdict', result.verdict]);
   if (result.summary) rows.push(['Executive Summary', result.summary]);
   (result.sections || []).forEach(section => {
-    (section.items || []).forEach(item => rows.push([section.title, item]));
+    (section.items || []).forEach(item => rows.push([section.title, itemToText(item)]));
   });
   return rows;
 };
@@ -127,7 +143,7 @@ export const printToolResultPDF = (title: string, result: ToolAnalysisResult) =>
   const sectionsHtml = (result.sections || []).map(section => `
     <div class="section">
       <h2>${esc(section.title)}</h2>
-      <ul>${(section.items || []).map(item => `<li>${esc(item)}</li>`).join('')}</ul>
+      <ul>${(section.items || []).map(item => itemToHtml(item, esc)).join('')}</ul>
     </div>
   `).join('');
 
@@ -239,7 +255,7 @@ export const formatToolResult = (title: string, result: ToolAnalysisResult): str
 
   result.sections.forEach(section => {
     output += `${section.title.toUpperCase()}\n`;
-    section.items.forEach(item => { output += `- ${item}\n`; });
+    section.items.forEach(item => { output += `- ${itemToText(item)}\n`; });
     output += "\n";
   });
 

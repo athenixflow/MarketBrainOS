@@ -7,6 +7,7 @@ import { getAnalysesForScope, ToolAnalysisRecord } from '../../services/persiste
 import { getToolMeta } from '../../config/toolConfigs';
 import { getScoreBand } from '../../services/scoreBands';
 import AnalysisComments from './AnalysisComments';
+import { ResultItemList } from '../ResultSections';
 
 const SharedLibrary: React.FC<{ workspace: Workspace; selfUid: string; selfName: string }> = ({ workspace, selfUid, selfName }) => {
   const [records, setRecords] = useState<ToolAnalysisRecord[]>([]);
@@ -85,15 +86,8 @@ const SharedLibrary: React.FC<{ workspace: Workspace; selfUid: string; selfName:
                 <div className="mt-6 space-y-6 animate-in fade-in duration-300">
                   {(rec.result?.sections || []).map((s: any, i: number) => (
                     <div key={i}>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">{s.title}</p>
-                      <div className="space-y-2">
-                        {(s.items || []).map((item: string, j: number) => (
-                          <div key={j} className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl border border-gray-100">
-                            <div className="w-1.5 h-1.5 rounded-full mt-2 bg-[#FF0000]" />
-                            <p className="text-sm text-gray-600 leading-relaxed font-medium flex-1">{item}</p>
-                          </div>
-                        ))}
-                      </div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-3">{s.title}</p>
+                      <ResultItemList items={s.items || []} compact />
                     </div>
                   ))}
                   <AnalysisComments workspaceId={workspace.id} analysisId={rec.id} selfUid={selfUid} selfName={selfName} />

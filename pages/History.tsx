@@ -8,6 +8,7 @@ import { useScope } from '../context/ScopeContext';
 import { getToolMeta } from '../config/toolConfigs';
 import { getScoreBand } from '../services/scoreBands';
 import { downloadAsCSV, toolResultToCSV, printToolResultPDF } from '../services/exportService';
+import { ResultItemList } from '../components/ResultSections';
 
 const History: React.FC = () => {
   const { user } = useAuth();
@@ -153,15 +154,8 @@ const History: React.FC = () => {
                     <div className="mt-6 space-y-6 animate-in fade-in duration-300">
                       {(rec.result?.sections || []).map((section: any, si: number) => (
                         <div key={si}>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">{section.title}</p>
-                          <div className="space-y-2">
-                            {(section.items || []).map((item: string, ii: number) => (
-                              <div key={ii} className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl border border-gray-100">
-                                <div className="w-1.5 h-1.5 rounded-full mt-2 bg-[#FF0000]" />
-                                <p className="text-sm text-gray-600 leading-relaxed font-medium flex-1">{item}</p>
-                              </div>
-                            ))}
-                          </div>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-3">{section.title}</p>
+                          <ResultItemList items={section.items || []} compact />
                         </div>
                       ))}
                     </div>

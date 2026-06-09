@@ -23,6 +23,7 @@ import { ToolConfig, getToolMeta, getToolGuide } from '../config/toolConfigs';
 import { getUserToolAnalyses, ToolAnalysisRecord, deleteGenericAnalysis } from '../services/persistenceService';
 import { getScoreBand } from '../services/scoreBands';
 import { ExpectedOutcome, AnalysisPreview, RunProgress, CharCounter, RunStage } from './ToolGuide';
+import { ResultItemList } from './ResultSections';
 
 const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
   const { user, profile, refreshProfile } = useAuth();
@@ -196,6 +197,8 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
       const highlights = (selected.result?.sections || [])
         .slice(0, 2)
         .flatMap((s: any) => (s.items || []).slice(0, 3))
+        .map((it: any) => (typeof it === 'string' ? it : (it?.insight || '')))
+        .filter(Boolean)
         .join('; ');
       contextText = `${label} analysis — ${selected.result?.summary || ''}${highlights ? ' Highlights: ' + highlights : ''}`.trim();
     }
@@ -419,17 +422,7 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
                     ))}
                   </div>
 
-                  <div className="space-y-3">
-                    {activeSection?.items.map((item, i) => (
-                      <div key={i} className="flex items-start gap-4 p-5 bg-gray-50 rounded-2xl border border-gray-100">
-                        <div className="w-1.5 h-1.5 rounded-full mt-2 bg-[#FF0000]" />
-                        <p className="text-sm text-gray-600 leading-relaxed font-medium flex-1">{item}</p>
-                      </div>
-                    ))}
-                    {activeSection && activeSection.items.length === 0 && (
-                      <p className="text-gray-400 text-sm font-medium">No items in this section.</p>
-                    )}
-                  </div>
+                  {activeSection && <ResultItemList items={activeSection.items} />}
                 </Card>
               )}
             </>

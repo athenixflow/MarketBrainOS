@@ -377,9 +377,17 @@ export const TOKEN_COSTS = {
 
 // Shared result shape for the PRD §14–22 analysis tools.
 // `sections` carries each tool's PRD-specific result sections as titled bullet lists.
+// A result point is either a plain string (legacy/simple) or a structured insight card.
+export interface StructuredResultItem {
+  insight: string;     // the finding/point itself
+  evidence?: string;   // why it matters — the reasoning or signal behind it
+  action?: string;     // the specific recommended move
+}
+export type ResultItem = string | StructuredResultItem;
+
 export interface AnalysisSection {
   title: string;
-  items: string[];
+  items: ResultItem[];
 }
 
 export interface ToolAnalysisResult {

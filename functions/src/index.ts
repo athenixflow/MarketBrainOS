@@ -70,8 +70,15 @@ const genAI = new GoogleGenerativeAI(process.env.API_KEY || '');
 // --- HELPERS ---
 
 const systemInstruction = `
-You are the MarketBrainOS Intelligence Engine.
-Core Mission: Provide high-confidence marketing angles, conversion audits, and performance simulations.
+You are the MarketBrainOS Intelligence Engine — a senior strategy consultant and growth operator with
+deep expertise in marketing, sales, positioning, pricing, audience research, and operations.
+
+Standards for EVERY analysis:
+- Be specific and evidence-led. Reference the user's actual inputs by name; never generic filler.
+- Quantify wherever reasonable (ranges, %, benchmarks, rough $ impact) and state key assumptions.
+- Every point must stand on its own: a concrete insight, why it matters, and the exact next move.
+- Write in plain, direct language a busy founder can act on today. No restating the question, no fluff.
+- Prioritise: lead with what matters most and would move the needle fastest.
 `;
 
 // Canonical universal result sections (PRD §23 / V1 Tool Architecture). `summary`
@@ -439,13 +446,18 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
         const cfg = TOOL_PROMPTS[module];
         const { _context, ...cleanInput } = (input || {});
         const prompt = [
-          `Task: ${cfg.instruction}`,
-          `Inputs: ${JSON.stringify(cleanInput).slice(0, 16000)}`,
-          _context ? `Use this related prior analysis as supporting context — build on it, do not just repeat it: ${String(_context).slice(0, 3000)}` : "",
-          cfg.scored ? "Include a numeric 'score' (0-100) and a short 'verdict' label." : "",
-          `Provide a 'summary' (the Executive Summary) plus a 'sections' array that includes EVERY one of these sections, in this exact order: ${UNIVERSAL_SECTIONS.join(', ')}.`,
-          "Each section: {title, items:[string]} with 3-6 specific, actionable items. Tailor the content of each section to the task above.",
-          "Return strict JSON: { score?, verdict?, summary, sections: [{title, items:[string]}] }"
+          `Role & task: As a senior strategist, ${cfg.instruction}`,
+          `Business inputs (use them specifically — do not ignore any provided field; treat blank fields as unknown): ${JSON.stringify(cleanInput).slice(0, 16000)}`,
+          _context ? `Related prior analysis to build on (extend it, do not just repeat it): ${String(_context).slice(0, 3000)}` : "",
+          cfg.scored ? "Include a numeric 'score' (0-100) for overall quality/viability and a short 'verdict' label (e.g. 'Strong', 'Promising', 'Needs work')." : "",
+          `Write a thorough 'summary' (3-5 sentences): the executive read — the headline takeaways and the single highest-leverage move.`,
+          `Then a 'sections' array containing EVERY one of these sections, in this exact order: ${UNIVERSAL_SECTIONS.join(', ')}.`,
+          `Each section = { title, items }. Provide 4-7 items per section. Each item is an object { insight, evidence, action }:`,
+          `- 'insight': the specific point, 1-2 sentences, grounded in the inputs.`,
+          `- 'evidence': why it matters — the reasoning, signal, or rough quantified impact, 1-2 sentences.`,
+          `- 'action': the single concrete next move, 1 sentence, imperative.`,
+          `Make every item distinct, detailed, and tailored to the inputs. No vague or repeated points.`,
+          `Return strict JSON only: { score?, verdict?, summary, sections: [{ title, items: [{ insight, evidence, action }] }] }`
         ].filter(Boolean).join(' ');
         const result = await model.generateContent({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],

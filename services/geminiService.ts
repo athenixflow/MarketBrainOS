@@ -8,7 +8,7 @@ import {
   saveGenericAnalysis,
   createNotification
 } from "./persistenceService";
-import { AngleMinerResults, TestLabResults, AuditResult, MarketingAngle, TestLabVariant, ToolAnalysisResult, Scope } from "../types";
+import { AngleMinerResults, TestLabResults, AuditResult, MarketingAngle, TestLabVariant, ToolAnalysisResult, ResultItem, Scope } from "../types";
 
 export const MAX_INPUT_CHARS = 12000;
 
@@ -148,7 +148,20 @@ export const runToolAnalysis = async (
   const payload = contextText ? { ...inputs, _context: contextText } : inputs;
   const raw = await executeAsyncJob(module, payload, scope);
 
-  // Defensive normalization — server may return a partial/loose shape.
+  // Defensive normalization — server may return strings OR structured {insight, evidence, action}
+  // items (and older saved results are plain strings). Coerce both into ResultItem.
+  const normalizeItem = (i: any): ResultItem | null => {
+    if (typeof i === 'string') { const t = i.trim(); return t || null; }
+    if (i && typeof i === 'object') {
+      const insight = String(i.insight || i.point || i.text || i.title || '').trim();
+      if (!insight) return null;
+      const evidence = String(i.evidence || i.why || i.reason || i.rationale || '').trim();
+      const action = String(i.action || i.recommendation || i.next || i.do || '').trim();
+      return { insight, ...(evidence ? { evidence } : {}), ...(action ? { action } : {}) };
+    }
+    return null;
+  };
+
   const result: ToolAnalysisResult = {
     score: typeof raw?.score === 'number' ? raw.score : undefined,
     verdict: typeof raw?.verdict === 'string' ? raw.verdict : undefined,
@@ -158,7 +171,7 @@ export const runToolAnalysis = async (
           .map((s: any) => ({
             title: typeof s?.title === 'string' ? s.title : 'Section',
             items: Array.isArray(s?.items)
-              ? s.items.map((i: any) => (typeof i === 'string' ? i : (i?.text || i?.point || ''))).filter(Boolean)
+              ? s.items.map(normalizeItem).filter((x: ResultItem | null): x is ResultItem => x !== null)
               : []
           }))
           .filter((s: any) => s.items.length > 0)
