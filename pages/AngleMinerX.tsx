@@ -48,6 +48,12 @@ const AngleMinerX: React.FC = () => {
   const [results, setResults] = useState<AngleMinerResults | null>(null);
   const [productName, setProductName] = useState('');
   const [market, setMarket] = useState('');
+  const [competitors, setCompetitors] = useState('');
+  const [objections, setObjections] = useState('');
+  const [brandVoice, setBrandVoice] = useState('');
+  const [proofPoints, setProofPoints] = useState('');
+  const [pricePoint, setPricePoint] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [activeTab, setActiveTab] = useState<string>(ANGLE_TYPES[0]);
 
   // Usage Modal State
@@ -128,7 +134,12 @@ const AngleMinerX: React.FC = () => {
         industry,
         market,
         goal,
-        tones: selectedTones
+        tones: selectedTones,
+        competitors,
+        objections,
+        brandVoice,
+        proofPoints,
+        pricePoint
       }, user?.uid);
       setResults(data);
       // Open the first angle type that actually has results.
@@ -378,8 +389,30 @@ const AngleMinerX: React.FC = () => {
                   </div>
                 </div>
 
+                <div className="mb-10">
+                  <button type="button" onClick={() => setShowAdvanced(v => !v)} className="flex items-center gap-2 text-[10px] font-bold text-gray-600 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">
+                    <span className="text-base leading-none w-4 text-center">{showAdvanced ? '−' : '+'}</span>
+                    Advanced context (optional)
+                  </button>
+                  <p className="mt-2 mb-6 text-[11px] font-medium text-gray-500 leading-relaxed pl-6">The more context you add, the sharper and more tailored the angles. All optional.</p>
+                  {showAdvanced && (
+                    <div>
+                      <Input label="Competitors" placeholder="Who else competes for this attention?" value={competitors} onChange={(e) => setCompetitors(e.target.value)} />
+                      <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">Rivals to differentiate against.<span className="text-gray-500"> e.g. Asana, Monday, ClickUp.</span></p>
+                      <Input label="Buyer Objections" placeholder="Why might they hesitate?" value={objections} onChange={(e) => setObjections(e.target.value)} multiline />
+                      <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">Doubts the angles should defuse.<span className="text-gray-500"> e.g. “Too expensive”, “We already use X”.</span></p>
+                      <Input label="Brand Voice" placeholder="The tone to match" value={brandVoice} onChange={(e) => setBrandVoice(e.target.value)} />
+                      <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">How the copy should sound.<span className="text-gray-500"> e.g. Confident, plain-spoken, a little playful.</span></p>
+                      <Input label="Proof / Credibility" placeholder="Results, stats, testimonials to lean on" value={proofPoints} onChange={(e) => setProofPoints(e.target.value)} multiline />
+                      <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">Evidence the angles can use.<span className="text-gray-500"> e.g. “Used by 4,000 teams”, “2.3× ROI in 30 days”.</span></p>
+                      <Input label="Price Point" placeholder="e.g. $49/mo" value={pricePoint} onChange={(e) => setPricePoint(e.target.value)} />
+                      <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">Shapes how the value is framed.<span className="text-gray-500"> e.g. $49/mo, or $2k one-time.</span></p>
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex flex-col gap-6 mt-8">
-                  <PrimaryButton 
+                  <PrimaryButton
                     type="submit"
                     disabled={loading || !product || !target || !industry || product.length > MAX_INPUT_CHARS}
                     className="w-full"

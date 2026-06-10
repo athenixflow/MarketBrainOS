@@ -41,6 +41,11 @@ const TestLabPro: React.FC = () => {
   const [executionError, setExecutionError] = useState<string | null>(null);
   const [results, setResults] = useState<TestLabResults | null>(null);
   const [honeypotValue, setHoneypotValue] = useState('');
+  const [audience, setAudience] = useState('');
+  const [goal, setGoal] = useState('');
+  const [channel, setChannel] = useState('');
+  const [product, setProduct] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Usage Modal State
   const [showUsageModal, setShowUsageModal] = useState(false);
@@ -147,7 +152,7 @@ const TestLabPro: React.FC = () => {
     setExecutionError(null);
     setResults(null);
     try {
-      const data = await runTestLabComparison(comparisonType, uniqueVariants, user?.uid);
+      const data = await runTestLabComparison(comparisonType, uniqueVariants, user?.uid, { audience, goal, channel, product });
       setResults(data);
       
       if (user) await refreshProfile();
@@ -251,6 +256,26 @@ const TestLabPro: React.FC = () => {
                     </p>
                   </div>
                 ))}
+              </div>
+
+              <div className="mt-8 mb-2">
+                <button type="button" onClick={() => setShowAdvanced(v => !v)} className="flex items-center gap-2 text-[10px] font-bold text-gray-600 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">
+                  <span className="text-base leading-none w-4 text-center">{showAdvanced ? '−' : '+'}</span>
+                  Advanced context (optional)
+                </button>
+                <p className="mt-2 mb-6 text-[11px] font-medium text-gray-500 leading-relaxed pl-6">Context makes the prediction sharper and the explanation more useful. All optional.</p>
+                {showAdvanced && (
+                  <div>
+                    <Input label="Target Audience" placeholder="Who will see these?" value={audience} onChange={(e) => setAudience(e.target.value)} />
+                    <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">Who you’re testing against.<span className="text-gray-500"> e.g. Cold Meta traffic, first-time buyers.</span></p>
+                    <Input label="Desired Action" placeholder="What should a winner drive?" value={goal} onChange={(e) => setGoal(e.target.value)} />
+                    <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">The action a winning variant should produce.<span className="text-gray-500"> e.g. Click through to the offer.</span></p>
+                    <Input label="Channel / Placement" placeholder="Where these run" value={channel} onChange={(e) => setChannel(e.target.value)} />
+                    <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">The placement and its constraints.<span className="text-gray-500"> e.g. Meta feed, email subject line.</span></p>
+                    <Input label="Product / Offer" placeholder="What’s being promoted" value={product} onChange={(e) => setProduct(e.target.value)} />
+                    <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">What the variants are selling.<span className="text-gray-500"> e.g. A $29/mo analytics tool.</span></p>
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col gap-8 mt-8">

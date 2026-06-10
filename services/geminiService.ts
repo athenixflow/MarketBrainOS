@@ -109,9 +109,9 @@ export const improveAngle = async (text: string, userId?: string) => {
   return await executeAsyncJob('AngleMiner_Improve', text);
 };
 
-export const runTestLabComparison = async (type: string, variants: string[], userId?: string) => {
+export const runTestLabComparison = async (type: string, variants: string[], userId?: string, extra?: Record<string, string>) => {
   SystemContracts.TestLab.inputValidator({ type, variants });
-  const result = await executeAsyncJob('TestLab_Simulation', { type, variants });
+  const result = await executeAsyncJob('TestLab_Simulation', { type, variants, ...(extra || {}) });
   SystemContracts.TestLab.outputValidator(result);
   if (userId) await saveTestLabResult(userId, type, variants, result);
   return result;

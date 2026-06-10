@@ -405,6 +405,7 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
         const prompt = `
           As a senior direct-response copywriter, generate high-converting marketing angles.
           Product Name: ${input.productName || ''}. Description: ${input.product}. Audience: ${input.target}. Market: ${input.market || input.industry}. Goal: ${input.goal}. Tones: ${input.tones?.join(', ')}.
+          ${input.competitors ? `Competitors: ${input.competitors}.` : ''}${input.objections ? ` Objections to overcome: ${input.objections}.` : ''}${input.brandVoice ? ` Brand voice: ${input.brandVoice}.` : ''}${input.proofPoints ? ` Proof / credibility to use: ${input.proofPoints}.` : ''}${input.pricePoint ? ` Price point: ${input.pricePoint}.` : ''}
           Produce angles across these 8 types: Emotional, Fear, Aspiration, Curiosity, Authority, Differentiation, Story, Contrarian (at least one of each; more for the strongest).
           For each angle: 'type' (one of the 8 exact labels), 'title' (the angle name), 'hook' (a ready-to-use headline/opening line, written in the chosen tone and specific to THIS product and audience), 'rational' (2-3 sentences on the psychology of why it works for this audience and when to use it), 'score' (0-100 estimated strength).
           Also produce 'hooks': 3-5 platform-ready variations, each { platform (e.g. Meta, Google, Email, LinkedIn), short (a punchy hook under 15 words), expanded (a 1-2 sentence version) }.
@@ -421,7 +422,7 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
         responseText = result.response.text();
       }
       else if (module === 'TestLab_Simulation') {
-        const prompt = `As a senior performance-marketing analyst, predict how these ${input.type} variants would perform and explain why. Variants: ${input.variants?.join(' | ')}. For each variant give { label, text (the variant, lightly cleaned), score (0-100 predicted performance) }. Pick 'winnerLabel'. Write a detailed 'explanation' (3-5 sentences): why the winner wins, the key clarity/psychology differences between variants, and one concrete way to make the winner even stronger. Return strict JSON: { variants: [{label, text, score}], winnerLabel, explanation }`;
+        const prompt = `As a senior performance-marketing analyst, predict how these ${input.type} variants would perform and explain why. Variants: ${input.variants?.join(' | ')}.${input.audience ? ` Audience: ${input.audience}.` : ''}${input.goal ? ` Desired action: ${input.goal}.` : ''}${input.channel ? ` Channel/placement: ${input.channel}.` : ''}${input.product ? ` Product/offer: ${input.product}.` : ''} For each variant give { label, text (the variant, lightly cleaned), score (0-100 predicted performance) }. Pick 'winnerLabel'. Write a detailed 'explanation' (3-5 sentences): why the winner wins, the key clarity/psychology differences between variants, and one concrete way to make the winner even stronger. Return strict JSON: { variants: [{label, text, score}], winnerLabel, explanation }`;
         const result = await model.generateContent({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: { responseMimeType: 'application/json' }

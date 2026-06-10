@@ -50,7 +50,8 @@ const Workflow: React.FC = () => {
   const [usageReason, setUsageReason] = useState<'exhausted' | 'insufficient'>('exhausted');
 
   // Step 1: AngleMiner X
-  const [minerParams, setMinerParams] = useState({ product: '', industry: '', target: '', goal: 'All', tones: [] as string[] });
+  const [minerParams, setMinerParams] = useState({ product: '', industry: '', target: '', goal: 'All', tones: [] as string[], competitors: '', objections: '', brandVoice: '' });
+  const [wfAdvanced, setWfAdvanced] = useState(false);
   const [minerResults, setMinerResults] = useState<AngleMinerResults | null>(null);
 
   // Step 2: Selection
@@ -371,6 +372,21 @@ const Workflow: React.FC = () => {
                 />
               </div>
             </div>
+            <div className="mt-8">
+              <button type="button" onClick={() => setWfAdvanced(v => !v)} className="flex items-center gap-2 text-[10px] font-bold text-gray-600 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">
+                <span className="text-base leading-none w-4 text-center">{wfAdvanced ? '−' : '+'}</span>
+                Advanced context (optional)
+              </button>
+              <p className="mt-2 mb-6 text-[11px] font-medium text-gray-500 leading-relaxed pl-6">More context makes the generated angles sharper. All optional.</p>
+              {wfAdvanced && (
+                <div className="space-y-4">
+                  <Input label="Competitors" placeholder="Who else competes for attention?" value={minerParams.competitors} onChange={e => setMinerParams({ ...minerParams, competitors: e.target.value })} />
+                  <Input label="Buyer Objections" placeholder="Why might they hesitate?" value={minerParams.objections} onChange={e => setMinerParams({ ...minerParams, objections: e.target.value })} multiline />
+                  <Input label="Brand Voice" placeholder="The tone to match" value={minerParams.brandVoice} onChange={e => setMinerParams({ ...minerParams, brandVoice: e.target.value })} />
+                </div>
+              )}
+            </div>
+
             <div className="mt-12 flex justify-between">
               <SecondaryButton onClick={() => setStep(0)}>Cancel</SecondaryButton>
               <PrimaryButton 
