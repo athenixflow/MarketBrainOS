@@ -3,6 +3,7 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card } from '../../UI';
+import { itemText } from '../../ResultSections';
 import { useAdmin } from '../AdminContext';
 import { AdminSectionHeader, KpiCard, Pill } from '../primitives';
 import { adminCan } from '../../../config/adminAccess';
@@ -50,7 +51,7 @@ const ReportDetail: React.FC = () => {
             {sections.map((s: any, i: number) => (
               <div key={i}>
                 <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">{s.title}</p>
-                <ul className="space-y-1.5">{(s.items || []).map((it: string, j: number) => <li key={j} className="text-sm text-gray-600 font-medium flex gap-2"><span className="mt-2 w-1 h-1 rounded-full bg-[#FF0000] shrink-0" />{it}</li>)}</ul>
+                <ul className="space-y-1.5">{(s.items || []).map((it: any, j: number) => <li key={j} className="text-sm text-gray-600 font-medium flex gap-2"><span className="mt-2 w-1 h-1 rounded-full bg-[#FF0000] shrink-0" />{itemText(it)}</li>)}</ul>
               </div>
             ))}
           </div>

@@ -8,6 +8,12 @@ import { ResultItem, StructuredResultItem } from '../types';
 const isStructured = (item: ResultItem): item is StructuredResultItem =>
   typeof item === 'object' && item !== null && typeof (item as any).insight === 'string';
 
+/** Plain-text form of a result item — the insight headline, or the string itself. Use in compact
+ *  summary views (Dashboard, admin reports) that render one line per point, so a structured
+ *  { insight, evidence, action } object is never passed to React as a child (avoids React #31). */
+export const itemText = (item: ResultItem): string =>
+  typeof item === 'string' ? item : (item?.insight || '');
+
 /** One result point — a rich card (insight → why it matters → recommended action) or a plain bullet. */
 export const ResultItemCard: React.FC<{ item: ResultItem; compact?: boolean }> = ({ item, compact }) => {
   if (!isStructured(item)) {

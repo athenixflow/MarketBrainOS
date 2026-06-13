@@ -7,6 +7,7 @@ import {
 } from '../components/UI';
 import AnimatedSection from '../components/AnimatedSection';
 import SubscriptionPanel from '../components/SubscriptionPanel';
+import { itemText } from '../components/ResultSections';
 import { useAuth } from '../context/AuthContext';
 import { useScope } from '../context/ScopeContext';
 import {
@@ -293,9 +294,9 @@ const Dashboard: React.FC = () => {
             <Card className="!p-8" title="Recent Recommendations">
               {metrics.recSection && Array.isArray(metrics.recSection.items) && metrics.recSection.items.length > 0 ? (
                 <ul className="space-y-4">
-                  {metrics.recSection.items.slice(0, 4).map((it: string, i: number) => (
+                  {metrics.recSection.items.slice(0, 4).map((it: any, i: number) => (
                     <li key={i} className="flex gap-3 text-sm text-gray-600 font-medium leading-relaxed">
-                      <span className="mt-2 w-1.5 h-1.5 rounded-full bg-[#FF0000] shrink-0" />{it}
+                      <span className="mt-2 w-1.5 h-1.5 rounded-full bg-[#FF0000] shrink-0" />{itemText(it)}
                     </li>
                   ))}
                 </ul>
