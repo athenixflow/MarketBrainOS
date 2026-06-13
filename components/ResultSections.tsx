@@ -11,8 +11,18 @@ const isStructured = (item: ResultItem): item is StructuredResultItem =>
 /** Plain-text form of a result item — the insight headline, or the string itself. Use in compact
  *  summary views (Dashboard, admin reports) that render one line per point, so a structured
  *  { insight, evidence, action } object is never passed to React as a child (avoids React #31). */
-export const itemText = (item: ResultItem): string =>
-  typeof item === 'string' ? item : (item?.insight || '');
+export const itemText = (item: ResultItem): string => asText(item);
+
+// Defensively coerce any value to renderable text. Never returns an object, so React can never
+// receive an object as a child (the cause of minified React #31). Handles strings, numbers, and
+// loose AI/legacy shapes by digging out a sensible text field before falling back to "".
+const asText = (v: any): string => {
+  if (v == null) return '';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (typeof v === 'object') return asText(v.insight ?? v.text ?? v.point ?? v.title ?? v.action ?? v.value ?? '');
+  return '';
+};
 
 /** One result point — a rich card (insight → why it matters → recommended action) or a plain bullet. */
 export const ResultItemCard: React.FC<{ item: ResultItem; compact?: boolean }> = ({ item, compact }) => {
@@ -20,26 +30,28 @@ export const ResultItemCard: React.FC<{ item: ResultItem; compact?: boolean }> =
     return (
       <div className={`flex items-start gap-3 ${compact ? 'p-4' : 'p-5'} bg-gray-50 rounded-2xl border border-gray-100`}>
         <div className="w-1.5 h-1.5 rounded-full mt-2 bg-[#FF0000] shrink-0" />
-        <p className="text-sm text-gray-700 leading-relaxed font-medium flex-1">{item}</p>
+        <p className="text-sm text-gray-700 leading-relaxed font-medium flex-1">{asText(item)}</p>
       </div>
     );
   }
+  const evidence = asText(item.evidence);
+  const action = asText(item.action);
   return (
     <div className={`${compact ? 'p-4' : 'p-5'} bg-gray-50 rounded-2xl border border-gray-100`}>
       <div className="flex items-start gap-3">
         <div className="w-1.5 h-1.5 rounded-full mt-2 bg-[#FF0000] shrink-0" />
-        <p className="text-sm text-[#0B0B0B] leading-relaxed font-bold flex-1">{item.insight}</p>
+        <p className="text-sm text-[#0B0B0B] leading-relaxed font-bold flex-1">{asText(item.insight)}</p>
       </div>
-      {item.evidence && (
+      {evidence && (
         <div className="mt-3 pl-[18px]">
           <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Why it matters</span>
-          <p className="mt-1 text-sm text-gray-600 leading-relaxed font-medium">{item.evidence}</p>
+          <p className="mt-1 text-sm text-gray-600 leading-relaxed font-medium">{evidence}</p>
         </div>
       )}
-      {item.action && (
+      {action && (
         <div className="mt-3 pl-[18px]">
           <span className="text-[9px] font-black uppercase tracking-widest text-[#FF0000]">Do this</span>
-          <p className="mt-1 text-sm text-gray-700 leading-relaxed font-semibold">{item.action}</p>
+          <p className="mt-1 text-sm text-gray-700 leading-relaxed font-semibold">{action}</p>
         </div>
       )}
     </div>
