@@ -35,7 +35,7 @@ const AIOps: React.FC = () => {
         </Card>
         <Card title="Provider">
           <div className="flex items-center justify-between mb-6">
-            <span className="text-sm font-bold text-[#0B0B0B]">Gemini (gemini-3-pro-preview)</span>
+            <span className="text-sm font-bold text-[#0B0B0B]">Gemini (gemini-2.5-pro)</span>
             <Pill tone="green">Active</Pill>
           </div>
           <div className="space-y-3">

@@ -399,7 +399,7 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
 
     try {
       let responseText = "";
-      const model = genAI.getGenerativeModel({ model: "gemini-3-pro-preview", systemInstruction });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro", systemInstruction });
 
       if (module === 'AngleMiner_Generate') {
         const prompt = `
@@ -501,6 +501,10 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
       res.status(200).json({ result: finalOutput });
 
     } catch (error: any) {
+      // Surface the real cause in Cloud Logging (`firebase functions:log`).
+      // Previously errors were only written to Firestore `action_logs`, so a missing
+      // API key / Gemini failure showed up as a bare 500 with no diagnosable reason.
+      console.error(`executeAnalysis failed [${module}]:`, error?.message || error);
       if (tokensDeducted) {
         await db.runTransaction(async (t: admin.firestore.Transaction) => {
           const userDoc = await t.get(userRef);
@@ -2027,7 +2031,7 @@ export const generateExecutiveBriefing = functions.https.onCall(async (data: any
   const sampleAnalyses = await db.collection('tool_analysis_results').where('enterprise_id', '==', eid).limit(15).get();
   const summaries = sampleAnalyses.docs.map((d: any) => d.data()?.result?.summary).filter(Boolean).slice(0, 15);
 
-  const model = genAI.getGenerativeModel({ model: 'gemini-3-pro-preview', systemInstruction });
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-pro', systemInstruction });
   const prompt = [
     `Produce a ${period} EXECUTIVE BRIEFING for "${entName}" leadership.`,
     `Aggregated metrics: ${latest ? JSON.stringify({ total_analyses: latest.total_analyses, total_reports: latest.total_reports, active_users: latest.active_users, top_tools: (latest.by_module || []).slice(0, 5) }) : 'limited data available'}.`,

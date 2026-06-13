@@ -1,0 +1,8 @@
+# Secrets — never commit. Holds the Gemini API key (process.env.API_KEY).
+.env
+.env.*
+!.env.example
+
+# Build output / deps
+node_modules/
+lib/
