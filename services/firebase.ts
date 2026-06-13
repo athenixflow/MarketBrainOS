@@ -1,6 +1,6 @@
 import * as firebaseApp from 'firebase/app';
 import { getAuth, GoogleAuthProvider, Auth, User } from 'firebase/auth';
-import { getFirestore, Firestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, Firestore } from 'firebase/firestore';
 import { getFunctions, Functions } from 'firebase/functions';
 import { getAnalytics, Analytics } from 'firebase/analytics';
 
@@ -44,11 +44,16 @@ try {
   auth = getAuth(app);
   googleProvider = new GoogleAuthProvider();
   
-  // Initialize Firestore
-  // We use getFirestore() which uses default settings.
-  // Explicitly configuring complex persistence (tabManager) can cause connection timeouts
-  // in some environments if tabs lock the DB.
-  db = getFirestore(app);
+  // Initialize Firestore with ignoreUndefinedProperties so writes never throw when a field is
+  // undefined (Firestore rejects undefined by default — e.g. non-scored tools save result.score
+  // as undefined). This applies to every client write app-wide. initializeFirestore must run
+  // before any getFirestore(); fall back to getFirestore() if it was already started (e.g. HMR),
+  // so a double-init doesn't trip the outer mock fallback below.
+  try {
+    db = initializeFirestore(app, { ignoreUndefinedProperties: true });
+  } catch {
+    db = getFirestore(app);
+  }
 
   functions = getFunctions(app);
   

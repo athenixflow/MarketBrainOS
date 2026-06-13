@@ -9,6 +9,10 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import * as crypto from 'crypto';
 
 admin.initializeApp();
+// Drop undefined fields on every server-side write instead of throwing (Firestore rejects
+// undefined by default). Must be set before the first Firestore operation; admin.firestore()
+// returns a singleton, so this applies to `db` below and every collection write in this file.
+admin.firestore().settings({ ignoreUndefinedProperties: true });
 const db = admin.firestore();
 
 // --- SERVER-SIDE CONFIGURATION ---
