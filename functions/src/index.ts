@@ -865,8 +865,7 @@ export const adminManageSubscription = functions.https.onCall(async (data: any, 
           if (!['free', 'pro', 'team', 'agency', 'enterprise'].includes(plan)) throw new functions.https.HttpsError('invalid-argument', 'Invalid plan');
           // Set the new plan's monthly allocation; preserve purchased tokens.
           const { purchased } = readBalances(u);
-          const upd: any = { tier: plan, subscription_status: plan === 'free' ? 'free' : 'active', ...balanceFields(planMonthlyDefault(plan), purchased) };
-          if (plan !== 'free') upd.plan_renews_at = renews(30);
+          const upd: any = { tier: plan, subscription_status: plan === 'free' ? 'free' : 'active', plan_renews_at: renews(30), ...balanceFields(planMonthlyDefault(plan), purchased) };
           t.update(targetRef, upd);
           break;
         }
@@ -1246,7 +1245,8 @@ export const changeSubscription = functions.https.onCall(async (data: any, conte
         t.set(logRef, { uid, action: 'subscription_cancel', created_at: admin.firestore.FieldValue.serverTimestamp() });
         result = { status: 'cancelled' };
       } else if (action === 'downgrade') {
-        t.update(userRef, { tier: 'free', subscription_status: 'free', plan_renews_at: admin.firestore.FieldValue.delete() });
+        // Keep a renewal date so the free monthly allowance still cycles.
+        t.update(userRef, { tier: 'free', subscription_status: 'free', ...balanceFields(planMonthlyDefault('free'), readBalances(userData).purchased), plan_renews_at: renewsAt });
         const logRef = db.collection('action_logs').doc();
         t.set(logRef, { uid, action: 'subscription_downgrade', created_at: admin.firestore.FieldValue.serverTimestamp() });
         result = { status: 'free' };
@@ -1261,59 +1261,56 @@ export const changeSubscription = functions.https.onCall(async (data: any, conte
   }
 });
 
-// --- MONTHLY TOKEN REFRESH (§64) ---
-// Scheduled monthly grant of the Pro allowance. Runs at 00:00 UTC on the 1st of each
-// month. DEPLOY-TIME: only fires once deployed (`firebase deploy --only functions`) on
-// the Blaze plan, which provisions Cloud Scheduler. Token reset uses the SAME rule as the
-// `renew` branch of changeSubscription (set to PRO_MONTHLY_TOKENS) so there is one source
-// of truth for the monthly allowance.
+// --- MONTHLY TOKEN REFRESH (all plans, renewal-cycle based) ---
+// Runs DAILY (00:00 UTC). Any account whose plan_renews_at has elapsed has its monthly_tokens reset
+// to its plan's allocation (from the live pricing config), purchased_tokens preserved, and
+// plan_renews_at advanced one cycle. Covers Free/Pro/Team/Agency/Enterprise owners. Every user has a
+// plan_renews_at (set on signup/upgrade/downgrade and backfilled) so a single range query finds the
+// due accounts. DEPLOY-TIME: Cloud Scheduler is provisioned on first deploy (Blaze plan).
+// (Per-container workspace/agency monthly sub-pool resets are added in the allocation phase.)
 export const monthlyTokenRefresh = functions.pubsub
-  .schedule('0 0 1 * *')
+  .schedule('0 0 * * *')
   .timeZone('UTC')
   .onRun(async () => {
+    const cfg = await getPricingConfig();
     const now = new Date();
-    const renewsAt = new Date(now.getTime() + RENEWAL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const nowIso = now.toISOString();
+    const nextRenews = new Date(now.getTime() + cfg.renewalDays * 24 * 60 * 60 * 1000).toISOString();
 
-    // Pro users whose subscription still entitles them to the monthly allowance.
-    // 'cancelled' retains access until period end, so they are refreshed too.
-    const snap = await db.collection('users').where('tier', '==', 'pro').get();
-    const eligible = snap.docs.filter((d: admin.firestore.QueryDocumentSnapshot) => {
-      const s = d.data().subscription_status;
-      return s === 'active' || s === 'cancelled' || s === undefined;
-    });
+    const snap = await db.collection('users').where('plan_renews_at', '<=', nowIso).get();
+    // 'expired' subscriptions don't renew; everything else (active/cancelled/free/undefined) does.
+    const due = snap.docs.filter((d: admin.firestore.QueryDocumentSnapshot) => d.data().subscription_status !== 'expired');
 
     let refreshed = 0;
     // Firestore batches cap at 500 ops; each user costs up to 3 writes (user + log + notification).
     const CHUNK = 150;
-    for (let i = 0; i < eligible.length; i += CHUNK) {
+    for (let i = 0; i < due.length; i += CHUNK) {
       const batch = db.batch();
-      for (const userDoc of eligible.slice(i, i + CHUNK)) {
+      for (const userDoc of due.slice(i, i + CHUNK)) {
+        const data = userDoc.data();
+        const tier = (data.tier as string) || 'free';
+        const allocation = cfg.plans[tier as Tier]?.monthlyTokens ?? cfg.plans.free.monthlyTokens;
         batch.update(userDoc.ref, {
-          ...balanceFields(PRO_MONTHLY_TOKENS, readBalances(userDoc.data()).purchased),
-          plan_renews_at: renewsAt,
+          ...balanceFields(allocation, readBalances(data).purchased),
+          plan_renews_at: nextRenews,
         });
         const logRef = db.collection('action_logs').doc();
         batch.set(logRef, {
-          uid: userDoc.id,
-          action: 'monthly_refresh',
-          tokens_added: PRO_MONTHLY_TOKENS,
+          uid: userDoc.id, action: 'monthly_refresh', tokens_added: allocation, tier,
           created_at: admin.firestore.FieldValue.serverTimestamp(),
         });
         const noteRef = db.collection('notifications').doc();
         batch.set(noteRef, {
-          uid: userDoc.id,
-          category: 'Token',
-          title: 'Monthly tokens refreshed',
-          body: `Your Pro plan was topped up to ${PRO_MONTHLY_TOKENS} tokens for the new cycle.`,
-          read: false,
-          created_at: now.toISOString(),
+          uid: userDoc.id, category: 'Token', title: 'Monthly tokens refreshed',
+          body: `Your monthly allowance was reset to ${allocation} tokens for the new cycle.`,
+          read: false, created_at: nowIso,
         });
         refreshed++;
       }
       await batch.commit();
     }
 
-    console.log(`monthlyTokenRefresh: refreshed ${refreshed} Pro account(s).`);
+    console.log(`monthlyTokenRefresh: refreshed ${refreshed} account(s) across all plans.`);
     return null;
   });
 

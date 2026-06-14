@@ -294,6 +294,8 @@ export const ensureUserProfile = async (userId: string, email: string) => {
       role: email === 'admin@marketbrainos.com' ? 'super_admin' : 'user',
       onboarded: false,
       subscription_status: 'free',
+      // Renewal date so the free monthly allowance cycles via monthlyTokenRefresh.
+      plan_renews_at: new Date(Date.now() + 30 * 86400000).toISOString(),
       created_at: new Date().toISOString(),
       last_active: new Date().toISOString()
     });
