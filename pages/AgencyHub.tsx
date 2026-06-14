@@ -15,8 +15,9 @@ import ClientDirectory from '../components/agency/ClientDirectory';
 import ClientWorkspace from '../components/agency/ClientWorkspace';
 import AgencyMembers from '../components/agency/AgencyMembers';
 import AgencyAnalytics from '../components/agency/AgencyAnalytics';
+import TokenBudgets from '../components/agency/TokenBudgets';
 
-const TABS = ['Dashboard', 'Clients', 'Members', 'Analytics', 'Settings'] as const;
+const TABS = ['Dashboard', 'Clients', 'Members', 'Analytics', 'Budgets', 'Settings'] as const;
 type Tab = typeof TABS[number];
 
 const AgencyHub: React.FC = () => {
@@ -176,6 +177,7 @@ const AgencyHub: React.FC = () => {
       {tab === 'Clients' && <ClientDirectory agency={agency} clients={clients} canManage={can('clients:manage', membership)} onOpenClient={openClient} onReload={loadAgency} />}
       {tab === 'Members' && <AgencyMembers agency={agency} members={members} membership={membership} selfUid={user?.uid || ''} onReload={loadAgency} />}
       {tab === 'Analytics' && <AgencyAnalytics agency={agency} clients={clients} members={members} />}
+      {tab === 'Budgets' && <TokenBudgets agency={agency} clients={clients} agencyId={activeId} canManage={can('clients:manage', membership)} onReload={loadAgency} />}
       {tab === 'Settings' && (
         can('settings:manage', membership) ? (
           <div className="space-y-6 max-w-2xl">

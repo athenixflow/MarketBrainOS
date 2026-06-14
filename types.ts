@@ -193,9 +193,15 @@ export interface AgencyClient {
   tags?: string[];
   analysis_count?: number;
   last_activity?: string;
+  // Token budgeting (Phase 4): allocation = per-cycle cap (0 = uncapped); consumed tracked per cycle.
+  allocation?: number;
+  consumed_this_cycle?: number;
+  consumed_cycle?: string;
   created_at: string;
   updated_at?: string;
 }
+
+// Agencies/enterprises also carry an `enterprise_allocation` cap when nested under an enterprise.
 
 // Doc id convention: `${client_id}_${uid}` (firestore.rules depends on it).
 export interface ClientAssignment {

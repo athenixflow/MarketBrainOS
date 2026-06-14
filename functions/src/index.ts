@@ -491,8 +491,13 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
       return;
     }
 
-    // BILLING & EXECUTION — deduct from the resolved billing wallet (owner for team scope).
+    // BILLING & EXECUTION — owner wallet is the token source; for team/agency scope the analysis is
+    // ALSO budgeted against the container's per-cycle allocation cap so each workspace/client blocks
+    // independently when its allocated budget is exhausted.
     const userRef = db.collection('users').doc(billingUid);
+    const containerRef = billedWorkspaceId ? db.collection('workspaces').doc(billedWorkspaceId)
+      : billedClientId ? db.collection('agency_clients').doc(billedClientId)
+      : null;
     let tokensDeducted = false;
     let deductedMonthly = 0;    // exact amounts spent per bucket, for a precise refund on failure
     let deductedPurchased = 0;
@@ -501,9 +506,23 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
       await db.runTransaction(async (t: admin.firestore.Transaction) => {
         const userDoc = await t.get(userRef);
         if (!userDoc.exists) throw new Error('User profile not found.');
+        const containerDoc = containerRef ? await t.get(containerRef) : null;
 
         const userData = userDoc.data()!;
         if (userData.is_suspended) throw new Error('Account suspended.');
+
+        // Container budget cap (allocation > 0 = capped; 0/unset = draws freely from the owner pool).
+        // Consumption is counted per owner-renewal cycle and lazily reset when a new cycle starts.
+        const ownerCycle = userData.plan_renews_at || '';
+        let prevConsumed = 0;
+        if (containerDoc && containerDoc.exists) {
+          const c = containerDoc.data()!;
+          prevConsumed = (c.consumed_cycle === ownerCycle) ? (Number(c.consumed_this_cycle) || 0) : 0;
+          const cap = Number(c.allocation) || 0;
+          if (cap > 0 && prevConsumed + cost > cap) {
+            throw new Error('Budget exhausted.');
+          }
+        }
 
         // Spend monthly (resets each cycle) before purchased (never expires); block when both are short.
         const { monthly, purchased } = readBalances(userData);
@@ -516,11 +535,16 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
         deductedPurchased = fromPurchased;
 
         t.update(userRef, { ...balanceFields(monthly - fromMonthly, purchased - fromPurchased), last_active: now.toDate().toISOString() });
+        if (containerRef) {
+          t.set(containerRef, { consumed_this_cycle: prevConsumed + cost, consumed_cycle: ownerCycle }, { merge: true });
+        }
         tokensDeducted = true;
       });
     } catch (e: any) {
       if (e.message === 'Insufficient analysis credits.') {
         res.status(429).json({ error: { message: e.message, code: 'resource-exhausted' } });
+      } else if (e.message === 'Budget exhausted.') {
+        res.status(429).json({ error: { message: 'This workspace/client has used its allocated token budget for this cycle. Ask the owner to allocate more.', code: 'resource-exhausted' } });
       } else if (e.message === 'Account suspended.') {
         res.status(403).json({ error: { message: e.message, code: 'permission-denied' } });
       } else {
@@ -640,9 +664,14 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
       if (tokensDeducted) {
         await db.runTransaction(async (t: admin.firestore.Transaction) => {
           const userDoc = await t.get(userRef);
+          const containerDoc = containerRef ? await t.get(containerRef) : null;
           if (userDoc.exists) {
             const { monthly, purchased } = readBalances(userDoc.data());
             t.update(userRef, balanceFields(monthly + deductedMonthly, purchased + deductedPurchased));
+          }
+          if (containerRef && containerDoc && containerDoc.exists) {
+            const consumed = Number(containerDoc.data()!.consumed_this_cycle) || 0;
+            t.update(containerRef, { consumed_this_cycle: Math.max(0, consumed - cost) });
           }
         });
       }
@@ -1182,6 +1211,63 @@ export const confirmTopUp = functions.https.onCall(async (data: any, context: an
     if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError('internal', error.message || 'Top-up transaction failed.');
   }
+});
+
+// --- TOKEN ALLOCATION (true hierarchical budgets) ---
+// An owner divides their monthly pool into per-container budget caps that block independently:
+//   level 'client' -> agency owner/director caps a client's spend (sum of client caps <= agency pool)
+//   level 'agency' -> enterprise owner caps a linked agency's spend (sum of caps <= enterprise pool)
+// Caps are governance: the actual tokens still come from the owner's wallet. amount 0 = uncapped.
+export const allocateTokens = functions.https.onCall(async (data: any, context: any) => {
+  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
+  const uid = context.auth.uid;
+  const { level, agencyId, clientId, enterpriseId } = data || {};
+  const amount = Math.max(0, Math.round(Number(data?.amount) || 0));
+  const cfg = await getPricingConfig();
+
+  if (level === 'client') {
+    if (!agencyId || !clientId) throw new functions.https.HttpsError('invalid-argument', 'agencyId and clientId required.');
+    const ag = await db.collection('agencies').doc(agencyId).get();
+    if (!ag.exists) throw new functions.https.HttpsError('not-found', 'Agency not found.');
+    if (ag.data()!.owner_id !== uid) {
+      const m = await db.collection('agency_members').doc(`${agencyId}_${uid}`).get();
+      const role = m.exists ? m.data()!.role : null;
+      if (role !== 'agency_owner' && role !== 'agency_director') {
+        throw new functions.https.HttpsError('permission-denied', 'Only the agency owner/director can allocate.');
+      }
+    }
+    const pool = Number(ag.data()!.enterprise_allocation) || cfg.plans.agency.monthlyTokens;
+    const clients = await db.collection('agency_clients').where('agency_id', '==', agencyId).get();
+    let sumOthers = 0;
+    clients.forEach((d: admin.firestore.QueryDocumentSnapshot) => { if (d.id !== clientId) sumOthers += Number(d.data().allocation) || 0; });
+    if (amount > 0 && sumOthers + amount > pool) {
+      throw new functions.https.HttpsError('resource-exhausted', `Allocation exceeds the agency pool (${pool}). Available: ${Math.max(0, pool - sumOthers)}.`);
+    }
+    await db.collection('agency_clients').doc(clientId).update({ allocation: amount });
+    return { success: true, allocation: amount, poolRemaining: pool - sumOthers - amount };
+  }
+
+  if (level === 'agency') {
+    if (!enterpriseId || !agencyId) throw new functions.https.HttpsError('invalid-argument', 'enterpriseId and agencyId required.');
+    const ent = await db.collection('enterprises').doc(enterpriseId).get();
+    if (!ent.exists) throw new functions.https.HttpsError('not-found', 'Enterprise not found.');
+    if (ent.data()!.owner_id !== uid) throw new functions.https.HttpsError('permission-denied', 'Only the enterprise owner can allocate.');
+    const pool = cfg.plans.enterprise.monthlyTokens;
+    const linked: string[] = ent.data()!.linked_agencies || [];
+    let sumOthers = 0;
+    for (const aId of linked) {
+      if (aId === agencyId) continue;
+      const a = await db.collection('agencies').doc(aId).get();
+      sumOthers += Number(a.data()?.enterprise_allocation) || 0;
+    }
+    if (amount > 0 && sumOthers + amount > pool) {
+      throw new functions.https.HttpsError('resource-exhausted', `Allocation exceeds the enterprise pool (${pool}). Available: ${Math.max(0, pool - sumOthers)}.`);
+    }
+    await db.collection('agencies').doc(agencyId).update({ enterprise_allocation: amount });
+    return { success: true, allocation: amount, poolRemaining: pool - sumOthers - amount };
+  }
+
+  throw new functions.https.HttpsError('invalid-argument', 'Unknown allocation level.');
 });
 
 // --- SUBSCRIPTION LIFECYCLE FUNCTION (§30) ---

@@ -174,6 +174,21 @@ export const callConfirmTopUp = async (paymentReference: string, packId?: string
   }
 };
 
+// Hierarchical token allocation — agency owner caps a client's budget (level 'client'); enterprise
+// owner caps an agency's budget (level 'agency'). amount 0 = uncapped (draws freely from the pool).
+export const callAllocateTokens = async (params: {
+  level: 'client' | 'agency'; agencyId?: string; clientId?: string; enterpriseId?: string; amount: number;
+}) => {
+  if (!isFirebaseInitialized) throw new Error("Connection failed");
+  const fn = httpsCallable(functions, 'allocateTokens');
+  try {
+    const result = await fn(params);
+    return result.data as { success: boolean; allocation: number; poolRemaining: number };
+  } catch (error: any) {
+    throw new Error(error.message || "Allocation failed.");
+  }
+};
+
 // §30 Subscription lifecycle — server-authoritative state transitions.
 export const callChangeSubscription = async (action: 'upgrade' | 'cancel' | 'downgrade' | 'renew') => {
   if (!isFirebaseInitialized) throw new Error("Connection failed");
