@@ -155,6 +155,13 @@ service cloud.firestore {
       allow read:  if isSignedIn();   // module flags gate the UI
       allow write: if false;          // updateSystemSettings only
     }
+    // Pricing/token-economy config (prices, allocations, limits, packs, expansion, tool costs).
+    // Public-readable so the marketing pricing page + in-app billing always show live numbers;
+    // written only by updatePricingConfig (super_admin, Admin SDK).
+    match /pricing_config/{id} {
+      allow read:  if true;
+      allow write: if false;
+    }
     match /admin_audit_logs/{id}    { allow read: if isPlatformAdmin(); allow write: if false; }
     match /security_audit_logs/{id} { allow read: if isPlatformAdmin(); allow create: if isSignedIn(); allow update, delete: if false; }
     match /rate_limits/{id}         { allow read, write: if false; } // server only

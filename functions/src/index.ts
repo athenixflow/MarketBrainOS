@@ -69,6 +69,108 @@ const TOP_UP_CONFIG = {
   TOKENS_GRANTED: 100
 };
 
+// ---- PRICING CONFIG (runtime-editable single source of truth; Firestore: pricing_config/global) ----
+// The server reads this for tool costs, per-plan monthly token allocations, org capacity limits,
+// plan prices, token packs and expansion pricing. A super_admin edits it via `updatePricingConfig`;
+// a missing or partial doc falls back to these defaults so the platform always has a valid config.
+// Cached ~60s per warm instance.
+type Tier = 'free' | 'pro' | 'team' | 'agency' | 'enterprise';
+interface PlanConfig {
+  price: number;
+  monthlyTokens: number;
+  membersPerWorkspace?: number;
+  workspaces?: number;
+  agencies?: number;
+  workspacesPerAgency?: number;
+  maxMembers?: number;
+}
+interface TokenPack { id: string; label: string; tokens: number; price: number; }
+interface PricingConfig {
+  plans: Record<Tier, PlanConfig>;
+  expansion: { member: number; workspace: number; agency: number };
+  tokenPacks: TokenPack[];
+  toolCosts: Record<string, number>;
+  analysisTiers: { standard: number; premium: number; advanced: number };
+  renewalDays: number;
+}
+
+const DEFAULT_PRICING_CONFIG: PricingConfig = {
+  plans: {
+    free:       { price: 0,   monthlyTokens: 20 },
+    pro:        { price: 7,   monthlyTokens: 100 },
+    team:       { price: 49,  monthlyTokens: 400,   membersPerWorkspace: 10 },
+    agency:     { price: 199, monthlyTokens: 2000,  workspaces: 5,  membersPerWorkspace: 10, maxMembers: 50 },
+    enterprise: { price: 999, monthlyTokens: 10000, agencies: 5, workspacesPerAgency: 5, membersPerWorkspace: 10, maxMembers: 250 },
+  },
+  expansion: { member: 4, workspace: 25, agency: 99 },
+  tokenPacks: [
+    { id: 'starter',    label: 'Starter Pack',    tokens: 100,   price: 5 },
+    { id: 'growth',     label: 'Growth Pack',     tokens: 500,   price: 20 },
+    { id: 'business',   label: 'Business Pack',   tokens: 1500,  price: 50 },
+    { id: 'agency',     label: 'Agency Pack',     tokens: 5000,  price: 150 },
+    { id: 'enterprise', label: 'Enterprise Pack', tokens: 10000, price: 250 },
+  ],
+  toolCosts: { ...COSTS },
+  analysisTiers: { standard: 3, premium: 4, advanced: 5 },
+  renewalDays: 30,
+};
+
+// Merge a (possibly partial) stored config over the defaults so missing keys never break the app.
+const mergePricingConfig = (base: PricingConfig, over: any): PricingConfig => {
+  if (!over || typeof over !== 'object') return base;
+  const plans = { ...base.plans };
+  if (over.plans && typeof over.plans === 'object') {
+    (Object.keys(plans) as Tier[]).forEach((t) => {
+      if (over.plans[t] && typeof over.plans[t] === 'object') plans[t] = { ...plans[t], ...over.plans[t] };
+    });
+  }
+  return {
+    plans,
+    expansion: { ...base.expansion, ...(over.expansion || {}) },
+    tokenPacks: Array.isArray(over.tokenPacks) && over.tokenPacks.length ? over.tokenPacks : base.tokenPacks,
+    toolCosts: { ...base.toolCosts, ...(over.toolCosts || {}) },
+    analysisTiers: { ...base.analysisTiers, ...(over.analysisTiers || {}) },
+    renewalDays: typeof over.renewalDays === 'number' ? over.renewalDays : base.renewalDays,
+  };
+};
+
+let _pricingCache: { cfg: PricingConfig; at: number } | null = null;
+const getPricingConfig = async (): Promise<PricingConfig> => {
+  const nowMs = new Date().getTime();
+  if (_pricingCache && nowMs - _pricingCache.at < 60000) return _pricingCache.cfg;
+  let cfg = DEFAULT_PRICING_CONFIG;
+  try {
+    const doc = await db.collection('pricing_config').doc('global').get();
+    if (doc.exists) cfg = mergePricingConfig(DEFAULT_PRICING_CONFIG, doc.data());
+  } catch (e: any) {
+    console.warn('getPricingConfig: using defaults:', e?.message || e);
+  }
+  _pricingCache = { cfg, at: nowMs };
+  return cfg;
+};
+
+// Super-admin: edit the live pricing config (prices, allocations, limits, tool costs, packs, expansion).
+export const updatePricingConfig = functions.https.onCall(async (data: any, context: any) => {
+  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
+  const callerUid = context.auth.uid;
+  const callerSnap = await db.collection('users').doc(callerUid).get();
+  if (callerSnap.data()?.role !== 'super_admin') {
+    throw new functions.https.HttpsError('permission-denied', 'Super admin only.');
+  }
+  const changes = data?.changes;
+  if (!changes || typeof changes !== 'object') {
+    throw new functions.https.HttpsError('invalid-argument', 'No changes provided.');
+  }
+  // Validate/normalize by merging over defaults, so a malformed payload can't corrupt the config.
+  const merged = mergePricingConfig(DEFAULT_PRICING_CONFIG, changes);
+  await db.collection('pricing_config').doc('global').set(merged);
+  _pricingCache = null; // bust cache so the change takes effect immediately
+  try {
+    await logAdminAudit(callerUid, callerSnap.data()?.email || 'unknown', 'update_pricing_config', 'global', { keys: Object.keys(changes) });
+  } catch (e: any) { console.warn('pricing config audit log skipped:', e?.message || e); }
+  return { success: true, config: merged };
+});
+
 const genAI = new GoogleGenerativeAI(process.env.API_KEY || '');
 
 // --- HELPERS ---
@@ -199,11 +301,13 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
   try {
     const { module, input, scope } = req.body;
 
-    if (!COSTS[module]) {
+    // Per-tool cost from the live pricing config (admin-editable), falling back to the static map.
+    const pricing = await getPricingConfig();
+    const cost = pricing.toolCosts[module] ?? COSTS[module];
+    if (cost === undefined) {
       res.status(400).json({ error: { message: `Unknown module: ${module}`, code: 'invalid-argument' } });
       return;
     }
-    const cost = COSTS[module];
 
     // SCOPE-OWNER BILLING (Master Wiring): when an analysis is run inside a Team workspace,
     // tokens are deducted from the workspace OWNER's pooled wallet, not the runner's. We
@@ -1042,8 +1146,8 @@ export const confirmTopUp = functions.https.onCall(async (data: any, context: an
 // --- SUBSCRIPTION LIFECYCLE FUNCTION (§30) ---
 // Simulated billing: server-authoritative transitions. A real provider (Stripe) would
 // verify payment before `upgrade`/`renew` — that check is the documented seam below.
-const PRO_MONTHLY_TOKENS = 200;
-const RENEWAL_DAYS = 30;
+const PRO_MONTHLY_TOKENS = DEFAULT_PRICING_CONFIG.plans.pro.monthlyTokens;
+const RENEWAL_DAYS = DEFAULT_PRICING_CONFIG.renewalDays;
 
 export const changeSubscription = functions.https.onCall(async (data: any, context: any) => {
   if (!context.auth) {
@@ -1181,8 +1285,8 @@ export const monthlyTokenRefresh = functions.pubsub
 // billing: upgrading to Team grants a pooled token allowance on the OWNER's wallet.
 // ============================================================
 
-const TEAM_MONTHLY_TOKENS = 500;   // simulated pooled Team allowance (owner's wallet)
-const TEAM_SEAT_LIMIT = 10;        // simulated seat cap
+const TEAM_MONTHLY_TOKENS = DEFAULT_PRICING_CONFIG.plans.team.monthlyTokens;     // pooled Team allowance (owner's wallet)
+const TEAM_SEAT_LIMIT = DEFAULT_PRICING_CONFIG.plans.team.membersPerWorkspace!;  // per-workspace seat cap
 
 // Server mirror of the workspace permission matrix (keep in sync with permissionService.ts).
 const wsCanManageMembers = (role: string) => role === 'owner' || role === 'admin';
@@ -1426,7 +1530,7 @@ export const manageMembership = functions.https.onCall(async (data: any, context
 // assigned (client_assignments). Tokens belong to the agency owner's pooled wallet.
 // ============================================================
 
-const AGENCY_MONTHLY_TOKENS = 1500;  // simulated pooled Agency allowance (owner's wallet)
+const AGENCY_MONTHLY_TOKENS = DEFAULT_PRICING_CONFIG.plans.agency.monthlyTokens;  // pooled Agency allowance (owner's wallet)
 const AGENCY_CLIENT_LIMIT = 25;      // simulated client cap
 
 const agencyCanManageClients = (role: string) => ['agency_owner', 'agency_director', 'account_manager'].includes(role);
@@ -1707,7 +1811,7 @@ export const manageAgencyMember = functions.https.onCall(async (data: any, conte
 // the AI briefing engine synthesizes those into an executive briefing.
 // ============================================================
 
-const ENTERPRISE_MONTHLY_TOKENS = 5000;  // simulated pooled Enterprise allowance
+const ENTERPRISE_MONTHLY_TOKENS = DEFAULT_PRICING_CONFIG.plans.enterprise.monthlyTokens;  // pooled Enterprise allowance
 
 const entCanManage = (role: string) => ['enterprise_owner', 'executive_admin'].includes(role);
 const entCanManageDepts = (role: string) => ['enterprise_owner', 'executive_admin', 'department_director'].includes(role);
