@@ -10,6 +10,7 @@ import {
 } from 'firebase/auth';
 import { PageHeader, Card, PrimaryButton, Input, Tabs } from '../components/UI';
 import SubscriptionPanel from '../components/SubscriptionPanel';
+import { TokenStore } from '../components/TokenStore';
 import { useAuth } from '../context/AuthContext';
 import { useScope } from '../context/ScopeContext';
 import { auth } from '../services/firebase';
@@ -281,14 +282,12 @@ const Settings: React.FC = () => {
       {/* ---------- BILLING ---------- */}
       {activeTab === 'Billing' && (
         <div className="space-y-6">
-          <Card title="Tokens">
+          <Card title="Token Store">
             <p className="text-sm text-gray-500 font-medium mb-8">
-              {profile.tier === 'pro'
-                ? 'Top up 100 tokens for $5 at any time. Top-ups never affect your monthly reset.'
-                : 'Token top-ups are available on the Pro plan. Upgrade from the Subscription tab to enable them.'}
+              Buy token packs to top up your balance. Purchased tokens never expire and are spent only
+              after your monthly allowance runs out.
             </p>
-            {profile.tier === 'pro' && <PrimaryButton onClick={topUp}>Buy 100 Tokens — $5</PrimaryButton>}
-            {topUpMsg && <p className="mt-6 text-[10px] font-bold text-green-600 uppercase tracking-widest">{topUpMsg}</p>}
+            <TokenStore onPurchased={() => { if (user) getUserPaymentHistory(user.uid).then(setPayments).catch(() => {}); }} />
           </Card>
           <Card title="Transaction History">
             {loadingPayments ? (

@@ -23,6 +23,7 @@ const AgencyHub = lazy(() => import('./pages/AgencyHub'));
 const EnterpriseSuite = lazy(() => import('./pages/EnterpriseSuite'));
 const Reports = lazy(() => import('./pages/Reports'));
 const Settings = lazy(() => import('./pages/Settings'));
+const TokenStorePage = lazy(() => import('./pages/TokenStore'));
 const Support = lazy(() => import('./pages/Support'));
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ScopeProvider, useScope } from './context/ScopeContext';
@@ -315,6 +316,7 @@ const AppRoutes: React.FC = () => {
       <Route path="/history" element={user ? <History /> : <Navigate to="/auth" />} />
       <Route path="/reports" element={user ? <Reports /> : <Navigate to="/auth" />} />
       <Route path="/settings" element={user ? <Settings /> : <Navigate to="/auth" />} />
+      <Route path="/store" element={user ? <TokenStorePage /> : <Navigate to="/auth" />} />
       <Route path="/support" element={user ? <Support /> : <Navigate to="/auth" />} />
       <Route path="/team" element={user ? <TeamWorkspace /> : <Navigate to="/auth" />} />
       <Route path="/agency" element={user ? <AgencyHub /> : <Navigate to="/auth" />} />

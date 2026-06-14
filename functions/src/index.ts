@@ -64,11 +64,6 @@ const RATE_LIMIT_RULES = {
   BLOCK_DURATION_MS: 600000
 };
 
-const TOP_UP_CONFIG = {
-  PRICE_USD: 5,
-  TOKENS_GRANTED: 100
-};
-
 // ---- PRICING CONFIG (runtime-editable single source of truth; Firestore: pricing_config/global) ----
 // The server reads this for tool costs, per-plan monthly token allocations, org capacity limits,
 // plan prices, token packs and expansion pricing. A super_admin edits it via `updatePricingConfig`;
@@ -1092,15 +1087,20 @@ export const confirmTopUp = functions.https.onCall(async (data: any, context: an
     throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
   }
   const uid = context.auth.uid;
-  const { paymentReference, amountPaid } = data;
+  const { paymentReference, packId, amountPaid } = data;
 
   if (!paymentReference || typeof paymentReference !== 'string') {
     throw new functions.https.HttpsError('invalid-argument', 'Missing payment reference.');
   }
-  
-  // Strict economic enforcement: Client must acknowledge the exact price
-  if (amountPaid !== TOP_UP_CONFIG.PRICE_USD) {
-    throw new functions.https.HttpsError('invalid-argument', 'Invalid payment amount.');
+
+  // Resolve the requested token pack from the live config. Back-compat: a legacy call with only
+  // amountPaid maps to the pack at that price; no args defaults to the first (starter) pack.
+  const cfg = await getPricingConfig();
+  const pack = (packId && cfg.tokenPacks.find((p) => p.id === packId))
+    || (typeof amountPaid === 'number' && cfg.tokenPacks.find((p) => p.price === amountPaid))
+    || (packId == null && amountPaid == null ? cfg.tokenPacks[0] : null);
+  if (!pack) {
+    throw new functions.https.HttpsError('invalid-argument', 'Unknown token pack.');
   }
 
   const paymentRef = db.collection('payments').doc(paymentReference);
@@ -1127,8 +1127,8 @@ export const confirmTopUp = functions.https.onCall(async (data: any, context: an
         throw new functions.https.HttpsError('permission-denied', 'Account suspended. Top-up rejected.');
       }
 
-      if (userData.tier !== 'pro') {
-        throw new functions.https.HttpsError('permission-denied', 'Only Pro users can purchase top-ups.');
+      if (userData.tier === 'free') {
+        throw new functions.https.HttpsError('permission-denied', 'Upgrade to a paid plan to purchase token packs.');
       }
 
       // 4. MOCK VERIFICATION (In production, verify against Stripe/Provider API here)
@@ -1142,29 +1142,32 @@ export const confirmTopUp = functions.https.onCall(async (data: any, context: an
       // 5. EXECUTE CREDIT — packs add to purchased tokens (never expire).
       const { monthly, purchased } = readBalances(userData);
 
-      // Update User
       t.update(userRef, {
-        ...balanceFields(monthly, purchased + TOP_UP_CONFIG.TOKENS_GRANTED),
+        ...balanceFields(monthly, purchased + pack.tokens),
         last_topup: admin.firestore.FieldValue.serverTimestamp()
       });
 
-      // Create Payment Record (Immutable)
+      // Payment record (immutable, simulated provider).
       t.set(paymentRef, {
         uid,
         payment_reference: paymentReference,
-        amount_paid: TOP_UP_CONFIG.PRICE_USD,
-        tokens_credited: TOP_UP_CONFIG.TOKENS_GRANTED,
-        provider: 'stripe_simulated', // Placeholder
+        amount_paid: pack.price,
+        tokens_credited: pack.tokens,
+        pack_id: pack.id,
+        type: 'token_pack',
+        provider: 'stripe_simulated',
+        status: 'completed',
         created_at: admin.firestore.FieldValue.serverTimestamp()
       });
 
-      // Create Action Log (Immutable)
+      // Action log (immutable).
       const actionLogRef = db.collection('action_logs').doc();
       t.set(actionLogRef, {
         uid,
         action: 'token_topup',
-        tokens_added: TOP_UP_CONFIG.TOKENS_GRANTED,
-        amount_paid: TOP_UP_CONFIG.PRICE_USD,
+        tokens_added: pack.tokens,
+        amount_paid: pack.price,
+        pack_id: pack.id,
         payment_reference: paymentReference,
         created_at: admin.firestore.FieldValue.serverTimestamp()
       });

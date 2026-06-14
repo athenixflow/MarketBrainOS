@@ -359,8 +359,8 @@ export const UsageLimitModal: React.FC<{
   const isFree = tier === 'free';
 
   const handlePrimaryAction = () => {
-    // Both upgrade (free) and top-up (pro) are handled in-app on the dashboard.
-    navigate('/');
+    // Free users upgrade on the pricing page; paid users buy token packs in the store.
+    navigate(isFree ? '/pricing' : '/store');
     onClose();
   };
 
@@ -376,7 +376,7 @@ export const UsageLimitModal: React.FC<{
     if (reason === 'exhausted') {
       content = {
         title: "You’ve used your free tokens",
-        body: "You’ve reached the limit of your free tokens.\nUpgrade to Pro to get 200 tokens every month and keep running analyses.",
+        body: "You’ve reached the limit of your free tokens.\nUpgrade to Pro to get 100 tokens every month and keep running analyses.",
         primaryCTA: "Upgrade to Pro — $7/month",
         secondaryCTA: "Not now",
         hint: "Tokens are only used when analyses complete successfully."

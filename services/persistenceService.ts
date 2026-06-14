@@ -162,13 +162,12 @@ export const callUpdateSystemSettings = async (changes: Partial<AdminSettings>) 
   }
 };
 
-export const callConfirmTopUp = async (paymentReference: string) => {
+export const callConfirmTopUp = async (paymentReference: string, packId?: string) => {
   if (!isFirebaseInitialized) throw new Error("Connection failed");
   const confirmTopUp = httpsCallable(functions, 'confirmTopUp');
   try {
-    // Amount is hardcoded to 5 on client to match server expectation,
-    // but server enforces it regardless.
-    const result = await confirmTopUp({ paymentReference, amountPaid: 5 });
+    // Server resolves the pack (price/tokens) from the live pricing config and credits purchased tokens.
+    const result = await confirmTopUp({ paymentReference, packId });
     return result.data;
   } catch (error: any) {
     throw new Error(error.message || "Top-up failed.");

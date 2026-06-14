@@ -417,7 +417,9 @@ export interface AdminSettings {
 export interface UserProfile {
   id: string;
   email: string;
-  tokens: number;
+  tokens: number;                 // mirror = monthly_tokens + purchased_tokens (back-compat)
+  monthly_tokens?: number;        // included allowance; resets each billing cycle
+  purchased_tokens?: number;      // bought via token packs; never expire
   tier: UserTier;
   role: UserRole;
   last_active?: string;
