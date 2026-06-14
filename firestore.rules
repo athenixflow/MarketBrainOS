@@ -78,7 +78,9 @@ service cloud.firestore {
 
       allow create: if self(uid)
         && request.resource.data.tier == 'free'
-        && request.resource.data.tokens <= 4
+        && request.resource.data.tokens <= 20
+        && request.resource.data.get('monthly_tokens', 0) <= 20
+        && request.resource.data.get('purchased_tokens', 0) == 0
         && (request.resource.data.role == 'user'
             || request.auth.token.email == 'admin@marketbrainos.com');
 

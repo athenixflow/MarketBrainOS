@@ -1,4 +1,5 @@
 import { db, isFirebaseInitialized, functions } from './firebase';
+import { DEFAULT_PRICING_CONFIG } from '../config/pricingConfig';
 import { httpsCallable } from 'firebase/functions';
 import { 
   collection, 
@@ -275,6 +276,8 @@ export const replayOnboarding = async (userId: string) => {
   try { await updateDoc(doc(db, 'users', userId), { onboarded: false }); } catch (e) { console.error(e); }
 };
 
+const FREE_MONTHLY_TOKENS = DEFAULT_PRICING_CONFIG.plans.free.monthlyTokens;
+
 export const ensureUserProfile = async (userId: string, email: string) => {
   if (!isFirebaseInitialized) return;
   const docRef = doc(db, 'users', userId);
@@ -283,7 +286,10 @@ export const ensureUserProfile = async (userId: string, email: string) => {
     await setDoc(docRef, {
       id: userId,
       email: email,
-      tokens: 4,
+      // Free plan monthly allocation (resets each cycle). Mirror `tokens` = monthly + purchased.
+      tokens: FREE_MONTHLY_TOKENS,
+      monthly_tokens: FREE_MONTHLY_TOKENS,
+      purchased_tokens: 0,
       tier: 'free',
       role: email === 'admin@marketbrainos.com' ? 'super_admin' : 'user',
       onboarded: false,

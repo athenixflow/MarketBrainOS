@@ -149,6 +149,28 @@ const getPricingConfig = async (): Promise<PricingConfig> => {
   return cfg;
 };
 
+// ---- Token balance helpers ----
+// Billing containers track `monthly_tokens` (resets each cycle) and `purchased_tokens` (never expire),
+// plus a legacy `tokens` mirror (= monthly + purchased) so every existing reader keeps working.
+// readBalances lazily migrates legacy docs: a bare `tokens` value is treated as the monthly balance.
+const readBalances = (data: any): { monthly: number; purchased: number } => {
+  const monthly = typeof data?.monthly_tokens === 'number'
+    ? data.monthly_tokens
+    : (typeof data?.tokens === 'number' ? data.tokens : 0);
+  const purchased = typeof data?.purchased_tokens === 'number' ? data.purchased_tokens : 0;
+  return { monthly, purchased };
+};
+// Always write all three fields together so the mirror can never drift.
+const balanceFields = (monthly: number, purchased: number) => {
+  const m = Math.max(0, Math.round(monthly));
+  const p = Math.max(0, Math.round(purchased));
+  return { monthly_tokens: m, purchased_tokens: p, tokens: m + p };
+};
+// A plan's monthly allocation from the static defaults (sync; runtime overrides applied where the
+// async config is already loaded). Unknown tiers fall back to the free allocation.
+const planMonthlyDefault = (tier: string): number =>
+  (DEFAULT_PRICING_CONFIG.plans as any)[tier]?.monthlyTokens ?? DEFAULT_PRICING_CONFIG.plans.free.monthlyTokens;
+
 // Super-admin: edit the live pricing config (prices, allocations, limits, tool costs, packs, expansion).
 export const updatePricingConfig = functions.https.onCall(async (data: any, context: any) => {
   if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
@@ -477,21 +499,28 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
     // BILLING & EXECUTION — deduct from the resolved billing wallet (owner for team scope).
     const userRef = db.collection('users').doc(billingUid);
     let tokensDeducted = false;
+    let deductedMonthly = 0;    // exact amounts spent per bucket, for a precise refund on failure
+    let deductedPurchased = 0;
 
     try {
       await db.runTransaction(async (t: admin.firestore.Transaction) => {
         const userDoc = await t.get(userRef);
         if (!userDoc.exists) throw new Error('User profile not found.');
-        
+
         const userData = userDoc.data()!;
         if (userData.is_suspended) throw new Error('Account suspended.');
-        
-        const currentTokens = userData.tokens || 0;
-        if (currentTokens < cost) {
+
+        // Spend monthly (resets each cycle) before purchased (never expires); block when both are short.
+        const { monthly, purchased } = readBalances(userData);
+        if (monthly + purchased < cost) {
           throw new Error('Insufficient analysis credits.');
         }
+        const fromMonthly = Math.min(monthly, cost);
+        const fromPurchased = cost - fromMonthly;
+        deductedMonthly = fromMonthly;
+        deductedPurchased = fromPurchased;
 
-        t.update(userRef, { tokens: currentTokens - cost, last_active: now.toDate().toISOString() });
+        t.update(userRef, { ...balanceFields(monthly - fromMonthly, purchased - fromPurchased), last_active: now.toDate().toISOString() });
         tokensDeducted = true;
       });
     } catch (e: any) {
@@ -617,8 +646,8 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
         await db.runTransaction(async (t: admin.firestore.Transaction) => {
           const userDoc = await t.get(userRef);
           if (userDoc.exists) {
-            const current = userDoc.data()!.tokens || 0;
-            t.update(userRef, { tokens: current + cost });
+            const { monthly, purchased } = readBalances(userDoc.data());
+            t.update(userRef, balanceFields(monthly + deductedMonthly, purchased + deductedPurchased));
           }
         });
       }
@@ -713,10 +742,12 @@ export const manageUser = functions.https.onCall(async (data: any, context: any)
           t.update(targetRef, { tier: payload.plan });
           break;
 
-        case 'resetTokens':
-          const defaultTokens = userData.tier === 'pro' ? 200 : 4;
-          t.update(targetRef, { tokens: defaultTokens });
+        case 'resetTokens': {
+          // Reset monthly allowance to the plan default; keep never-expiring purchased tokens.
+          const { purchased } = readBalances(userData);
+          t.update(targetRef, balanceFields(planMonthlyDefault(userData.tier || 'free'), purchased));
           break;
+        }
 
         case 'toggleStatus':
           // Toggle between active and disabled (is_suspended)
@@ -784,15 +815,22 @@ export const adminManageTokens = functions.https.onCall(async (data: any, contex
       const doc = await t.get(targetRef);
       if (!doc.exists) throw new functions.https.HttpsError('not-found', 'Target user not found');
       const u = doc.data()!;
-      const current = Number(u.tokens) || 0;
+      const { monthly, purchased } = readBalances(u);
+      const current = monthly + purchased;
+      let nm = monthly, np = purchased;
       switch (action) {
-        case 'add': case 'bonus': case 'refund': delta = amount; break;
-        case 'remove': delta = -Math.min(amount, current); break;
-        case 'reset': delta = (u.tier === 'pro' ? 200 : 4) - current; break;
+        // Gifts/refunds go to purchased (never expire); removals come off monthly first, then purchased.
+        case 'add': case 'bonus': case 'refund': np = purchased + amount; delta = amount; break;
+        case 'remove': {
+          const take = Math.min(amount, current);
+          const fromM = Math.min(monthly, take);
+          nm = monthly - fromM; np = purchased - (take - fromM); delta = -take; break;
+        }
+        case 'reset': nm = planMonthlyDefault(u.tier || 'free'); np = purchased; delta = (nm + np) - current; break;
         default: throw new functions.https.HttpsError('invalid-argument', 'Unknown token action');
       }
-      newBalance = Math.max(0, current + delta);
-      t.update(targetRef, { tokens: newBalance });
+      newBalance = nm + np;
+      t.update(targetRef, balanceFields(nm, np));
       writeServerActionLog(t, {
         uid: targetUserId, action: `admin_token_${action}`, module: 'AdminTokens',
         tokens_added: delta, status: 'success', admin_uid: caller.uid, reason,
@@ -825,15 +863,17 @@ export const adminManageSubscription = functions.https.onCall(async (data: any, 
         case 'changePlan': {
           const plan = payload?.plan;
           if (!['free', 'pro', 'team', 'agency', 'enterprise'].includes(plan)) throw new functions.https.HttpsError('invalid-argument', 'Invalid plan');
-          const upd: any = { tier: plan, subscription_status: plan === 'free' ? 'free' : 'active' };
+          // Set the new plan's monthly allocation; preserve purchased tokens.
+          const { purchased } = readBalances(u);
+          const upd: any = { tier: plan, subscription_status: plan === 'free' ? 'free' : 'active', ...balanceFields(planMonthlyDefault(plan), purchased) };
           if (plan !== 'free') upd.plan_renews_at = renews(30);
-          if (plan === 'pro' && (Number(u.tokens) || 0) < 200) upd.tokens = 200;
           t.update(targetRef, upd);
           break;
         }
         case 'trial': {
           if (days <= 0) throw new functions.https.HttpsError('invalid-argument', 'Trial days required');
-          t.update(targetRef, { tier: 'pro', subscription_status: 'active', plan_renews_at: renews(days), tokens: Math.max(Number(u.tokens) || 0, 200) });
+          const { purchased: trialPurchased } = readBalances(u);
+          t.update(targetRef, { tier: 'pro', subscription_status: 'active', plan_renews_at: renews(days), ...balanceFields(planMonthlyDefault('pro'), trialPurchased) });
           break;
         }
         case 'extend': {
@@ -869,7 +909,7 @@ export const adminBulkAction = functions.https.onCall(async (data: any, context:
       const ref = db.collection('users').doc(uid);
       if (action === 'suspend') batch.update(ref, { is_suspended: true, suspension_reason: 'Bulk administrative action' });
       else if (action === 'unsuspend') batch.update(ref, { is_suspended: false, suspension_reason: admin.firestore.FieldValue.delete() });
-      else if (action === 'grantTokens') batch.update(ref, { tokens: admin.firestore.FieldValue.increment(Math.abs(Number(payload?.amount) || 0)) });
+      else if (action === 'grantTokens') { const amt = Math.abs(Number(payload?.amount) || 0); batch.update(ref, { purchased_tokens: admin.firestore.FieldValue.increment(amt), tokens: admin.firestore.FieldValue.increment(amt) }); }
       else if (action === 'changePlan') { if (!['free', 'pro'].includes(payload?.plan)) throw new functions.https.HttpsError('invalid-argument', 'Invalid plan'); batch.update(ref, { tier: payload.plan }); }
       else if (action === 'notify') {
         const nref = db.collection('notifications').doc();
@@ -895,7 +935,7 @@ export const adminCreateUser = functions.https.onCall(async (data: any, context:
     const userRecord = await admin.auth().createUser({ email, password });
     const plan = ['free', 'pro'].includes(tier) ? tier : 'free';
     await db.collection('users').doc(userRecord.uid).set({
-      id: userRecord.uid, email, tokens: plan === 'pro' ? 200 : 4, tier: plan,
+      id: userRecord.uid, email, ...balanceFields(planMonthlyDefault(plan), 0), tier: plan,
       role: 'user', onboarded: false, subscription_status: plan === 'pro' ? 'active' : 'free',
       created_at: new Date().toISOString(), last_active: new Date().toISOString(),
     });
@@ -1100,14 +1140,13 @@ export const confirmTopUp = functions.https.onCall(async (data: any, context: an
         throw new functions.https.HttpsError('aborted', 'Payment verification failed.');
       }
 
-      // 5. EXECUTE CREDIT
-      const currentTokens = userData.tokens || 0;
-      const newTokens = currentTokens + TOP_UP_CONFIG.TOKENS_GRANTED;
+      // 5. EXECUTE CREDIT — packs add to purchased tokens (never expire).
+      const { monthly, purchased } = readBalances(userData);
 
       // Update User
-      t.update(userRef, { 
-        tokens: newTokens, 
-        last_topup: admin.firestore.FieldValue.serverTimestamp() 
+      t.update(userRef, {
+        ...balanceFields(monthly, purchased + TOP_UP_CONFIG.TOKENS_GRANTED),
+        last_topup: admin.firestore.FieldValue.serverTimestamp()
       });
 
       // Create Payment Record (Immutable)
@@ -1174,14 +1213,14 @@ export const changeSubscription = functions.https.onCall(async (data: any, conte
 
       if (action === 'upgrade' || action === 'renew') {
         // SEAM: verify payment with provider here before granting (simulated as success).
-        const currentTokens = userData.tokens || 0;
+        // Upgrade/renew sets the monthly Pro allocation; purchased tokens are preserved.
+        const { purchased } = readBalances(userData);
         t.update(userRef, {
           tier: 'pro',
           subscription_status: 'active',
           plan_renews_at: renewsAt,
           subscription_started_at: userData.subscription_started_at || now.toISOString(),
-          // Renewal/upgrade grants the monthly Pro allocation.
-          tokens: action === 'upgrade' ? currentTokens + PRO_MONTHLY_TOKENS : PRO_MONTHLY_TOKENS,
+          ...balanceFields(PRO_MONTHLY_TOKENS, purchased),
         });
 
         // Payment record (immutable) — subscription type.
@@ -1250,7 +1289,7 @@ export const monthlyTokenRefresh = functions.pubsub
       const batch = db.batch();
       for (const userDoc of eligible.slice(i, i + CHUNK)) {
         batch.update(userDoc.ref, {
-          tokens: PRO_MONTHLY_TOKENS,
+          ...balanceFields(PRO_MONTHLY_TOKENS, readBalances(userDoc.data()).purchased),
           plan_renews_at: renewsAt,
         });
         const logRef = db.collection('action_logs').doc();
@@ -1339,7 +1378,7 @@ export const manageWorkspace = functions.https.onCall(async (data: any, context:
           subscription_status: 'active',
           plan_renews_at: renewsAt,
           subscription_started_at: userData.subscription_started_at || now.toISOString(),
-          tokens: (userData.tokens || 0) + TEAM_MONTHLY_TOKENS,
+          ...balanceFields(TEAM_MONTHLY_TOKENS, readBalances(userData).purchased),
         });
         const payRef = db.collection('payments').doc();
         t.set(payRef, {
@@ -1577,7 +1616,7 @@ export const manageAgency = functions.https.onCall(async (data: any, context: an
         t.update(userRef, {
           tier: 'agency', subscription_status: 'active', plan_renews_at: renewsAt,
           subscription_started_at: userData.subscription_started_at || now.toISOString(),
-          tokens: (userData.tokens || 0) + AGENCY_MONTHLY_TOKENS,
+          ...balanceFields(AGENCY_MONTHLY_TOKENS, readBalances(userData).purchased),
         });
         const payRef = db.collection('payments').doc();
         t.set(payRef, {
@@ -1847,7 +1886,7 @@ export const manageEnterprise = functions.https.onCall(async (data: any, context
         t.update(userRef, {
           tier: 'enterprise', subscription_status: 'active', plan_renews_at: renewsAt,
           subscription_started_at: userData.subscription_started_at || now.toISOString(),
-          tokens: (userData.tokens || 0) + ENTERPRISE_MONTHLY_TOKENS,
+          ...balanceFields(ENTERPRISE_MONTHLY_TOKENS, readBalances(userData).purchased),
         });
         const payRef = db.collection('payments').doc();
         t.set(payRef, { uid, payment_reference: `sub_enterprise_${now.getTime()}`, amount_paid: 0, tokens_credited: ENTERPRISE_MONTHLY_TOKENS, type: 'subscription', provider: 'stripe_simulated', status: 'completed', created_at: admin.firestore.FieldValue.serverTimestamp() });
