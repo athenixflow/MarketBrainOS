@@ -273,8 +273,10 @@ const logAdminAudit = async (adminUid: string, adminEmail: string, action: strin
 export const executeAnalysis = functions.https.onRequest(async (req: any, res: any) => {
   // 1. CORS MIDDLEWARE
   const allowedOrigins = [
-    'https://www.marketbrainos.com', 
-    'https://marketbrainos.com', 
+    'https://marketbrainosweb.web.app',          // Firebase Hosting (primary)
+    'https://marketbrainosweb.firebaseapp.com',  // Firebase Hosting (alt domain)
+    'https://www.marketbrainos.com',
+    'https://marketbrainos.com',
     'http://localhost:5173'
   ];
   const origin = req.headers.origin;

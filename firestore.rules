@@ -66,7 +66,7 @@ service cloud.firestore {
     function canSeeStamped(d) {
       return (d.creator_user_id == request.auth.uid || d.user_id == request.auth.uid)
         || (d.visibility_type == 'team' && isWorkspaceMember(d.workspace_id))
-        || (d.visibility_type == 'client' && canAccessClient(d.agency_id, d.client_id))
+        || (d.visibility_type == 'client' && isAgencyMember(d.agency_id))
         || (d.visibility_type == 'enterprise' && isEnterpriseMember(d.enterprise_id));
     }
 
@@ -214,25 +214,27 @@ service cloud.firestore {
     match /agency_clients/{cid}  { allow read: if canAccessClient(resource.data.agency_id, cid) || isPlatformAdmin(); allow write: if false; }
     match /client_workspaces/{id}{ allow read: if isSignedIn(); allow write: if false; }
     match /client_assignments/{id} {
+      // List access is query-constant via agency membership (queries constrain agency_id); a member
+      // also reads their own assignment rows.
       allow read:  if isSignedIn()
         && (resource.data.uid == request.auth.uid
-            || canAccessClient(resource.data.agency_id, resource.data.client_id)
+            || isAgencyMember(resource.data.agency_id)
             || isPlatformAdmin());
       allow write: if false;
     }
     match /client_activity/{id} {
-      allow read:   if canAccessClient(resource.data.agency_id, resource.data.client_id) || isPlatformAdmin();
+      allow read:   if isAgencyMember(resource.data.agency_id) || isPlatformAdmin();
       allow create: if canAccessClient(request.resource.data.agency_id, request.resource.data.client_id)
                     && request.resource.data.actor_uid == request.auth.uid;
       allow update, delete: if false;
     }
-    match /client_reports/{id}   { allow read: if canAccessClient(resource.data.agency_id, resource.data.client_id) || isPlatformAdmin(); allow write: if false; }
+    match /client_reports/{id}   { allow read: if isAgencyMember(resource.data.agency_id) || isPlatformAdmin(); allow write: if false; }
     match /agency_invitations/{id} {
       allow read:  if isSignedIn() && (resource.data.email == request.auth.token.email || isPlatformAdmin());
       allow write: if false;
     }
     match /client_notes/{id} {
-      allow read:   if canAccessClient(resource.data.agency_id, resource.data.client_id) || isPlatformAdmin();
+      allow read:   if isAgencyMember(resource.data.agency_id) || isPlatformAdmin();
       allow create: if canAccessClient(request.resource.data.agency_id, request.resource.data.client_id)
                     && request.resource.data.author_uid == request.auth.uid;
       allow update, delete: if isSignedIn() && resource.data.author_uid == request.auth.uid;

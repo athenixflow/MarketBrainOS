@@ -3,7 +3,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, PrimaryButton, Input, EmptyState, ErrorMessage } from '../UI';
 import {
-  Agency, AgencyClient, WorkspaceMember, ClientAssignment, ClientNote, ClientActivity, ClientAssignmentRole,
+  Agency, AgencyClient, WorkspaceMember, ClientAssignment, ClientNote, ClientActivity, ClientAssignmentRole, TOKEN_COSTS,
 } from '../../types';
 import { Membership, can } from '../../services/permissionService';
 import {
@@ -41,9 +41,9 @@ const ClientWorkspace: React.FC<{
 
   const reload = useCallback(() => {
     getAnalysesForScope('', { level: 'client', clientId: client.id, agencyId: agency.id }).then(setAnalyses);
-    getClientNotes(client.id).then(setNotes);
-    getClientActivity(client.id).then(setActivity);
-    getClientAssignments(client.id).then(setAssignments);
+    getClientNotes(client.id, agency.id).then(setNotes);
+    getClientActivity(client.id, agency.id).then(setActivity);
+    getClientAssignments(client.id, agency.id).then(setAssignments);
   }, [client.id, agency.id]);
   useEffect(() => { reload(); }, [reload]);
 
@@ -52,20 +52,20 @@ const ClientWorkspace: React.FC<{
   const addNote = async () => {
     if (!noteDraft.trim()) return;
     await createClientNote({ client_id: client.id, agency_id: agency.id, author_uid: selfUid, author_name: selfName, content: noteDraft.trim() });
-    setNoteDraft(''); getClientNotes(client.id).then(setNotes);
+    setNoteDraft(''); getClientNotes(client.id, agency.id).then(setNotes);
   };
-  const togglePin = async (n: ClientNote) => { await updateClientNote(n.id, { pinned: !n.pinned }); getClientNotes(client.id).then(setNotes); };
-  const delNote = async (id: string) => { await deleteClientNote(id); getClientNotes(client.id).then(setNotes); };
+  const togglePin = async (n: ClientNote) => { await updateClientNote(n.id, { pinned: !n.pinned }); getClientNotes(client.id, agency.id).then(setNotes); };
+  const delNote = async (id: string) => { await deleteClientNote(id); getClientNotes(client.id, agency.id).then(setNotes); };
 
   // Assignments
   const assign = async (uid: string, role: ClientAssignmentRole) => {
     setError('');
-    try { await callManageClient('assign', { agencyId: agency.id, clientId: client.id, targetUid: uid, assignment_role: role }); getClientAssignments(client.id).then(setAssignments); }
+    try { await callManageClient('assign', { agencyId: agency.id, clientId: client.id, targetUid: uid, assignment_role: role }); getClientAssignments(client.id, agency.id).then(setAssignments); }
     catch (e: any) { setError(e.message || 'Assign failed'); }
   };
   const unassign = async (uid: string) => {
     setError('');
-    try { await callManageClient('unassign', { agencyId: agency.id, clientId: client.id, targetUid: uid }); getClientAssignments(client.id).then(setAssignments); }
+    try { await callManageClient('unassign', { agencyId: agency.id, clientId: client.id, targetUid: uid }); getClientAssignments(client.id, agency.id).then(setAssignments); }
     catch (e: any) { setError(e.message || 'Unassign failed'); }
   };
 
@@ -117,7 +117,23 @@ const ClientWorkspace: React.FC<{
             <Card className="!p-6"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Assigned</p><p className="text-3xl font-black text-[#0B0B0B]">{assignments.length}</p></Card>
             <Card className="!p-6"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Status</p><p className="text-xl font-black text-[#0B0B0B] capitalize">{client.status.replace('_', ' ')}</p></Card>
           </div>
-          <PrimaryButton onClick={() => navigate(`/${TOOL_CONFIG_LIST[0]?.slug || ''}`)}>Run Analysis for {client.name}</PrimaryButton>
+          <Card title={`Run an analysis for ${client.name}`}>
+            <p className="text-sm text-gray-500 font-medium mb-6">
+              Pick a tool — the result stays isolated to this client and is billed to the client's budget.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {TOOL_CONFIG_LIST.map((t) => (
+                <button
+                  key={t.slug}
+                  onClick={() => navigate(`/${t.slug}`)}
+                  className="text-left p-4 rounded-2xl bg-gray-50 border border-gray-100 hover:border-[#FF0000] transition-colors"
+                >
+                  <p className="text-sm font-bold text-[#0B0B0B]">{t.navLabel}</p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">{TOKEN_COSTS[t.costKey]} tokens</p>
+                </button>
+              ))}
+            </div>
+          </Card>
           <Card title="Client information">
             <div className="grid md:grid-cols-2 gap-3 text-sm">
               <p><span className="text-gray-400">Website:</span> {client.website || '—'}</p>

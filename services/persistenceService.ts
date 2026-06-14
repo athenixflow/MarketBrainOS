@@ -548,8 +548,9 @@ export const getAnalysesForScope = async (userId: string, scope: Scope): Promise
     let q;
     if (scope.level === 'team' && scope.workspaceId) {
       q = query(col, where('workspace_id', '==', scope.workspaceId), where('visibility_type', '==', 'team'));
-    } else if (scope.level === 'client' && scope.clientId) {
-      q = query(col, where('client_id', '==', scope.clientId), where('visibility_type', '==', 'client'));
+    } else if (scope.level === 'client' && scope.clientId && scope.agencyId) {
+      // agency_id constraint makes the rule (isAgencyMember(agency_id)) query-constant so the list is allowed.
+      q = query(col, where('agency_id', '==', scope.agencyId), where('client_id', '==', scope.clientId), where('visibility_type', '==', 'client'));
     } else if (scope.level === 'enterprise' && scope.enterpriseId) {
       q = query(col, where('enterprise_id', '==', scope.enterpriseId), where('visibility_type', '==', 'enterprise'));
     } else {
@@ -598,8 +599,8 @@ export const getReportsForScope = async (userId: string, scope: Scope): Promise<
       q = query(col, where('creator_user_id', '==', userId));
     } else if (scope.level === 'team' && scope.workspaceId) {
       q = query(col, where('workspace_id', '==', scope.workspaceId), where('visibility_type', '==', 'team'));
-    } else if (scope.level === 'client' && scope.clientId) {
-      q = query(col, where('client_id', '==', scope.clientId), where('visibility_type', '==', 'client'));
+    } else if (scope.level === 'client' && scope.clientId && scope.agencyId) {
+      q = query(col, where('agency_id', '==', scope.agencyId), where('client_id', '==', scope.clientId), where('visibility_type', '==', 'client'));
     } else if (scope.level === 'enterprise' && scope.enterpriseId) {
       q = query(col, where('enterprise_id', '==', scope.enterpriseId), where('visibility_type', '==', 'enterprise'));
     } else {
@@ -803,10 +804,15 @@ export const getClient = async (clientId: string): Promise<AgencyClient | null> 
   } catch (e) { console.error('Failed to load client', e); return null; }
 };
 
-export const getClientAssignments = async (clientId: string): Promise<ClientAssignment[]> => {
+export const getClientAssignments = async (clientId: string, agencyId?: string): Promise<ClientAssignment[]> => {
   if (!isFirebaseInitialized || !clientId) return [];
   try {
-    const snap = await getDocs(query(collection(db, 'client_assignments'), where('client_id', '==', clientId)));
+    const base = collection(db, 'client_assignments');
+    // agency_id constraint makes the read rule (isAgencyMember(agency_id)) query-constant.
+    const q = agencyId
+      ? query(base, where('agency_id', '==', agencyId), where('client_id', '==', clientId))
+      : query(base, where('client_id', '==', clientId));
+    const snap = await getDocs(q);
     return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }) as ClientAssignment);
   } catch (e) { console.error('Failed to load assignments', e); return []; }
 };
@@ -832,10 +838,14 @@ export const getAgencyMembers = async (agencyId: string): Promise<WorkspaceMembe
 };
 
 // --- Client notes ---
-export const getClientNotes = async (clientId: string): Promise<ClientNote[]> => {
+export const getClientNotes = async (clientId: string, agencyId?: string): Promise<ClientNote[]> => {
   if (!isFirebaseInitialized || !clientId) return [];
   try {
-    const snap = await getDocs(query(collection(db, 'client_notes'), where('client_id', '==', clientId)));
+    const base = collection(db, 'client_notes');
+    const q = agencyId
+      ? query(base, where('agency_id', '==', agencyId), where('client_id', '==', clientId))
+      : query(base, where('client_id', '==', clientId));
+    const snap = await getDocs(q);
     return snap.docs
       .map(d => ({ id: d.id, ...(d.data() as any) }) as ClientNote)
       .sort((a, b) => (Number(b.pinned) - Number(a.pinned)) || (new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()));
@@ -865,10 +875,14 @@ export const deleteClientNote = async (id: string): Promise<void> => {
 };
 
 // --- Client activity ---
-export const getClientActivity = async (clientId: string, max = 50): Promise<ClientActivity[]> => {
+export const getClientActivity = async (clientId: string, agencyId?: string, max = 50): Promise<ClientActivity[]> => {
   if (!isFirebaseInitialized || !clientId) return [];
   try {
-    const snap = await getDocs(query(collection(db, 'client_activity'), where('client_id', '==', clientId)));
+    const base = collection(db, 'client_activity');
+    const q = agencyId
+      ? query(base, where('agency_id', '==', agencyId), where('client_id', '==', clientId))
+      : query(base, where('client_id', '==', clientId));
+    const snap = await getDocs(q);
     return snap.docs
       .map(d => ({ id: d.id, ...(d.data() as any) }) as ClientActivity)
       .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
