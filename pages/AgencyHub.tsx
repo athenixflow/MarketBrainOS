@@ -16,6 +16,9 @@ import ClientWorkspace from '../components/agency/ClientWorkspace';
 import AgencyMembers from '../components/agency/AgencyMembers';
 import AgencyAnalytics from '../components/agency/AgencyAnalytics';
 import TokenBudgets from '../components/agency/TokenBudgets';
+import CapacityPanel from '../components/CapacityPanel';
+import { callPurchaseExpansion } from '../services/persistenceService';
+import { DEFAULT_PRICING_CONFIG } from '../config/pricingConfig';
 
 const TABS = ['Dashboard', 'Clients', 'Members', 'Analytics', 'Budgets', 'Settings'] as const;
 type Tab = typeof TABS[number];
@@ -177,7 +180,34 @@ const AgencyHub: React.FC = () => {
       {tab === 'Clients' && <ClientDirectory agency={agency} clients={clients} canManage={can('clients:manage', membership)} onOpenClient={openClient} onReload={loadAgency} />}
       {tab === 'Members' && <AgencyMembers agency={agency} members={members} membership={membership} selfUid={user?.uid || ''} onReload={loadAgency} />}
       {tab === 'Analytics' && <AgencyAnalytics agency={agency} clients={clients} members={members} />}
-      {tab === 'Budgets' && <TokenBudgets agency={agency} clients={clients} agencyId={activeId} canManage={can('clients:manage', membership)} onReload={loadAgency} />}
+      {tab === 'Budgets' && (
+        <div className="space-y-6">
+          <CapacityPanel
+            title="Plan capacity & expansions"
+            rows={[
+              {
+                label: 'Workspaces (clients)',
+                used: clients.length,
+                cap: (DEFAULT_PRICING_CONFIG.plans.agency.workspaces || 0) + (agency?.extra_workspaces || 0),
+                ...(agency?.owner_id === user?.uid ? {
+                  buyLabel: `Add workspace $${DEFAULT_PRICING_CONFIG.expansion.workspace}`,
+                  onBuy: async () => { await callPurchaseExpansion({ type: 'workspace', level: 'agency', containerId: activeId }); await loadAgency(); },
+                } : {}),
+              },
+              {
+                label: 'Members',
+                used: agency?.member_count || members.length,
+                cap: (DEFAULT_PRICING_CONFIG.plans.agency.maxMembers || 0) + (agency?.extra_members || 0),
+                ...(agency?.owner_id === user?.uid ? {
+                  buyLabel: `Add seat $${DEFAULT_PRICING_CONFIG.expansion.member}`,
+                  onBuy: async () => { await callPurchaseExpansion({ type: 'member', level: 'agency', containerId: activeId }); await loadAgency(); },
+                } : {}),
+              },
+            ]}
+          />
+          <TokenBudgets agency={agency} clients={clients} agencyId={activeId} canManage={can('clients:manage', membership)} onReload={loadAgency} />
+        </div>
+      )}
       {tab === 'Settings' && (
         can('settings:manage', membership) ? (
           <div className="space-y-6 max-w-2xl">

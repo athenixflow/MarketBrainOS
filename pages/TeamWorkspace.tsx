@@ -13,9 +13,11 @@ import {
 } from '../types';
 import {
   getWorkspace, getWorkspaceMembers, getPendingInvitations,
-  callManageWorkspace, callManageMembership,
+  callManageWorkspace, callManageMembership, callPurchaseExpansion,
 } from '../services/persistenceService';
 import { TOOL_CONFIG_LIST } from '../config/toolConfigs';
+import { DEFAULT_PRICING_CONFIG } from '../config/pricingConfig';
+import CapacityPanel from '../components/CapacityPanel';
 import TeamOverview from '../components/team/TeamOverview';
 import TeamMembers from '../components/team/TeamMembers';
 import SharedLibrary from '../components/team/SharedLibrary';
@@ -182,7 +184,23 @@ const TeamWorkspace: React.FC = () => {
       {error && <ErrorMessage message={error} />}
 
       {tab === 'Overview' && <TeamOverview workspace={workspace} onQuickAction={handleQuickAction} />}
-      {tab === 'Members' && <TeamMembers workspace={workspace} membership={membership} selfUid={user?.uid || ''} />}
+      {tab === 'Members' && (
+        <div className="space-y-6">
+          <CapacityPanel
+            title="Plan capacity & expansions"
+            rows={[{
+              label: 'Members',
+              used: members.length,
+              cap: (DEFAULT_PRICING_CONFIG.plans.team.membersPerWorkspace || 0) + (workspace?.extra_seats || 0),
+              ...(workspace && workspace.owner_id === user?.uid ? {
+                buyLabel: `Add seat $${DEFAULT_PRICING_CONFIG.expansion.member}`,
+                onBuy: async () => { await callPurchaseExpansion({ type: 'member', level: 'workspace', containerId: workspace.id }); await loadWorkspace(); },
+              } : {}),
+            }]}
+          />
+          <TeamMembers workspace={workspace} membership={membership} selfUid={user?.uid || ''} />
+        </div>
+      )}
       {tab === 'Library' && <SharedLibrary workspace={workspace} selfUid={user?.uid || ''} selfName={selfName} />}
       {tab === 'Reports' && <TeamReports workspace={workspace} />}
       {tab === 'Analytics' && <TeamAnalytics workspace={workspace} />}

@@ -93,6 +93,11 @@ export interface Workspace {
   owner_id: string;
   status: 'active' | 'archived';
   member_count?: number;
+  extra_seats?: number;       // purchased member-seat expansions (effective cap = base + extras)
+  monthly_tokens?: number;
+  allocation?: number;
+  consumed_this_cycle?: number;
+  consumed_cycle?: string;
   created_at: string;
   updated_at?: string;
 }
@@ -175,6 +180,9 @@ export interface Agency {
   status: 'active' | 'archived';
   client_count?: number;
   member_count?: number;
+  extra_workspaces?: number;  // purchased workspace expansions
+  extra_members?: number;     // purchased member-seat expansions
+  enterprise_allocation?: number; // token budget assigned by a parent enterprise
   created_at: string;
   updated_at?: string;
 }
@@ -267,6 +275,8 @@ export interface Enterprise {
   member_count?: number;
   department_count?: number;
   brand_count?: number;
+  extra_agencies?: number;    // purchased agency-slot expansions
+  extra_members?: number;     // purchased member-seat expansions
   // Containers the enterprise aggregates over (registered by the owner).
   linked_workspaces?: string[];
   linked_agencies?: string[];

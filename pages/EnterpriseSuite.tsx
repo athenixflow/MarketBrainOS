@@ -12,8 +12,10 @@ import {
 import {
   getEnterprise, getEnterpriseMembers, getEnterpriseDepartments, getEnterpriseBrands,
   getLatestHealthScore, getLatestAnalyticsSnapshot, getEnterpriseForecasts, getEnterpriseBriefings,
-  getEnterpriseInvitations, callManageEnterprise, callManageEnterpriseMember, callRunEnterpriseAggregation,
+  getEnterpriseInvitations, callManageEnterprise, callManageEnterpriseMember, callRunEnterpriseAggregation, callPurchaseExpansion,
 } from '../services/persistenceService';
+import { DEFAULT_PRICING_CONFIG } from '../config/pricingConfig';
+import CapacityPanel from '../components/CapacityPanel';
 import EnterpriseDashboard from '../components/enterprise/EnterpriseDashboard';
 import EnterpriseIntelligence from '../components/enterprise/EnterpriseIntelligence';
 import EnterprisePerformance from '../components/enterprise/EnterprisePerformance';
@@ -176,7 +178,34 @@ const EnterpriseSuite: React.FC = () => {
       {tab === 'Performance' && <EnterprisePerformance analytics={analytics} departments={departments} brands={brands} />}
       {tab === 'Briefings' && <EnterpriseBriefings enterprise={enterprise} briefings={briefings} canGenerate={can('reports:create', membership)} onReload={loadAll} />}
       {tab === 'Structure' && <EnterpriseStructure enterprise={enterprise} departments={departments} brands={brands} canManage={can('departments:manage', membership)} onReload={loadAll} />}
-      {tab === 'Members' && <EnterpriseMembers enterprise={enterprise} members={members} membership={membership} selfUid={user?.uid || ''} onReload={loadAll} />}
+      {tab === 'Members' && (
+        <div className="space-y-6">
+          <CapacityPanel
+            title="Plan capacity & expansions"
+            rows={[
+              {
+                label: 'Agencies',
+                used: (enterprise?.linked_agencies || []).length,
+                cap: (DEFAULT_PRICING_CONFIG.plans.enterprise.agencies || 0) + (enterprise?.extra_agencies || 0),
+                ...(enterprise && enterprise.owner_id === user?.uid ? {
+                  buyLabel: `Add agency $${DEFAULT_PRICING_CONFIG.expansion.agency}`,
+                  onBuy: async () => { await callPurchaseExpansion({ type: 'agency', level: 'enterprise', containerId: enterprise.id }); await loadAll(); },
+                } : {}),
+              },
+              {
+                label: 'Members',
+                used: members.length,
+                cap: (DEFAULT_PRICING_CONFIG.plans.enterprise.maxMembers || 0) + (enterprise?.extra_members || 0),
+                ...(enterprise && enterprise.owner_id === user?.uid ? {
+                  buyLabel: `Add seat $${DEFAULT_PRICING_CONFIG.expansion.member}`,
+                  onBuy: async () => { await callPurchaseExpansion({ type: 'member', level: 'enterprise', containerId: enterprise.id }); await loadAll(); },
+                } : {}),
+              },
+            ]}
+          />
+          <EnterpriseMembers enterprise={enterprise} members={members} membership={membership} selfUid={user?.uid || ''} onReload={loadAll} />
+        </div>
+      )}
       {tab === 'Settings' && (
         can('settings:manage', membership) ? (
           <div className="space-y-6 max-w-2xl">

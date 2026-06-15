@@ -166,6 +166,10 @@ const balanceFields = (monthly: number, purchased: number) => {
 const planMonthlyDefault = (tier: string): number =>
   (DEFAULT_PRICING_CONFIG.plans as any)[tier]?.monthlyTokens ?? DEFAULT_PRICING_CONFIG.plans.free.monthlyTokens;
 
+// Effective org capacity = the plan's base limit + any purchased expansion extras on the container.
+const effectiveLimit = (cfg: PricingConfig, tier: Tier, key: keyof PlanConfig, extras: any): number =>
+  (Number((cfg.plans[tier] as any)[key]) || 0) + (Number(extras) || 0);
+
 // Super-admin: edit the live pricing config (prices, allocations, limits, tool costs, packs, expansion).
 export const updatePricingConfig = functions.https.onCall(async (data: any, context: any) => {
   if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
@@ -1272,6 +1276,46 @@ export const allocateTokens = functions.https.onCall(async (data: any, context: 
   throw new functions.https.HttpsError('invalid-argument', 'Unknown allocation level.');
 });
 
+// --- PAID EXPANSIONS (simulated) ---
+// Raise an org container's capacity by buying an extra seat / workspace / agency. Increments the
+// container's extra_* counter (effective cap = plan base + extras) and records a recurring expansion
+// payment. Only the container owner can purchase.
+export const purchaseExpansion = functions.https.onCall(async (data: any, context: any) => {
+  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
+  const uid = context.auth.uid;
+  const type = data?.type as 'member' | 'workspace' | 'agency';
+  const level = data?.level as 'workspace' | 'agency' | 'enterprise';
+  const containerId = (data?.containerId || '').toString();
+  if (!['member', 'workspace', 'agency'].includes(type)) throw new functions.https.HttpsError('invalid-argument', 'Invalid expansion type.');
+  if (!['workspace', 'agency', 'enterprise'].includes(level)) throw new functions.https.HttpsError('invalid-argument', 'Invalid level.');
+  if (!containerId) throw new functions.https.HttpsError('invalid-argument', 'containerId required.');
+  // Valid combinations: member on any container; workspace only on an agency; agency only on an enterprise.
+  if ((type === 'workspace' && level !== 'agency') || (type === 'agency' && level !== 'enterprise')) {
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid level/type combination.');
+  }
+
+  const coll = ({ workspace: 'workspaces', agency: 'agencies', enterprise: 'enterprises' } as Record<string, string>)[level];
+  const field = type === 'member' ? (level === 'workspace' ? 'extra_seats' : 'extra_members')
+    : type === 'workspace' ? 'extra_workspaces' : 'extra_agencies';
+
+  const ref = db.collection(coll).doc(containerId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new functions.https.HttpsError('not-found', 'Container not found.');
+  if (snap.data()!.owner_id !== uid) throw new functions.https.HttpsError('permission-denied', 'Only the owner can buy expansions.');
+
+  const cfg = await getPricingConfig();
+  const price = cfg.expansion[type];
+
+  await ref.update({ [field]: admin.firestore.FieldValue.increment(1) });
+  await db.collection('payments').add({
+    uid, type: 'expansion', expansion_type: type, level, container_id: containerId,
+    amount_paid: price, recurring: 'monthly', provider: 'stripe_simulated', status: 'completed',
+    payment_reference: `exp_${type}_${new Date().getTime()}`, created_at: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  await db.collection('action_logs').add({ uid, action: `expansion_${type}`, level, container_id: containerId, amount_paid: price, created_at: admin.firestore.FieldValue.serverTimestamp() });
+  return { success: true, type, field, price };
+});
+
 // --- SUBSCRIPTION LIFECYCLE FUNCTION (§30) ---
 // Simulated billing: server-authoritative transitions. A real provider (Stripe) would
 // verify payment before `upgrade`/`renew` — that check is the documented seam below.
@@ -1413,7 +1457,6 @@ export const monthlyTokenRefresh = functions.pubsub
 // ============================================================
 
 const TEAM_MONTHLY_TOKENS = DEFAULT_PRICING_CONFIG.plans.team.monthlyTokens;     // pooled Team allowance (owner's wallet)
-const TEAM_SEAT_LIMIT = DEFAULT_PRICING_CONFIG.plans.team.membersPerWorkspace!;  // per-workspace seat cap
 
 // Server mirror of the workspace permission matrix (keep in sync with permissionService.ts).
 const wsCanManageMembers = (role: string) => role === 'owner' || role === 'admin';
@@ -1593,12 +1636,12 @@ export const manageMembership = functions.https.onCall(async (data: any, context
     // Prevent privilege escalation: only assignable roles may be invited (never 'owner').
     if (!WORKSPACE_INVITE_ROLES.includes(role)) throw new functions.https.HttpsError('invalid-argument', 'Invalid role.');
 
-    // Seat limit (simulated).
+    // Seat limit = plan base + purchased extra seats on the workspace.
     const membersSnap = await db.collection('workspace_members').where('container_id', '==', wid).get();
     const active = membersSnap.docs.filter((d: any) => d.data().status !== 'removed').length;
-    if (active >= TEAM_SEAT_LIMIT) throw new functions.https.HttpsError('resource-exhausted', `Seat limit (${TEAM_SEAT_LIMIT}) reached.`);
-
     const ws = await db.collection('workspaces').doc(wid).get();
+    const seatCap = effectiveLimit(await getPricingConfig(), 'team', 'membersPerWorkspace', ws.exists ? ws.data()!.extra_seats : 0);
+    if (active >= seatCap) throw new functions.https.HttpsError('resource-exhausted', `Seat limit (${seatCap}) reached. Buy an extra seat to add more members.`);
     await db.collection('workspace_invitations').add({
       workspace_id: wid,
       workspace_name: ws.exists ? ws.data()!.name : 'Workspace',
@@ -1658,7 +1701,6 @@ export const manageMembership = functions.https.onCall(async (data: any, context
 // ============================================================
 
 const AGENCY_MONTHLY_TOKENS = DEFAULT_PRICING_CONFIG.plans.agency.monthlyTokens;  // pooled Agency allowance (owner's wallet)
-const AGENCY_CLIENT_LIMIT = 25;      // simulated client cap
 
 const agencyCanManageClients = (role: string) => ['agency_owner', 'agency_director', 'account_manager'].includes(role);
 const agencyCanManageMembersOrClients = (role: string) => ['agency_owner', 'agency_director'].includes(role);
@@ -1781,10 +1823,12 @@ export const manageClient = functions.https.onCall(async (data: any, context: an
     const agRef = db.collection('agencies').doc(aid);
     const clientRef = db.collection('agency_clients').doc();
     const now = new Date().toISOString();
+    const cfg = await getPricingConfig();
     await db.runTransaction(async (t: admin.firestore.Transaction) => {
       const ag = await t.get(agRef);
       const count = ag.exists ? (ag.data()!.client_count || 0) : 0;
-      if (count >= AGENCY_CLIENT_LIMIT) throw new functions.https.HttpsError('resource-exhausted', `Client limit (${AGENCY_CLIENT_LIMIT}) reached.`);
+      const wsCap = effectiveLimit(cfg, 'agency', 'workspaces', ag.exists ? ag.data()!.extra_workspaces : 0);
+      if (count >= wsCap) throw new functions.https.HttpsError('resource-exhausted', `Workspace limit (${wsCap}) reached. Buy an extra workspace to add more.`);
       t.set(clientRef, {
         agency_id: aid, name,
         industry: (payload.industry || '').toString(), website: (payload.website || '').toString(),
@@ -1860,6 +1904,7 @@ export const manageAgencyMember = functions.https.onCall(async (data: any, conte
     const invRef = db.collection('agency_invitations').doc(inviteId);
     const agRef = db.collection('agencies').doc(aid);
     let agName = 'Agency';
+    const cfg = await getPricingConfig();
     await db.runTransaction(async (t: admin.firestore.Transaction) => {
       const inv = await t.get(invRef);
       if (!inv.exists) throw new functions.https.HttpsError('not-found', 'Invitation not found.');
@@ -1867,6 +1912,11 @@ export const manageAgencyMember = functions.https.onCall(async (data: any, conte
       if (invData.status !== 'pending') throw new functions.https.HttpsError('failed-precondition', 'Invitation no longer valid.');
       if ((invData.email || '').toLowerCase() !== email) throw new functions.https.HttpsError('permission-denied', 'Invitation is for a different account.');
       const ag = await t.get(agRef);
+      // Member capacity = plan base (50) + purchased extra member seats.
+      const memberCap = effectiveLimit(cfg, 'agency', 'maxMembers', ag.exists ? ag.data()!.extra_members : 0);
+      if ((ag.exists ? (ag.data()!.member_count || 1) : 1) >= memberCap) {
+        throw new functions.https.HttpsError('resource-exhausted', `Agency member limit (${memberCap}) reached. Buy an extra member seat to add more.`);
+      }
       agName = ag.exists ? (ag.data()!.name || 'Agency') : 'Agency';
       const safeRole = AGENCY_INVITE_ROLES.includes(invData.role) ? invData.role : 'analyst';
       t.set(db.collection('agency_members').doc(`${aid}_${uid}`), {
@@ -2027,6 +2077,12 @@ export const manageEnterprise = functions.https.onCall(async (data: any, context
           throw new functions.https.HttpsError('permission-denied', `Not authorized to link agency ${aId}.`);
         }
       }
+      // Agency capacity = plan base (5) + purchased extra agency slots.
+      const entDoc = await entRef.get();
+      const agencyCap = effectiveLimit(await getPricingConfig(), 'enterprise', 'agencies', entDoc.exists ? entDoc.data()!.extra_agencies : 0);
+      if (payload.linked_agencies.length > agencyCap) {
+        throw new functions.https.HttpsError('resource-exhausted', `Agency limit (${agencyCap}) reached. Buy an extra agency slot to link more.`);
+      }
       updates.linked_agencies = payload.linked_agencies;
     }
     await entRef.update(updates);
@@ -2114,6 +2170,7 @@ export const manageEnterpriseMember = functions.https.onCall(async (data: any, c
     const invRef = db.collection('enterprise_invitations').doc(inviteId);
     const entRef = db.collection('enterprises').doc(eid);
     let entName = 'Enterprise';
+    const cfg = await getPricingConfig();
     await db.runTransaction(async (t: admin.firestore.Transaction) => {
       const inv = await t.get(invRef);
       if (!inv.exists) throw new functions.https.HttpsError('not-found', 'Invitation not found.');
@@ -2121,6 +2178,11 @@ export const manageEnterpriseMember = functions.https.onCall(async (data: any, c
       if (invData.status !== 'pending') throw new functions.https.HttpsError('failed-precondition', 'Invitation no longer valid.');
       if ((invData.email || '').toLowerCase() !== email) throw new functions.https.HttpsError('permission-denied', 'Invitation is for a different account.');
       const ent = await t.get(entRef);
+      // Member capacity = plan base (250) + purchased extra member seats.
+      const memberCap = effectiveLimit(cfg, 'enterprise', 'maxMembers', ent.exists ? ent.data()!.extra_members : 0);
+      if ((ent.exists ? (ent.data()!.member_count || 1) : 1) >= memberCap) {
+        throw new functions.https.HttpsError('resource-exhausted', `Enterprise member limit (${memberCap}) reached. Buy an extra member seat to add more.`);
+      }
       entName = ent.exists ? (ent.data()!.name || 'Enterprise') : 'Enterprise';
       const safeRole = ENTERPRISE_INVITE_ROLES.includes(invData.role) ? invData.role : 'executive_viewer';
       t.set(db.collection('enterprise_members').doc(`${eid}_${uid}`), { uid, container_id: eid, name: entName, email, role: safeRole, status: 'active', joined_at: new Date().toISOString() });

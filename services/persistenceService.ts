@@ -189,6 +189,20 @@ export const callAllocateTokens = async (params: {
   }
 };
 
+// Paid expansion — raise an org container's capacity (extra seat / workspace / agency). Simulated.
+export const callPurchaseExpansion = async (params: {
+  type: 'member' | 'workspace' | 'agency'; level: 'workspace' | 'agency' | 'enterprise'; containerId: string;
+}) => {
+  if (!isFirebaseInitialized) throw new Error("Connection failed");
+  const fn = httpsCallable(functions, 'purchaseExpansion');
+  try {
+    const result = await fn(params);
+    return result.data as { success: boolean; type: string; field: string; price: number };
+  } catch (error: any) {
+    throw new Error(error.message || "Expansion purchase failed.");
+  }
+};
+
 // §30 Subscription lifecycle — server-authoritative state transitions.
 export const callChangeSubscription = async (action: 'upgrade' | 'cancel' | 'downgrade' | 'renew') => {
   if (!isFirebaseInitialized) throw new Error("Connection failed");
