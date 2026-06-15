@@ -44,6 +44,7 @@ export const ADMIN_SECTIONS: AdminSectionDef[] = [
   { key: 'agencies',      label: 'Agencies',       group: 'Organizations',  viewScope: 'admin:read' },
   { key: 'enterprise',    label: 'Enterprise',     group: 'Organizations',  viewScope: 'admin:read' },
 
+  { key: 'pricing',       label: 'Pricing & Plans',group: 'Business',       viewScope: 'admin:system_config' },
   { key: 'revenue',       label: 'Revenue',        group: 'Business',       viewScope: 'admin:read' },
   { key: 'transactions',  label: 'Transactions',   group: 'Business',       viewScope: 'admin:read' },
   { key: 'refunds',       label: 'Refunds',        group: 'Business',       viewScope: 'admin:read' },

@@ -1,5 +1,5 @@
 import { db, isFirebaseInitialized, functions } from './firebase';
-import { DEFAULT_PRICING_CONFIG } from '../config/pricingConfig';
+import { DEFAULT_PRICING_CONFIG, PricingConfig } from '../config/pricingConfig';
 import { httpsCallable } from 'firebase/functions';
 import { 
   collection, 
@@ -201,6 +201,23 @@ export const callPurchaseExpansion = async (params: {
   } catch (error: any) {
     throw new Error(error.message || "Expansion purchase failed.");
   }
+};
+
+// Live pricing config (admin editor + anywhere that wants the runtime values). Falls back to defaults.
+export const getLivePricingConfig = async (): Promise<PricingConfig> => {
+  if (!isFirebaseInitialized) return DEFAULT_PRICING_CONFIG;
+  try {
+    const snap = await getDoc(doc(db, 'pricing_config', 'global'));
+    return snap.exists() ? ({ ...DEFAULT_PRICING_CONFIG, ...(snap.data() as any) } as PricingConfig) : DEFAULT_PRICING_CONFIG;
+  } catch { return DEFAULT_PRICING_CONFIG; }
+};
+
+// Super-admin: persist edited pricing config (server validates + merges over defaults).
+export const callUpdatePricingConfig = async (changes: Partial<PricingConfig>) => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  const fn = httpsCallable(functions, 'updatePricingConfig');
+  try { return (await fn({ changes })).data as { success: boolean; config: PricingConfig }; }
+  catch (error: any) { throw new Error(error.message || 'Save failed.'); }
 };
 
 // §30 Subscription lifecycle — server-authoritative state transitions.

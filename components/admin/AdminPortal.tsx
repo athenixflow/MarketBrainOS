@@ -24,6 +24,7 @@ import AgencyDetail from './sections/AgencyDetail';
 import ClientDetail from './sections/ClientDetail';
 import EnterpriseDetail from './sections/EnterpriseDetail';
 import Revenue from './sections/Revenue';
+import PricingAdmin from './sections/Pricing';
 import Transactions from './sections/Transactions';
 import Refunds from './sections/Refunds';
 import Reports from './sections/Reports';
@@ -93,6 +94,7 @@ const AdminPortalInner: React.FC = () => {
           <Route path="clients/:id" element={<ClientDetail />} />
           <Route path="enterprise" element={<OrgList kind="enterprise" />} />
           <Route path="enterprise/:id" element={<EnterpriseDetail />} />
+          <Route path="pricing" element={<PricingAdmin />} />
           <Route path="revenue" element={<Revenue />} />
           <Route path="transactions" element={<Transactions />} />
           <Route path="refunds" element={<Refunds />} />

@@ -8,6 +8,7 @@ import { LineChart, DonutChart, bucketByDay } from '../Charts';
 import { downloadAsCSV, paymentsToCSV } from '../../../services/exportService';
 import { PaymentRecord } from '../../../types';
 import { fmtDate, money, tsToMillis } from '../util';
+import { DEFAULT_PRICING_CONFIG, PLAN_META, Tier } from '../../../config/pricingConfig';
 
 const Revenue: React.FC = () => {
   const a = useAdmin();
@@ -16,7 +17,18 @@ const Revenue: React.FC = () => {
     const total = a.payments.reduce((s, p) => s + (Number(p.amount_paid) || 0), 0);
     const paidUsers = a.users.filter(u => u.tier !== 'free').length;
     const activePro = a.users.filter(u => u.subscription_status === 'active').length;
-    const mrr = activePro * 7;
+    // MRR by plan from the config prices (all paid tiers, not just Pro).
+    const paidTiers: Tier[] = ['pro', 'team', 'agency', 'enterprise'];
+    const byPlan = paidTiers
+      .map(t => ({ label: PLAN_META[t].name, value: a.users.filter(u => u.tier === t).length * (DEFAULT_PRICING_CONFIG.plans[t].price || 0) }))
+      .filter(x => x.value > 0);
+    const mrr = byPlan.reduce((s, x) => s + x.value, 0);
+    // Revenue by source from the payments ledger (subscriptions vs token packs vs expansions).
+    const bySource = (() => {
+      let subs = 0, packs = 0, exp = 0;
+      a.payments.forEach(p => { const amt = Number(p.amount_paid) || 0; const t = (p as any).type; if (t === 'expansion') exp += amt; else if (t === 'subscription') subs += amt; else packs += amt; });
+      return [{ label: 'Subscriptions', value: subs }, { label: 'Token packs', value: packs }, { label: 'Expansions', value: exp }].filter(x => x.value > 0);
+    })();
     const arpu = a.users.length ? total / a.users.length : 0;
     const arppu = paidUsers ? total / paidUsers : 0;
     const ltv = arppu * 12; // rough: ARPPU annualized
@@ -30,18 +42,11 @@ const Revenue: React.FC = () => {
     const sums: Record<string, number> = {};
     a.payments.forEach(p => { const t = tsToMillis(p.created_at); if (!t) return; const dt = new Date(t); const k = `${dt.getMonth() + 1}/${dt.getDate()}`; sums[k] = (sums[k] || 0) + (Number(p.amount_paid) || 0); });
     const series = bucketByDay(a.payments.map(p => tsToMillis(p.created_at)).filter(Boolean) as number[], 14).map(b => ({ label: b.label, value: sums[b.label] || 0 }));
-    // revenue by plan (active subscribers × price; pro=$7)
-    const byPlan = [
-      { label: 'Pro', value: a.users.filter(u => u.tier === 'pro').length * 7 },
-      { label: 'Team', value: a.users.filter(u => u.tier === 'team').length * 0 },
-      { label: 'Agency', value: a.users.filter(u => u.tier === 'agency').length * 0 },
-      { label: 'Enterprise', value: a.users.filter(u => u.tier === 'enterprise').length * 0 },
-    ].filter(x => x.value > 0);
     // churn
     const cancelled = a.users.filter(u => u.subscription_status === 'cancelled').length;
     const expired = a.users.filter(u => u.subscription_status === 'expired').length;
     const churnRate = (activePro + cancelled + expired) ? Math.round(((cancelled + expired) / (activePro + cancelled + expired)) * 100) : 0;
-    return { total, mrr, arr: mrr * 12, arpu, arppu, ltv, series, periods, refunded, byPlan, cancelled, expired, churnRate };
+    return { total, mrr, arr: mrr * 12, arpu, arppu, ltv, series, periods, refunded, byPlan, bySource, cancelled, expired, churnRate };
   }, [a.payments, a.users]);
 
   const columns: Column<PaymentRecord>[] = [
@@ -73,9 +78,10 @@ const Revenue: React.FC = () => {
         <KpiCard label="Refunded" value={money(d.refunded)} tone={d.refunded ? 'danger' : 'default'} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card title="Revenue (14d)"><LineChart data={d.series} valueFormat={money} /></Card>
         <Card title="MRR by Plan">{d.byPlan.length ? <DonutChart data={d.byPlan} /> : <p className="text-sm text-gray-400 py-8 text-center font-medium">No recurring revenue yet.</p>}</Card>
+        <Card title="Revenue by Source">{d.bySource.length ? <DonutChart data={d.bySource} /> : <p className="text-sm text-gray-400 py-8 text-center font-medium">No revenue yet.</p>}</Card>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
