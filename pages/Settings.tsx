@@ -282,6 +282,12 @@ const Settings: React.FC = () => {
       {/* ---------- BILLING ---------- */}
       {activeTab === 'Billing' && (
         <div className="space-y-6">
+          <Card title="Billing Center">
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-sm text-gray-500 font-medium">See your plan, renewal date, token balance, expansions and invoices in one place.</p>
+              <Link to="/billing"><PrimaryButton>Open Billing Center</PrimaryButton></Link>
+            </div>
+          </Card>
           <Card title="Token Store">
             <p className="text-sm text-gray-500 font-medium mb-8">
               Buy token packs to top up your balance. Purchased tokens never expire and are spent only
