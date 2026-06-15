@@ -956,6 +956,25 @@ export const callManageAgencyMember = async (
   catch (error: any) { throw new Error(error.message || 'Agency membership action failed.'); }
 };
 
+// Direct member provisioning (active immediately) with per-member tools + token budget.
+export const callCreateAgencyMember = async (params: {
+  agencyId: string; email: string; password?: string; role: string; allowed_tools: string[]; token_budget: number;
+}) => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  const fn = httpsCallable(functions, 'createAgencyMember');
+  try { return (await fn(params)).data as { success: boolean; uid: string; created: boolean }; }
+  catch (error: any) { throw new Error(error.message || 'Create member failed.'); }
+};
+
+export const callUpdateAgencyMember = async (params: {
+  agencyId: string; targetUid: string; role?: string; allowed_tools?: string[]; token_budget?: number;
+}) => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  const fn = httpsCallable(functions, 'updateAgencyMember');
+  try { return (await fn(params)).data as { success: boolean }; }
+  catch (error: any) { throw new Error(error.message || 'Update member failed.'); }
+};
+
 // ============================================================
 // PHASE 6.3 — ENTERPRISE ANALYTICS SUITE DATA LAYER
 // UI reads engine-produced aggregates (health/analytics/forecast/briefing); never raw data.

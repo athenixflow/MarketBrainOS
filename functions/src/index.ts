@@ -338,6 +338,8 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
     let billingUid = uid;
     let billedWorkspaceId: string | null = null;
     let billedClientId: string | null = null;
+    let billedMemberPath: string | null = null;      // agency_members doc to charge a per-member budget
+    let memberAllowedTools: string[] | null = null;  // per-member tool allowlist (null = unrestricted)
     if (scope && scope.level === 'team' && scope.workspaceId) {
       const memberSnap = await db.collection('workspace_members').doc(`${scope.workspaceId}_${uid}`).get();
       if (!memberSnap.exists || memberSnap.data()!.status === 'removed') {
@@ -385,6 +387,23 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
       if (agSnap.exists && agSnap.data()!.owner_id) {
         billingUid = agSnap.data()!.owner_id;  // agency owner's pooled wallet
         billedClientId = scope.clientId;
+        // Per-member tool allowlist + token budget (set when the owner provisioned the member).
+        const md = agMember.data()!;
+        memberAllowedTools = Array.isArray(md.allowed_tools) && md.allowed_tools.length ? md.allowed_tools : null;
+        if (typeof md.token_budget === 'number' && md.token_budget > 0) {
+          billedMemberPath = `${scope.agencyId}_${uid}`;
+        }
+      }
+    }
+
+    // Per-member tool gate: a provisioned member may only run their allowed tools (by tool group).
+    if (memberAllowedTools) {
+      const group = MODULE_MAPPING[module] || module;
+      const allowedGroups = memberAllowedTools.map((m) => MODULE_MAPPING[m] || m);
+      if (!allowedGroups.includes(group)) {
+        await db.collection('action_logs').add({ uid, module, tokens_used: 0, status: 'blocked', error_code: 'TOOL_NOT_ALLOWED', created_at: admin.firestore.FieldValue.serverTimestamp() });
+        res.status(403).json({ error: { message: "This tool isn't enabled for your account. Ask your agency owner to enable it.", code: 'permission-denied' } });
+        return;
       }
     }
 
@@ -504,7 +523,9 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
     const containerRef = billedWorkspaceId ? db.collection('workspaces').doc(billedWorkspaceId)
       : billedClientId ? db.collection('agency_clients').doc(billedClientId)
       : null;
+    const memberRef = billedMemberPath ? db.collection('agency_members').doc(billedMemberPath) : null;
     let tokensDeducted = false;
+    let deductedMemberCost = 0;  // amount charged to the member budget, for refund on failure
     let deductedMonthly = 0;    // exact amounts spent per bucket, for a precise refund on failure
     let deductedPurchased = 0;
 
@@ -513,6 +534,7 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
         const userDoc = await t.get(userRef);
         if (!userDoc.exists) throw new Error('User profile not found.');
         const containerDoc = containerRef ? await t.get(containerRef) : null;
+        const memberDoc = memberRef ? await t.get(memberRef) : null;
 
         const userData = userDoc.data()!;
         if (userData.is_suspended) throw new Error('Account suspended.');
@@ -530,6 +552,17 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
           }
         }
 
+        // Per-member budget (the runner's own allowance from the agency pool).
+        let prevMemberConsumed = 0;
+        if (memberDoc && memberDoc.exists) {
+          const m = memberDoc.data()!;
+          prevMemberConsumed = (m.consumed_cycle === ownerCycle) ? (Number(m.consumed_this_cycle) || 0) : 0;
+          const mcap = Number(m.token_budget) || 0;
+          if (mcap > 0 && prevMemberConsumed + cost > mcap) {
+            throw new Error('Member budget exhausted.');
+          }
+        }
+
         // Spend monthly (resets each cycle) before purchased (never expires); block when both are short.
         const { monthly, purchased } = readBalances(userData);
         if (monthly + purchased < cost) {
@@ -544,6 +577,10 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
         if (containerRef) {
           t.set(containerRef, { consumed_this_cycle: prevConsumed + cost, consumed_cycle: ownerCycle }, { merge: true });
         }
+        if (memberRef) {
+          t.set(memberRef, { consumed_this_cycle: prevMemberConsumed + cost, consumed_cycle: ownerCycle }, { merge: true });
+          deductedMemberCost = cost;
+        }
         tokensDeducted = true;
       });
     } catch (e: any) {
@@ -551,6 +588,8 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
         res.status(429).json({ error: { message: e.message, code: 'resource-exhausted' } });
       } else if (e.message === 'Budget exhausted.') {
         res.status(429).json({ error: { message: 'This workspace/client has used its allocated token budget for this cycle. Ask the owner to allocate more.', code: 'resource-exhausted' } });
+      } else if (e.message === 'Member budget exhausted.') {
+        res.status(429).json({ error: { message: 'Your token budget is used up for this cycle. Ask your agency owner for more.', code: 'resource-exhausted' } });
       } else if (e.message === 'Account suspended.') {
         res.status(403).json({ error: { message: e.message, code: 'permission-denied' } });
       } else {
@@ -671,6 +710,7 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
         await db.runTransaction(async (t: admin.firestore.Transaction) => {
           const userDoc = await t.get(userRef);
           const containerDoc = containerRef ? await t.get(containerRef) : null;
+          const memberDoc = memberRef ? await t.get(memberRef) : null;
           if (userDoc.exists) {
             const { monthly, purchased } = readBalances(userDoc.data());
             t.update(userRef, balanceFields(monthly + deductedMonthly, purchased + deductedPurchased));
@@ -678,6 +718,10 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
           if (containerRef && containerDoc && containerDoc.exists) {
             const consumed = Number(containerDoc.data()!.consumed_this_cycle) || 0;
             t.update(containerRef, { consumed_this_cycle: Math.max(0, consumed - cost) });
+          }
+          if (memberRef && memberDoc && memberDoc.exists && deductedMemberCost > 0) {
+            const mc = Number(memberDoc.data()!.consumed_this_cycle) || 0;
+            t.update(memberRef, { consumed_this_cycle: Math.max(0, mc - deductedMemberCost) });
           }
         });
       }
@@ -1979,6 +2023,123 @@ export const manageAgencyMember = functions.https.onCall(async (data: any, conte
     return { success: true };
   }
   throw new functions.https.HttpsError('invalid-argument', 'Unknown agency membership action.');
+});
+
+// --- AGENCY MEMBER MANAGEMENT (direct create + per-member tools + per-member token budget) ---
+// Owner/director provisions a member directly: creates (or reuses) the auth account, sets their role,
+// the tools they may use, and a per-cycle token budget drawn from the agency pool. The member is
+// active immediately (no invite/accept).
+export const createAgencyMember = functions.https.onCall(async (data: any, context: any) => {
+  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
+  const callerUid = context.auth.uid;
+  const agencyId = (data?.agencyId || '').toString();
+  const email = (data?.email || '').toString().toLowerCase().trim();
+  const password = (data?.password || '').toString();
+  const role = AGENCY_INVITE_ROLES.includes(data?.role) ? data.role : 'analyst';
+  const tools = Array.isArray(data?.allowed_tools) ? data.allowed_tools.filter((t: any) => typeof t === 'string') : [];
+  const budget = Math.max(0, Math.round(Number(data?.token_budget) || 0));
+  if (!agencyId) throw new functions.https.HttpsError('invalid-argument', 'agencyId required.');
+  if (!email.includes('@')) throw new functions.https.HttpsError('invalid-argument', 'A valid email is required.');
+
+  const caller = await getAgencyMemberDoc(agencyId, callerUid);
+  if (!caller || !agencyCanManageMembersOrClients(caller.role)) {
+    throw new functions.https.HttpsError('permission-denied', 'Only the agency owner/director can add members.');
+  }
+  const agSnap = await db.collection('agencies').doc(agencyId).get();
+  if (!agSnap.exists) throw new functions.https.HttpsError('not-found', 'Agency not found.');
+  const agData = agSnap.data()!;
+
+  const cfg = await getPricingConfig();
+  // Capacity: member cap (plan base + extras).
+  const memberCap = effectiveLimit(cfg, 'agency', 'maxMembers', agData.extra_members);
+  if ((agData.member_count || 1) >= memberCap) {
+    throw new functions.https.HttpsError('resource-exhausted', `Agency member limit (${memberCap}) reached. Buy an extra member seat to add more.`);
+  }
+  // Budget: sum of member budgets must stay within the agency pool.
+  const pool = Number(agData.enterprise_allocation) || cfg.plans.agency.monthlyTokens;
+  const membersSnap = await db.collection('agency_members').where('container_id', '==', agencyId).get();
+  let sumBudgets = 0;
+  membersSnap.forEach((d: admin.firestore.QueryDocumentSnapshot) => { if (d.data().status !== 'removed') sumBudgets += Number(d.data().token_budget) || 0; });
+  if (budget > 0 && sumBudgets + budget > pool) {
+    throw new functions.https.HttpsError('resource-exhausted', `Budget exceeds the agency pool (${pool}). Available: ${Math.max(0, pool - sumBudgets)}.`);
+  }
+
+  // Find or create the auth user.
+  let uid: string; let created = false; let name = email.split('@')[0];
+  try {
+    const existing = await admin.auth().getUserByEmail(email);
+    uid = existing.uid;
+    name = existing.displayName || name;
+  } catch {
+    if (!password || password.length < 6) {
+      throw new functions.https.HttpsError('invalid-argument', 'A temporary password (min 6 characters) is required for a new member.');
+    }
+    const rec = await admin.auth().createUser({ email, password });
+    uid = rec.uid; created = true;
+    await db.collection('users').doc(uid).set({
+      id: uid, email, ...balanceFields(planMonthlyDefault('free'), 0), tier: 'free',
+      role: 'user', onboarded: false, subscription_status: 'free',
+      plan_renews_at: new Date(Date.now() + cfg.renewalDays * 86400000).toISOString(),
+      created_at: new Date().toISOString(), last_active: new Date().toISOString(),
+    }, { merge: true });
+  }
+
+  const memberRef = db.collection('agency_members').doc(`${agencyId}_${uid}`);
+  const existingMember = await memberRef.get();
+  if (existingMember.exists && existingMember.data()!.role === 'agency_owner') {
+    throw new functions.https.HttpsError('failed-precondition', 'That user is the agency owner.');
+  }
+  const wasActive = existingMember.exists && existingMember.data()!.status !== 'removed';
+  await memberRef.set({
+    uid, container_id: agencyId, name, email, role,
+    allowed_tools: tools, token_budget: budget, consumed_this_cycle: 0, consumed_cycle: '',
+    status: 'active', joined_at: new Date().toISOString(),
+  }, { merge: true });
+  if (!wasActive) await db.collection('agencies').doc(agencyId).update({ member_count: (agData.member_count || 1) + 1 });
+
+  return { success: true, uid, created };
+});
+
+// Owner/director edits a member's role, tools, and/or token budget.
+export const updateAgencyMember = functions.https.onCall(async (data: any, context: any) => {
+  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
+  const callerUid = context.auth.uid;
+  const agencyId = (data?.agencyId || '').toString();
+  const targetUid = (data?.targetUid || '').toString();
+  if (!agencyId || !targetUid) throw new functions.https.HttpsError('invalid-argument', 'agencyId and targetUid required.');
+
+  const caller = await getAgencyMemberDoc(agencyId, callerUid);
+  if (!caller || !agencyCanManageMembersOrClients(caller.role)) {
+    throw new functions.https.HttpsError('permission-denied', 'Only the agency owner/director can edit members.');
+  }
+  const memberRef = db.collection('agency_members').doc(`${agencyId}_${targetUid}`);
+  const m = await memberRef.get();
+  if (!m.exists) throw new functions.https.HttpsError('not-found', 'Member not found.');
+  if (m.data()!.role === 'agency_owner') throw new functions.https.HttpsError('failed-precondition', 'Use transfer to change the owner.');
+
+  const updates: any = {};
+  if (data?.role !== undefined) {
+    if (!AGENCY_INVITE_ROLES.includes(data.role)) throw new functions.https.HttpsError('invalid-argument', 'Invalid role.');
+    updates.role = data.role;
+  }
+  if (Array.isArray(data?.allowed_tools)) updates.allowed_tools = data.allowed_tools.filter((t: any) => typeof t === 'string');
+  if (data?.token_budget !== undefined) {
+    const budget = Math.max(0, Math.round(Number(data.token_budget) || 0));
+    const agSnap = await db.collection('agencies').doc(agencyId).get();
+    const cfg = await getPricingConfig();
+    const pool = Number(agSnap.data()?.enterprise_allocation) || cfg.plans.agency.monthlyTokens;
+    const membersSnap = await db.collection('agency_members').where('container_id', '==', agencyId).get();
+    let sumOthers = 0;
+    membersSnap.forEach((d: admin.firestore.QueryDocumentSnapshot) => {
+      if (d.id !== `${agencyId}_${targetUid}` && d.data().status !== 'removed') sumOthers += Number(d.data().token_budget) || 0;
+    });
+    if (budget > 0 && sumOthers + budget > pool) {
+      throw new functions.https.HttpsError('resource-exhausted', `Budget exceeds the agency pool (${pool}). Available: ${Math.max(0, pool - sumOthers)}.`);
+    }
+    updates.token_budget = budget;
+  }
+  await memberRef.update(updates);
+  return { success: true };
 });
 
 // ============================================================

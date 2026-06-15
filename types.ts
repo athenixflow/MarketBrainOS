@@ -118,6 +118,11 @@ export interface WorkspaceMember {
   status: 'active' | 'invited' | 'removed';
   joined_at?: string;
   last_active?: string;
+  // Agency member provisioning (Phase: member management)
+  allowed_tools?: string[];        // analysis module keys the member may run (empty = all)
+  token_budget?: number;           // per-cycle budget from the agency pool (0 = unlimited within pool)
+  consumed_this_cycle?: number;
+  consumed_cycle?: string;
 }
 
 export interface WorkspaceInvitation {
