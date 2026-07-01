@@ -345,7 +345,7 @@ const AppRoutes: React.FC = () => {
       } />
       
       {/* Public Routes */}
-      <Route path="/documentation" element={<Documentation />} />
+      <Route path="/documentation/*" element={<Documentation />} />
       <Route path="/features" element={<Features />} />
       <Route path="/pricing" element={<Pricing />} />
       <Route path="/about" element={<About />} />
@@ -371,8 +371,11 @@ const AppContainer: React.FC = () => {
 
   // Public marketing pages carry their own chrome (PublicLayout) and must render full-width,
   // even for logged-in users — otherwise the app sidebar/header double up with the public nav.
+  // The docs hub (/documentation/*) is its own full-bleed mini-app with its own nav, so it is
+  // treated the same way for every visitor (matched by prefix to cover its sub-pages).
   const PUBLIC_ROUTES = ['/features', '/pricing', '/about', '/faq'];
-  const isPublicRoute = PUBLIC_ROUTES.includes(location.pathname);
+  const isDocsRoute = location.pathname.startsWith('/documentation');
+  const isPublicRoute = PUBLIC_ROUTES.includes(location.pathname) || isDocsRoute;
 
   // Use layout logic: If user is logged in (and not on a public marketing page), show sidebar.
   const showSidebar = !!user && !isPublicRoute;
