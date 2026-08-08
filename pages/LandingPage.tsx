@@ -6,10 +6,13 @@ import AnimatedSection from '../components/AnimatedSection';
 import PublicLayout from '../components/PublicLayout';
 import FaqAccordion from '../components/FaqAccordion';
 import { FAQ_ITEMS, TESTIMONIALS } from '../config/marketingContent';
+import Seo from '../components/Seo';
+import { MARKETING_SEO } from '../config/seo';
 
 const LandingPage: React.FC = () => {
   return (
     <PublicLayout>
+      <Seo {...MARKETING_SEO.home} />
 
       {/* 1. HERO SECTION */}
       <AnimatedSection as="section" index={0} className="relative pt-32 pb-24 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" role="banner">

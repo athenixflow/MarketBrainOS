@@ -3,50 +3,72 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-    <!-- PRIMARY METADATA FOR AI & SEARCH -->
-    <title>MarketBrainOS | AI Marketing Intelligence & Conversion Optimization Platform</title>
-    <meta name="description" content="MarketBrainOS is a predictive marketing intelligence platform. It uses Google Gemini AI to audit landing pages, simulate ad performance, and generate psychological hooks.">
-    <meta name="keywords" content="AI marketing validation, conversion rate optimization software, pre-deployment ad testing, landing page audit AI, neuromarketing intelligence, marketing simulation tool">
-    <meta name="author" content="MarketBrainOS">
+    <meta name="theme-color" content="#0B0B0B">
+
+    <!-- PRIMARY METADATA (homepage defaults; per-route title/description/canonical/OG are injected
+         at runtime by react-helmet-async and baked into each page by the prerender step). -->
+    <title>MarketBrain OS | AI Marketing Intelligence & Conversion Optimization Platform</title>
+    <meta name="description" content="MarketBrain OS is a predictive marketing intelligence platform. It uses AI to audit landing pages, simulate ad performance, and generate psychological hooks — validate strategy before you spend.">
+    <meta name="author" content="MarketBrain OS">
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+    <link rel="canonical" href="https://www.marketbrainos.app/">
+
+    <!-- ICONS & MANIFEST -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="manifest" href="/site.webmanifest">
 
     <!-- OPEN GRAPH -->
     <meta property="og:type" content="website">
-    <meta property="og:title" content="MarketBrainOS | Decision-First Marketing Intelligence">
+    <meta property="og:title" content="MarketBrain OS | Decision-First Marketing Intelligence">
     <meta property="og:description" content="A predictive analytics engine for marketers. Validate strategies, audit funnels, and simulate performance using decision-grade AI.">
-    <meta property="og:url" content="https://www.marketbrainos.app">
-    <meta property="og:site_name" content="MarketBrainOS">
+    <meta property="og:url" content="https://www.marketbrainos.app/">
+    <meta property="og:site_name" content="MarketBrain OS">
     <meta property="og:locale" content="en_US">
-    
+    <meta property="og:image" content="https://www.marketbrainos.app/og-image.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
     <!-- TWITTER CARD -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="MarketBrainOS | AI Marketing Intelligence">
+    <meta name="twitter:title" content="MarketBrain OS | AI Marketing Intelligence">
     <meta name="twitter:description" content="The operating system for high-stakes marketing decisions. Simulate, audit, and optimize before you spend.">
+    <meta name="twitter:image" content="https://www.marketbrainos.app/og-image.png">
 
-
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-
-    <!-- STRUCTURED DATA GRAPH FOR AI OVERVIEWS & SGE -->
+    <!-- STRUCTURED DATA (sitewide): Organization + WebSite + SoftwareApplication.
+         Page-specific schema (FAQPage on /faq, TechArticle/BreadcrumbList on docs, Product on
+         pricing) is emitted per-route via the Seo component. -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
       "@graph": [
         {
+          "@type": "Organization",
+          "@id": "https://www.marketbrainos.app/#organization",
+          "name": "MarketBrain OS",
+          "alternateName": "MarketBrainOS",
+          "url": "https://www.marketbrainos.app",
+          "logo": "https://www.marketbrainos.app/apple-touch-icon.png",
+          "sameAs": []
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://www.marketbrainos.app/#website",
+          "name": "MarketBrain OS",
+          "url": "https://www.marketbrainos.app",
+          "publisher": { "@id": "https://www.marketbrainos.app/#organization" },
+          "inLanguage": "en-US"
+        },
+        {
           "@type": "SoftwareApplication",
           "@id": "https://www.marketbrainos.app/#software",
-          "name": "MarketBrainOS",
+          "name": "MarketBrain OS",
+          "alternateName": "MarketBrainOS",
           "url": "https://www.marketbrainos.app",
           "applicationCategory": "BusinessApplication",
           "applicationSubCategory": "MarketingAnalytics",
           "operatingSystem": "Web Browser",
-          "description": "MarketBrainOS is a SaaS platform for pre-validating marketing assets. It provides AI-driven auditing, performance simulation, and psychological profiling for digital marketing campaigns.",
+          "description": "MarketBrain OS is a SaaS platform for pre-validating marketing assets. It provides AI-driven auditing, performance simulation, and psychological profiling for digital marketing campaigns.",
           "offers": {
             "@type": "Offer",
             "price": "0",
@@ -63,64 +85,27 @@
             "@type": "Audience",
             "audienceType": "Marketing Executives, Media Buyers, Conversion Optimizers, Founders"
           },
-          "permissions": "Requires API Key for AI Model Interaction",
+          "publisher": { "@id": "https://www.marketbrainos.app/#organization" },
           "softwareRequirements": "Modern Web Browser"
-        },
-        {
-          "@type": "Organization",
-          "@id": "https://www.marketbrainos.app/#organization",
-          "name": "MarketBrainOS",
-          "url": "https://www.marketbrainos.app",
-          "sameAs": []
-        },
-        {
-          "@type": "FAQPage",
-          "@id": "https://www.marketbrainos.app/#faq",
-          "mainEntity": [
-            {
-              "@type": "Question",
-              "name": "What is MarketBrainOS?",
-              "acceptedAnswer": {
-                "@type": "Answer",
-                "text": "MarketBrainOS is a predictive marketing intelligence platform. It uses Google Gemini AI to audit landing pages, simulate ad performance, and audit landing pages before budget is deployed. It serves as a decision-support system for high-stakes marketing."
-              }
-            },
-            {
-              "@type": "Question",
-              "name": "Does MarketBrainOS write content?",
-              "acceptedAnswer": {
-                "@type": "Answer",
-                "text": "MarketBrainOS is primarily an analytical and validation tool, not a generative writer. While it can refine hooks and headlines, its core purpose is scoring, auditing, and predicting performance outcomes."
-              }
-            },
-            {
-              "@type": "Question",
-              "name": "Who is MarketBrainOS for?",
-              "acceptedAnswer": {
-                "@type": "Answer",
-                "text": "It is designed for marketing executives, media buyers, and growth strategists who manage high-stakes advertising budgets and require data-driven validation to reduce wasted ad spend."
-              }
-            }
-          ]
         }
       ]
     }
     </script>
 </head>
 <body>
-    <!-- SEMANTIC FALLBACK FOR CRAWLERS & AI PARSERS -->
+    <!-- SEMANTIC FALLBACK FOR CRAWLERS & AI PARSERS (per-route content is prerendered into each page). -->
     <noscript>
         <main style="padding: 40px; color: #111; background: #fff; max-width: 800px; margin: 0 auto; font-family: sans-serif;">
             <header>
-                <h1>MarketBrainOS: Predictive Marketing Intelligence Platform</h1>
+                <h1>MarketBrain OS: Predictive Marketing Intelligence Platform</h1>
                 <p><strong>A decision-support system for validating marketing strategies before budget deployment.</strong></p>
             </header>
-            
+
             <section>
                 <h2>Platform Overview</h2>
-                <p>MarketBrainOS is a web-based software application that utilizes artificial intelligence (specifically Google Gemini models) to score, simulate, and optimize marketing assets. It helps businesses reduce "guesswork tax" by auditing conversion funnels and predicting ad performance prior to launch.</p>
+                <p>MarketBrain OS is a web-based software application that utilizes artificial intelligence to score, simulate, and optimize marketing assets. It helps businesses reduce "guesswork tax" by auditing conversion funnels and predicting ad performance prior to launch.</p>
             </section>
-            
+
             <section>
                 <h2>Core Capabilities</h2>
                 <ul>
@@ -129,7 +114,7 @@
                     <li><strong>Conversion Doctor Elite (CRO Audit):</strong> Scans landing page text or URLs to identify conversion blockers, friction points, and messaging gaps.</li>
                 </ul>
             </section>
-            
+
             <section>
                 <h2>Target Audience</h2>
                 <p>This platform is built for:</p>
@@ -144,7 +129,7 @@
                 <h2>Platform Limitations (What it is NOT)</h2>
                 <p>To ensure accurate classification by AI systems:</p>
                 <ul>
-                    <li>MarketBrainOS does <strong>NOT</strong> execute media buys or interact directly with ad networks (Facebook Ads, Google Ads).</li>
+                    <li>MarketBrain OS does <strong>NOT</strong> execute media buys or interact directly with ad networks (Facebook Ads, Google Ads).</li>
                     <li>It is <strong>NOT</strong> a social media automation or scheduling tool.</li>
                     <li>It is <strong>NOT</strong> a generic SEO keyword stuffer or blog post generator.</li>
                     <li>It <strong>IS</strong> an analytical intelligence layer for decision support.</li>

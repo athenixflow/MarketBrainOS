@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import { useParams, Link, Navigate } from 'react-router-dom';
 import { getCategory, articlesByCategory } from '../../config/docs/registry';
 import Icon from './icons';
+import Seo from '../Seo';
 
 const DocsCategory: React.FC = () => {
   const { categoryId } = useParams();
@@ -16,6 +17,7 @@ const DocsCategory: React.FC = () => {
 
   return (
     <div className="max-w-4xl">
+      <Seo title={category.title} description={category.summary} path={`/documentation/${category.id}`} />
       <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-gray-500 mb-6">
         <Link to="/documentation" className="hover:text-white transition-colors">Docs</Link>
         <Icon name="chevronRight" className="w-3 h-3 text-gray-700" />

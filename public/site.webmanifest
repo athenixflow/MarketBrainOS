@@ -1,0 +1,13 @@
+{
+  "name": "MarketBrain OS",
+  "short_name": "MarketBrain OS",
+  "description": "AI marketing intelligence & conversion optimization platform.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0B0B0B",
+  "theme_color": "#0B0B0B",
+  "icons": [
+    { "src": "/favicon.svg", "type": "image/svg+xml", "sizes": "any" },
+    { "src": "/apple-touch-icon.png", "type": "image/png", "sizes": "180x180" }
+  ]
+}

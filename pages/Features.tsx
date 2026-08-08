@@ -4,6 +4,8 @@ import PublicLayout from '../components/PublicLayout';
 import AnimatedSection from '../components/AnimatedSection';
 import { PrimaryButton } from '../components/UI';
 import { NAV_SUITES } from '../config/toolConfigs';
+import Seo from '../components/Seo';
+import { MARKETING_SEO } from '../config/seo';
 
 const SUITE_BLURB: Record<string, string> = {
   'Marketing Intelligence': 'Understand markets, audiences, messaging, and campaigns before you spend.',
@@ -15,6 +17,7 @@ const SUITE_BLURB: Record<string, string> = {
 
 const Features: React.FC = () => (
   <PublicLayout>
+    <Seo {...MARKETING_SEO.features} />
     <AnimatedSection as="section" index={0} className="pt-24 pb-16 px-6 md:px-12 max-w-7xl mx-auto">
       <span className="text-sm font-bold text-[#FF0000] uppercase tracking-[0.2em] mb-6 block">The Intelligence Suite</span>
       <h1 className="text-5xl md:text-6xl font-black text-white tracking-tight mb-8 leading-[1.1]">Thirteen analyzers. One connected system.</h1>

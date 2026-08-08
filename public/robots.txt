@@ -1,0 +1,6 @@
+# MarketBrain OS — all crawlers are welcome, including AI answer engines
+# (GPTBot, OAI-SearchBot, ClaudeBot, PerplexityBot, Google-Extended, Bingbot, etc.).
+User-agent: *
+Allow: /
+
+Sitemap: https://www.marketbrainos.app/sitemap.xml

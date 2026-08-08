@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 import { DOC_CATEGORIES, articleCount, getArticle } from '../../config/docs/registry';
 import { useDocsSearch } from './DocsLayout';
 import Icon from './icons';
+import Seo from '../Seo';
 
 const POPULAR: { cat: string; id: string }[] = [
   { cat: 'getting-started', id: 'first-analysis' },
@@ -22,6 +23,11 @@ const DocsHome: React.FC = () => {
 
   return (
     <div>
+      <Seo
+        title="Documentation"
+        description="Complete guides for every MarketBrain OS tool, the token economy, plans and billing, the collaboration layers, roles, and the admin console."
+        path="/documentation"
+      />
       {/* Hero */}
       <section className="mb-16">
         <p className="text-[11px] font-bold text-[#FF0000] uppercase tracking-[0.3em] mb-5">Documentation</p>

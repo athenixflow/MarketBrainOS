@@ -1,5 +1,5 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
-import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { NavigationItem } from './types';
 // Eager: first-paint surfaces (logged-out landing + auth).
 import AuthPage from './pages/Auth';
@@ -360,6 +360,7 @@ const AppContainer: React.FC = () => {
   const [isEmergency, setIsEmergency] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, profile } = useAuth();
 
   useEffect(() => {
@@ -367,6 +368,14 @@ const AppContainer: React.FC = () => {
     check();
     const interval = setInterval(check, 10000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Back-compat: the app moved from HashRouter to clean URLs. Old links like
+  // https://…/#/pricing still land here — redirect the hash path to the real route once on load.
+  useEffect(() => {
+    const h = window.location.hash;
+    if (h.startsWith('#/')) navigate(h.slice(1), { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Public marketing pages carry their own chrome (PublicLayout) and must render full-width,
@@ -413,9 +422,9 @@ const App: React.FC = () => {
   return (
     <AuthProvider>
       <ScopeProvider>
-        <HashRouter>
+        <BrowserRouter>
           <AppContainer />
-        </HashRouter>
+        </BrowserRouter>
       </ScopeProvider>
     </AuthProvider>
   );

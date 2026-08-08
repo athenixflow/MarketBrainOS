@@ -7,6 +7,8 @@ import DocsBlocks from './DocsBlocks';
 import DocsTOC from './DocsTOC';
 import { scrollToHeading } from './useScrollSpy';
 import Icon from './icons';
+import Seo from '../Seo';
+import { SITE_URL, SITE_NAME, DOCS_LAST_UPDATED, canonicalUrl } from '../../config/seo';
 
 const DocArticle: React.FC = () => {
   const { categoryId, articleId } = useParams();
@@ -14,7 +16,7 @@ const DocArticle: React.FC = () => {
   const article = getArticle(categoryId, articleId);
   const category = getCategory(categoryId);
 
-  // On navigation: jump to the #anchor (set via react-router, safe under HashRouter) or to the top.
+  // On navigation: jump to the #anchor (set via react-router) or to the top.
   useEffect(() => {
     const hash = location.hash.replace(/^#/, '');
     if (hash) {
@@ -28,9 +30,33 @@ const DocArticle: React.FC = () => {
   if (!article || !category) return <Navigate to="/documentation" replace />;
 
   const { prev, next } = articleNeighbours(article);
+  const path = `/documentation/${article.categoryId}/${article.id}`;
+  const url = canonicalUrl(path);
+  const articleJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'TechArticle',
+    headline: article.title,
+    description: article.summary,
+    url,
+    inLanguage: 'en-US',
+    dateModified: DOCS_LAST_UPDATED,
+    author: { '@type': 'Organization', name: SITE_NAME },
+    publisher: { '@type': 'Organization', name: SITE_NAME, logo: { '@type': 'ImageObject', url: `${SITE_URL}/apple-touch-icon.png` } },
+    isPartOf: { '@id': `${SITE_URL}/#website` },
+  };
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Docs', item: `${SITE_URL}/documentation` },
+      { '@type': 'ListItem', position: 2, name: category.title, item: `${SITE_URL}/documentation/${category.id}` },
+      { '@type': 'ListItem', position: 3, name: article.title, item: url },
+    ],
+  };
 
   return (
     <div className="flex gap-12 w-full">
+      <Seo title={article.title} description={article.summary} path={path} ogType="article" jsonLd={[articleJsonLd, breadcrumbJsonLd]} />
       <article className="min-w-0 flex-1 max-w-3xl">
         {/* Breadcrumbs */}
         <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-gray-500 mb-6">
@@ -43,6 +69,7 @@ const DocArticle: React.FC = () => {
           <h1 className="text-3xl lg:text-4xl font-bold tracking-tight text-white leading-tight mb-4">{article.title}</h1>
           <div className="w-12 h-[2px] bg-[#FF0000] rounded-full mb-5" />
           <p className="text-lg text-gray-400 font-medium leading-relaxed">{article.summary}</p>
+          <p className="text-[11px] font-bold uppercase tracking-widest text-gray-600 mt-5">Last updated {DOCS_LAST_UPDATED}</p>
         </header>
 
         {/* Body card */}

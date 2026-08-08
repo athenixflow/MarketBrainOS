@@ -9,19 +9,17 @@ import DocsHome from './DocsHome';
 import DocsCategory from './DocsCategory';
 import DocArticle from './DocArticle';
 
+// Per-page SEO (title/description/canonical + TechArticle/BreadcrumbList JSON-LD) is emitted by the
+// individual docs routes via <Seo>, so no static wrapper microdata here.
 const DocsApp: React.FC = () => (
-  <div itemScope itemType="https://schema.org/TechArticle">
-    <meta itemProp="headline" content="MarketBrain OS Documentation" />
-    <meta itemProp="description" content="Complete guides for every MarketBrain OS tool, the token economy, plans and billing, collaboration layers, roles, and the admin console." />
-    <Routes>
-      <Route element={<DocsLayout />}>
-        <Route index element={<DocsHome />} />
-        <Route path=":categoryId" element={<DocsCategory />} />
-        <Route path=":categoryId/:articleId" element={<DocArticle />} />
-        <Route path="*" element={<Navigate to="/documentation" replace />} />
-      </Route>
-    </Routes>
-  </div>
+  <Routes>
+    <Route element={<DocsLayout />}>
+      <Route index element={<DocsHome />} />
+      <Route path=":categoryId" element={<DocsCategory />} />
+      <Route path=":categoryId/:articleId" element={<DocArticle />} />
+      <Route path="*" element={<Navigate to="/documentation" replace />} />
+    </Route>
+  </Routes>
 );
 
 export default DocsApp;

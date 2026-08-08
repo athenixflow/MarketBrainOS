@@ -5,9 +5,23 @@ import AnimatedSection from '../components/AnimatedSection';
 import FaqAccordion from '../components/FaqAccordion';
 import { PrimaryButton } from '../components/UI';
 import { FAQ_ITEMS } from '../config/marketingContent';
+import Seo from '../components/Seo';
+import { MARKETING_SEO } from '../config/seo';
+
+// FAQPage structured data generated from the real FAQ content (highest GEO leverage — see plan).
+const FAQ_JSONLD = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: FAQ_ITEMS.map(({ q, a }) => ({
+    '@type': 'Question',
+    name: q,
+    acceptedAnswer: { '@type': 'Answer', text: a },
+  })),
+};
 
 const FAQ: React.FC = () => (
   <PublicLayout>
+    <Seo {...MARKETING_SEO.faq} jsonLd={FAQ_JSONLD} />
     <AnimatedSection as="section" index={0} className="pt-24 pb-12 px-6 md:px-12 max-w-3xl mx-auto text-center">
       <span className="text-sm font-bold text-[#FF0000] uppercase tracking-[0.2em] mb-6 block">FAQ</span>
       <h1 className="text-5xl md:text-6xl font-black text-white tracking-tight mb-8 leading-[1.1]">Questions, answered.</h1>

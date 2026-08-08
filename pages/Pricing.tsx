@@ -5,6 +5,25 @@ import AnimatedSection from '../components/AnimatedSection';
 import { useAuth } from '../context/AuthContext';
 import { callChangeSubscription } from '../services/persistenceService';
 import { DEFAULT_PRICING_CONFIG as CFG, PLAN_META, PLAN_ORDER, Tier } from '../config/pricingConfig';
+import Seo from '../components/Seo';
+import { MARKETING_SEO, SITE_URL, SITE_NAME } from '../config/seo';
+
+// Product + per-plan Offer structured data (generated from the live pricing config).
+const PRICING_JSONLD = {
+  '@context': 'https://schema.org',
+  '@type': 'Product',
+  name: SITE_NAME,
+  description: 'AI marketing intelligence platform. Plans from Free to Enterprise, each with a monthly token allowance plus pay-as-you-go token packs.',
+  brand: { '@type': 'Brand', name: SITE_NAME },
+  offers: PLAN_ORDER.map((tier) => ({
+    '@type': 'Offer',
+    name: `${PLAN_META[tier].name} plan`,
+    price: String(CFG.plans[tier].price),
+    priceCurrency: 'USD',
+    url: `${SITE_URL}/pricing`,
+    availability: 'https://schema.org/OnlineOnly',
+  })),
+};
 
 const Pricing: React.FC = () => {
   const navigate = useNavigate();
@@ -50,6 +69,7 @@ const Pricing: React.FC = () => {
 
   return (
     <PublicLayout>
+      <Seo {...MARKETING_SEO.pricing} jsonLd={PRICING_JSONLD} />
       <AnimatedSection as="section" index={0} className="pt-24 pb-12 px-6 md:px-12 max-w-7xl mx-auto text-center">
         <span className="text-sm font-bold text-[#FF0000] uppercase tracking-[0.2em] mb-6 block">Pricing</span>
         <h1 className="text-5xl md:text-6xl font-black text-white tracking-tight mb-8 leading-[1.1]">Scale from solo to enterprise.</h1>
