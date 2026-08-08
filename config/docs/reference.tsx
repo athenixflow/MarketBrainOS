@@ -85,7 +85,7 @@ const support: DocArticle = {
     { type: 'heading', id: 'channels', text: 'Getting help' },
     { type: 'paragraph', text: 'Start with these docs or the [FAQ](/faq) for quick answers on plans, tokens, and analyses. The in-app [Support page](/support) links to both.' },
     { type: 'heading', id: 'email', text: 'Email the team' },
-    { type: 'paragraph', text: 'Still stuck? Email **support@marketbrainos.com** with your account email and a description of what you are trying to do, and the team will help.' },
+    { type: 'paragraph', text: 'Still stuck? Email **support@marketbrainos.app** with your account email and a description of what you are trying to do, and the team will help.' },
   ],
 };
 

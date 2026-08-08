@@ -5,7 +5,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader, Card } from '../components/UI';
 
-const SUPPORT_EMAIL = 'support@marketbrainos.com';
+const SUPPORT_EMAIL = 'support@marketbrainos.app';
 
 const Support: React.FC = () => {
   const channels = [

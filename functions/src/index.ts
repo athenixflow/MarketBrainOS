@@ -279,8 +279,10 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
   const allowedOrigins = [
     'https://marketbrainosweb.web.app',          // Firebase Hosting (primary)
     'https://marketbrainosweb.firebaseapp.com',  // Firebase Hosting (alt domain)
-    'https://www.marketbrainos.com',
-    'https://marketbrainos.com',
+    'https://www.marketbrainos.app',             // Custom domain (primary)
+    'https://marketbrainos.app',                 // Custom domain (apex)
+    'https://www.marketbrainos.com',             // Legacy domain (kept during transition)
+    'https://marketbrainos.com',                 // Legacy domain (kept during transition)
     'http://localhost:5173'
   ];
   const origin = req.headers.origin;

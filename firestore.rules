@@ -82,7 +82,7 @@ service cloud.firestore {
         && request.resource.data.get('monthly_tokens', 0) <= 20
         && request.resource.data.get('purchased_tokens', 0) == 0
         && (request.resource.data.role == 'user'
-            || request.auth.token.email == 'admin@marketbrainos.com');
+            || request.auth.token.email == 'admin@marketbrainos.app');
 
       // Client updates may change ONLY profile/preference fields (strict allowlist). Economy
       // and authority fields (tokens, tier, role, is_suspended, subscription_status,
