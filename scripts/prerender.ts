@@ -8,9 +8,26 @@ import path from 'node:path';
 import fs from 'node:fs';
 import http from 'node:http';
 import sirv from 'sirv';
-import puppeteer from 'puppeteer';
 import { DOC_CATEGORIES, DOC_ARTICLES } from '../config/docs/registry';
 import { SITE_URL } from '../config/seo';
+
+// Launch headless Chrome. On Vercel/CI the build sandbox (Amazon Linux) has no usable Chromium, so
+// use @sparticuz/chromium (a self-contained Linux binary) via puppeteer-core. Locally, use full
+// puppeteer's bundled Chromium. Same launch shape both ways.
+async function launchBrowser(): Promise<any> {
+  if (process.env.VERCEL || process.env.CI) {
+    const chromium: any = (await import('@sparticuz/chromium')).default;
+    const pc: any = await import('puppeteer-core');
+    return pc.launch({
+      args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'],
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+      defaultViewport: { width: 1280, height: 800 },
+    });
+  }
+  const puppeteer: any = (await import('puppeteer')).default;
+  return puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.resolve(__dirname, '../dist');
@@ -59,7 +76,7 @@ async function main() {
   const server = http.createServer((req, res) => serve(req, res, () => { res.statusCode = 404; res.end('not found'); }));
   await new Promise<void>((resolve) => server.listen(PORT, resolve));
 
-  const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+  const browser = await launchBrowser();
 
   // Generate social/icon assets.
   const shot = async (html: string, width: number, height: number, out: string) => {
@@ -144,4 +161,13 @@ async function main() {
   console.log(`\nPrerender complete: ${ROUTES.length} routes, sitemap.xml (${urls.length} urls), llms.txt.`);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+main().catch((e) => {
+  console.error(e);
+  // On Vercel/CI a prerender failure must NOT break the deploy — the SPA still ships (SEO degraded),
+  // and we verify the live site with curl afterward. Locally, fail loudly so problems are caught.
+  if (process.env.VERCEL || process.env.CI) {
+    console.error('\n⚠️  PRERENDER FAILED — deploying CSR-only (SEO degraded). Build continues.\n');
+    process.exit(0);
+  }
+  process.exit(1);
+});
