@@ -340,7 +340,8 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
     let billingUid = uid;
     let billedWorkspaceId: string | null = null;
     let billedClientId: string | null = null;
-    let billedMemberPath: string | null = null;      // agency_members doc to charge a per-member budget
+    let billedMemberPath: string | null = null;      // member doc id to charge a per-member budget
+    let billedMemberColl: string | null = null;      // its collection (workspace_members | agency_members)
     let memberAllowedTools: string[] | null = null;  // per-member tool allowlist (null = unrestricted)
     if (scope && scope.level === 'team' && scope.workspaceId) {
       const memberSnap = await db.collection('workspace_members').doc(`${scope.workspaceId}_${uid}`).get();
@@ -360,6 +361,13 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
       if (wsSnap.exists && wsSnap.data()!.owner_id) {
         billingUid = wsSnap.data()!.owner_id;
         billedWorkspaceId = scope.workspaceId;
+        // Per-member tool allowlist + token budget (set when the owner provisioned the member).
+        const md = memberSnap.data()!;
+        memberAllowedTools = Array.isArray(md.allowed_tools) && md.allowed_tools.length ? md.allowed_tools : null;
+        if (typeof md.token_budget === 'number' && md.token_budget > 0) {
+          billedMemberPath = `${scope.workspaceId}_${uid}`;
+          billedMemberColl = 'workspace_members';
+        }
       }
     } else if (scope && scope.level === 'client' && scope.clientId && scope.agencyId) {
       // Agency member must belong to the agency AND (be owner/director OR be assigned to the client).
@@ -394,6 +402,7 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
         memberAllowedTools = Array.isArray(md.allowed_tools) && md.allowed_tools.length ? md.allowed_tools : null;
         if (typeof md.token_budget === 'number' && md.token_budget > 0) {
           billedMemberPath = `${scope.agencyId}_${uid}`;
+          billedMemberColl = 'agency_members';
         }
       }
     }
@@ -404,7 +413,7 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
       const allowedGroups = memberAllowedTools.map((m) => MODULE_MAPPING[m] || m);
       if (!allowedGroups.includes(group)) {
         await db.collection('action_logs').add({ uid, module, tokens_used: 0, status: 'blocked', error_code: 'TOOL_NOT_ALLOWED', created_at: admin.firestore.FieldValue.serverTimestamp() });
-        res.status(403).json({ error: { message: "This tool isn't enabled for your account. Ask your agency owner to enable it.", code: 'permission-denied' } });
+        res.status(403).json({ error: { message: "This tool isn't enabled for your account. Ask the owner to enable it.", code: 'permission-denied' } });
         return;
       }
     }
@@ -525,7 +534,7 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
     const containerRef = billedWorkspaceId ? db.collection('workspaces').doc(billedWorkspaceId)
       : billedClientId ? db.collection('agency_clients').doc(billedClientId)
       : null;
-    const memberRef = billedMemberPath ? db.collection('agency_members').doc(billedMemberPath) : null;
+    const memberRef = billedMemberPath && billedMemberColl ? db.collection(billedMemberColl).doc(billedMemberPath) : null;
     let tokensDeducted = false;
     let deductedMemberCost = 0;  // amount charged to the member budget, for refund on failure
     let deductedMonthly = 0;    // exact amounts spent per bucket, for a precise refund on failure
@@ -591,7 +600,7 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
       } else if (e.message === 'Budget exhausted.') {
         res.status(429).json({ error: { message: 'This workspace/client has used its allocated token budget for this cycle. Ask the owner to allocate more.', code: 'resource-exhausted' } });
       } else if (e.message === 'Member budget exhausted.') {
-        res.status(429).json({ error: { message: 'Your token budget is used up for this cycle. Ask your agency owner for more.', code: 'resource-exhausted' } });
+        res.status(429).json({ error: { message: 'Your token budget is used up for this cycle. Ask the owner for more.', code: 'resource-exhausted' } });
       } else if (e.message === 'Account suspended.') {
         res.status(403).json({ error: { message: e.message, code: 'permission-denied' } });
       } else {
@@ -2144,6 +2153,114 @@ export const updateAgencyMember = functions.https.onCall(async (data: any, conte
   return { success: true };
 });
 
+// --- TEAM WORKSPACE member provisioning (direct-create parity with agency) ---
+// Owner/admin adds a member by email + temp password with a role, tool allowlist, and per-member
+// token budget drawn from the team pool. The budget + allowlist gate team-scope analyses in executeAnalysis.
+export const createWorkspaceMember = functions.https.onCall(async (data: any, context: any) => {
+  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
+  const callerUid = context.auth.uid;
+  const workspaceId = (data?.workspaceId || '').toString();
+  const email = (data?.email || '').toString().toLowerCase().trim();
+  const password = (data?.password || '').toString();
+  const role = WORKSPACE_INVITE_ROLES.includes(data?.role) ? data.role : 'analyst';
+  const tools = Array.isArray(data?.allowed_tools) ? data.allowed_tools.filter((t: any) => typeof t === 'string') : [];
+  const budget = Math.max(0, Math.round(Number(data?.token_budget) || 0));
+  if (!workspaceId) throw new functions.https.HttpsError('invalid-argument', 'workspaceId required.');
+  if (!email.includes('@')) throw new functions.https.HttpsError('invalid-argument', 'A valid email is required.');
+
+  const caller = await getWorkspaceMemberDoc(workspaceId, callerUid);
+  if (!caller || !wsCanManageMembers(caller.role)) {
+    throw new functions.https.HttpsError('permission-denied', 'Only the workspace owner/admin can add members.');
+  }
+  const wsSnap = await db.collection('workspaces').doc(workspaceId).get();
+  if (!wsSnap.exists) throw new functions.https.HttpsError('not-found', 'Workspace not found.');
+  const wsData = wsSnap.data()!;
+
+  const cfg = await getPricingConfig();
+  const memberCap = effectiveLimit(cfg, 'team', 'membersPerWorkspace', wsData.extra_seats);
+  if ((wsData.member_count || 1) >= memberCap) {
+    throw new functions.https.HttpsError('resource-exhausted', `Member limit (${memberCap}) reached. Buy an extra seat to add more.`);
+  }
+  const pool = cfg.plans.team.monthlyTokens;
+  const membersSnap = await db.collection('workspace_members').where('container_id', '==', workspaceId).get();
+  let sumBudgets = 0;
+  membersSnap.forEach((d: admin.firestore.QueryDocumentSnapshot) => { if (d.data().status !== 'removed') sumBudgets += Number(d.data().token_budget) || 0; });
+  if (budget > 0 && sumBudgets + budget > pool) {
+    throw new functions.https.HttpsError('resource-exhausted', `Budget exceeds the workspace pool (${pool}). Available: ${Math.max(0, pool - sumBudgets)}.`);
+  }
+
+  let uid: string; let created = false; let name = email.split('@')[0];
+  try {
+    const existing = await admin.auth().getUserByEmail(email);
+    uid = existing.uid; name = existing.displayName || name;
+  } catch {
+    if (!password || password.length < 6) throw new functions.https.HttpsError('invalid-argument', 'A temporary password (min 6 characters) is required for a new member.');
+    const rec = await admin.auth().createUser({ email, password });
+    uid = rec.uid; created = true;
+    await db.collection('users').doc(uid).set({
+      id: uid, email, ...balanceFields(planMonthlyDefault('free'), 0), tier: 'free',
+      role: 'user', onboarded: false, subscription_status: 'free',
+      plan_renews_at: new Date(Date.now() + cfg.renewalDays * 86400000).toISOString(),
+      created_at: new Date().toISOString(), last_active: new Date().toISOString(),
+    }, { merge: true });
+  }
+
+  const memberRef = db.collection('workspace_members').doc(`${workspaceId}_${uid}`);
+  const existingMember = await memberRef.get();
+  if (existingMember.exists && existingMember.data()!.role === 'owner') {
+    throw new functions.https.HttpsError('failed-precondition', 'That user is the workspace owner.');
+  }
+  const wasActive = existingMember.exists && existingMember.data()!.status !== 'removed';
+  await memberRef.set({
+    uid, container_id: workspaceId, name, email, role,
+    allowed_tools: tools, token_budget: budget, consumed_this_cycle: 0, consumed_cycle: '',
+    status: 'active', joined_at: new Date().toISOString(),
+  }, { merge: true });
+  if (!wasActive) await db.collection('workspaces').doc(workspaceId).update({ member_count: (wsData.member_count || 1) + 1 });
+
+  return { success: true, uid, created };
+});
+
+export const updateWorkspaceMember = functions.https.onCall(async (data: any, context: any) => {
+  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
+  const callerUid = context.auth.uid;
+  const workspaceId = (data?.workspaceId || '').toString();
+  const targetUid = (data?.targetUid || '').toString();
+  if (!workspaceId || !targetUid) throw new functions.https.HttpsError('invalid-argument', 'workspaceId and targetUid required.');
+
+  const caller = await getWorkspaceMemberDoc(workspaceId, callerUid);
+  if (!caller || !wsCanManageMembers(caller.role)) {
+    throw new functions.https.HttpsError('permission-denied', 'Only the workspace owner/admin can edit members.');
+  }
+  const memberRef = db.collection('workspace_members').doc(`${workspaceId}_${targetUid}`);
+  const m = await memberRef.get();
+  if (!m.exists) throw new functions.https.HttpsError('not-found', 'Member not found.');
+  if (m.data()!.role === 'owner') throw new functions.https.HttpsError('failed-precondition', 'Use transfer to change the owner.');
+
+  const updates: any = {};
+  if (data?.role !== undefined) {
+    if (!WORKSPACE_INVITE_ROLES.includes(data.role)) throw new functions.https.HttpsError('invalid-argument', 'Invalid role.');
+    updates.role = data.role;
+  }
+  if (Array.isArray(data?.allowed_tools)) updates.allowed_tools = data.allowed_tools.filter((t: any) => typeof t === 'string');
+  if (data?.token_budget !== undefined) {
+    const budget = Math.max(0, Math.round(Number(data.token_budget) || 0));
+    const cfg = await getPricingConfig();
+    const pool = cfg.plans.team.monthlyTokens;
+    const membersSnap = await db.collection('workspace_members').where('container_id', '==', workspaceId).get();
+    let sumOthers = 0;
+    membersSnap.forEach((d: admin.firestore.QueryDocumentSnapshot) => {
+      if (d.id !== `${workspaceId}_${targetUid}` && d.data().status !== 'removed') sumOthers += Number(d.data().token_budget) || 0;
+    });
+    if (budget > 0 && sumOthers + budget > pool) {
+      throw new functions.https.HttpsError('resource-exhausted', `Budget exceeds the workspace pool (${pool}). Available: ${Math.max(0, pool - sumOthers)}.`);
+    }
+    updates.token_budget = budget;
+  }
+  await memberRef.update(updates);
+  return { success: true };
+});
+
 // ============================================================
 // PHASE 6.3 — ENTERPRISE ANALYTICS SUITE (server-authoritative + read-only aggregation)
 // The Enterprise NEVER mutates underlying analyses. The aggregation engine (Admin SDK)
@@ -2394,6 +2511,114 @@ export const manageEnterpriseMember = functions.https.onCall(async (data: any, c
     return { success: true };
   }
   throw new functions.https.HttpsError('invalid-argument', 'Unknown enterprise membership action.');
+});
+
+// --- ENTERPRISE member provisioning (direct-create parity with agency) ---
+// Owner/executive-admin adds a member by email + temp password with a role, tool allowlist, and budget.
+// The allowlist/budget are STORED for now; they will gate once an enterprise analysis scope exists.
+export const createEnterpriseMember = functions.https.onCall(async (data: any, context: any) => {
+  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
+  const callerUid = context.auth.uid;
+  const enterpriseId = (data?.enterpriseId || '').toString();
+  const email = (data?.email || '').toString().toLowerCase().trim();
+  const password = (data?.password || '').toString();
+  const role = ENTERPRISE_INVITE_ROLES.includes(data?.role) ? data.role : 'executive_viewer';
+  const tools = Array.isArray(data?.allowed_tools) ? data.allowed_tools.filter((t: any) => typeof t === 'string') : [];
+  const budget = Math.max(0, Math.round(Number(data?.token_budget) || 0));
+  if (!enterpriseId) throw new functions.https.HttpsError('invalid-argument', 'enterpriseId required.');
+  if (!email.includes('@')) throw new functions.https.HttpsError('invalid-argument', 'A valid email is required.');
+
+  const caller = await getEntMemberDoc(enterpriseId, callerUid);
+  if (!caller || !entCanManage(caller.role)) {
+    throw new functions.https.HttpsError('permission-denied', 'Only the enterprise owner/admin can add members.');
+  }
+  const entSnap = await db.collection('enterprises').doc(enterpriseId).get();
+  if (!entSnap.exists) throw new functions.https.HttpsError('not-found', 'Enterprise not found.');
+  const entData = entSnap.data()!;
+
+  const cfg = await getPricingConfig();
+  const memberCap = effectiveLimit(cfg, 'enterprise', 'maxMembers', entData.extra_members);
+  if ((entData.member_count || 1) >= memberCap) {
+    throw new functions.https.HttpsError('resource-exhausted', `Enterprise member limit (${memberCap}) reached. Buy an extra member seat to add more.`);
+  }
+  const pool = cfg.plans.enterprise.monthlyTokens;
+  const membersSnap = await db.collection('enterprise_members').where('container_id', '==', enterpriseId).get();
+  let sumBudgets = 0;
+  membersSnap.forEach((d: admin.firestore.QueryDocumentSnapshot) => { if (d.data().status !== 'removed') sumBudgets += Number(d.data().token_budget) || 0; });
+  if (budget > 0 && sumBudgets + budget > pool) {
+    throw new functions.https.HttpsError('resource-exhausted', `Budget exceeds the enterprise pool (${pool}). Available: ${Math.max(0, pool - sumBudgets)}.`);
+  }
+
+  let uid: string; let created = false; let name = email.split('@')[0];
+  try {
+    const existing = await admin.auth().getUserByEmail(email);
+    uid = existing.uid; name = existing.displayName || name;
+  } catch {
+    if (!password || password.length < 6) throw new functions.https.HttpsError('invalid-argument', 'A temporary password (min 6 characters) is required for a new member.');
+    const rec = await admin.auth().createUser({ email, password });
+    uid = rec.uid; created = true;
+    await db.collection('users').doc(uid).set({
+      id: uid, email, ...balanceFields(planMonthlyDefault('free'), 0), tier: 'free',
+      role: 'user', onboarded: false, subscription_status: 'free',
+      plan_renews_at: new Date(Date.now() + cfg.renewalDays * 86400000).toISOString(),
+      created_at: new Date().toISOString(), last_active: new Date().toISOString(),
+    }, { merge: true });
+  }
+
+  const memberRef = db.collection('enterprise_members').doc(`${enterpriseId}_${uid}`);
+  const existingMember = await memberRef.get();
+  if (existingMember.exists && existingMember.data()!.role === 'enterprise_owner') {
+    throw new functions.https.HttpsError('failed-precondition', 'That user is the enterprise owner.');
+  }
+  const wasActive = existingMember.exists && existingMember.data()!.status !== 'removed';
+  await memberRef.set({
+    uid, container_id: enterpriseId, name, email, role,
+    allowed_tools: tools, token_budget: budget, consumed_this_cycle: 0, consumed_cycle: '',
+    status: 'active', joined_at: new Date().toISOString(),
+  }, { merge: true });
+  if (!wasActive) await db.collection('enterprises').doc(enterpriseId).update({ member_count: (entData.member_count || 1) + 1 });
+
+  return { success: true, uid, created };
+});
+
+export const updateEnterpriseMember = functions.https.onCall(async (data: any, context: any) => {
+  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
+  const callerUid = context.auth.uid;
+  const enterpriseId = (data?.enterpriseId || '').toString();
+  const targetUid = (data?.targetUid || '').toString();
+  if (!enterpriseId || !targetUid) throw new functions.https.HttpsError('invalid-argument', 'enterpriseId and targetUid required.');
+
+  const caller = await getEntMemberDoc(enterpriseId, callerUid);
+  if (!caller || !entCanManage(caller.role)) {
+    throw new functions.https.HttpsError('permission-denied', 'Only the enterprise owner/admin can edit members.');
+  }
+  const memberRef = db.collection('enterprise_members').doc(`${enterpriseId}_${targetUid}`);
+  const m = await memberRef.get();
+  if (!m.exists) throw new functions.https.HttpsError('not-found', 'Member not found.');
+  if (m.data()!.role === 'enterprise_owner') throw new functions.https.HttpsError('failed-precondition', 'Use transfer to change the owner.');
+
+  const updates: any = {};
+  if (data?.role !== undefined) {
+    if (!ENTERPRISE_INVITE_ROLES.includes(data.role)) throw new functions.https.HttpsError('invalid-argument', 'Invalid role.');
+    updates.role = data.role;
+  }
+  if (Array.isArray(data?.allowed_tools)) updates.allowed_tools = data.allowed_tools.filter((t: any) => typeof t === 'string');
+  if (data?.token_budget !== undefined) {
+    const budget = Math.max(0, Math.round(Number(data.token_budget) || 0));
+    const cfg = await getPricingConfig();
+    const pool = cfg.plans.enterprise.monthlyTokens;
+    const membersSnap = await db.collection('enterprise_members').where('container_id', '==', enterpriseId).get();
+    let sumOthers = 0;
+    membersSnap.forEach((d: admin.firestore.QueryDocumentSnapshot) => {
+      if (d.id !== `${enterpriseId}_${targetUid}` && d.data().status !== 'removed') sumOthers += Number(d.data().token_budget) || 0;
+    });
+    if (budget > 0 && sumOthers + budget > pool) {
+      throw new functions.https.HttpsError('resource-exhausted', `Budget exceeds the enterprise pool (${pool}). Available: ${Math.max(0, pool - sumOthers)}.`);
+    }
+    updates.token_budget = budget;
+  }
+  await memberRef.update(updates);
+  return { success: true };
 });
 
 // --- ENTERPRISE ANALYTICS ENGINE (read-only aggregation) ---

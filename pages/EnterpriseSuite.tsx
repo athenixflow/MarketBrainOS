@@ -13,6 +13,7 @@ import {
   getEnterprise, getEnterpriseMembers, getEnterpriseDepartments, getEnterpriseBrands,
   getLatestHealthScore, getLatestAnalyticsSnapshot, getEnterpriseForecasts, getEnterpriseBriefings,
   getEnterpriseInvitations, callManageEnterprise, callManageEnterpriseMember, callRunEnterpriseAggregation, callPurchaseExpansion,
+  getAgenciesByIds,
 } from '../services/persistenceService';
 import { DEFAULT_PRICING_CONFIG } from '../config/pricingConfig';
 import CapacityPanel from '../components/CapacityPanel';
@@ -22,8 +23,9 @@ import EnterprisePerformance from '../components/enterprise/EnterprisePerformanc
 import EnterpriseStructure from '../components/enterprise/EnterpriseStructure';
 import EnterpriseBriefings from '../components/enterprise/EnterpriseBriefings';
 import EnterpriseMembers from '../components/enterprise/EnterpriseMembers';
+import EnterpriseBudgets from '../components/enterprise/EnterpriseBudgets';
 
-const TABS = ['Dashboard', 'Intelligence', 'Performance', 'Briefings', 'Structure', 'Members', 'Settings'] as const;
+const TABS = ['Dashboard', 'Intelligence', 'Performance', 'Briefings', 'Structure', 'Members', 'Budgets', 'Settings'] as const;
 type Tab = typeof TABS[number];
 
 const EnterpriseSuite: React.FC = () => {
@@ -43,6 +45,7 @@ const EnterpriseSuite: React.FC = () => {
   const [forecasts, setForecasts] = useState<EnterpriseForecast[]>([]);
   const [briefings, setBriefings] = useState<EnterpriseBriefing[]>([]);
   const [invites, setInvites] = useState<EnterpriseInvitation[]>([]);
+  const [linkedAgencies, setLinkedAgencies] = useState<any[]>([]);
   const [tab, setTab] = useState<Tab>('Dashboard');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -66,6 +69,7 @@ const EnterpriseSuite: React.FC = () => {
     ]);
     setEnterprise(ent); setMembers(mem); setDepartments(depts); setBrands(brs);
     setHealth(h); setAnalytics(a); setForecasts(f); setBriefings(b);
+    setLinkedAgencies(await getAgenciesByIds((ent as any)?.linked_agencies || []));
   }, [activeId]);
 
   useEffect(() => {
@@ -205,6 +209,9 @@ const EnterpriseSuite: React.FC = () => {
           />
           <EnterpriseMembers enterprise={enterprise} members={members} membership={membership} selfUid={user?.uid || ''} onReload={loadAll} />
         </div>
+      )}
+      {tab === 'Budgets' && (
+        <EnterpriseBudgets enterprise={enterprise} agencies={linkedAgencies} enterpriseId={activeId} canManage={enterprise?.owner_id === user?.uid} onReload={loadAll} />
       )}
       {tab === 'Settings' && (
         can('settings:manage', membership) ? (

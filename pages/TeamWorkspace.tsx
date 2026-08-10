@@ -198,7 +198,7 @@ const TeamWorkspace: React.FC = () => {
               } : {}),
             }]}
           />
-          <TeamMembers workspace={workspace} membership={membership} selfUid={user?.uid || ''} />
+          <TeamMembers workspace={workspace} members={members} membership={membership} selfUid={user?.uid || ''} onReload={loadWorkspace} />
         </div>
       )}
       {tab === 'Library' && <SharedLibrary workspace={workspace} selfUid={user?.uid || ''} selfName={selfName} />}

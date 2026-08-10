@@ -992,6 +992,57 @@ export const callUpdateAgencyMember = async (params: {
   catch (error: any) { throw new Error(error.message || 'Update member failed.'); }
 };
 
+// Team-workspace direct member provisioning (parity with agency).
+export const callCreateWorkspaceMember = async (params: {
+  workspaceId: string; email: string; password?: string; role: string; allowed_tools: string[]; token_budget: number;
+}) => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  const fn = httpsCallable(functions, 'createWorkspaceMember');
+  try { return (await fn(params)).data as { success: boolean; uid: string; created: boolean }; }
+  catch (error: any) { throw new Error(error.message || 'Create member failed.'); }
+};
+
+export const callUpdateWorkspaceMember = async (params: {
+  workspaceId: string; targetUid: string; role?: string; allowed_tools?: string[]; token_budget?: number;
+}) => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  const fn = httpsCallable(functions, 'updateWorkspaceMember');
+  try { return (await fn(params)).data as { success: boolean }; }
+  catch (error: any) { throw new Error(error.message || 'Update member failed.'); }
+};
+
+// Enterprise direct member provisioning (parity with agency; tools/budget stored, gate later).
+export const callCreateEnterpriseMember = async (params: {
+  enterpriseId: string; email: string; password?: string; role: string; allowed_tools: string[]; token_budget: number;
+}) => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  const fn = httpsCallable(functions, 'createEnterpriseMember');
+  try { return (await fn(params)).data as { success: boolean; uid: string; created: boolean }; }
+  catch (error: any) { throw new Error(error.message || 'Create member failed.'); }
+};
+
+export const callUpdateEnterpriseMember = async (params: {
+  enterpriseId: string; targetUid: string; role?: string; allowed_tools?: string[]; token_budget?: number;
+}) => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  const fn = httpsCallable(functions, 'updateEnterpriseMember');
+  try { return (await fn(params)).data as { success: boolean }; }
+  catch (error: any) { throw new Error(error.message || 'Update member failed.'); }
+};
+
+// Load agency docs by id (for the enterprise → agency allocation UI).
+export const getAgenciesByIds = async (ids: string[]): Promise<any[]> => {
+  if (!isFirebaseInitialized || !ids?.length) return [];
+  const out: any[] = [];
+  await Promise.all(ids.map(async (id) => {
+    try {
+      const snap = await getDoc(doc(db, 'agencies', id));
+      if (snap.exists()) out.push({ id: snap.id, ...(snap.data() as any) });
+    } catch { /* skip inaccessible */ }
+  }));
+  return out;
+};
+
 // ============================================================
 // PHASE 6.3 — ENTERPRISE ANALYTICS SUITE DATA LAYER
 // UI reads engine-produced aggregates (health/analytics/forecast/briefing); never raw data.
