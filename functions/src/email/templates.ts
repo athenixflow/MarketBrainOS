@@ -3,12 +3,12 @@
 
 import {
   renderEmail, button, sectionHeading, paragraph, featureRows, steps, checklist, callout,
-  metaTable, balanceCard, codeBlock, divider, FOOTER_LINKS, SITE_URL, RED,
+  metaTable, balanceCard, codeBlock, divider, FOOTER_LINKS, SITE_URL, RED, esc,
 } from './layout';
 
 export interface RenderedEmail { subject: string; html: string; }
 const money = (n: number) => `$${(Number(n) || 0).toFixed(2)}`;
-const span = (t: string) => `<span style="color:#ff5a5a;">${t}</span>`;
+const span = (t: string) => `<span style="color:#ff5a5a;">${esc(t)}</span>`;
 
 // ---- TIER 1 -----------------------------------------------------------------------------------
 
@@ -17,7 +17,7 @@ const welcome = (d: { firstName?: string; verifyUrl?: string; monthlyTokens?: nu
   html: renderEmail({
     preheader: `Welcome to MarketBrain OS — you've got ${d.monthlyTokens ?? 20} tokens to validate your first idea.`,
     tag: 'Welcome',
-    heading: `Welcome aboard${d.firstName ? `, ${d.firstName}` : ''}.`,
+    heading: `Welcome aboard${d.firstName ? `, ${esc(d.firstName)}` : ''}.`,
     heroSubtext: "You just added an always-on strategic intelligence layer to your marketing. Let's turn your first idea into a scored, validated decision.",
     body:
       paragraph(`MarketBrain OS pressure-tests your marketing <em>before</em> you spend — scoring angles, auditing funnels, and simulating campaigns against high-conversion benchmarks. Your account starts with <strong>${d.monthlyTokens ?? 20} free tokens</strong> this month, refreshed every cycle.`) +
@@ -52,7 +52,7 @@ const verifyEmail = (d: { verifyUrl: string }): RenderedEmail => ({
       paragraph('Please confirm this is your email address. This link is valid for a limited time and can only be used once.') +
       button('Verify my email →', d.verifyUrl) +
       divider() +
-      paragraph(`<span style="font-size:13px;color:#8a8a8a;">If the button doesn't work, copy this link:<br><span style="color:${RED};">${d.verifyUrl}</span></span>`) +
+      paragraph(`<span style="font-size:13px;color:#8a8a8a;">If the button doesn't work, copy this link:<br><span style="color:${RED};">${esc(d.verifyUrl)}</span></span>`) +
       paragraph('<span style="font-size:13px;color:#8a8a8a;">If you didn\'t create a MarketBrain OS account, you can safely ignore this email.</span>'),
     footerNote: 'Security is important to us — we never ask for your password by email.',
   }),
@@ -69,7 +69,7 @@ const passwordReset = (d: { resetUrl: string }): RenderedEmail => ({
       paragraph('Click below to choose a new password. For your security, this link expires in one hour and can only be used once.') +
       button('Reset my password →', d.resetUrl) +
       divider() +
-      paragraph(`<span style="font-size:13px;color:#8a8a8a;">If the button doesn't work, copy this link:<br><span style="color:${RED};">${d.resetUrl}</span></span>`) +
+      paragraph(`<span style="font-size:13px;color:#8a8a8a;">If the button doesn't work, copy this link:<br><span style="color:${RED};">${esc(d.resetUrl)}</span></span>`) +
       callout("If you didn't request this, no action is needed — your password stays the same. Consider reviewing your account security if you're concerned.", 'Didn’t request this?'),
     footerNote: 'We will never ask for your password or payment details by email.',
   }),
@@ -98,7 +98,7 @@ const memberInvite = (d: { inviterEmail: string; containerName: string; containe
     heading: `You're invited to join ${span(d.containerName)}.`,
     heroSubtext: `${d.inviterEmail} has invited you to collaborate as a ${d.roleLabel}.`,
     body:
-      paragraph(`${d.containerName} runs its marketing intelligence on MarketBrain OS — shared analyses, ${d.containerType === 'agency' ? 'client workspaces' : 'reports'}, and a pooled token budget, all in one place.`) +
+      paragraph(`${esc(d.containerName)} runs its marketing intelligence on MarketBrain OS — shared analyses, ${d.containerType === 'agency' ? 'client workspaces' : 'reports'}, and a pooled token budget, all in one place.`) +
       button('Accept invitation →', d.acceptUrl, 'This invitation expires in 7 days.') +
       sectionHeading(`As a ${d.roleLabel}, you'll be able to`) +
       checklist(d.capabilities && d.capabilities.length ? d.capabilities : [
@@ -109,7 +109,7 @@ const memberInvite = (d: { inviterEmail: string; containerName: string; containe
       callout(`<b>New to MarketBrain OS?</b> It's a predictive marketing-intelligence platform that scores and validates ideas, copy, funnels, and campaigns before you spend. <a href="${SITE_URL}/documentation" style="color:${RED};">Take the quick tour</a>.`, 'First time here?') +
       divider() +
       paragraph("<span style='font-size:13px;color:#8a8a8a;'>If you weren't expecting this, you can safely ignore it — no account is created until you accept.</span>"),
-    footerNote: `If the button doesn't work, paste this link: ${d.acceptUrl}`,
+    footerNote: `If the button doesn't work, paste this link: ${esc(d.acceptUrl)}`,
   }),
 });
 
@@ -121,7 +121,7 @@ const memberAdded = (d: { containerName: string; tempPassword: string; roleLabel
     heading: `You've been added to ${span(d.containerName)}.`,
     heroSubtext: `An account was created for you as a ${d.roleLabel}. Sign in with the temporary password below, then change it right away.`,
     body:
-      paragraph(`<b>Sign-in email:</b> ${d.email}`) +
+      paragraph(`<b>Sign-in email:</b> ${esc(d.email)}`) +
       paragraph('<b>Temporary password:</b>') +
       codeBlock(d.tempPassword) +
       button('Sign in →', `${SITE_URL}/auth`) +
@@ -391,7 +391,7 @@ const accountSuspended = (d: { reason?: string }): RenderedEmail => ({
     heading: 'Your account has been suspended.',
     heroSubtext: 'Access to your MarketBrain OS account has been temporarily suspended by an administrator.',
     body:
-      paragraph(d.reason ? `Reason: ${d.reason}` : 'This is usually related to a billing issue or a review of activity on the account.') +
+      paragraph(d.reason ? `Reason: ${esc(d.reason)}` : 'This is usually related to a billing issue or a review of activity on the account.') +
       paragraph('If you believe this is a mistake, please get in touch and we’ll help sort it out.') +
       button('Contact support →', `${SITE_URL}/support`),
     footerLinks: [{ label: 'Support', href: `${SITE_URL}/support` }],

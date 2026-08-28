@@ -6,7 +6,8 @@ export const SITE_URL = 'https://www.marketbrainos.app';
 export const RED = '#FF0000';
 export const DARK = '#0B0B0B';
 
-const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+// Escape user/dynamic values before they enter HTML (prevents HTML injection into emails).
+export const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 export const url = (path: string) => (path.startsWith('http') ? path : `${SITE_URL}${path.startsWith('/') ? path : `/${path}`}`);
 
 // --- Content components (return HTML strings) ---------------------------------------------------
