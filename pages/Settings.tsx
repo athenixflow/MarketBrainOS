@@ -14,7 +14,7 @@ import { TokenStore } from '../components/TokenStore';
 import { useAuth } from '../context/AuthContext';
 import { useScope } from '../context/ScopeContext';
 import { auth } from '../services/firebase';
-import { updateUserProfile, getUserPaymentHistory, callConfirmTopUp, createNotification } from '../services/persistenceService';
+import { updateUserProfile, getUserPaymentHistory, callConfirmTopUp, createNotification, callRequestPasswordReset } from '../services/persistenceService';
 import { downloadAsCSV, paymentsToCSV } from '../services/exportService';
 import { PaymentRecord, NotificationPrefs } from '../types';
 import { canSeeFeature, tierAtLeast } from '../config/access';
@@ -143,7 +143,7 @@ const Settings: React.FC = () => {
   const sendReset = async () => {
     if (!user || !user.email) return;
     setSecurityMsg(''); setSecurityErr(false);
-    try { await sendPasswordResetEmail(auth, user.email); setSecurityMsg('Password reset email sent.'); }
+    try { await callRequestPasswordReset(user.email); setSecurityMsg('Password reset email sent.'); }
     catch (e: any) { setSecurityErr(true); setSecurityMsg(e.message || 'Could not send reset email.'); }
   };
   const changePassword = async () => {

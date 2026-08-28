@@ -20,7 +20,9 @@ export const sendEmail = async (to: string, subject: string, html: string): Prom
   const r = client();
   if (!r) { console.warn(`[email] RESEND_API_KEY not set — skipped "${subject}" to ${to}`); return; }
   try {
-    await r.emails.send({ from: FROM, to, subject, html, replyTo: REPLY_TO });
+    // Resend returns { data, error } and does NOT throw on API errors — check the error field.
+    const { error } = await r.emails.send({ from: FROM, to, subject, html, replyTo: REPLY_TO });
+    if (error) { console.error(`[email] resend rejected "${subject}" to ${to}: ${(error as any)?.message || JSON.stringify(error)}`); return; }
     console.log(`[email] sent "${subject}" to ${to}`);
   } catch (e: any) {
     console.error(`[email] send failed to ${to}: ${e?.message || e}`);

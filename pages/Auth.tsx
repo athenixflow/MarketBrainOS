@@ -10,6 +10,7 @@ import {
 import { Card, Input, PrimaryButton, PageHeader, ErrorMessage } from '../components/UI';
 import { SecurityEngine } from '../services/securityEngine';
 import { useAuth } from '../context/AuthContext';
+import { callRequestPasswordReset } from '../services/persistenceService';
 
 const AuthPage: React.FC = () => {
   const [view, setView] = useState<'auth' | 'verify'>('auth');
@@ -58,7 +59,7 @@ const AuthPage: React.FC = () => {
         await refreshProfile();
         navigate('/');
       } else if (mode === 'forgot') {
-        await sendPasswordResetEmail(auth, email);
+        await callRequestPasswordReset(email);
         setSuccessMsg("Password reset email sent. Check your inbox.");
         setLoading(false);
       }
