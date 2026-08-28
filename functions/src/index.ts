@@ -2803,6 +2803,24 @@ export const generateExecutiveBriefing = functions.https.onCall(async (data: any
 // EMAIL — auth lifecycle (welcome / verify / password reset)
 // ============================================================
 
+// Rewrite Firebase's default action-handler host (…firebaseapp.com/__/auth/action) to our branded
+// handler at /auth/action, preserving the query string (mode, oobCode, apiKey, continueUrl, lang) that
+// pages/AuthAction.tsx consumes. This makes the branded reset/verify page work WITHOUT the console
+// "Customize action URL" setting, which is unreliable for non-Firebase-Hosting (Vercel) domains.
+const ACTION_HANDLER_BASE = 'https://www.marketbrainos.app/auth/action';
+function brandActionLink(link: string): string {
+  try {
+    const u = new URL(link);
+    const target = new URL(ACTION_HANDLER_BASE);
+    u.protocol = target.protocol;
+    u.host = target.host;
+    u.pathname = target.pathname;
+    return u.toString(); // origin+path swapped, ?mode/&oobCode/&apiKey… preserved verbatim
+  } catch {
+    return link; // unparseable — fall back to Firebase's original link
+  }
+}
+
 // Welcome email on signup. Fires for EVERY new auth user, so we skip members provisioned via
 // createWorkspace/Agency/EnterpriseMember (they get the "you've been added" email instead) by
 // checking a short-lived marker those functions write just before admin.auth().createUser().
@@ -2814,7 +2832,7 @@ async function sendWelcomeOnce(uid: string, email: string, name: string | undefi
   if (snap.exists && snap.data()!.welcome_sent) return;
   let verifyUrl: string | undefined;
   if (!emailVerified) {
-    try { verifyUrl = await admin.auth().generateEmailVerificationLink(email, { url: 'https://www.marketbrainos.app/auth?verified=1' }); }
+    try { verifyUrl = brandActionLink(await admin.auth().generateEmailVerificationLink(email, { url: 'https://www.marketbrainos.app/auth?verified=1' })); }
     catch (e: any) { console.error('[email] verification link failed:', e?.message || e); }
   }
   await sendTemplate(email, 'welcome', { firstName: name, verifyUrl, monthlyTokens: DEFAULT_PRICING_CONFIG.plans.free.monthlyTokens });
@@ -2851,7 +2869,7 @@ export const requestPasswordReset = functions.https.onCall(async (data: any) => 
   const email = (data?.email || '').toString().toLowerCase().trim();
   if (!email.includes('@')) return { success: true };
   try {
-    const link = await admin.auth().generatePasswordResetLink(email, { url: 'https://www.marketbrainos.app/auth' });
+    const link = brandActionLink(await admin.auth().generatePasswordResetLink(email, { url: 'https://www.marketbrainos.app/auth' }));
     await sendTemplate(email, 'passwordReset', { resetUrl: link });
   } catch (e: any) {
     console.warn('[email] password reset (no send):', e?.message || e);
