@@ -27,6 +27,7 @@ const TokenStorePage = lazy(() => import('./pages/TokenStore'));
 const BillingCenter = lazy(() => import('./pages/BillingCenter'));
 const Support = lazy(() => import('./pages/Support'));
 const AuthAction = lazy(() => import('./pages/AuthAction'));
+const NotFound = lazy(() => import('./pages/NotFound'));
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ScopeProvider, useScope } from './context/ScopeContext';
 import { Honeypot, LoadingState } from './components/UI';
@@ -353,6 +354,9 @@ const AppRoutes: React.FC = () => {
       <Route path="/faq" element={<FAQ />} />
       <Route path="/auth" element={user ? <Navigate to="/" /> : <AuthPage />} />
       <Route path="/auth/action" element={<AuthAction />} />
+
+      {/* Catch-all — branded 404 for any unmatched path (adapts to auth state) */}
+      <Route path="*" element={<NotFound />} />
     </Routes>
     </Suspense>
   );

@@ -314,7 +314,12 @@ const Dashboard: React.FC = () => {
             {loadingData ? (
               <p className="text-sm text-gray-400 font-medium py-8 text-center">Loading activity…</p>
             ) : recentActivity.length === 0 ? (
-              <EmptyState message="No activity yet" submessage="Your latest analyses and reports will show up here as you work." />
+              <>
+                <EmptyState message="No activity yet" submessage="Your latest analyses and reports will show up here as you work." />
+                <div className="flex justify-center">
+                  <button onClick={scrollToTools} className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest hover:opacity-60 transition-opacity border-b border-[#FF0000]/20 pb-1">Browse tools →</button>
+                </div>
+              </>
             ) : (
               <div className="divide-y divide-gray-100">
                 {recentActivity.map((a, i) => (

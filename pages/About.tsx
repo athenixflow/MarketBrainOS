@@ -40,17 +40,20 @@ const About: React.FC = () => (
     </AnimatedSection>
 
     <AnimatedSection as="section" index={2} className="py-12 px-6 md:px-12 max-w-4xl mx-auto border-t border-gray-900/50">
-      <h2 className="text-2xl font-bold text-white mb-8">The team</h2>
+      <h2 className="text-2xl font-bold text-white mb-8">What we believe</h2>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-        {['Product & Strategy', 'AI & Engineering', 'Growth & Support'].map((t) => (
-          <div key={t} className="p-8 border border-gray-800 rounded-2xl bg-[#0F0F0F]">
-            <div className="w-12 h-12 rounded-full bg-gray-800 mb-6" />
-            <h3 className="text-white font-bold mb-2">{t}</h3>
-            <p className="text-xs text-gray-500 leading-relaxed">A small, focused team building decision-grade intelligence tools.</p>
+        {[
+          { t: 'Validate before you spend', d: 'The most expensive marketing decisions are the ones made on gut feel. Pressure-test them first.' },
+          { t: 'Decision-grade, not guesswork', d: 'Every analysis returns a consistent, comparable, and actionable result — never a vague opinion.' },
+          { t: 'Intelligence that compounds', d: 'The tools connect: each insight feeds the next, so your strategy gets sharper the more you use it.' },
+        ].map((p) => (
+          <div key={p.t} className="p-8 border border-gray-800 rounded-2xl bg-[#0F0F0F]">
+            <div className="w-8 h-[2px] bg-[#FF0000] rounded-full mb-6" />
+            <h3 className="text-white font-bold mb-3">{p.t}</h3>
+            <p className="text-sm text-gray-500 leading-relaxed">{p.d}</p>
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-gray-600 uppercase tracking-widest mt-6">Team details are illustrative and will be updated.</p>
     </AnimatedSection>
 
     <AnimatedSection as="section" index={3} className="py-24 px-6 md:px-12 text-center border-t border-gray-900/50">

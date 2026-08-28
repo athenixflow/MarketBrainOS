@@ -66,7 +66,14 @@ const History: React.FC = () => {
       {loading && <LoadingState message="Loading your history..." />}
 
       {!loading && records.length === 0 && (
-        <EmptyState message="No saved analyses yet." submessage="Run any analysis tool and it will appear here automatically." />
+        <Card>
+          <EmptyState message="No saved analyses yet." submessage="Run any analysis tool and it appears here automatically — searchable, exportable, and saved for good." />
+          <div className="flex justify-center">
+            <Link to="/" className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest hover:opacity-60 transition-opacity border-b border-[#FF0000]/20 pb-1">
+              Run your first analysis →
+            </Link>
+          </div>
+        </Card>
       )}
 
       {!loading && records.length > 0 && (

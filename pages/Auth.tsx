@@ -14,11 +14,9 @@ import { useAuth } from '../context/AuthContext';
 import { callRequestPasswordReset, callSendWelcomeEmail } from '../services/persistenceService';
 
 const AuthPage: React.FC = () => {
-  const [view, setView] = useState<'auth' | 'verify'>('auth');
   const [mode, setMode] = useState<'signin' | 'signup' | 'forgot'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [otpCode, setOtpCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -102,39 +100,6 @@ const AuthPage: React.FC = () => {
       setLoading(false);
     }
   };
-
-  const handleVerifyOTP = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await SecurityEngine.verifyStepUpOTP(otpCode, null);
-      if (res.valid) {
-        navigate('/');
-      } else {
-        throw new Error(res.error || "Invalid code.");
-      }
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (view === 'verify') {
-    return (
-      <div className="max-w-xl mx-auto py-24 animate-in fade-in duration-1000">
-        <PageHeader title="Verification Required" subtitle="Identity must be confirmed via secondary channel." />
-        <Card accent className="shadow-2xl">
-          <form onSubmit={handleVerifyOTP}>
-            <Input label="Security Code" placeholder="000000" value={otpCode} onChange={(e) => setOtpCode(e.target.value)} disabled={loading} />
-            {error && <ErrorMessage message={error} />}
-            <PrimaryButton type="submit" className="w-full mt-6" disabled={loading}>Confirm Identity</PrimaryButton>
-          </form>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="max-w-xl mx-auto py-24 animate-in fade-in duration-1000">
