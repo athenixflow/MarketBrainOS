@@ -7,6 +7,7 @@ import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import * as crypto from 'crypto';
+import { sendTemplate } from './email/send';
 
 admin.initializeApp();
 // Drop undefined fields on every server-side write instead of throwing (Firestore rejects
@@ -1001,6 +1002,14 @@ export const adminBulkAction = functions.https.onCall(async (data: any, context:
       } else throw new functions.https.HttpsError('invalid-argument', 'Unknown bulk action');
     }
     await batch.commit();
+    if (action === 'suspend' || action === 'unsuspend') {
+      await Promise.all(targetUserIds.map(async (targetId: string) => {
+        try {
+          const u = await admin.auth().getUser(targetId);
+          if (u.email) await sendTemplate(u.email, action === 'suspend' ? 'accountSuspended' : 'accountReinstated', { reason: payload?.reason });
+        } catch { /* best-effort */ }
+      }));
+    }
     await logAdminAudit(caller.uid, caller.email, `BULK_${action.toUpperCase()}`, `${targetUserIds.length} users`, { count: targetUserIds.length, payload });
     return { success: true, count: targetUserIds.length };
   } catch (e: any) {
@@ -1070,10 +1079,11 @@ export const adminRefund = functions.https.onCall(async (data: any, context: any
   const amt = Math.abs(Number(amount) || 0);
   if (!uid || amt <= 0) throw new functions.https.HttpsError('invalid-argument', 'uid and a positive amount required');
   try {
+    const refundRef = `refund_${Date.now()}`;
     const ref = db.collection('payments').doc();
     await ref.set({
       uid,
-      payment_reference: `refund_${Date.now()}`,
+      payment_reference: refundRef,
       original_payment_id: paymentId || null,
       amount_paid: -amt,
       tokens_credited: 0,
@@ -1085,6 +1095,10 @@ export const adminRefund = functions.https.onCall(async (data: any, context: any
       created_at: admin.firestore.FieldValue.serverTimestamp(),
     });
     await logAdminAudit(caller.uid, caller.email, 'REFUND_ISSUED', uid, { amount: amt, paymentId: paymentId || null, reason });
+    try {
+      const target = await admin.auth().getUser(uid);
+      if (target.email) await sendTemplate(target.email, 'refundIssued', { amount: amt, reference: refundRef, date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) });
+    } catch (e) { /* best-effort */ }
     return { success: true };
   } catch (e: any) {
     if (e instanceof functions.https.HttpsError) throw e;
@@ -1195,6 +1209,7 @@ export const confirmTopUp = functions.https.onCall(async (data: any, context: an
 
   const paymentRef = db.collection('payments').doc(paymentReference);
   const userRef = db.collection('users').doc(uid);
+  let newBalance = 0; let credited = false;  // captured for the receipt email
 
   try {
     await db.runTransaction(async (t: admin.firestore.Transaction) => {
@@ -1236,6 +1251,7 @@ export const confirmTopUp = functions.https.onCall(async (data: any, context: an
         ...balanceFields(monthly, purchased + pack.tokens),
         last_topup: admin.firestore.FieldValue.serverTimestamp()
       });
+      newBalance = monthly + purchased + pack.tokens; credited = true;
 
       // Payment record (immutable, simulated provider).
       t.set(paymentRef, {
@@ -1265,6 +1281,13 @@ export const confirmTopUp = functions.https.onCall(async (data: any, context: an
       return { success: true };
     });
 
+    if (credited && context.auth.token.email) {
+      await sendTemplate(context.auth.token.email, 'tokenReceipt', {
+        packLabel: pack.label, tokens: pack.tokens, amount: pack.price, newBalance,
+        reference: paymentReference,
+        date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
+      });
+    }
     return { success: true };
 
   } catch (error: any) {
@@ -1368,6 +1391,10 @@ export const purchaseExpansion = functions.https.onCall(async (data: any, contex
     payment_reference: `exp_${type}_${new Date().getTime()}`, created_at: admin.firestore.FieldValue.serverTimestamp(),
   });
   await db.collection('action_logs').add({ uid, action: `expansion_${type}`, level, container_id: containerId, amount_paid: price, created_at: admin.firestore.FieldValue.serverTimestamp() });
+  if (context.auth.token.email) {
+    const typeLabel = ({ member: 'Extra member seat', workspace: 'Extra workspace', agency: 'Extra agency slot' } as Record<string, string>)[type] || 'Capacity add-on';
+    await sendTemplate(context.auth.token.email, 'expansionPurchased', { typeLabel, containerName: snap.data()!.name || 'your account', price });
+  }
   return { success: true, type, field, price };
 });
 
@@ -1443,6 +1470,14 @@ export const changeSubscription = functions.https.onCall(async (data: any, conte
       }
     });
 
+    const subEmail = context.auth.token.email;
+    if (subEmail) {
+      const proPrice = DEFAULT_PRICING_CONFIG.plans.pro.price;
+      const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+      if (action === 'upgrade') await sendTemplate(subEmail, 'subscriptionUpgraded', { planName: 'Pro', monthlyTokens: PRO_MONTHLY_TOKENS, price: proPrice });
+      else if (action === 'renew') await sendTemplate(subEmail, 'subscriptionRenewed', { planName: 'Pro', monthlyTokens: PRO_MONTHLY_TOKENS, amount: proPrice, date: today });
+      else if (action === 'cancel' || action === 'downgrade') await sendTemplate(subEmail, 'subscriptionCancelled', { planName: 'Pro' });
+    }
     return { success: true, ...result };
   } catch (error: any) {
     console.error('Subscription change failed:', error);
@@ -1703,7 +1738,10 @@ export const manageMembership = functions.https.onCall(async (data: any, context
       email: inviteEmail, role, invited_by: uid, status: 'pending',
       created_at: new Date().toISOString(),
     });
-    // EMAIL SEAM (§67): a deployed trigger would email the invitee here.
+    await sendTemplate(inviteEmail, 'memberInvite', {
+      inviterEmail: email, containerName: ws.exists ? ws.data()!.name : 'the workspace', containerType: 'team',
+      roleLabel: role.replace(/_/g, ' '), acceptUrl: 'https://www.marketbrainos.app/team',
+    });
     await writeWorkspaceActivity(wid, 'member_added', uid, email, `Invited ${inviteEmail} as ${role}`);
     return { success: true };
   }
@@ -1999,6 +2037,10 @@ export const manageAgencyMember = functions.https.onCall(async (data: any, conte
       agency_id: aid, agency_name: ag.exists ? ag.data()!.name : 'Agency',
       email: inviteEmail, role, invited_by: uid, status: 'pending', created_at: new Date().toISOString(),
     });
+    await sendTemplate(inviteEmail, 'memberInvite', {
+      inviterEmail: context.auth?.token?.email || 'A colleague', containerName: ag.exists ? ag.data()!.name : 'the agency', containerType: 'agency',
+      roleLabel: role.replace(/_/g, ' '), acceptUrl: 'https://www.marketbrainos.app/agency',
+    });
     return { success: true };
   }
   if (action === 'revoke') {
@@ -2085,6 +2127,7 @@ export const createAgencyMember = functions.https.onCall(async (data: any, conte
     if (!password || password.length < 6) {
       throw new functions.https.HttpsError('invalid-argument', 'A temporary password (min 6 characters) is required for a new member.');
     }
+    await db.collection('provisioning_markers').doc(email).set({ at: Date.now() });  // suppresses the welcome email; this member gets the "added" email instead
     const rec = await admin.auth().createUser({ email, password });
     uid = rec.uid; created = true;
     await db.collection('users').doc(uid).set({
@@ -2108,6 +2151,7 @@ export const createAgencyMember = functions.https.onCall(async (data: any, conte
   }, { merge: true });
   if (!wasActive) await db.collection('agencies').doc(agencyId).update({ member_count: (agData.member_count || 1) + 1 });
 
+  if (created) await sendTemplate(email, 'memberAdded', { containerName: agData.name || 'the agency', tempPassword: password, roleLabel: role.replace(/_/g, ' '), email });
   return { success: true, uid, created };
 });
 
@@ -2195,6 +2239,7 @@ export const createWorkspaceMember = functions.https.onCall(async (data: any, co
     uid = existing.uid; name = existing.displayName || name;
   } catch {
     if (!password || password.length < 6) throw new functions.https.HttpsError('invalid-argument', 'A temporary password (min 6 characters) is required for a new member.');
+    await db.collection('provisioning_markers').doc(email).set({ at: Date.now() });  // suppresses the welcome email; this member gets the "added" email instead
     const rec = await admin.auth().createUser({ email, password });
     uid = rec.uid; created = true;
     await db.collection('users').doc(uid).set({
@@ -2218,6 +2263,7 @@ export const createWorkspaceMember = functions.https.onCall(async (data: any, co
   }, { merge: true });
   if (!wasActive) await db.collection('workspaces').doc(workspaceId).update({ member_count: (wsData.member_count || 1) + 1 });
 
+  if (created) await sendTemplate(email, 'memberAdded', { containerName: wsData.name || 'the workspace', tempPassword: password, roleLabel: role.replace(/_/g, ' '), email });
   return { success: true, uid, created };
 });
 
@@ -2482,6 +2528,10 @@ export const manageEnterpriseMember = functions.https.onCall(async (data: any, c
     if (!ENTERPRISE_INVITE_ROLES.includes(role)) throw new functions.https.HttpsError('invalid-argument', 'Invalid role.');
     const ent = await db.collection('enterprises').doc(eid).get();
     await db.collection('enterprise_invitations').add({ enterprise_id: eid, enterprise_name: ent.exists ? ent.data()!.name : 'Enterprise', email: inviteEmail, role, invited_by: uid, status: 'pending', created_at: new Date().toISOString() });
+    await sendTemplate(inviteEmail, 'memberInvite', {
+      inviterEmail: email || 'A colleague', containerName: ent.exists ? ent.data()!.name : 'the enterprise', containerType: 'enterprise',
+      roleLabel: role.replace(/_/g, ' '), acceptUrl: 'https://www.marketbrainos.app/enterprise',
+    });
     return { success: true };
   }
   if (action === 'revoke') { await db.collection('enterprise_invitations').doc((payload.invitationId || '').toString()).update({ status: 'revoked' }); return { success: true }; }
@@ -2555,6 +2605,7 @@ export const createEnterpriseMember = functions.https.onCall(async (data: any, c
     uid = existing.uid; name = existing.displayName || name;
   } catch {
     if (!password || password.length < 6) throw new functions.https.HttpsError('invalid-argument', 'A temporary password (min 6 characters) is required for a new member.');
+    await db.collection('provisioning_markers').doc(email).set({ at: Date.now() });  // suppresses the welcome email; this member gets the "added" email instead
     const rec = await admin.auth().createUser({ email, password });
     uid = rec.uid; created = true;
     await db.collection('users').doc(uid).set({
@@ -2578,6 +2629,7 @@ export const createEnterpriseMember = functions.https.onCall(async (data: any, c
   }, { merge: true });
   if (!wasActive) await db.collection('enterprises').doc(enterpriseId).update({ member_count: (entData.member_count || 1) + 1 });
 
+  if (created) await sendTemplate(email, 'memberAdded', { containerName: entData.name || 'the enterprise', tempPassword: password, roleLabel: role.replace(/_/g, ' '), email });
   return { success: true, uid, created };
 });
 
@@ -2740,5 +2792,48 @@ export const generateExecutiveBriefing = functions.https.onCall(async (data: any
     created_at: new Date().toISOString(), created_by: context.auth.token.email || uid,
   };
   const ref = await db.collection('enterprise_briefings').add(briefing);
+  // Email the caller that a fresh briefing is ready (best-effort).
+  if (context.auth.token.email) {
+    await sendTemplate(context.auth.token.email, 'briefingReady', { enterpriseName: entName });
+  }
   return { success: true, id: ref.id, briefing };
+});
+
+// ============================================================
+// EMAIL — auth lifecycle (welcome / verify / password reset)
+// ============================================================
+
+// Welcome email on signup. Fires for EVERY new auth user, so we skip members provisioned via
+// createWorkspace/Agency/EnterpriseMember (they get the "you've been added" email instead) by
+// checking a short-lived marker those functions write just before admin.auth().createUser().
+export const onUserCreated = functions.auth.user().onCreate(async (user: admin.auth.UserRecord) => {
+  const email = user.email;
+  if (!email) return;
+  const markerRef = db.collection('provisioning_markers').doc(email.toLowerCase());
+  const marker = await markerRef.get();
+  if (marker.exists) { await markerRef.delete().catch(() => undefined); return; } // provisioned member — skip welcome
+
+  const firstName = (user.displayName || '').trim().split(/\s+/)[0] || undefined;
+  let verifyUrl: string | undefined;
+  const isPassword = (user.providerData || []).some((p) => p.providerId === 'password');
+  if (isPassword && !user.emailVerified) {
+    try {
+      verifyUrl = await admin.auth().generateEmailVerificationLink(email, { url: 'https://www.marketbrainos.app/auth?verified=1' });
+    } catch (e: any) { console.error('[email] verification link failed:', e?.message || e); }
+  }
+  await sendTemplate(email, 'welcome', { firstName, verifyUrl, monthlyTokens: DEFAULT_PRICING_CONFIG.plans.free.monthlyTokens });
+});
+
+// Branded password reset — the frontend calls this instead of Firebase's default sender. Always
+// returns success (no account-enumeration) and only sends if the account exists.
+export const requestPasswordReset = functions.https.onCall(async (data: any) => {
+  const email = (data?.email || '').toString().toLowerCase().trim();
+  if (!email.includes('@')) return { success: true };
+  try {
+    const link = await admin.auth().generatePasswordResetLink(email, { url: 'https://www.marketbrainos.app/auth' });
+    await sendTemplate(email, 'passwordReset', { resetUrl: link });
+  } catch (e: any) {
+    console.warn('[email] password reset (no send):', e?.message || e);
+  }
+  return { success: true };
 });

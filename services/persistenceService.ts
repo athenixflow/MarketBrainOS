@@ -1043,6 +1043,15 @@ export const getAgenciesByIds = async (ids: string[]): Promise<any[]> => {
   return out;
 };
 
+// Branded password reset — sends our own email (via Resend) instead of Firebase's default template.
+// Always resolves; the server never reveals whether the account exists.
+export const callRequestPasswordReset = async (email: string) => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  const fn = httpsCallable(functions, 'requestPasswordReset');
+  try { return (await fn({ email })).data as { success: boolean }; }
+  catch (error: any) { throw new Error(error.message || 'Could not send reset email.'); }
+};
+
 // ============================================================
 // PHASE 6.3 — ENTERPRISE ANALYTICS SUITE DATA LAYER
 // UI reads engine-produced aggregates (health/analytics/forecast/briefing); never raw data.
