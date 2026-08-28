@@ -26,6 +26,7 @@ const Settings = lazy(() => import('./pages/Settings'));
 const TokenStorePage = lazy(() => import('./pages/TokenStore'));
 const BillingCenter = lazy(() => import('./pages/BillingCenter'));
 const Support = lazy(() => import('./pages/Support'));
+const AuthAction = lazy(() => import('./pages/AuthAction'));
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ScopeProvider, useScope } from './context/ScopeContext';
 import { Honeypot, LoadingState } from './components/UI';
@@ -351,6 +352,7 @@ const AppRoutes: React.FC = () => {
       <Route path="/about" element={<About />} />
       <Route path="/faq" element={<FAQ />} />
       <Route path="/auth" element={user ? <Navigate to="/" /> : <AuthPage />} />
+      <Route path="/auth/action" element={<AuthAction />} />
     </Routes>
     </Suspense>
   );
@@ -384,7 +386,7 @@ const AppContainer: React.FC = () => {
   // treated the same way for every visitor (matched by prefix to cover its sub-pages).
   const PUBLIC_ROUTES = ['/features', '/pricing', '/about', '/faq'];
   const isDocsRoute = location.pathname.startsWith('/documentation');
-  const isPublicRoute = PUBLIC_ROUTES.includes(location.pathname) || isDocsRoute;
+  const isPublicRoute = PUBLIC_ROUTES.includes(location.pathname) || isDocsRoute || location.pathname === '/auth/action';
 
   // Use layout logic: If user is logged in (and not on a public marketing page), show sidebar.
   const showSidebar = !!user && !isPublicRoute;
