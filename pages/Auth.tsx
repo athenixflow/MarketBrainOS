@@ -2,15 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, googleProvider } from '../services/firebase';
 import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  sendPasswordResetEmail, 
-  signInWithPopup 
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+  signInWithPopup,
+  getAdditionalUserInfo
 } from 'firebase/auth';
 import { Card, Input, PrimaryButton, PageHeader, ErrorMessage } from '../components/UI';
 import { SecurityEngine } from '../services/securityEngine';
 import { useAuth } from '../context/AuthContext';
-import { callRequestPasswordReset } from '../services/persistenceService';
+import { callRequestPasswordReset, callSendWelcomeEmail } from '../services/persistenceService';
 
 const AuthPage: React.FC = () => {
   const [view, setView] = useState<'auth' | 'verify'>('auth');
@@ -52,6 +53,7 @@ const AuthPage: React.FC = () => {
     try {
       if (mode === 'signup') {
         await createUserWithEmailAndPassword(auth, email, password);
+        callSendWelcomeEmail();  // fire-and-forget welcome + verification email
         await refreshProfile();
         navigate('/');
       } else if (mode === 'signin') {
@@ -74,7 +76,8 @@ const AuthPage: React.FC = () => {
     setError(null);
     setLoading(true);
     try {
-      await signInWithPopup(auth, googleProvider);
+      const cred = await signInWithPopup(auth, googleProvider);
+      if (getAdditionalUserInfo(cred)?.isNewUser) callSendWelcomeEmail();  // welcome for brand-new Google accounts
       await refreshProfile();
       navigate('/');
     } catch (err: any) {

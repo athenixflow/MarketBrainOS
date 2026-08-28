@@ -2806,22 +2806,43 @@ export const generateExecutiveBriefing = functions.https.onCall(async (data: any
 // Welcome email on signup. Fires for EVERY new auth user, so we skip members provisioned via
 // createWorkspace/Agency/EnterpriseMember (they get the "you've been added" email instead) by
 // checking a short-lived marker those functions write just before admin.auth().createUser().
+// Sends the welcome email once (idempotent via users/{uid}.welcome_sent). Adds a verification link
+// for unverified (password) accounts.
+async function sendWelcomeOnce(uid: string, email: string, name: string | undefined, emailVerified: boolean): Promise<void> {
+  const userRef = db.collection('users').doc(uid);
+  const snap = await userRef.get();
+  if (snap.exists && snap.data()!.welcome_sent) return;
+  let verifyUrl: string | undefined;
+  if (!emailVerified) {
+    try { verifyUrl = await admin.auth().generateEmailVerificationLink(email, { url: 'https://www.marketbrainos.app/auth?verified=1' }); }
+    catch (e: any) { console.error('[email] verification link failed:', e?.message || e); }
+  }
+  await sendTemplate(email, 'welcome', { firstName: name, verifyUrl, monthlyTokens: DEFAULT_PRICING_CONFIG.plans.free.monthlyTokens });
+  await userRef.set({ welcome_sent: true }, { merge: true });
+}
+
+// Background auth trigger — best-effort only (gen1 auth triggers can be unreliable), so the client
+// ALSO calls sendWelcomeEmail below; both are idempotent. Skips provisioned members via the marker.
 export const onUserCreated = functions.auth.user().onCreate(async (user: admin.auth.UserRecord) => {
   const email = user.email;
   if (!email) return;
   const markerRef = db.collection('provisioning_markers').doc(email.toLowerCase());
   const marker = await markerRef.get();
   if (marker.exists) { await markerRef.delete().catch(() => undefined); return; } // provisioned member — skip welcome
-
   const firstName = (user.displayName || '').trim().split(/\s+/)[0] || undefined;
-  let verifyUrl: string | undefined;
-  const isPassword = (user.providerData || []).some((p) => p.providerId === 'password');
-  if (isPassword && !user.emailVerified) {
-    try {
-      verifyUrl = await admin.auth().generateEmailVerificationLink(email, { url: 'https://www.marketbrainos.app/auth?verified=1' });
-    } catch (e: any) { console.error('[email] verification link failed:', e?.message || e); }
-  }
-  await sendTemplate(email, 'welcome', { firstName, verifyUrl, monthlyTokens: DEFAULT_PRICING_CONFIG.plans.free.monthlyTokens });
+  await sendWelcomeOnce(user.uid, email, firstName, user.emailVerified);
+});
+
+// Reliable welcome path: the app calls this right after a successful self-signup (email/password or a
+// brand-new Google account). Idempotent; provisioned members never call it, so they never get a welcome.
+export const sendWelcomeEmail = functions.https.onCall(async (data: any, context: any) => {
+  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
+  const email = (context.auth.token.email || '').toString();
+  if (!email) return { success: true };
+  const name = ((context.auth.token.name as string) || '').trim().split(/\s+/)[0] || undefined;
+  const verified = context.auth.token.email_verified === true;
+  await sendWelcomeOnce(context.auth.uid, email, name, verified);
+  return { success: true };
 });
 
 // Branded password reset — the frontend calls this instead of Firebase's default sender. Always

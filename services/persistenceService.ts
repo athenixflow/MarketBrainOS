@@ -1052,6 +1052,12 @@ export const callRequestPasswordReset = async (email: string) => {
   catch (error: any) { throw new Error(error.message || 'Could not send reset email.'); }
 };
 
+// Fire-and-forget welcome email after a self-signup (idempotent server-side). Never blocks the UI.
+export const callSendWelcomeEmail = async (): Promise<void> => {
+  if (!isFirebaseInitialized) return;
+  try { await httpsCallable(functions, 'sendWelcomeEmail')({}); } catch { /* best-effort */ }
+};
+
 // ============================================================
 // PHASE 6.3 — ENTERPRISE ANALYTICS SUITE DATA LAYER
 // UI reads engine-produced aggregates (health/analytics/forecast/briefing); never raw data.
