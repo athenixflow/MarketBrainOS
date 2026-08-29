@@ -33,6 +33,8 @@ const PublicFooter: React.FC = () => {
             <h4 className="text-white font-bold mb-6 text-sm">Company</h4>
             <ul className="space-y-4 text-sm text-gray-500">
               <li><Link to="/about" className="hover:text-white transition-colors">About</Link></li>
+              <li><Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
+              <li><Link to="/terms" className="hover:text-white transition-colors">Terms of Service</Link></li>
             </ul>
           </div>
         </div>

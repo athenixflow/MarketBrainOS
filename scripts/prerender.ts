@@ -35,7 +35,7 @@ const PORT = 4178;
 const ORIGIN = `http://localhost:${PORT}`;
 
 // ---- Route list (single source of truth: marketing pages + the docs registry) -------------------
-const MARKETING = ['/', '/features', '/pricing', '/about', '/faq'];
+const MARKETING = ['/', '/features', '/pricing', '/about', '/faq', '/privacy', '/terms'];
 const DOCS = [
   '/documentation',
   ...DOC_CATEGORIES.map((c) => `/documentation/${c.id}`),

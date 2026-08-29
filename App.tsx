@@ -16,6 +16,8 @@ const Features = lazy(() => import('./pages/Features'));
 const Pricing = lazy(() => import('./pages/Pricing'));
 const About = lazy(() => import('./pages/About'));
 const FAQ = lazy(() => import('./pages/FAQ'));
+const Privacy = lazy(() => import('./pages/Privacy'));
+const Terms = lazy(() => import('./pages/Terms'));
 const ToolPage = lazy(() => import('./components/ToolPage'));
 const History = lazy(() => import('./pages/History'));
 const TeamWorkspace = lazy(() => import('./pages/TeamWorkspace'));
@@ -352,6 +354,8 @@ const AppRoutes: React.FC = () => {
       <Route path="/pricing" element={<Pricing />} />
       <Route path="/about" element={<About />} />
       <Route path="/faq" element={<FAQ />} />
+      <Route path="/privacy" element={<Privacy />} />
+      <Route path="/terms" element={<Terms />} />
       <Route path="/auth" element={user ? <Navigate to="/" /> : <AuthPage />} />
       <Route path="/auth/action" element={<AuthAction />} />
 
@@ -388,7 +392,7 @@ const AppContainer: React.FC = () => {
   // even for logged-in users — otherwise the app sidebar/header double up with the public nav.
   // The docs hub (/documentation/*) is its own full-bleed mini-app with its own nav, so it is
   // treated the same way for every visitor (matched by prefix to cover its sub-pages).
-  const PUBLIC_ROUTES = ['/features', '/pricing', '/about', '/faq'];
+  const PUBLIC_ROUTES = ['/features', '/pricing', '/about', '/faq', '/privacy', '/terms'];
   const isDocsRoute = location.pathname.startsWith('/documentation');
   const isPublicRoute = PUBLIC_ROUTES.includes(location.pathname) || isDocsRoute || location.pathname === '/auth/action';
 

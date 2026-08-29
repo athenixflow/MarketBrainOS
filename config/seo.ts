@@ -44,4 +44,14 @@ export const MARKETING_SEO: Record<string, PageSeo> = {
     description: 'Answers to common questions about MarketBrain OS — how tokens work, pricing, the tools included, data handling, and how to get started.',
     path: '/faq',
   },
+  privacy: {
+    title: 'Privacy Policy',
+    description: 'How MarketBrain OS collects, uses, stores, and protects your data — including account information, analysis content, AI processing, and your privacy rights.',
+    path: '/privacy',
+  },
+  terms: {
+    title: 'Terms of Service',
+    description: 'The terms governing your use of MarketBrain OS — accounts, plans and tokens, acceptable use, AI-output disclaimers, and your rights and responsibilities.',
+    path: '/terms',
+  },
 };
