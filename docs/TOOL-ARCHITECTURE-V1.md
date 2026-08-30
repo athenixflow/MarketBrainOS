@@ -257,7 +257,7 @@ V1 can keep the existing artifact collections for compatibility, but new result 
 
 ## 10. Token Policy
 
-The PRD states `1 Analysis = 1 Token`, but Phase 0 intentionally kept per-tool costs for cost control. V1 therefore uses per-tool costs until the product owner revisits pricing.
+Per-tool token costs, kept from Phase 0 for cost control. The PRD originally specified a flat `1 Analysis = 1 Token`; that rule was superseded and the PRD now documents per-tool costs as the pricing model. `toolCosts` in the pricing config is the source of truth.
 
 Rules:
 

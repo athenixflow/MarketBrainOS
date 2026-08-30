@@ -17,9 +17,11 @@ All 4 rulings implemented.
   `SUPABASE_*` env type declarations in `vite.config.ts`. (No `supabase-schema.sql` / `api/analysis/`
   existed in the working tree — they were never committed here.)
 - **Tool naming:** TestLab Pro + pipeline Workflow kept as product extras. 9 PRD tools queued.
-- **Pro = 200 tokens/mo:** fixed in `functions/src/index.ts`, `pages/Dashboard.tsx`, `pages/LandingPage.tsx`.
+- **Pro monthly tokens:** unified on a single source of truth. Superseded 2026-08-31 — the settled
+  value is **100 tokens/mo** (`config/pricingConfig.ts` + the server `DEFAULT_PRICING_CONFIG`), and all
+  user-facing copy now interpolates from the config instead of hardcoding a number.
 
-**Satisfies:** §26–29 (Pro 200 ✅), §55–62 (single backend ✅).
+**Satisfies:** §26–29 (Pro 100 ✅), §55–62 (single backend ✅).
 
 ## Phase 1 — Core loop integrity ✅ COMPLETE (2026-06-01)
 

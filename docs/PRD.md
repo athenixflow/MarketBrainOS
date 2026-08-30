@@ -24,9 +24,10 @@ Consultants, E-commerce Brands, SaaS Companies, Corporate Strategy Teams.
 **Revenue Model:**
 - Pro Subscription — **$7/month**
 - Token Top-Ups — **$5 = 100 tokens**
-- Free Plan — **5 tokens** (one-time, no monthly replenishment)
-- Pro Plan — **200 tokens/month**
-- **Pricing rule: 1 Analysis = 1 Token** (flat, regardless of tool)
+- Free Plan — **one-time allowance, no monthly replenishment** (amount: see pricing config)
+- Pro Plan — **100 tokens/month**
+- **Pricing rule: per-tool token costs** (3/4/5/6 depending on analysis depth, see `toolCosts` in the
+  pricing config). Supersedes the original flat "1 analysis = 1 token" rule.
 
 ---
 
@@ -89,9 +90,10 @@ tokens) · Feature Access Grid · Notification Center.
 
 ## 7. Token Economy
 
-- Free Plan: **5 tokens** (experience value; no replenishment).
-- Pro Plan: **200 tokens/month** (regular business use).
-- Consumption: **1 Analysis = 1 Token** (simple, transparent).
+- Free Plan: **one-time allowance, no replenishment** (experience value). Amount is set by
+  `config/pricingConfig.ts` / the server default, which are the single source of truth.
+- Pro Plan: **100 tokens/month** (regular business use).
+- Consumption: **per-tool cost** (3/4/5/6 by analysis depth; see `toolCosts` in the pricing config).
 - Top-Ups: **$5 = 100 tokens** (continue after allocation exhausted).
 - **Token Events:** Signup Bonus · Monthly Allocation · Top-Up Purchase · Analysis Consumption ·
   Admin Allocation.
@@ -101,8 +103,8 @@ tokens) · Feature Access Grid · Notification Center.
 
 ## 8. Subscription System
 
-- **Free Plan:** 5 tokens, full access until exhausted.
-- **Pro Plan:** 200 monthly tokens, priority access, full usage.
+- **Free Plan:** one-time token allowance, full access until exhausted.
+- **Pro Plan:** 100 monthly tokens, priority access, full usage.
 - **Actions:** Upgrade · Renew · Cancel · Downgrade.
 - **Billing Components:** Subscription Status · Next Billing Date · Billing History · Invoices · Receipts.
 - **States:** Free · Active · Past Due · Cancelled · Expired.
@@ -248,9 +250,9 @@ Stored: Analysis Type, Date, Inputs, Outputs, Token Usage. *Purpose: learn from 
 - **§26 Token Economy:** prevents unlimited AI usage; predictable costs; fair monetization; drives
   upgrades. Sources: Free allocation, Monthly Pro allocation, Top-ups, Promo bonuses, Admin allocations.
   Lifecycle: Allocated → Stored → Requested → Validated → Deducted → Runs → Stored.
-- **§27 Free Plan:** 5 tokens; all tools, history, dashboard, basic support; no replenishment.
-- **§28 Pro Plan:** $7/mo, 200 tokens/mo, all tools, monthly replenishment, history, priority support,
-  future premium features. Renewal flow: Renews → Payment OK → 200 tokens allocated → continue.
+- **§27 Free Plan:** one-time token allowance; all tools, history, dashboard, basic support; no replenishment.
+- **§28 Pro Plan:** $7/mo, 100 tokens/mo, all tools, monthly replenishment, history, priority support,
+  future premium features. Renewal flow: Renews → Payment OK → 100 tokens allocated → continue.
 - **§29 Token Top-Up:** $5 = 100 tokens, instant. Records date/amount/tokens/status.
 - **§30 Subscription Management:** states Free/Active/Past Due/Cancelled/Expired; events New/Renewal/
   Cancel/Failed/Upgrade/Downgrade; controls View/Upgrade/Cancel/Billing History.
@@ -332,7 +334,8 @@ Audit Logs. Goals: Reliability, Scalability, Security, Fast Retrieval.
 
 - **§63 Automation Engine:** Token Allocation, Subscription Renewal, Top-Up Processing, Notification
   Delivery, Analysis Completion, System Monitoring.
-- **§64 Monthly Token Automation:** Renews → +200 tokens → balance updated → user notified.
+- **§64 Monthly Token Automation:** Renews → +100 tokens (Pro) → balance updated → user notified.
+  Free accounts are excluded: their allowance is one-time and does not replenish.
 - **§65 Top-Up Automation:** Payment OK → tokens added → balance updated → notified.
 - **§66 Analysis Completion Automation:** Completed → results saved → notification → history updated.
 - **§67 Email Automation:** Welcome, Verification, Password Reset, Analysis Complete, Payment,
