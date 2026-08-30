@@ -1,3 +1,19 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Accessibility: tailwindcss-animate does not honour prefers-reduced-motion on its own, and the app
+   uses its enter utilities (animate-in / fade-in / slide-in-from-*) on page shells, modals, results
+   and empty states. Collapse all of it to an instant, fully-visible final state for users who ask
+   for reduced motion. Enter animations use animation-fill-mode: both, so cancelling the animation
+   leaves the element at its natural opacity/transform rather than hidden. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

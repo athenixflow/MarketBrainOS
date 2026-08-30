@@ -403,7 +403,7 @@ const Workflow: React.FC = () => {
       {loading && <LoadingState message="Neural engine processing active..." isTakingLong={isTakingLong} onCancel={() => setLoading(false)} />}
 
       {step === 2 && !loading && minerResults && (
-        <div className="max-w-4xl mx-auto space-y-12 animate-in slide-in-from-bottom-8 duration-700">
+        <div className="max-w-4xl mx-auto space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <SectionHeader title="Step 2: Selection" subtitle="Choose hooks to enter performance simulator (Max 3)." />
           <div className="grid grid-cols-1 gap-6">
             {[...(minerResults.angles || [])].sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 6).map((angle, i) => (
@@ -436,7 +436,7 @@ const Workflow: React.FC = () => {
       )}
 
       {step === 3 && !loading && testResults && (
-        <Card className="max-w-4xl mx-auto shadow-2xl animate-in slide-in-from-bottom-8 duration-700">
+        <Card className="max-w-4xl mx-auto shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
           <SectionHeader title="Step 3: TestLab Pro" subtitle="Performance prediction results." />
           <div className="mb-12">
             <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-6 text-center">Projected Performance Winner</p>
@@ -453,7 +453,7 @@ const Workflow: React.FC = () => {
       )}
 
       {step === 4 && !loading && !executionError && (
-        <Card className="max-w-4xl mx-auto shadow-2xl animate-in slide-in-from-bottom-8 duration-700">
+        <Card className="max-w-4xl mx-auto shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
           <SectionHeader title="Step 4: Conversion Doctor" subtitle="Diagnose the health of existing assets." />
           <form onSubmit={(e) => { e.preventDefault(); handleStartAudit(); }}>
             <HoneypotField value={honeypotValue} onChange={setHoneypotValue} />
@@ -475,7 +475,7 @@ const Workflow: React.FC = () => {
       )}
 
       {step === 5 && !loading && auditResult && (
-        <Card className="max-w-4xl mx-auto shadow-2xl animate-in slide-in-from-bottom-8 duration-700">
+        <Card className="max-w-4xl mx-auto shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
           <SectionHeader title="Step 5: Improvement Pipeline" subtitle="Synthesizing test results with clinical data." />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
             <div className="p-10 bg-[#FFF9F9] rounded-[40px] border border-[#FF0000]/10">
@@ -516,7 +516,7 @@ const Workflow: React.FC = () => {
                 isPro={isPro} 
               />
             </div>
-            <div className="text-center mb-20 animate-in fade-in slide-in-from-top-4 duration-1000">
+            <div className="text-center mb-20 animate-in fade-in slide-in-from-top-2 duration-500">
               <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-[0.5em] mb-8">Executive Intelligence Summary</p>
               <h1 className="text-5xl font-black text-white tracking-tighter mb-6">Strategic Assets Ready.</h1>
               <p className="text-gray-500 text-xl font-medium mb-12">Your strategy has been validated and clinically refined.</p>

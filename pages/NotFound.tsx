@@ -26,7 +26,7 @@ const NotFound: React.FC = () => {
       ];
 
   return (
-    <div className="min-h-[75vh] flex flex-col items-center justify-center text-center px-6 py-20 animate-in fade-in duration-1000">
+    <div className="min-h-[75vh] flex flex-col items-center justify-center text-center px-6 py-20 animate-in fade-in duration-500">
       {/* Brand mark — only when logged out (the app header/sidebar already brand the signed-in view). */}
       {!user && (
         <Link to="/" className="flex items-center gap-3 mb-14">

@@ -6,6 +6,13 @@ import { useAuth } from '../context/AuthContext';
 import { UserTier, ActionLogEntry, PaymentRecord } from '../types';
 import { getUserActionLogs, getUserPaymentHistory } from '../services/persistenceService';
 import { downloadAsCSV, paymentsToCSV } from '../services/exportService';
+import { DEFAULT_PRICING_CONFIG } from '../config/pricingConfig';
+
+// Plan figures are derived from the pricing config so on-screen copy can never contradict what the
+// account actually receives.
+const PRO_TOKENS = DEFAULT_PRICING_CONFIG.plans.pro.monthlyTokens;
+const PRO_PRICE = DEFAULT_PRICING_CONFIG.plans.pro.price;
+const STARTER_PACK = DEFAULT_PRICING_CONFIG.tokenPacks[0];
 
 // 1. PRIMARY ACTION BUTTON
 export const PrimaryButton: React.FC<{
@@ -152,7 +159,7 @@ export const SectionHeader: React.FC<{ title: string; subtitle?: string }> = ({ 
 
 // 8. EMPTY STATE COMPONENT
 export const EmptyState: React.FC<{ message: string; submessage?: string }> = ({ message, submessage }) => (
-  <div className="py-32 flex flex-col items-center justify-center text-center animate-in fade-in duration-1000">
+  <div className="py-32 flex flex-col items-center justify-center text-center animate-in fade-in duration-500">
     <div className="w-12 h-12 bg-[#F9F9F9] border border-gray-100 rounded-full mb-8 flex items-center justify-center">
       <div className="w-1.5 h-1.5 bg-[#FF0000] rounded-full opacity-30" />
     </div>
@@ -337,7 +344,7 @@ export const isNetworkError = (msg: string | null): boolean => {
 
 // 12. RESULT CONTAINER
 export const ResultContainer: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="mt-24 space-y-12 animate-in slide-in-from-bottom-8 duration-1000">
+  <div className="mt-24 space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
     {children}
   </div>
 );
@@ -381,8 +388,8 @@ export const UsageLimitModal: React.FC<{
     if (reason === 'exhausted') {
       content = {
         title: "You’ve used your free tokens",
-        body: "You’ve reached the limit of your free tokens.\nUpgrade to Pro to get 100 tokens every month and keep running analyses.",
-        primaryCTA: "Upgrade to Pro — $7/month",
+        body: `You’ve reached the limit of your free tokens.\nUpgrade to Pro to get ${PRO_TOKENS} tokens every month and keep running analyses.`,
+        primaryCTA: `Upgrade to Pro, $${PRO_PRICE}/month`,
         secondaryCTA: "Not now",
         hint: "Tokens are only used when analyses complete successfully."
       };
@@ -403,7 +410,7 @@ export const UsageLimitModal: React.FC<{
         body: "You’ve used your monthly tokens.\nTop up to keep running analyses instantly.",
         primaryCTA: "Top up tokens",
         secondaryCTA: "Wait for monthly reset",
-        hint: "$5 = 100 tokens"
+        hint: `$${STARTER_PACK.price} = ${STARTER_PACK.tokens} tokens`
       };
     }
   }
@@ -448,7 +455,7 @@ export const TokenStatusBanner: React.FC<{
     return (
       <div className="w-full bg-[#1A1A1A] border-b border-gray-800 py-3 px-6 flex flex-col sm:flex-row items-center justify-center gap-4 text-center">
         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-          You’re on the Free plan. Upgrade to Pro to get 200 tokens every month.
+          You’re on the Free plan. Upgrade to Pro to get {PRO_TOKENS} tokens every month.
         </p>
         <button
           onClick={() => navigate('/')}

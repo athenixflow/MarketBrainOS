@@ -1,6 +1,9 @@
 /** @type {import('tailwindcss').Config} */
 // Compiled/purged Tailwind build (replaces the render-blocking cdn.tailwindcss.com dev script).
 // Content globs cover every file that carries className strings so no utilities are purged.
+// NOTE: this project is ESM ("type": "module"), so plugins are imported, not require()d.
+import tailwindcssAnimate from 'tailwindcss-animate';
+
 export default {
   content: [
     './index.html',
@@ -16,5 +19,8 @@ export default {
     // (Inter was loaded but never applied), so we keep the same stack for a pixel-identical result.
     extend: {},
   },
-  plugins: [],
+  // Supplies the `animate-in` / `fade-in` / `slide-in-from-*` / `zoom-in` enter utilities used
+  // throughout the app. Without it those class names compile to nothing and every "animation" in
+  // the UI is silently inert. Reduced-motion is handled globally in index.css.
+  plugins: [tailwindcssAnimate],
 };

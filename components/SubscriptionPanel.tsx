@@ -3,6 +3,12 @@ import { Card, PrimaryButton } from './UI';
 import { useAuth } from '../context/AuthContext';
 import { callChangeSubscription, createNotification } from '../services/persistenceService';
 import { SubscriptionStatus } from '../types';
+import { DEFAULT_PRICING_CONFIG } from '../config/pricingConfig';
+
+// Derived, never hardcoded: plan copy must track the pricing config or it drifts (it previously
+// advertised 200 tokens while the config granted 100).
+const PRO_TOKENS = DEFAULT_PRICING_CONFIG.plans.pro.monthlyTokens;
+const PRO_PRICE = DEFAULT_PRICING_CONFIG.plans.pro.price;
 
 const STATUS_STYLE: Record<SubscriptionStatus, { label: string; cls: string }> = {
   free: { label: 'Free', cls: 'bg-gray-100 text-gray-500 border-gray-200' },
@@ -58,20 +64,20 @@ const SubscriptionPanel: React.FC = () => {
         {isPro
           ? status === 'cancelled'
             ? 'Your Pro plan is cancelled and will not renew. You keep access until the end of the current period.'
-            : 'Pro includes 200 tokens every month, all tools, priority support, and token top-ups.'
-          : 'Upgrade to Pro for 200 tokens every month, all tools, priority support, and the ability to top up.'}
+            : `Pro includes ${PRO_TOKENS} tokens every month, all tools, priority support, and token top-ups.`
+          : `Upgrade to Pro for ${PRO_TOKENS} tokens every month, all tools, priority support, and the ability to top up.`}
       </p>
 
       <div className="flex flex-wrap gap-4">
         {!isPro && (
-          <PrimaryButton onClick={() => run('upgrade', 'Upgraded to Pro.', 'Welcome to Pro — 200 tokens added.')} disabled={!!busy} className="!px-8">
-            {busy === 'upgrade' ? 'Processing...' : 'Upgrade to Pro — $7/mo'}
+          <PrimaryButton onClick={() => run('upgrade', 'Upgraded to Pro.', `Welcome to Pro. ${PRO_TOKENS} tokens added.`)} disabled={!!busy} className="!px-8">
+            {busy === 'upgrade' ? 'Processing...' : `Upgrade to Pro, $${PRO_PRICE}/mo`}
           </PrimaryButton>
         )}
         {isPro && status === 'active' && (
           <>
             <button
-              onClick={() => run('renew', 'Subscription renewed.', 'Your Pro plan renewed — 200 tokens added.')}
+              onClick={() => run('renew', 'Subscription renewed.', `Your Pro plan renewed. ${PRO_TOKENS} tokens added.`)}
               disabled={!!busy}
               className="px-8 py-3.5 rounded-2xl font-bold text-xs uppercase tracking-widest bg-[#0B0B0B] text-white hover:bg-black transition-colors disabled:opacity-50"
             >

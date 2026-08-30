@@ -413,7 +413,7 @@ const AppContainer: React.FC = () => {
       
       <main className={`${showSidebar ? 'lg:ml-72 ml-0 pt-16' : ''} min-h-screen flex flex-col`}>
         {showSidebar ? (
-          <div className="p-6 lg:p-20 max-w-5xl w-full mx-auto flex-grow animate-in fade-in slide-in-from-bottom-4 duration-1000">
+          <div className="p-6 lg:p-20 max-w-5xl w-full mx-auto flex-grow animate-in fade-in slide-in-from-bottom-2 duration-500">
             <AppRoutes />
           </div>
         ) : (

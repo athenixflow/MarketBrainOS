@@ -1,6 +1,15 @@
 // Shared marketing copy reused across the FAQ page and homepage FAQ section.
 
+import { DEFAULT_PRICING_CONFIG as CFG } from './pricingConfig';
+
 export interface FaqItem { q: string; a: string; }
+
+// Plan figures are interpolated from the pricing config so published copy cannot advertise numbers
+// the product does not deliver.
+const FREE_TOKENS = CFG.plans.free.monthlyTokens;
+const PRO_TOKENS = CFG.plans.pro.monthlyTokens;
+const PRO_PRICE = CFG.plans.pro.price;
+const PACK = CFG.tokenPacks[0];
 
 export const FAQ_ITEMS: FaqItem[] = [
   {
@@ -9,11 +18,11 @@ export const FAQ_ITEMS: FaqItem[] = [
   },
   {
     q: 'How do tokens work?',
-    a: 'Each analysis consumes tokens. Free accounts start with a one-time allowance; Pro accounts receive 200 tokens every month and can top up at any time. Tokens are only charged when an analysis completes successfully — failed runs are automatically refunded.',
+    a: `Each analysis consumes tokens. Free accounts get ${FREE_TOKENS} tokens each month; Pro accounts receive ${PRO_TOKENS} tokens every month and can top up at any time. Tokens are only charged when an analysis completes successfully, and failed runs are automatically refunded.`,
   },
   {
     q: 'How much does it cost?',
-    a: 'The Free plan is $0. Pro is $7/month and includes 200 tokens monthly, every tool, priority support, and token top-ups. Top-ups are $5 for 100 tokens and never expire.',
+    a: `The Free plan is $0. Pro is $${PRO_PRICE}/month and includes ${PRO_TOKENS} tokens monthly, every tool, priority support, and token top-ups. Top-ups start at $${PACK.price} for ${PACK.tokens} tokens and never expire.`,
   },
   {
     q: 'What tools are included?',
