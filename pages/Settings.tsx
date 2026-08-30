@@ -237,8 +237,8 @@ const Settings: React.FC = () => {
             {isPasswordUser ? (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
-                  <Input label="Current Password" placeholder="••••••••" value={pwd.current} onChange={(e) => setPwd(p => ({ ...p, current: e.target.value }))} />
-                  <Input label="New Password" placeholder="At least 6 characters" value={pwd.next} onChange={(e) => setPwd(p => ({ ...p, next: e.target.value }))} />
+                  <Input label="Current Password" type="password" autoComplete="current-password" placeholder="Enter your current password" value={pwd.current} onChange={(e) => setPwd(p => ({ ...p, current: e.target.value }))} />
+                  <Input label="New Password" type="password" autoComplete="new-password" placeholder="At least 6 characters" value={pwd.next} onChange={(e) => setPwd(p => ({ ...p, next: e.target.value }))} />
                 </div>
                 <div className="flex flex-wrap gap-4">
                   <PrimaryButton onClick={changePassword}>Update Password</PrimaryButton>

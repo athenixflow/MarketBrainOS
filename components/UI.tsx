@@ -108,7 +108,10 @@ export const Input: React.FC<{
   error?: string;
   disabled?: boolean;
   name?: string;
-}> = ({ label, placeholder, value, onChange, multiline, error, disabled, name }) => (
+  /** Defaults to "text". MUST be set to "password" for secrets, or the value renders in clear text. */
+  type?: 'text' | 'email' | 'password' | 'number';
+  autoComplete?: string;
+}> = ({ label, placeholder, value, onChange, multiline, error, disabled, name, type = 'text', autoComplete }) => (
   <div className="flex flex-col mb-12">
     <label className="text-xs font-bold text-gray-700 mb-5 tracking-widest uppercase">{label}</label>
     {multiline ? (
@@ -123,6 +126,8 @@ export const Input: React.FC<{
     ) : (
       <input
         name={name}
+        type={type}
+        autoComplete={autoComplete}
         disabled={disabled}
         className={`bg-[#FBFBFB] border ${error ? 'border-[#FF0000]/20' : 'border-gray-100'} p-8 rounded-[32px] focus:ring-4 focus:ring-[#FF0000]/5 focus:border-[#FF0000]/20 outline-none transition-all text-lg text-[#0B0B0B] placeholder:text-gray-400 disabled:opacity-50`}
         placeholder={placeholder}

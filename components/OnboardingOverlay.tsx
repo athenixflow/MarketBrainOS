@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { PrimaryButton } from './UI';
 import { useAuth } from '../context/AuthContext';
 import { setOnboarded } from '../services/persistenceService';
@@ -24,7 +25,7 @@ const STEPS: Step[] = [
   {
     eyebrow: 'Tokens',
     title: 'How tokens work',
-    body: 'Each analysis consumes tokens. Free accounts start with a small allowance; Pro gives you 200 tokens every month plus the ability to top up ($5 = 100 tokens). Tokens are only charged when an analysis completes successfully.',
+    body: 'Each analysis consumes tokens. Free accounts start with a monthly allowance, and Pro adds a larger monthly balance plus the option to top up. Tokens are only charged when an analysis completes successfully.',
   },
   {
     eyebrow: 'Your Tools',
@@ -34,7 +35,7 @@ const STEPS: Step[] = [
   {
     eyebrow: 'Get Started',
     title: 'Run your first analysis',
-    body: 'The fastest way to see value is to try a tool. Strategy Lab is a great place to start — pressure-test any idea in under a minute.',
+    body: 'The fastest way to see value is to try a tool. Strategy Lab is a great place to start, and it can pressure-test any idea in under a minute.',
   },
 ];
 
@@ -43,6 +44,7 @@ const OnboardingOverlay: React.FC = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [closing, setClosing] = useState(false);
+  const reduce = useReducedMotion();
 
   const isLast = step === STEPS.length - 1;
   const current = STEPS[step];
@@ -58,25 +60,59 @@ const OnboardingOverlay: React.FC = () => {
   if (closing) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#0B0B0B]/95 backdrop-blur-md p-6 animate-in fade-in duration-300">
-      <div className="bg-white text-[#0B0B0B] max-w-lg w-full p-12 rounded-[40px] shadow-2xl relative">
+    <motion.div
+      initial={reduce ? false : { opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-[#0B0B0B]/95 backdrop-blur-md p-6"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Getting started"
+    >
+      <motion.div
+        initial={reduce ? false : { opacity: 0, y: 20, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+        className="bg-white text-[#0B0B0B] max-w-lg w-full p-10 sm:p-12 rounded-2xl shadow-2xl relative"
+      >
         <button
           onClick={() => finish(false)}
-          className="absolute top-8 right-10 text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors"
+          className="absolute top-8 right-8 text-[11px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors"
         >
           Skip
         </button>
 
-        <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-[0.4em] mb-6">{current.eyebrow}</p>
-        <h2 className="text-3xl font-bold tracking-tight mb-6 leading-tight">{current.title}</h2>
-        <p className="text-gray-500 font-medium leading-relaxed mb-10">{current.body}</p>
+        {/* Step position, so the reader knows how long this takes. */}
+        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-8">
+          Step {step + 1} of {STEPS.length}
+        </p>
 
-        {/* Progress dots */}
-        <div className="flex items-center gap-2 mb-10">
-          {STEPS.map((_, i) => (
-            <div
-              key={i}
-              className={`h-1.5 rounded-full transition-all duration-300 ${i === step ? 'w-8 bg-[#FF0000]' : 'w-1.5 bg-gray-200'}`}
+        {/* Content swaps in place; motion communicates the step transition. */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={step}
+            initial={reduce ? false : { opacity: 0, x: 12 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={reduce ? undefined : { opacity: 0, x: -12 }}
+            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <div className="w-8 h-[2px] bg-[#FF0000] rounded-full mb-6" />
+            <h2 className="text-2xl sm:text-3xl font-black tracking-tight mb-4 leading-tight">{current.title}</h2>
+            <p className="text-[15px] text-gray-600 leading-relaxed">{current.body}</p>
+          </motion.div>
+        </AnimatePresence>
+
+        {/* Progress bars double as jump targets. */}
+        <div className="flex items-center gap-2 mt-10 mb-8">
+          {STEPS.map((s, i) => (
+            <button
+              key={s.eyebrow}
+              onClick={() => setStep(i)}
+              aria-label={`Go to step ${i + 1}: ${s.title}`}
+              aria-current={i === step ? 'step' : undefined}
+              className={`h-1.5 rounded-full transition-all duration-300 ${
+                i === step ? 'w-10 bg-[#FF0000]' : 'w-4 bg-gray-200 hover:bg-gray-300'
+              }`}
             />
           ))}
         </div>
@@ -85,18 +121,18 @@ const OnboardingOverlay: React.FC = () => {
           <button
             onClick={() => setStep((s) => Math.max(0, s - 1))}
             disabled={step === 0}
-            className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors disabled:opacity-0"
+            className="text-[11px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors disabled:opacity-0 disabled:pointer-events-none"
           >
             Back
           </button>
           {isLast ? (
-            <PrimaryButton onClick={() => finish(true)} className="!px-10">Run First Analysis</PrimaryButton>
+            <PrimaryButton onClick={() => finish(true)} className="!px-10">Run first analysis</PrimaryButton>
           ) : (
             <PrimaryButton onClick={() => setStep((s) => s + 1)} className="!px-10">Next</PrimaryButton>
           )}
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 };
 

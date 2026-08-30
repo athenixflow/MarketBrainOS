@@ -70,7 +70,7 @@ const EnterpriseMembers: React.FC<{
 
           <div className="grid md:grid-cols-2 gap-4">
             <Input label="Email" placeholder="exec@company.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={!!editingUid} />
-            {!editingUid && <Input label="Temporary password" placeholder="They can change it after first login" value={password} onChange={(e) => setPassword(e.target.value)} />}
+            {!editingUid && <Input label="Temporary password" type="password" autoComplete="new-password" placeholder="They can change it after first login" value={password} onChange={(e) => setPassword(e.target.value)} />}
             <div>
               <label className="block text-xs font-bold text-gray-700 mb-3 tracking-widest uppercase">Role</label>
               <select value={role} onChange={(e) => setRole(e.target.value as EnterpriseRole)} className="w-full bg-[#FBFBFB] border border-gray-100 p-4 rounded-2xl text-sm outline-none">
