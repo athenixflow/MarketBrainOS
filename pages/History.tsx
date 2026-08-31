@@ -3,12 +3,20 @@ import { Link } from 'react-router-dom';
 import AnimatedSection from '../components/AnimatedSection';
 import { PageHeader, Card, EmptyState, LoadingState } from '../components/UI';
 import { useAuth } from '../context/AuthContext';
-import { getAnalysesForScope, deleteGenericAnalysis, ToolAnalysisRecord } from '../services/persistenceService';
+import { getAnalysesForScope, deleteAnalysisRecord, ToolAnalysisRecord } from '../services/persistenceService';
 import { useScope } from '../context/ScopeContext';
 import { getToolMeta } from '../config/toolConfigs';
 import { getScoreBand } from '../services/scoreBands';
 import { downloadAsCSV, toolResultToCSV, printToolResultPDF } from '../services/exportService';
 import { ResultItemList } from '../components/ResultSections';
+
+// The bespoke tools are not in TOOL_CONFIG_LIST, so getToolMeta cannot resolve their route.
+const BESPOKE_SLUG: Record<string, string> = {
+  angleminer_results: 'angle-miner',
+  testlab_results: 'test-lab',
+  conversion_doctor_results: 'conversion-doctor',
+  workflow_runs: 'workflow',
+};
 
 const History: React.FC = () => {
   const { user } = useAuth();
@@ -51,9 +59,11 @@ const History: React.FC = () => {
     });
   }, [records, search, toolFilter]);
 
-  const handleDelete = async (id: string) => {
-    await deleteGenericAnalysis(id);
-    setRecords((prev) => prev.filter((r) => r.id !== id));
+  // Routed by record source: bespoke rows live in their own collections, so deleting them via the
+  // generic deleter would target the wrong collection and silently do nothing.
+  const handleDelete = async (rec: ToolAnalysisRecord) => {
+    await deleteAnalysisRecord(rec);
+    setRecords((prev) => prev.filter((r) => r.id !== rec.id));
   };
 
   return (
@@ -106,6 +116,7 @@ const History: React.FC = () => {
             {filtered.map((rec) => {
               const meta = getToolMeta(rec.module);
               const label = meta?.label || rec.module;
+              const slug = meta?.slug || (rec.source ? BESPOKE_SLUG[rec.source] : undefined);
               const isOpen = expandedId === rec.id;
               const score = typeof rec.result?.score === 'number' ? rec.result.score : undefined;
               return (
@@ -135,8 +146,8 @@ const History: React.FC = () => {
                     <button onClick={() => setExpandedId(isOpen ? '' : rec.id)} className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">
                       {isOpen ? 'Hide' : 'View'}
                     </button>
-                    {meta?.slug && (
-                      <Link to={`/${meta.slug}`} className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">Reopen Tool</Link>
+                    {slug && (
+                      <Link to={`/${slug}`} className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">Reopen Tool</Link>
                     )}
                     {rec.result && (
                       <>
@@ -154,7 +165,7 @@ const History: React.FC = () => {
                         </button>
                       </>
                     )}
-                    <button onClick={() => handleDelete(rec.id)} className="text-[10px] font-bold text-gray-400 hover:text-[#FF0000] uppercase tracking-widest transition-colors">Delete</button>
+                    <button onClick={() => handleDelete(rec)} className="text-[10px] font-bold text-gray-400 hover:text-[#FF0000] uppercase tracking-widest transition-colors">Delete</button>
                   </div>
 
                   {isOpen && (

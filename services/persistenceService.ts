@@ -496,6 +496,109 @@ export const deleteWorkflowRun = async (id: string) => {
   await deleteDoc(doc(db, 'workflow_runs', id));
 };
 
+// --- Bespoke tools in the unified history ------------------------------------------------------
+// The four bespoke tools each save to their own collection. Nothing ever read them back, so those
+// runs disappeared the moment the user left the page, while History promised "every analysis you run
+// is saved here". These readers project each collection into the ToolAnalysisRecord shape History
+// already renders, so no UI rewrite is needed.
+//
+// `source` records which collection a row came from so Delete can be routed correctly - without it
+// History would call deleteGenericAnalysis and target the wrong collection.
+
+const bespokeRecord = (
+  id: string, source: BespokeSource, module: string, timestamp: string,
+  inputs: Record<string, string>, result: any,
+): ToolAnalysisRecord => ({ id, source, module, timestamp, inputs, result });
+
+const readOwn = async (col: string, userId: string) => {
+  const snapshot = await getDocs(query(collection(db, col), where('user_id', '==', userId)));
+  return snapshot.docs;
+};
+
+/** Reads the four bespoke collections and maps them into the generic history record shape. */
+export const getBespokeAnalyses = async (userId: string): Promise<ToolAnalysisRecord[]> => {
+  if (!isFirebaseInitialized) return [];
+  const out: ToolAnalysisRecord[] = [];
+
+  const settle = await Promise.allSettled([
+    readOwn('angleminer_results', userId),
+    readOwn('testlab_results', userId),
+    readOwn('conversion_doctor_results', userId),
+    readOwn('workflow_runs', userId),
+  ]);
+  // One failing collection must not blank the whole history.
+  settle.forEach((r, i) => { if (r.status === 'rejected') console.error(`history: bespoke read ${i} failed`, r.reason); });
+  const [angle, testlab, doctor, workflow] = settle.map(r => (r.status === 'fulfilled' ? r.value : []));
+
+  angle.forEach(d => {
+    const v: any = d.data();
+    const res = v.angles_output || {};
+    const angles = res.angles || [];
+    const hooks = res.hooks || [];
+    out.push(bespokeRecord(d.id, 'angleminer_results', 'AngleMiner X', v.timestamp,
+      { Industry: v.industry || '', Audience: v.target_audience || '' },
+      {
+        summary: `${angles.length} marketing angle${angles.length === 1 ? '' : 's'}${hooks.length ? ` and ${hooks.length} platform hooks` : ''}.`,
+        sections: [
+          ...(angles.length ? [{ title: 'Angles', items: angles.map((a: any) => `${a.title}: "${a.improved || a.hook}"`) }] : []),
+          ...(hooks.length ? [{ title: 'Hooks', items: hooks.map((h: any) => `[${[h.channel, h.platform].filter(Boolean).join(' · ') || 'General'}] "${h.short}"`) }] : []),
+        ],
+      }));
+  });
+
+  testlab.forEach(d => {
+    const v: any = d.data();
+    const res = v.results || {};
+    const variants = res.variants || [];
+    const winner = variants.find((x: any) => x.label === res.winnerLabel);
+    out.push(bespokeRecord(d.id, 'testlab_results', 'TestLab Pro', v.timestamp,
+      { Comparison: v.comparison_type || '', Winner: v.winner || '' },
+      {
+        score: winner?.score,
+        verdict: v.winner ? `${v.winner} wins` : undefined,
+        summary: res.explanation || '',
+        sections: variants.length ? [{ title: 'Variation scores', items: variants.map((x: any) => `${x.label} (${x.score}/100): "${x.text}"`) }] : [],
+      }));
+  });
+
+  doctor.forEach(d => {
+    const v: any = d.data();
+    const res = v.audit_output || {};
+    const issues = res.issues || [];
+    const fixes = res.fixes || [];
+    out.push(bespokeRecord(d.id, 'conversion_doctor_results', 'Conversion Doctor', v.timestamp,
+      {}, {
+        score: v.conversion_score ?? res.score,
+        summary: res.summary || '',
+        sections: [
+          ...(issues.length ? [{ title: 'Conversion blockers', items: issues.map((x: any) => x.blocker || x) }] : []),
+          ...(fixes.length ? [{ title: 'Recommended fixes', items: fixes.map((x: any) => x.fix || x) }] : []),
+        ],
+      }));
+  });
+
+  workflow.forEach(d => {
+    const v: any = d.data();
+    const f = v.final_output || {};
+    const assets = [f.headline && `Headline: "${f.headline}"`, f.cta && `CTA: "${f.cta}"`, f.offer && `Offer: "${f.offer}"`].filter(Boolean);
+    out.push(bespokeRecord(d.id, 'workflow_runs', 'Workflow Pipeline', v.timestamp,
+      { 'Selected angle': v.selected_angle || '' },
+      {
+        summary: v.selected_angle ? `Built from the angle: "${v.selected_angle}"` : 'Workflow run.',
+        sections: assets.length ? [{ title: 'Final assets', items: assets }] : [],
+      }));
+  });
+
+  return out;
+};
+
+/** Routes deletion to the collection a history row actually came from. */
+export const deleteAnalysisRecord = async (rec: ToolAnalysisRecord): Promise<void> => {
+  if (!isFirebaseInitialized) return;
+  if (!rec.source) return deleteGenericAnalysis(rec.id);
+  await deleteDoc(doc(db, rec.source, rec.id));
+};
+
 // Generic persistence for the PRD §14–22 analysis tools.
 // Stores under 'tool_analysis_results' keyed by module for a unified history view.
 // Phase 6: derive the ownership stamp from the active scope. 'personal' (the V1 default)
@@ -544,12 +647,18 @@ export const deleteGenericAnalysis = async (id: string) => {
   await deleteDoc(doc(db, 'tool_analysis_results', id));
 };
 
+/** Collections the four bespoke tools save to, outside the generic `tool_analysis_results`. */
+export type BespokeSource =
+  | 'angleminer_results' | 'testlab_results' | 'conversion_doctor_results' | 'workflow_runs';
+
 export interface ToolAnalysisRecord {
   id: string;
   module: string;
   inputs: Record<string, string>;
   result: any;
   timestamp: string;
+  /** Absent for generic records; set for bespoke ones so Delete targets the right collection. */
+  source?: BespokeSource;
 }
 
 // Reads a user's saved generic-tool analyses for the connected-ecosystem context picker.
@@ -575,7 +684,18 @@ export const getUserToolAnalyses = async (userId: string): Promise<ToolAnalysisR
 // reader assumes membership has already been established by ScopeContext.
 export const getAnalysesForScope = async (userId: string, scope: Scope): Promise<ToolAnalysisRecord[]> => {
   if (!isFirebaseInitialized) return [];
-  if (scope.level === 'personal') return getUserToolAnalyses(userId);
+  if (scope.level === 'personal') {
+    // Personal scope also surfaces the four bespoke tools, which write to their own collections.
+    // Only here: those documents carry no workspace/client/enterprise or visibility fields, so they
+    // cannot be filtered for shared scopes. getUserToolAnalyses is deliberately left alone - the
+    // ToolPage context picker calls it directly and expects generic records only.
+    const [generic, bespoke] = await Promise.all([
+      getUserToolAnalyses(userId),
+      getBespokeAnalyses(userId),
+    ]);
+    return [...generic, ...bespoke]
+      .sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
+  }
   try {
     const col = collection(db, 'tool_analysis_results');
     let q;
