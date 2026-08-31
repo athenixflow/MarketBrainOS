@@ -125,7 +125,7 @@ export const Input: React.FC<{
       <textarea
         name={name}
         disabled={disabled}
-        className={`bg-[#FBFBFB] border ${error ? 'border-[#FF0000]/20' : 'border-gray-100'} p-8 rounded-[32px] focus:ring-4 focus:ring-[#FF0000]/5 focus:border-[#FF0000]/20 outline-none min-h-[180px] transition-all text-lg text-[#0B0B0B] placeholder:text-gray-400 leading-relaxed disabled:opacity-50`}
+        className={`w-full min-w-0 bg-[#FBFBFB] border ${error ? 'border-[#FF0000]/20' : 'border-gray-100'} p-8 rounded-[32px] focus:ring-4 focus:ring-[#FF0000]/5 focus:border-[#FF0000]/20 outline-none min-h-[180px] transition-all text-lg text-[#0B0B0B] placeholder:text-gray-400 leading-relaxed disabled:opacity-50`}
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e)}
@@ -136,7 +136,7 @@ export const Input: React.FC<{
         type={type}
         autoComplete={autoComplete}
         disabled={disabled}
-        className={`bg-[#FBFBFB] border ${error ? 'border-[#FF0000]/20' : 'border-gray-100'} p-8 rounded-[32px] focus:ring-4 focus:ring-[#FF0000]/5 focus:border-[#FF0000]/20 outline-none transition-all text-lg text-[#0B0B0B] placeholder:text-gray-400 disabled:opacity-50`}
+        className={`w-full min-w-0 bg-[#FBFBFB] border ${error ? 'border-[#FF0000]/20' : 'border-gray-100'} p-8 rounded-[32px] focus:ring-4 focus:ring-[#FF0000]/5 focus:border-[#FF0000]/20 outline-none transition-all text-lg text-[#0B0B0B] placeholder:text-gray-400 disabled:opacity-50`}
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e)}

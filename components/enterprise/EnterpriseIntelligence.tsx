@@ -43,7 +43,7 @@ const EnterpriseIntelligence: React.FC<{ latest: EnterpriseBriefing | null; fore
       )}
       {forecasts.length > 0 && (
         <Card title="Forecasting">
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {forecasts.map(f => (
               <div key={f.id} className="p-4 bg-gray-50 rounded-xl border border-gray-100">
                 <div className="flex items-center justify-between">

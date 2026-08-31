@@ -68,7 +68,7 @@ const EnterpriseMembers: React.FC<{
             <div><p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Unallocated</p><p className="text-lg font-black text-[#0B0B0B] mt-1">{remaining.toLocaleString()}</p></div>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input label="Email" placeholder="exec@company.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={!!editingUid} />
             {!editingUid && <Input label="Temporary password" type="password" autoComplete="new-password" placeholder="They can change it after first login" value={password} onChange={(e) => setPassword(e.target.value)} />}
             <div>

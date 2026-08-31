@@ -56,7 +56,7 @@ const ClientDirectory: React.FC<{
 
       {showForm && canManage && (
         <Card title="Add a client">
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input label="Client name" placeholder="Acme Inc." value={form.name} onChange={(e) => set('name', e.target.value)} />
             <Input label="Industry" placeholder="SaaS, Retail…" value={form.industry} onChange={(e) => set('industry', e.target.value)} />
             <Input label="Website" placeholder="acme.com" value={form.website} onChange={(e) => set('website', e.target.value)} />
@@ -72,7 +72,7 @@ const ClientDirectory: React.FC<{
       {clients.length === 0 ? (
         <EmptyState message="No clients yet." submessage={canManage ? 'Add your first client to start isolating client intelligence.' : 'You have not been assigned to any clients yet.'} />
       ) : (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map(c => (
             <button key={c.id} onClick={() => onOpenClient(c)} className="text-left p-6 bg-white rounded-2xl border border-gray-100 hover:border-gray-200 hover:shadow-lg transition-all">
               <div className="flex items-start justify-between gap-3 mb-3">

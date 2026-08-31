@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Paint the brand background on the document itself. Nothing set a background on html/body, so any
+   horizontal overflow exposed the browser's default white canvas beside the dark app shell - which is
+   exactly how a grid track blowout showed up as "the black panel stops 74% across the screen".
+   overflow-x: clip is the safety net: it contains a stray wide child without creating a scroll
+   container (unlike overflow-x: hidden, it does not break position: sticky). */
+html,
+body {
+  background-color: #0b0b0b;
+  overflow-x: clip;
+}
+
 /* Accessibility: tailwindcss-animate does not honour prefers-reduced-motion on its own, and the app
    uses its enter utilities (animate-in / fade-in / slide-in-from-*) on page shells, modals, results
    and empty states. Collapse all of it to an instant, fully-visible final state for users who ask

@@ -135,7 +135,7 @@ const ClientWorkspace: React.FC<{
             </div>
           </Card>
           <Card title="Client information">
-            <div className="grid md:grid-cols-2 gap-3 text-sm">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
               <p><span className="text-gray-400">Website:</span> {client.website || '—'}</p>
               <p><span className="text-gray-400">Contact:</span> {client.primary_contact || '—'}</p>
               <p><span className="text-gray-400">Email:</span> {client.email || '—'}</p>

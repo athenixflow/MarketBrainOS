@@ -43,9 +43,11 @@ export const AnalysisPreview: React.FC<{
         {filled.length === 0 ? (
           <p className="text-xs text-gray-400 font-medium">Fill in the inputs to preview your analysis.</p>
         ) : filled.slice(0, 5).map((i) => (
-          <div key={i.label} className="flex justify-between gap-4 text-xs">
-            <span className="font-bold text-gray-500 uppercase tracking-widest shrink-0">{i.label}</span>
-            <span className="text-gray-600 font-medium truncate text-right">{i.value}</span>
+          // Stacks on mobile so a long label cannot force the row (and the page) wider than the
+          // viewport. `shrink-0` here previously made the label contribute its full max-content width.
+          <div key={i.label} className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-4 text-xs">
+            <span className="font-bold text-gray-500 uppercase tracking-widest min-w-0">{i.label}</span>
+            <span className="text-gray-600 font-medium truncate sm:text-right min-w-0">{i.value}</span>
           </div>
         ))}
       </div>

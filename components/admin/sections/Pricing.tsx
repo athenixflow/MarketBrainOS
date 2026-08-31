@@ -85,7 +85,7 @@ const PricingAdmin: React.FC = () => {
         </div>
       </Card>
 
-      <div className="grid lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card title="Expansion pricing ($/mo each)">
           <div className="space-y-3">
             {([['member', 'Extra member seat'], ['workspace', 'Extra workspace'], ['agency', 'Extra agency']] as const).map(([k, label]) => (

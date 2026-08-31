@@ -259,7 +259,10 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
 
       <ExpectedOutcome outcomes={guide.outcomes} estimatedTime={guide.estimatedTime} analyzes={guide.description} />
 
-      <div className="grid lg:grid-cols-2 gap-10">
+      {/* grid-cols-1 is REQUIRED at the base breakpoint: without it the implicit track is `auto`
+          (minmax(min-content, max-content)), which is not clamped to the container and lets a long
+          child blow the page wider than the viewport. grid-cols-1 emits minmax(0,1fr) (minimum 0). */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
         {/* INPUT PANEL */}
         <AnimatedSection index={0}>
           <Card>
