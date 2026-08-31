@@ -70,6 +70,21 @@ service cloud.firestore {
         || (d.visibility_type == 'enterprise' && isEnterpriseMember(d.enterprise_id));
     }
 
+    // May the requester CREATE a doc carrying this ownership stamp?
+    // Creation previously validated only creator_user_id, so any signed-in user could write a doc
+    // stamped `visibility_type: 'team'` with an arbitrary workspace_id (likewise agency/enterprise).
+    // canSeeStamped then granted every member of that container read access, so an outsider who knew
+    // a container id could plant fabricated analyses/reports inside another tenant's shared library
+    // and they would read as internal intelligence. Ownership must be earned, not asserted.
+    // Deliberately mirrors canSeeStamped so write access is never broader OR narrower than read.
+    // Cloud Functions use the Admin SDK and bypass rules, so server-side stamping is unaffected.
+    function canStampAs(d) {
+      return d.visibility_type == 'private'
+        || (d.visibility_type == 'team' && isWorkspaceMember(d.workspace_id))
+        || (d.visibility_type == 'client' && isAgencyMember(d.agency_id))
+        || (d.visibility_type == 'enterprise' && isEnterpriseMember(d.enterprise_id));
+    }
+
     // ---------- users ----------
     // First-login creation is client-driven (ensureUserProfile). Lock the economy fields:
     // a new self-created profile must be free/user with the starter token grant.
@@ -101,7 +116,8 @@ service cloud.firestore {
     // ---------- analyses (unified history) ----------
     match /tool_analysis_results/{id} {
       allow create: if isSignedIn()
-        && request.resource.data.creator_user_id == request.auth.uid;
+        && request.resource.data.creator_user_id == request.auth.uid
+        && canStampAs(request.resource.data);
       // Platform admins may read all analyses (admin Analysis/Report management); everyone else
       // is limited to creator-owned + scope-visible records.
       allow read:   if isSignedIn() && (canSeeStamped(resource.data) || isPlatformAdmin());
@@ -114,7 +130,8 @@ service cloud.firestore {
     // ---------- reports (unified reporting) ----------
     match /reports/{id} {
       allow create: if isSignedIn()
-        && request.resource.data.creator_user_id == request.auth.uid;
+        && request.resource.data.creator_user_id == request.auth.uid
+        && canStampAs(request.resource.data);
       // Platform admins may read all reports (admin Report Management).
       allow read:   if isSignedIn() && (canSeeStamped(resource.data) || isPlatformAdmin());
       allow update, delete: if isSignedIn()
