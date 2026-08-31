@@ -52,7 +52,7 @@ const Users: React.FC = () => {
       </select>
     ) },
     { key: 'role', header: 'Role', render: u => <span className={`text-[10px] font-bold uppercase tracking-widest ${u.role !== 'user' ? 'text-blue-600' : 'text-gray-400'}`}>{u.role === 'user' ? 'User' : u.role.replace('_', ' ')}</span> },
-    { key: 'tokens', header: 'Tokens', render: u => <span className="text-sm font-bold text-[#0B0B0B]">{u.tokens}</span> },
+    { key: 'tokens', header: 'Tokens', align: 'right', render: u => <span className="text-sm font-bold text-[#0B0B0B]">{u.tokens}</span> },
     { key: 'status', header: 'Status', render: u => <Pill tone={u.is_suspended ? 'red' : 'green'}>{u.is_suspended ? 'Suspended' : 'Active'}</Pill> },
     { key: 'actions', header: 'Actions', align: 'right', render: u => (
       <div className="flex items-center justify-end gap-2">

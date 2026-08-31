@@ -9,7 +9,7 @@ export const KpiCard: React.FC<{ label: string; value: React.ReactNode; hint?: s
   ({ label, value, hint, accent, tone = 'default' }) => (
     <Card accent={accent}>
       <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-3">{label}</p>
-      <p className={`text-3xl font-black leading-none ${tone === 'danger' ? 'text-red-500' : tone === 'good' ? 'text-green-600' : 'text-[#0B0B0B]'}`}>{value}</p>
+      <p className={`text-2xl sm:text-3xl font-black leading-none tabular-nums ${tone === 'danger' ? 'text-red-500' : tone === 'good' ? 'text-green-600' : 'text-[#0B0B0B]'}`}>{value}</p>
       {hint && <p className="text-[11px] font-medium text-gray-400 mt-3">{hint}</p>}
     </Card>
   );
@@ -87,7 +87,8 @@ export function AdminTable<T extends { id?: string }>({
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, pageCount - 1);
   const slice = filtered.slice(safePage * pageSize, safePage * pageSize + pageSize);
-  const alignCls = (a?: string) => (a === 'right' ? 'text-right' : a === 'center' ? 'text-center' : 'text-left');
+  // tabular-nums on right-aligned columns so digits share a column width and actually line up.
+  const alignCls = (a?: string) => (a === 'right' ? 'text-right tabular-nums' : a === 'center' ? 'text-center' : 'text-left');
 
   return (
     <div>
@@ -108,12 +109,15 @@ export function AdminTable<T extends { id?: string }>({
         {filtered.length === 0 ? (
           <div className="p-12 text-center text-gray-400 font-medium text-sm">{empty}</div>
         ) : (
+          // min-w is what actually makes the scroller work: with `w-full` alone the table shrank to
+          // its container instead of overflowing, so columns collapsed to 1-2 characters and the
+          // horizontal scrollbar never appeared. Cell padding is responsive for the same reason.
           <div className="overflow-x-auto">
-            <table className="w-full text-left">
+            <table className="w-full min-w-[720px] text-left">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
                   {columns.map(c => (
-                    <th key={c.key} className={`px-6 py-5 text-[10px] uppercase font-bold text-gray-400 ${alignCls(c.align)}`}>{c.header}</th>
+                    <th key={c.key} className={`px-4 py-4 sm:px-6 sm:py-5 text-[10px] uppercase font-bold text-gray-400 whitespace-nowrap ${alignCls(c.align)}`}>{c.header}</th>
                   ))}
                 </tr>
               </thead>
@@ -121,7 +125,7 @@ export function AdminTable<T extends { id?: string }>({
                 {slice.map((row, i) => (
                   <tr key={row.id || i} className="hover:bg-gray-50/50 transition-colors">
                     {columns.map(c => (
-                      <td key={c.key} className={`px-6 py-5 ${alignCls(c.align)} ${c.className || ''}`}>
+                      <td key={c.key} className={`px-4 py-4 sm:px-6 sm:py-5 ${alignCls(c.align)} ${c.className || ''}`}>
                         {c.render ? c.render(row) : (row as any)[c.key]}
                       </td>
                     ))}

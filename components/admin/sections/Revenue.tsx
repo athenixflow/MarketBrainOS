@@ -52,8 +52,8 @@ const Revenue: React.FC = () => {
   const columns: Column<PaymentRecord>[] = [
     { key: 'date', header: 'Date', render: p => <span className="text-xs text-gray-600">{fmtDate(p.created_at)}</span> },
     { key: 'user', header: 'User', render: p => <span className="text-xs font-bold text-[#0B0B0B] truncate block max-w-[160px]">{p.uid}</span> },
-    { key: 'amount', header: 'Amount', render: p => <span className="text-sm font-black text-green-600">{money(Number(p.amount_paid) || 0)}</span> },
-    { key: 'tokens', header: 'Tokens', render: p => <span className="text-xs font-bold text-gray-600">+{p.tokens_credited}</span> },
+    { key: 'amount', header: 'Amount', align: 'right', render: p => <span className="text-sm font-black text-green-600">{money(Number(p.amount_paid) || 0)}</span> },
+    { key: 'tokens', header: 'Tokens', align: 'right', render: p => <span className="text-xs font-bold text-gray-600">+{p.tokens_credited}</span> },
     { key: 'status', header: 'Status', align: 'right', render: p => <Pill tone={p.status === 'failed' ? 'red' : 'green'}>{p.status || 'completed'}</Pill> },
   ];
 

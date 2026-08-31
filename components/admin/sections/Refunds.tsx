@@ -33,7 +33,7 @@ const Refunds: React.FC = () => {
   const columns: Column<PaymentRecord>[] = [
     { key: 'date', header: 'Date', render: p => <span className="text-xs text-gray-600">{fmtDate(p.created_at)}</span> },
     { key: 'user', header: 'User', render: p => <span className="text-xs font-bold text-[#0B0B0B] truncate block max-w-[160px]">{p.uid}</span> },
-    { key: 'amount', header: 'Amount', render: p => <span className="text-sm font-black text-red-500">{money(Math.abs(Number(p.amount_paid) || 0))}</span> },
+    { key: 'amount', header: 'Amount', align: 'right', render: p => <span className="text-sm font-black text-red-500">{money(Math.abs(Number(p.amount_paid) || 0))}</span> },
     { key: 'ref', header: 'Reference', render: p => <span className="text-xs font-mono text-gray-500 truncate block max-w-[160px]">{p.payment_reference || '—'}</span> },
     { key: 'status', header: 'Status', align: 'right', render: p => <Pill tone="red">{p.status || 'refunded'}</Pill> },
   ];

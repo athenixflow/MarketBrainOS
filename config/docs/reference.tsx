@@ -10,7 +10,7 @@ const tokenCosts: DocArticle = {
   keywords: ['cost', 'token', 'price', 'table', 'reference'],
   blocks: [
     { type: 'heading', id: 'table', text: 'Cost per run' },
-    { type: 'table', headers: ['Tool', 'Suite', 'Tokens'], rows: [
+    { type: 'table', headers: ['Tool', 'Suite', 'Tokens'], align: ['left', 'left', 'right'], rows: [
       ['Angle Miner', 'Marketing Intelligence', '3'],
       ['Messaging Analyzer', 'Marketing Intelligence', '3'],
       ['Audience Intelligence', 'Marketing Intelligence', '4'],

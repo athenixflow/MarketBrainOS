@@ -7,7 +7,7 @@ const BAND_COLOR: Record<string, string> = {
   critical: 'text-red-600', weak: 'text-orange-500', stable: 'text-yellow-500', strong: 'text-blue-500', excellent: 'text-green-600',
 };
 const Stat: React.FC<{ label: string; value: string | number }> = ({ label, value }) => (
-  <Card><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">{label}</p><p className="text-3xl font-black text-[#0B0B0B]">{value}</p></Card>
+  <Card><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">{label}</p><p className="text-2xl sm:text-3xl font-black text-[#0B0B0B] tabular-nums">{value}</p></Card>
 );
 
 const EnterpriseDashboard: React.FC<{

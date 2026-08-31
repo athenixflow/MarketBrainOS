@@ -102,13 +102,15 @@ const Block: React.FC<{ block: DocBlock }> = ({ block }) => {
 
     case 'table':
       return (
+        // min-w makes the scroller real (w-full alone let the table squash instead of overflowing).
+        // Per-column alignment so money/token columns can be right-aligned and actually line up.
         <div className="mb-8 overflow-x-auto rounded-2xl border border-gray-100">
-          <table className="w-full text-left border-collapse">
-            {block.caption && <caption className="text-left text-[10px] font-bold uppercase tracking-widest text-gray-400 px-5 pt-4 pb-2">{block.caption}</caption>}
+          <table className="w-full min-w-[520px] text-left border-collapse">
+            {block.caption && <caption className="text-left text-[10px] font-bold uppercase tracking-widest text-gray-400 px-4 sm:px-5 pt-4 pb-2">{block.caption}</caption>}
             <thead>
               <tr className="bg-gray-50">
                 {block.headers.map((h, i) => (
-                  <th key={i} className="text-[10px] font-bold uppercase tracking-widest text-gray-500 px-5 py-3 border-b border-gray-100">{h}</th>
+                  <th key={i} className={`text-[10px] font-bold uppercase tracking-widest text-gray-500 px-4 sm:px-5 py-3 border-b border-gray-100 whitespace-nowrap ${block.align?.[i] === 'right' ? 'text-right' : 'text-left'}`}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -116,7 +118,7 @@ const Block: React.FC<{ block: DocBlock }> = ({ block }) => {
               {block.rows.map((row, ri) => (
                 <tr key={ri} className="odd:bg-white even:bg-gray-50/40">
                   {row.map((cell, ci) => (
-                    <td key={ci} className={`px-5 py-3 text-[14px] leading-relaxed align-top border-b border-gray-50 ${ci === 0 ? 'font-semibold text-[#0B0B0B]' : 'text-gray-600'}`}>{renderInline(cell)}</td>
+                    <td key={ci} className={`px-4 sm:px-5 py-3 text-[14px] leading-relaxed align-top border-b border-gray-50 ${block.align?.[ci] === 'right' ? 'text-right tabular-nums' : ''} ${ci === 0 ? 'font-semibold text-[#0B0B0B]' : 'text-gray-600'}`}>{renderInline(cell)}</td>
                   ))}
                 </tr>
               ))}

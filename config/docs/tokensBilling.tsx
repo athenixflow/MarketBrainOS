@@ -37,7 +37,7 @@ const howTokens: DocArticle = {
     { type: 'paragraph', text: 'On paid plans, monthly tokens refresh to your plan\'s allowance at the start of each billing cycle (see your renewal date in the [Billing Center](/documentation/billing/billing-center)). Purchased tokens are untouched by resets. The Free plan does not refresh: its allowance is granted once when you sign up, and topping up or upgrading is how you add more.' },
     { type: 'heading', id: 'costs', text: 'What each tool costs' },
     { type: 'paragraph', text: 'Costs are per run and range from 3 to 6 tokens. If a run fails, the exact tokens are automatically refunded.' },
-    { type: 'table', headers: ['Tool', 'Tokens'], rows: [
+    { type: 'table', headers: ['Tool', 'Tokens'], align: ['left', 'right'], rows: [
       ['Angle Miner (generate)', '3'],
       ['Messaging Analyzer', '3'],
       ['Audience Intelligence', '4'],
@@ -66,7 +66,7 @@ const plans: DocArticle = {
   blocks: [
     { type: 'heading', id: 'ladder', text: 'The plan ladder' },
     { type: 'paragraph', text: 'Five plans scale from a solo free account to a multi-agency enterprise. Paid plans include a monthly token allowance (Free is a one-time allowance); higher plans unlock collaboration layers and larger capacity.' },
-    { type: 'table', headers: ['Plan', 'Price / mo', 'Included tokens', 'Capacity'], rows: PLAN_ORDER.map((t) => [
+    { type: 'table', headers: ['Plan', 'Price / mo', 'Included tokens', 'Capacity'], align: ['left', 'right', 'right', 'left'], rows: PLAN_ORDER.map((t) => [
       PLAN_META[t].name,
       money(cfg.plans[t].price),
       // Free is granted once at signup; paid plans refill this amount every cycle.
@@ -93,7 +93,7 @@ const tokenStore: DocArticle = {
   blocks: [
     { type: 'heading', id: 'packs', text: 'Top-up packs' },
     { type: 'paragraph', text: 'The [Token Store](/store) sells one-time packs. Purchased tokens **never expire** and stack on top of your monthly allowance.' },
-    { type: 'table', headers: ['Pack', 'Tokens', 'Price'], rows: cfg.tokenPacks.map((p) => [p.label, String(p.tokens), money(p.price)]) },
+    { type: 'table', headers: ['Pack', 'Tokens', 'Price'], align: ['left', 'right', 'right'], rows: cfg.tokenPacks.map((p) => [p.label, String(p.tokens), money(p.price)]) },
     { type: 'heading', id: 'buying', text: 'Buying tokens' },
     { type: 'paragraph', text: 'Open the Token Store, choose a pack, and confirm. The tokens are credited instantly and you get a confirmation plus a notification. You can also reach the store from inside the [Billing Center](/documentation/billing/billing-center).' },
     { type: 'callout', tone: 'warning', title: 'Paid plans only', text: 'Token packs are available on Pro and above. On the Free plan the Buy button is disabled with a prompt to upgrade first.' },
@@ -149,7 +149,7 @@ const expansions: DocArticle = {
   blocks: [
     { type: 'heading', id: 'base', text: 'Base capacity + paid expansions' },
     { type: 'paragraph', text: 'Each plan includes base capacity (members, workspaces, agencies). When you hit a limit, the container owner can buy an expansion from the capacity panel — the effective limit becomes the plan base plus everything purchased.' },
-    { type: 'table', headers: ['Expansion', 'Applies to', 'Price / mo'], rows: [
+    { type: 'table', headers: ['Expansion', 'Applies to', 'Price / mo'], align: ['left', 'left', 'right'], rows: [
       ['Extra member seat', 'Team, Agency, or Enterprise', money(cfg.expansion.member)],
       ['Extra workspace (client)', 'Agency', money(cfg.expansion.workspace)],
       ['Extra agency', 'Enterprise', money(cfg.expansion.agency)],

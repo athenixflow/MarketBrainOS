@@ -308,14 +308,14 @@ const Settings: React.FC = () => {
                   {payments.map(p => {
                     const date = p.created_at ? new Date(p.created_at.toMillis ? p.created_at.toMillis() : p.created_at) : null;
                     return (
-                      <div key={p.id} className="flex items-center justify-between p-5 rounded-2xl bg-gray-50 border border-gray-100">
-                        <div>
-                          <p className="text-sm font-bold text-[#0B0B0B]">Token Top-Up</p>
-                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">{date ? date.toLocaleDateString() : ''} • Ref {p.payment_reference || 'N/A'}</p>
+                      <div key={p.id} className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-gray-50 border border-gray-100">
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-[#0B0B0B] truncate">Token Top-Up</p>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1 truncate">{date ? date.toLocaleDateString() : ''} • Ref {p.payment_reference || 'N/A'}</p>
                         </div>
-                        <div className="text-right">
-                          <p className="text-sm font-black text-green-600">+{p.tokens_credited} Tokens</p>
-                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">${p.amount_paid}.00</p>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-black text-green-600 tabular-nums">+{p.tokens_credited} Tokens</p>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums">${p.amount_paid}.00</p>
                         </div>
                       </div>
                     );

@@ -8,7 +8,7 @@ import { getToolMeta } from '../../config/toolConfigs';
 const Stat: React.FC<{ label: string; value: string | number }> = ({ label, value }) => (
   <Card>
     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">{label}</p>
-    <p className="text-3xl font-black text-[#0B0B0B]">{value}</p>
+    <p className="text-2xl sm:text-3xl font-black text-[#0B0B0B] tabular-nums">{value}</p>
   </Card>
 );
 

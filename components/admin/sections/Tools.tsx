@@ -33,9 +33,9 @@ const Tools: React.FC = () => {
 
   const columns: Column<ToolRow>[] = [
     { key: 'module', header: 'Tool', render: r => <span className="text-sm font-bold text-[#0B0B0B]">{r.module}</span> },
-    { key: 'runs', header: 'Runs', render: r => <span className="text-sm font-bold text-[#0B0B0B]">{r.runs}</span> },
+    { key: 'runs', header: 'Runs', align: 'right', render: r => <span className="text-sm font-bold text-[#0B0B0B]">{r.runs}</span> },
     { key: 'rate', header: 'Success', render: r => { const rate = r.runs ? Math.round((r.success / r.runs) * 100) : 0; return <Pill tone={rate >= 90 ? 'green' : rate >= 70 ? 'yellow' : 'red'}>{rate}%</Pill>; } },
-    { key: 'failed', header: 'Failed', render: r => <span className={`text-xs font-bold ${r.failed ? 'text-red-500' : 'text-gray-400'}`}>{r.failed}</span> },
+    { key: 'failed', header: 'Failed', align: 'right', render: r => <span className={`text-xs font-bold ${r.failed ? 'text-red-500' : 'text-gray-400'}`}>{r.failed}</span> },
     { key: 'tokens', header: 'Tokens', align: 'right', render: r => <span className="text-xs font-bold text-gray-600">{r.tokens}</span> },
   ];
 

@@ -12,7 +12,8 @@ export type DocBlock =
   | { type: 'list'; ordered?: boolean; items: string[] }
   | { type: 'steps'; items: { title: string; text?: string }[] }
   | { type: 'callout'; tone?: DocBlockTone; title?: string; text: string }
-  | { type: 'table'; headers: string[]; rows: string[][]; caption?: string }
+  // `align` is per-column and optional; use 'right' for money/token columns so digits line up.
+  | { type: 'table'; headers: string[]; rows: string[][]; caption?: string; align?: ('left' | 'right')[] }
   | { type: 'keyValue'; pairs: { label: string; value: string }[] }
   | { type: 'code'; text: string };
 

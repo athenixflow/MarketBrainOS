@@ -87,12 +87,15 @@ const Pricing: React.FC = () => {
             const popular = tier === 'pro';
             const exp = expansionLine(tier);
             return (
-              <div key={tier} className={`p-7 rounded-3xl flex flex-col ${popular ? 'border-2 border-[#FF0000]/40 bg-[#111] shadow-2xl shadow-red-900/10' : 'border border-gray-800 bg-[#0B0B0B]'}`}>
-                {popular && <div className="self-start bg-[#FF0000] text-white text-[9px] font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-3">Most popular</div>}
+              <div key={tier} className={`relative p-7 rounded-2xl flex flex-col ${popular ? 'border-2 border-[#FF0000]/40 bg-[#111] shadow-2xl shadow-red-900/10' : 'border border-gray-800 bg-[#0B0B0B]'}`}>
+                {/* absolute so the badge does not push this card's content down relative to its row siblings */}
+                {popular && <div className="absolute top-0 right-4 -translate-y-1/2 bg-[#FF0000] text-white text-[9px] font-bold uppercase tracking-widest px-3 py-1 rounded-full">Most popular</div>}
                 <h3 className="text-xl font-bold text-white">{meta.name}</h3>
                 <p className="text-gray-500 text-xs mb-5 mt-1">{meta.tagline}</p>
                 <div className="text-3xl font-black text-white mb-1">${plan.price}<span className="text-base font-medium text-gray-600">/mo</span></div>
-                <p className="text-[#FF0000] text-xs font-bold uppercase tracking-widest mb-5">{plan.monthlyTokens.toLocaleString()} tokens / mo</p>
+                <p className="text-[#FF0000] text-xs font-bold uppercase tracking-widest mb-5">
+                  {plan.monthlyTokens.toLocaleString()} tokens {tier === 'free' ? 'one-time' : '/ mo'}
+                </p>
 
                 <ul className="space-y-2.5 mb-5 text-[13px] text-gray-300 flex-grow">
                   {meta.capacity.map((c, i) => (
@@ -119,8 +122,9 @@ const Pricing: React.FC = () => {
 
         {msg && <p className="text-center text-sm text-white font-semibold mt-8">{msg}</p>}
         <p className="text-center text-xs text-gray-600 mt-10 max-w-2xl mx-auto leading-relaxed">
-          Monthly tokens reset each billing cycle; purchased token packs never expire. Tokens are only charged
-          when an analysis completes — failed runs are automatically refunded.
+          On paid plans monthly tokens reset each billing cycle; the Free allowance is one-time. Purchased
+          token packs never expire. Tokens are only charged when an analysis completes, and failed runs are
+          automatically refunded.
         </p>
       </AnimatedSection>
     </PublicLayout>

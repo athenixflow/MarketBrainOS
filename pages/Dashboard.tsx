@@ -27,7 +27,7 @@ const moduleLabel = (m: string): string =>
 const Stat: React.FC<{ label: string; value: React.ReactNode; hint?: string }> = ({ label, value, hint }) => (
   <Card>
     <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-4">{label}</p>
-    <p className="text-4xl font-black text-[#0B0B0B] leading-none">{value}</p>
+    <p className="text-3xl sm:text-4xl font-black text-[#0B0B0B] leading-none tabular-nums">{value}</p>
     {hint && <p className="text-[11px] font-medium text-gray-400 mt-3">{hint}</p>}
   </Card>
 );
@@ -337,7 +337,7 @@ const Dashboard: React.FC = () => {
         </AnimatedSection>
 
         {/* ===================== SUBSCRIPTION + UPSELL ===================== */}
-        <AnimatedSection as="section" index={5} className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <AnimatedSection as="section" index={5} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <SubscriptionPanel />
           {lockedFeature
             ? <LockedFeatureCard title={lockedFeature.title} planLabel={lockedFeature.planLabel} description={lockedFeature.description} />
