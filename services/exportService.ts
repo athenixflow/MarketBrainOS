@@ -233,13 +233,19 @@ export const formatConversionDoctorExport = (result: AuditResult): string => {
   output += "EXECUTIVE SUMMARY\n";
   output += result.summary + "\n\n";
   
+  // Guarded: a missing issues/fixes array previously threw mid-export, so the user got no file at all.
+  const issues = result.issues || [];
+  const fixes = result.fixes || [];
+
   output += "KEY CONVERSION ISSUES\n";
-  result.issues.forEach(i => {
+  output += issues.length === 0 ? "None identified.\n\n" : "";
+  issues.forEach(i => {
     output += `- Issue: ${i.blocker}\n  Impact: ${i.impact}\n\n`;
   });
-  
+
   output += "RECOMMENDED FIXES\n";
-  result.fixes.forEach(f => {
+  output += fixes.length === 0 ? "None identified.\n\n" : "";
+  fixes.forEach(f => {
     output += `- Action: ${f.what}\n  Implementation: ${f.how}\n  Result: ${f.expectedResult}\n\n`;
   });
   

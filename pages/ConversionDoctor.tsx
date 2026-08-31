@@ -455,6 +455,51 @@ const ConversionDoctor: React.FC = () => {
                 </div>
               </Card>
             )}
+
+            {/* Rewrite suggestions: promised by the tool's stated deliverables and declared on
+                AuditResult, but the prompt never asked for them and nothing rendered them. */}
+            {result.rewrites && result.rewrites.length > 0 && (
+              <Card className="mt-12">
+                <div className="flex items-center gap-4 mb-8">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000]" />
+                  <h2 className="text-lg font-bold text-[#0B0B0B] uppercase tracking-widest">Rewrite Suggestions</h2>
+                </div>
+                <div className="space-y-3">
+                  {result.rewrites.map((rw, i) => (
+                    <div key={i} className="p-5 bg-gray-50 rounded-2xl border border-gray-100">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-gray-500 mb-3">{rw.label}</p>
+                      {rw.original && (
+                        <div className="mb-3">
+                          <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Current</span>
+                          <p className="mt-1 text-sm text-gray-500 leading-relaxed line-through decoration-gray-300">"{rw.original}"</p>
+                        </div>
+                      )}
+                      <div>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-[#FF0000]">Rewrite</span>
+                        <p className="mt-1 text-sm text-[#0B0B0B] font-bold leading-relaxed">"{rw.text}"</p>
+                      </div>
+                      <button
+                        onClick={() => copyToClipboard(rw.text)}
+                        className="mt-4 text-[9px] font-bold text-[#FF0000] hover:opacity-60 transition-opacity uppercase tracking-widest border-b border-[#FF0000]/10 pb-1"
+                      >
+                        Copy rewrite
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {/* When the audit produced neither blockers nor fixes, say so rather than leaving the
+                page as a bare score with no explanation of what happened. */}
+            {(result.issues || []).length === 0 && (result.fixes || []).length === 0 && (
+              <Card className="mt-12">
+                <p className="text-sm text-gray-500 font-medium leading-relaxed text-center">
+                  This audit did not surface specific blockers or fixes. That usually means the input was
+                  too short to analyse. Paste the full page copy and rerun for a detailed diagnosis.
+                </p>
+              </Card>
+            )}
           </ResultContainer>
         )}
       </div>

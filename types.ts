@@ -652,7 +652,11 @@ export interface AuditFix {
 }
 
 export interface AuditRewrite {
+  /** Which element was rewritten, e.g. "Headline", "Primary CTA". */
   label: string;
+  /** The current copy, when the model could quote it. Enables a before/after. */
+  original?: string;
+  /** The rewritten copy. */
   text: string;
 }
 

@@ -713,7 +713,8 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
           input.goal ? `Primary conversion goal: ${input.goal}.` : '',
           input.trafficSource ? `Traffic source: ${input.trafficSource}.` : '',
           `Give a 'score' (0-100) and a 1-2 sentence 'summary'. Identify the real conversion blockers (most impactful first) and concrete, specific fixes.`,
-          `Return strict JSON: { score, summary, issues: [{ blocker, impact, severity }], fixes: [{ what, how, expectedResult, priority }] } with 4-7 issues and 4-7 fixes.`,
+          `Also produce 'rewrites': 2-4 ready-to-paste rewrites of the highest-leverage copy elements. Each is { label (which element, e.g. "Headline" or "Primary CTA"), original (the current copy, quoted from the input verbatim; omit if it cannot be identified), text (the rewritten copy) }.`,
+          `Return strict JSON: { score, summary, issues: [{ blocker, impact, severity }], fixes: [{ what, how, expectedResult, priority }], rewrites: [{ label, original, text }] } with 4-7 issues and 4-7 fixes.`,
           `'severity' = Critical|High|Medium|Low; 'impact' = why it costs conversions; 'how' = exactly how to implement it; 'expectedResult' = the likely lift; 'priority' = High|Medium|Low.`,
         ].filter(Boolean).join(' ');
         const result = await model.generateContent({
