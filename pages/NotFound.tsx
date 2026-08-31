@@ -26,7 +26,14 @@ const NotFound: React.FC = () => {
       ];
 
   return (
-    <div className="min-h-[75vh] flex flex-col items-center justify-center text-center px-6 py-20 animate-in fade-in duration-500">
+    // A signed-in user renders inside the shell's container, which already supplies page padding, so
+    // adding our own gave 104px side padding and 160px on top. A signed-out visitor renders full-bleed
+    // (no container at all) and must bring its own.
+    <div
+      className={`min-h-[60vh] flex flex-col items-center justify-center text-center animate-in fade-in duration-500 ${
+        user ? 'py-10' : 'px-6 py-20'
+      }`}
+    >
       {/* Brand mark — only when logged out (the app header/sidebar already brand the signed-in view). */}
       {!user && (
         <Link to="/" className="flex items-center gap-3 mb-14">

@@ -49,7 +49,7 @@ const ScopeSwitcher: React.FC = () => {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-60 bg-white text-[#0B0B0B] rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+        <div className="absolute right-0 mt-2 w-[min(15rem,calc(100vw-2rem))] bg-white text-[#0B0B0B] rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
           <button
             onClick={() => { resetToPersonal(); setOpen(false); }}
             className={`w-full text-left px-5 py-3 text-sm font-bold hover:bg-gray-50 transition-colors ${scope.level === 'personal' ? 'text-[#FF0000]' : ''}`}

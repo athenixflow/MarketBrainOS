@@ -244,8 +244,8 @@ const Header: React.FC<{ onToggleSidebar?: () => void }> = ({ onToggleSidebar })
   }, []);
   
   return (
-    <header className="h-16 bg-[#0B0B0B] flex items-center px-6 lg:px-12 fixed top-0 left-0 right-0 border-b border-gray-900/30 z-20 backdrop-blur-2xl bg-opacity-95">
-      <div className="flex items-center gap-6">
+    <header className="h-16 bg-[#0B0B0B] flex items-center px-4 sm:px-6 lg:px-12 fixed top-0 left-0 right-0 border-b border-gray-900/30 z-20 backdrop-blur-2xl bg-opacity-95">
+      <div className="flex items-center gap-3 sm:gap-6 min-w-0">
         {user && (
           <button onClick={onToggleSidebar} className="lg:hidden text-gray-400 hover:text-white p-1">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
@@ -253,7 +253,7 @@ const Header: React.FC<{ onToggleSidebar?: () => void }> = ({ onToggleSidebar })
             </svg>
           </button>
         )}
-        <Link to="/" className="flex items-center gap-6">
+        <Link to="/" className="flex items-center gap-3 min-w-0">
           <div className="w-9 h-9 bg-[#FF0000] rounded-[10px] flex items-center justify-center font-bold text-white text-xs shadow-2xl shadow-[#FF0000]/20 transform -rotate-6 transition-transform hover:rotate-0">M</div>
           <h1 className="text-sm font-bold tracking-[0.2em] text-white uppercase hidden md:block">
             {isAdminPath ? 'MarketBrainOS Admin' : 'MarketBrainOS'}
@@ -264,8 +264,8 @@ const Header: React.FC<{ onToggleSidebar?: () => void }> = ({ onToggleSidebar })
           </h1>
         </Link>
       </div>
-      <div className="ml-auto flex items-center gap-6 lg:gap-12">
-        <div className="flex gap-6 lg:gap-10 text-[11px] font-bold tracking-[0.1em] text-gray-500 uppercase">
+      <div className="ml-auto flex items-center gap-3 sm:gap-6 lg:gap-10 min-w-0">
+        <div className="flex gap-3 sm:gap-6 lg:gap-8 text-[11px] font-bold tracking-[0.1em] text-gray-500 uppercase">
           {!isAdminPath && profile?.tier === 'free' && (
             <Link to="/pricing" className="text-[#FF0000] animate-pulse cursor-pointer hidden sm:block">Upgrade to Pro</Link>
           )}
@@ -416,7 +416,9 @@ const AppContainer: React.FC = () => {
       {/* Content container: max-w-5xl + p-20 previously left only 576px of content at a 1024px laptop,
           which is why the two-column tool layout collapsed to ~108px of typing width and the admin
           tables scrolled horizontally on desktop. */}
-      <main className={`${showSidebar ? 'lg:ml-72 ml-0 pt-16' : ''} min-h-screen flex flex-col`}>
+      {/* The lockdown banner is fixed at top-16, so content must clear the header AND the banner -
+          with only pt-16 it sat underneath the first ~26px of every page. */}
+      <main className={`${showSidebar ? `lg:ml-72 ml-0 ${isEmergency && !location.pathname.startsWith('/admin') ? 'pt-[5.75rem]' : 'pt-16'}` : ''} min-h-screen flex flex-col`}>
         {showSidebar ? (
           <div className="px-6 lg:px-12 py-8 lg:py-12 max-w-7xl w-full mx-auto flex-grow animate-in fade-in slide-in-from-bottom-2 duration-500">
             <AppRoutes />

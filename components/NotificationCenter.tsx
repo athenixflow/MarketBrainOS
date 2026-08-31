@@ -79,7 +79,7 @@ const NotificationCenter: React.FC = () => {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-3 w-80 max-h-[28rem] overflow-hidden flex flex-col bg-white text-[#0B0B0B] rounded-2xl shadow-2xl border border-gray-100 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+        <div className="absolute right-0 mt-3 w-[min(20rem,calc(100vw-2rem))] max-h-[28rem] overflow-hidden flex flex-col bg-white text-[#0B0B0B] rounded-2xl shadow-2xl border border-gray-100 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
             <p className="text-xs font-bold uppercase tracking-widest">Notifications</p>
             {unread > 0 && (
