@@ -207,33 +207,50 @@ const paymentReceipt = (d: { description: string; amount: number; reference: str
 
 // ---- TIER 2 -----------------------------------------------------------------------------------
 
-const lowBalance = (d: { balance: number }): RenderedEmail => ({
+// Token alerts must not promise a refill the account will never get: the Free allowance is ONE-TIME
+// (monthlyTokenRefresh skips free tiers), while paid plans do reset each cycle. Callers should pass
+// `replenishes: tier !== 'free'`. sendTemplate's data is typed `any`, so that cannot be enforced by
+// the compiler — when the flag is omitted the copy stays deliberately plan-neutral and true either way.
+const lowBalance = (d: { balance: number; replenishes?: boolean }): RenderedEmail => ({
   subject: 'Your token balance is running low',
   html: renderEmail({
-    preheader: `Only ${d.balance} tokens left this cycle.`,
+    preheader: `Only ${d.balance} tokens left.`,
     tag: 'Token alert',
     heading: 'Your tokens are running low.',
     heroSubtext: `You have ${d.balance} tokens left. Top up so your analyses never get interrupted.`,
     body:
-      balanceCard('Remaining this cycle', `${d.balance} tokens`) +
-      paragraph('Purchased token packs never expire and stack on top of your monthly allowance.') +
+      balanceCard('Remaining balance', `${d.balance} tokens`) +
+      paragraph('Purchased token packs never expire and stack on top of your plan allowance.') +
+      (d.replenishes === false
+        ? paragraph('Your Free allowance is a one-time grant, so it will not refill on its own. Top up or upgrade to keep going.')
+        : d.replenishes === true
+          ? paragraph('Your plan allowance refreshes at the start of your next billing cycle.')
+          : '') +
       button('Buy more tokens →', `${SITE_URL}/store`),
     footerLinks: [{ label: 'Token store', href: `${SITE_URL}/store` }, { label: 'Pricing', href: `${SITE_URL}/pricing` }],
     footerNote: 'You can turn off token alerts in Settings → Notifications.',
   }),
 });
 
-const outOfTokens = (d: { balance: number }): RenderedEmail => ({
+const outOfTokens = (d: { balance: number; replenishes?: boolean }): RenderedEmail => ({
   subject: "You're out of tokens",
   html: renderEmail({
     preheader: 'Top up to keep running analyses.',
     tag: 'Token alert',
     heading: "You're out of tokens.",
-    heroSubtext: 'Your balance has reached zero, so new analyses are paused until you top up or your monthly allowance resets.',
+    heroSubtext: d.replenishes === false
+      ? 'Your balance has reached zero, so new analyses are paused until you top up or upgrade.'
+      : d.replenishes === true
+        ? 'Your balance has reached zero, so new analyses are paused until you top up or your plan allowance resets.'
+        : 'Your balance has reached zero, so new analyses are paused until you add more tokens.',
     body:
       paragraph('Grab a token pack (they never expire) or upgrade your plan for a larger monthly allowance.') +
       button('Top up now →', `${SITE_URL}/store`) +
-      callout('Monthly tokens refresh automatically at the start of each billing cycle.'),
+      (d.replenishes === false
+        ? callout('The Free allowance is one-time and does not refresh. Upgrading to Pro adds tokens every month.')
+        : d.replenishes === true
+          ? callout('Monthly tokens refresh automatically at the start of each billing cycle.')
+          : ''),
     footerLinks: [{ label: 'Token store', href: `${SITE_URL}/store` }, { label: 'Pricing', href: `${SITE_URL}/pricing` }],
     footerNote: 'You can turn off token alerts in Settings → Notifications.',
   }),
