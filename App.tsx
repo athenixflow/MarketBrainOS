@@ -92,8 +92,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     /* Mobile Styles */
     top-0 h-full
     ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-    /* Desktop Styles (Reset to original) */
-    lg:translate-x-0 lg:top-16 lg:h-full lg:z-10
+    /* Desktop: offset by the 64px header, so the height must subtract it. lg:h-full resolved to
+       100vh against the viewport and pushed the footer (Admin link + token panel) below the fold,
+       where it could not be reached - overflow-y-auto is on the <nav>, not on this element. */
+    lg:translate-x-0 lg:top-16 lg:h-[calc(100vh-4rem)] lg:z-10
   `;
 
   if (isAdminPath) {

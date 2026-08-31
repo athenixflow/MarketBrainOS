@@ -167,9 +167,9 @@ const EnterpriseSuite: React.FC = () => {
         </div>
       )}
 
-      <div className="flex gap-6 border-b border-gray-100 overflow-x-auto no-scrollbar">
+      <div className="flex gap-6 border-b border-gray-900/50 overflow-x-auto no-scrollbar">
         {TABS.map(t => (
-          <button key={t} onClick={() => setTab(t)} className={`pb-3 text-[11px] font-bold uppercase tracking-widest whitespace-nowrap transition-all relative ${tab === t ? 'text-[#0B0B0B]' : 'text-gray-400 hover:text-gray-600'}`}>
+          <button key={t} onClick={() => setTab(t)} className={`pb-3 text-[11px] font-bold uppercase tracking-widest whitespace-nowrap transition-all relative ${tab === t ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}>
             {t}{tab === t && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#FF0000] rounded-full" />}
           </button>
         ))}

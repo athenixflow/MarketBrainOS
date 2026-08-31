@@ -194,17 +194,28 @@ export const LoadingState: React.FC<{
 );
 
 // 10. ERROR MESSAGE COMPONENT (GENERIC / CLIENT)
-export const ErrorMessage: React.FC<{ 
-  message: string; 
-  action?: { label: string; onClick: () => void } 
+// Solid deep-red alert. Most call sites render this straight onto the near-black page (the org hubs,
+// Workflow, admin) while a few sit inside a white Card, and the old light-grey panel was unreadable on
+// dark. An opaque fill reads correctly on BOTH surfaces, so there is no `dark` prop to forget. Red-700
+// rather than the brand #FF0000 so it never reads as a primary CTA. White on #B91C1C = 6.0:1 (AA).
+export const ErrorMessage: React.FC<{
+  message: string;
+  action?: { label: string; onClick: () => void }
 }> = ({ message, action }) => (
-  <div className="py-16 px-12 rounded-[40px] bg-gray-50/50 border border-gray-100 flex flex-col items-center text-center animate-in fade-in duration-500">
-    <div className="w-1.5 h-1.5 bg-gray-200 rounded-full mb-8" />
-    <p className="text-base font-medium text-gray-500 mb-8 max-w-sm leading-relaxed">{message}</p>
+  <div
+    role="alert"
+    className="rounded-2xl bg-[#B91C1C] px-4 py-3.5 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 animate-in fade-in duration-300"
+  >
+    <div className="flex items-start gap-3 min-w-0">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-white/90 flex-shrink-0 mt-px">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+      </svg>
+      <p className="text-[13px] font-medium text-white leading-relaxed min-w-0">{message}</p>
+    </div>
     {action && (
-      <button 
+      <button
         onClick={action.onClick}
-        className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest hover:opacity-60 transition-opacity border-b border-[#FF0000]/10 pb-1"
+        className="text-[10px] font-bold text-white uppercase tracking-widest hover:opacity-70 transition-opacity border-b border-white/40 pb-0.5 flex-shrink-0"
       >
         {action.label}
       </button>
