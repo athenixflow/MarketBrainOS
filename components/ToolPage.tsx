@@ -20,7 +20,7 @@ import { useScope } from '../context/ScopeContext';
 import { copyToClipboard, downloadAsText, printToolResultPDF, formatToolResult, downloadAsCSV, toolResultToCSV } from '../services/exportService';
 import { SecurityEngine } from '../services/securityEngine';
 import { ToolConfig, getToolMeta, getToolGuide } from '../config/toolConfigs';
-import { getUserToolAnalyses, ToolAnalysisRecord, deleteGenericAnalysis } from '../services/persistenceService';
+import { getUserToolAnalyses, ToolAnalysisRecord, deleteGenericAnalysis, saveReport } from '../services/persistenceService';
 import { getScoreBand } from '../services/scoreBands';
 import { ExpectedOutcome, AnalysisPreview, RunProgress, CharCounter, RunStage } from './ToolGuide';
 import { ResultItemList } from './ResultSections';
@@ -56,6 +56,7 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
 
   // Result-action feedback (Share copied / Deleted).
   const [actionMsg, setActionMsg] = useState<string>('');
+  const [savingReport, setSavingReport] = useState(false);
   const [deleted, setDeleted] = useState(false);
 
   // Phase 6.1: when acting inside a team workspace, let the user choose per-run whether the
@@ -243,6 +244,26 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
     setActionMsg('Result copied to clipboard');
     setTimeout(() => setActionMsg(''), 2500);
   };
+  // saveReport() existed but had no call sites anywhere, so /reports could never populate and its
+  // empty state told users to "save it as a report" - an action that did not exist in the UI.
+  const handleSaveReport = async () => {
+    if (!user || !result) return;
+    setSavingReport(true);
+    try {
+      await saveReport(user.uid, {
+        title: `${config.title} — ${new Date().toLocaleDateString()}`,
+        report_type: 'analysis',
+        content: { score: result.score, verdict: result.verdict, summary: result.summary, sections: result.sections },
+      }, scope);
+      setActionMsg('Saved to Reports');
+    } catch (e: any) {
+      console.error(e);
+      setActionMsg(e?.message || 'Could not save report');
+    } finally {
+      setSavingReport(false);
+      setTimeout(() => setActionMsg(''), 3000);
+    }
+  };
   const handleDelete = async () => {
     if (result?.savedId) {
       try { await deleteGenericAnalysis(result.savedId); } catch (e) { console.error(e); }
@@ -395,6 +416,9 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
                     </span>
                     <button onClick={handleRun} className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">Rerun</button>
                     <button onClick={handleShare} className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">Share</button>
+                    <button onClick={handleSaveReport} disabled={savingReport} className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors disabled:opacity-40">
+                      {savingReport ? 'Saving…' : 'Save as report'}
+                    </button>
                     <button onClick={handleDelete} className="text-[10px] font-bold text-gray-400 hover:text-[#FF0000] uppercase tracking-widest transition-colors">Delete</button>
                     {actionMsg && <span className="text-[10px] font-bold text-green-600 uppercase tracking-widest">{actionMsg}</span>}
                   </div>
