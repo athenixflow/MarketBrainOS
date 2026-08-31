@@ -43,8 +43,11 @@ const EnterpriseDashboard: React.FC<{
 
     {health && (
       <Card title="Health signals">
+        {(health.signals || []).length === 0 && (
+          <p className="text-sm text-gray-400 font-medium">No health signals were produced for this period.</p>
+        )}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {health.signals.map(s => (
+          {(health.signals || []).map(s => (
             <div key={s.label} className="p-4 bg-gray-50 rounded-xl border border-gray-100">
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{s.label}</p>
               <p className="text-2xl font-black text-[#0B0B0B] mt-1">{s.value}</p>

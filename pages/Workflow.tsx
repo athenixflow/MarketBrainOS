@@ -478,22 +478,28 @@ const Workflow: React.FC = () => {
         <Card className="max-w-4xl mx-auto shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
           <SectionHeader title="Step 5: Improvement Pipeline" subtitle="Synthesizing test results with clinical data." />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
-            <div className="p-10 bg-[#FFF9F9] rounded-2xl border border-[#FF0000]/10">
+            <div className="p-6 sm:p-8 bg-[#FFF9F9] rounded-2xl border border-[#FF0000]/10">
               <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-6">Top Diagnostic Issues</p>
-              <ul className="space-y-4">
-                {(auditResult.issues || []).slice(0, 3).map((iss, i) => (
-                  <li key={i} className="text-sm font-bold text-[#0B0B0B] flex items-start gap-4">
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000] mt-1.5 shrink-0" />
-                    {iss.blocker}
-                  </li>
-                ))}
-              </ul>
+              {(auditResult.issues || []).length === 0 ? (
+                <p className="text-sm font-medium text-gray-500">No conversion blockers were flagged in the audit.</p>
+              ) : (
+                <ul className="space-y-4">
+                  {(auditResult.issues || []).slice(0, 3).map((iss, i) => (
+                    <li key={i} className="text-sm font-bold text-[#0B0B0B] flex items-start gap-4">
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000] mt-1.5 shrink-0" />
+                      {iss.blocker}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
-            <div className="p-10 bg-gray-50 rounded-2xl border border-gray-100">
+            <div className="p-6 sm:p-8 bg-gray-50 rounded-2xl border border-gray-100">
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-6">Strategic Winning Foundation</p>
-              <p className="text-sm font-medium text-gray-600 leading-relaxed italic">
-                "{winningAngleText}"
-              </p>
+              {winningAngleText ? (
+                <p className="text-sm font-medium text-gray-600 leading-relaxed italic">"{winningAngleText}"</p>
+              ) : (
+                <p className="text-sm font-medium text-gray-500">No winning angle was carried through from the earlier steps.</p>
+              )}
             </div>
           </div>
           <div className="flex flex-col gap-6">
@@ -516,23 +522,40 @@ const Workflow: React.FC = () => {
                 isPro={isPro} 
               />
             </div>
+            {/* The headline must not claim success when there is nothing to show: "Skip to Summary"
+                reaches this screen without ever generating assets. */}
             <div className="text-center mb-20 animate-in fade-in slide-in-from-top-2 duration-500">
               <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-[0.3em] mb-8">Executive Intelligence Summary</p>
-              <h1 className="text-5xl font-black text-white tracking-tighter mb-6">Strategic Assets Ready.</h1>
-              <p className="text-gray-500 text-xl font-medium mb-12">Your strategy has been validated and clinically refined.</p>
-              
-              {finalImprovements && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-10 text-left">
-                  <Card title="Improved Headline">
-                    <p className="text-lg font-bold text-[#0B0B0B] leading-relaxed">"{finalImprovements.headline}"</p>
-                  </Card>
-                  <Card title="Benefit CTA">
-                    <p className="text-lg font-bold text-[#0B0B0B] leading-relaxed">"{finalImprovements.cta}"</p>
-                  </Card>
-                  <Card title="Offer Messaging">
-                    <p className="text-lg font-bold text-[#0B0B0B] leading-relaxed">"{finalImprovements.offer}"</p>
-                  </Card>
-                </div>
+              {finalImprovements ? (
+                <>
+                  <h1 className="text-4xl sm:text-5xl font-black text-white tracking-tighter mb-6">Strategic Assets Ready.</h1>
+                  <p className="text-gray-500 text-lg sm:text-xl font-medium mb-12">Your strategy has been validated and clinically refined.</p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-10 text-left">
+                    <Card title="Improved Headline">
+                      <p className="text-lg font-bold text-[#0B0B0B] leading-relaxed">"{finalImprovements.headline}"</p>
+                    </Card>
+                    <Card title="Benefit CTA">
+                      <p className="text-lg font-bold text-[#0B0B0B] leading-relaxed">"{finalImprovements.cta}"</p>
+                    </Card>
+                    <Card title="Offer Messaging">
+                      <p className="text-lg font-bold text-[#0B0B0B] leading-relaxed">"{finalImprovements.offer}"</p>
+                    </Card>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h1 className="text-4xl sm:text-5xl font-black text-white tracking-tighter mb-6">Workflow complete.</h1>
+                  <p className="text-gray-500 text-lg sm:text-xl font-medium mb-10 max-w-xl mx-auto leading-relaxed">
+                    You skipped the final improvement step, so no refined assets were generated. Go back to
+                    step 5 to produce the improved headline, CTA and offer messaging.
+                  </p>
+                  <button
+                    onClick={() => setStep(5)}
+                    className="text-[11px] font-bold text-[#FF0000] uppercase tracking-widest hover:opacity-70 transition-opacity border-b border-[#FF0000]/30 pb-1"
+                  >
+                    Back to step 5
+                  </button>
+                </>
               )}
             </div>
           </div>

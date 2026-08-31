@@ -159,6 +159,12 @@ const History: React.FC = () => {
 
                   {isOpen && (
                     <div className="mt-6 space-y-6 animate-in fade-in duration-300">
+                      {/* Without this, a record with no sections expanded to literally nothing. */}
+                      {(rec.result?.sections || []).length === 0 && (
+                        <p className="text-sm text-gray-400 font-medium">
+                          {rec.result?.summary || 'This record has no saved detail sections.'}
+                        </p>
+                      )}
                       {(rec.result?.sections || []).map((section: any, si: number) => (
                         <div key={si}>
                           <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-3">{section.title}</p>

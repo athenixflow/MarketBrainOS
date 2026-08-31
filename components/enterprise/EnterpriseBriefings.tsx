@@ -5,7 +5,9 @@ import { Enterprise, EnterpriseBriefing, BriefingPeriod } from '../../types';
 import { callGenerateExecutiveBriefing } from '../../services/persistenceService';
 
 const PERIODS: BriefingPeriod[] = ['weekly', 'monthly', 'quarterly', 'annual'];
-const Section: React.FC<{ title: string; items: string[] }> = ({ title, items }) =>
+// `items` is declared required in types.ts but these are server-written documents, so a missing field
+// would throw on .length rather than render empty. Default it.
+const Section: React.FC<{ title: string; items?: string[] }> = ({ title, items = [] }) =>
   items.length === 0 ? null : (
     <div><p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">{title}</p>
       <ul className="space-y-1">{items.map((it, i) => <li key={i} className="text-sm text-gray-600 font-medium flex gap-2"><span className="text-[#FF0000]">·</span>{it}</li>)}</ul></div>

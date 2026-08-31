@@ -46,15 +46,22 @@ const ReportDetail: React.FC = () => {
       )}
 
       <Card title="Content">
-        {sections ? (
+        {sections && sections.length > 0 ? (
           <div className="space-y-6">
             {sections.map((s: any, i: number) => (
               <div key={i}>
                 <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">{s.title}</p>
-                <ul className="space-y-1.5">{(s.items || []).map((it: any, j: number) => <li key={j} className="text-sm text-gray-600 font-medium flex gap-2"><span className="mt-2 w-1 h-1 rounded-full bg-[#FF0000] shrink-0" />{itemText(it)}</li>)}</ul>
+                {/* Section title and body are guarded together so a title can never sit over nothing. */}
+                {(s.items || []).length === 0 ? (
+                  <p className="text-sm text-gray-400 font-medium">No items in this section.</p>
+                ) : (
+                  <ul className="space-y-1.5">{(s.items || []).map((it: any, j: number) => <li key={j} className="text-sm text-gray-600 font-medium flex gap-2"><span className="mt-2 w-1 h-1 rounded-full bg-[#FF0000] shrink-0" />{itemText(it)}</li>)}</ul>
+                )}
               </div>
             ))}
           </div>
+        ) : sections ? (
+          <p className="text-sm text-gray-400 font-medium">This report has no content sections.</p>
         ) : (
           <pre className="text-[11px] font-mono text-gray-500 bg-gray-50 p-4 rounded-xl overflow-x-auto max-h-96">{typeof r.content === 'string' ? r.content : JSON.stringify(r.content, null, 2)}</pre>
         )}

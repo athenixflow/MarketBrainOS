@@ -3,7 +3,8 @@ import React from 'react';
 import { Card, EmptyState } from '../UI';
 import { EnterpriseBriefing, EnterpriseForecast } from '../../types';
 
-const List: React.FC<{ title: string; items: string[]; color: string }> = ({ title, items, color }) => (
+// items defaults to [] - these are server-written docs, so a missing field must not throw on .length.
+const List: React.FC<{ title: string; items?: string[]; color: string }> = ({ title, items = [], color }) => (
   <Card title={title}>
     {items.length === 0 ? <p className="text-sm text-gray-400 font-medium">None surfaced.</p> : (
       <div className="space-y-2">

@@ -186,9 +186,24 @@ const TestLabPro: React.FC = () => {
     }
   };
 
-  const winningVariant = results 
-    ? (results.variants || []).find(v => v.label === results.winnerLabel)
-    : null;
+  // Exact label equality alone was fragile: the model returns e.g. "A" while winnerLabel reads
+  // "Variant A", which produced a card headed " is the Projected Winner" over an empty quote block.
+  // Fall back through looser matches, then to the highest-scoring variant.
+  const scoredVariants = results?.variants || [];
+  const winningVariant = (() => {
+    if (!results || scoredVariants.length === 0) return null;
+    const target = (results.winnerLabel || '').trim().toLowerCase();
+    if (target) {
+      const exact = scoredVariants.find(v => (v.label || '').trim().toLowerCase() === target);
+      if (exact) return exact;
+      const loose = scoredVariants.find(v => {
+        const label = (v.label || '').trim().toLowerCase();
+        return !!label && (label.includes(target) || target.includes(label));
+      });
+      if (loose) return loose;
+    }
+    return scoredVariants.reduce((best, v) => ((v.score || 0) > (best.score || 0) ? v : best), scoredVariants[0]);
+  })();
 
   const isPro = profile?.tier === 'pro';
 
@@ -344,29 +359,69 @@ const TestLabPro: React.FC = () => {
               />
             </div>
 
-            <div className="mb-20">
-              <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-[0.3em] mb-10 text-center">Winning Strategic Asset</p>
-              <Card accent className="!border-[#FF0000]/10 !bg-[#FFF9F9] shadow-2xl scale-[1.02]">
-                <div className="flex justify-between items-start mb-10">
-                  <div>
-                    <h3 className="text-3xl font-bold text-[#0B0B0B] tracking-tight mb-2">
-                      {winningVariant?.label} is the Projected Winner
-                    </h3>
-                    <div className="flex items-center gap-3">
-                      <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000] animate-pulse" />
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Statistical Significance: High</span>
+            {/* Heading and body are guarded together: an unmatched winner used to leave the heading
+                painted over an empty quote block. */}
+            {winningVariant && (
+              <div className="mb-16">
+                <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-[0.3em] mb-8 text-center">Winning Strategic Asset</p>
+                <Card accent className="!border-[#FF0000]/10 !bg-[#FFF9F9] shadow-2xl">
+                  <div className="flex justify-between items-start gap-6 mb-8 flex-wrap">
+                    <div className="min-w-0">
+                      <h3 className="text-2xl sm:text-3xl font-bold text-[#0B0B0B] tracking-tight mb-2">
+                        {winningVariant.label || 'Top variant'} is the Projected Winner
+                      </h3>
+                      <div className="flex items-center gap-3">
+                        <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000]" />
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Highest projected performance</span>
+                      </div>
                     </div>
+                    <IntelligenceIndicator score={winningVariant.score} />
                   </div>
-                  {winningVariant && <IntelligenceIndicator score={winningVariant.score} />}
+                  {winningVariant.text && (
+                    <div className="p-6 sm:p-8 bg-white rounded-2xl border border-[#FF0000]/5 text-xl sm:text-2xl font-bold text-[#0B0B0B] leading-relaxed mb-8 shadow-inner">
+                      "{winningVariant.text}"
+                    </div>
+                  )}
+                  {results.explanation && (
+                    <div className="p-6 bg-gray-50/50 rounded-2xl border border-gray-100 text-gray-500 leading-relaxed font-medium whitespace-pre-wrap">
+                      {results.explanation}
+                    </div>
+                  )}
+                </Card>
+              </div>
+            )}
+
+            {/* Per-variant scores: promised by the "Variation Scores" deliverable and present in the
+                data (and in the export), but never rendered anywhere until now. */}
+            {scoredVariants.length > 0 && (
+              <div className="mb-16">
+                <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-[0.3em] mb-8 text-center">All Variation Scores</p>
+                <div className="space-y-4">
+                  {[...scoredVariants].sort((a, b) => (b.score || 0) - (a.score || 0)).map((v, i) => {
+                    const isWinner = v === winningVariant;
+                    return (
+                      <Card key={i} className={isWinner ? '!border-[#FF0000]/20' : ''}>
+                        <div className="flex items-start justify-between gap-4 flex-wrap mb-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <p className="text-sm font-bold text-[#0B0B0B]">{v.label || `Variant ${i + 1}`}</p>
+                            {isWinner && <span className="text-[9px] font-bold text-[#FF0000] uppercase tracking-widest px-2 py-0.5 rounded-full bg-[#FF0000]/10">Winner</span>}
+                          </div>
+                          <span className="text-sm font-black text-[#0B0B0B] tabular-nums">{v.score ?? '—'}<span className="text-gray-400 font-bold">/100</span></span>
+                        </div>
+                        {v.text && <p className="text-sm text-gray-600 leading-relaxed">"{v.text}"</p>}
+                        
+                      </Card>
+                    );
+                  })}
                 </div>
-                <div className="p-10 bg-white rounded-2xl border border-[#FF0000]/5 text-2xl font-bold text-[#0B0B0B] leading-relaxed mb-10 shadow-inner">
-                  "{winningVariant?.text}"
-                </div>
-                <div className="p-8 bg-gray-50/50 rounded-2xl border border-gray-100 text-gray-500 leading-relaxed font-medium whitespace-pre-wrap">
-                  {results.explanation}
-                </div>
-              </Card>
-            </div>
+              </div>
+            )}
+
+            {!winningVariant && variants.length === 0 && (
+              <p className="text-gray-500 text-sm font-medium py-8 text-center">
+                No variations were scored for this input. Try rerunning with more distinct variants.
+              </p>
+            )}
           </ResultContainer>
         )}
       </div>
