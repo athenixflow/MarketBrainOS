@@ -607,13 +607,23 @@ export const ANGLE_TYPES: AngleType[] = [
   'Authority', 'Differentiation', 'Story', 'Contrarian',
 ];
 
+/** Marketing channel a hook is written for. The Angle Miner UI groups hooks into these columns and the
+ *  server pins the value with a responseSchema enum, so the two cannot drift apart again. */
+export type HookChannel = 'Ads' | 'Organic' | 'Funnel';
+export const HOOK_CHANNELS: HookChannel[] = ['Ads', 'Organic', 'Funnel'];
+
+export interface AngleHook {
+  /** Optional because results saved before channels existed only carry `platform`. */
+  channel?: HookChannel;
+  /** Specific placement the hook targets (Meta, Google, Email, Landing Page…). Shown as a label. */
+  platform?: string;
+  short: string;
+  expanded: string;
+}
+
 export interface AngleMinerResults {
   angles: MarketingAngle[];
-  hooks?: {
-    platform: string;
-    short: string;
-    expanded: string;
-  }[];
+  hooks?: AngleHook[];
 }
 
 export interface TestLabVariant {

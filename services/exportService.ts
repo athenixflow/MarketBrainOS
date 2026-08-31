@@ -195,6 +195,17 @@ export const formatAngleMinerExport = (results: AngleMinerResults): string => {
     });
   });
 
+  // Hooks were previously omitted from every export, so users could not take away the platform-ready
+  // variations they had spent tokens generating.
+  const hooks = results.hooks || [];
+  if (hooks.length > 0) {
+    output += `\nPLATFORM-READY HOOKS\n`;
+    hooks.forEach(h => {
+      const label = [h.channel, h.platform].filter(Boolean).join(' · ') || 'General';
+      output += `- [${label}] "${h.short}"\n  ${h.expanded}\n\n`;
+    });
+  }
+
   return output;
 };
 

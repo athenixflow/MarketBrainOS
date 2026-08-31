@@ -27,10 +27,34 @@ import {
   isNetworkError
 } from '../components/UI';
 import { analyzeMarketingAngle, improveAngle, MAX_INPUT_CHARS } from '../services/geminiService';
-import { MarketingAngle, AngleMinerResults, AngleType, ANGLE_TYPES, TOKEN_COSTS } from '../types';
+import { MarketingAngle, AngleMinerResults, AngleType, ANGLE_TYPES, TOKEN_COSTS, AngleHook, HookChannel, HOOK_CHANNELS } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { copyToClipboard, downloadAsText, printAsPDF, formatAngleMinerExport } from '../services/exportService';
 import { SecurityEngine } from '../services/securityEngine';
+
+// Platform keywords used ONLY to rescue results saved before `channel` existed (those records carry a
+// platform like "Meta"/"Email" and no channel). Anything unrecognised lands in "Other" and is still
+// shown - the previous code filtered such hooks out of every column, so they vanished silently.
+const LEGACY_PLATFORM_CHANNEL: Record<string, HookChannel> = {
+  meta: 'Ads', facebook: 'Ads', instagram: 'Ads', google: 'Ads', ads: 'Ads', ppc: 'Ads', display: 'Ads',
+  organic: 'Organic', tiktok: 'Organic', linkedin: 'Organic', youtube: 'Organic', twitter: 'Organic',
+  x: 'Organic', blog: 'Organic', social: 'Organic', seo: 'Organic',
+  funnel: 'Funnel', email: 'Funnel', landing: 'Funnel', checkout: 'Funnel', cart: 'Funnel', sms: 'Funnel',
+};
+
+const resolveChannel = (hook: AngleHook): HookChannel | 'Other' => {
+  if (hook.channel && HOOK_CHANNELS.includes(hook.channel)) return hook.channel;
+  const platform = (hook.platform || '').toLowerCase();
+  if (!platform) return 'Other';
+  const hit = Object.keys(LEGACY_PLATFORM_CHANNEL).find(k => platform.includes(k));
+  return hit ? LEGACY_PLATFORM_CHANNEL[hit] : 'Other';
+};
+
+const bucketHooks = (hooks: AngleHook[]): Record<HookChannel | 'Other', AngleHook[]> => {
+  const buckets: Record<HookChannel | 'Other', AngleHook[]> = { Ads: [], Organic: [], Funnel: [], Other: [] };
+  hooks.forEach(h => buckets[resolveChannel(h)].push(h));
+  return buckets;
+};
 
 const AngleMinerX: React.FC = () => {
   const { user, profile, refreshProfile } = useAuth();
@@ -485,37 +509,50 @@ const AngleMinerX: React.FC = () => {
                 })()
               )}
 
-              {activeTab === 'Hooks & Scripts' && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-                  {['Ads', 'Organic', 'Funnel'].map(platform => (
-                    <div key={platform} className="space-y-8">
-                      <h4 className="text-[10px] font-bold text-[#FF0000] uppercase tracking-[0.3em] mb-4 text-center">{platform} Hooks</h4>
-                      {(results.hooks || [])
-                        .filter(h => h.platform.toLowerCase().includes(platform.toLowerCase()))
-                        .map((hook, i) => (
-                        <Card key={i}>
-                          <div className="space-y-6">
-                            <div>
-                              <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mb-2">Short Hook</p>
-                              <p className="text-sm font-bold text-[#0B0B0B]">"{hook.short}"</p>
+              {activeTab === 'Hooks & Scripts' && (() => {
+                const hooks = results.hooks || [];
+                const buckets = bucketHooks(hooks);
+                if (hooks.length === 0) {
+                  return <p className="text-gray-500 text-sm font-medium py-8 text-center">No hooks were generated for this input.</p>;
+                }
+                // "Other" only appears when something genuinely failed to classify, so a hook can never
+                // be silently dropped the way it was when every one was filtered out of all three columns.
+                const columns: (HookChannel | 'Other')[] = [...HOOK_CHANNELS, ...(buckets.Other.length > 0 ? ['Other' as const] : [])];
+                return (
+                  <div className={`grid grid-cols-1 gap-8 md:gap-10 ${columns.length > 3 ? 'md:grid-cols-2 xl:grid-cols-4' : 'md:grid-cols-3'}`}>
+                    {columns.map(channel => (
+                      <div key={channel} className="space-y-6">
+                        <h4 className="text-[10px] font-bold text-[#FF0000] uppercase tracking-[0.3em] mb-4 text-center">{channel} Hooks</h4>
+                        {buckets[channel].length === 0 ? (
+                          <p className="text-gray-500 text-xs font-medium text-center py-4">No {channel.toLowerCase()} hooks for this input.</p>
+                        ) : buckets[channel].map((hook, i) => (
+                          <Card key={i}>
+                            <div className="space-y-6">
+                              {hook.platform && (
+                                <span className="inline-block text-[9px] font-bold text-gray-500 uppercase tracking-widest px-2.5 py-1 rounded-full bg-gray-100">{hook.platform}</span>
+                              )}
+                              <div>
+                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-2">Short Hook</p>
+                                <p className="text-sm font-bold text-[#0B0B0B]">"{hook.short}"</p>
+                              </div>
+                              <div>
+                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-2">Expanded</p>
+                                <p className="text-xs text-gray-500 leading-relaxed italic">"{hook.expanded}"</p>
+                              </div>
+                              <button
+                                onClick={() => copyToClipboard(hook.short + "\n" + hook.expanded)}
+                                className="text-[9px] font-bold text-[#FF0000] hover:opacity-60 transition-opacity uppercase tracking-widest border-b border-[#FF0000]/10 pb-1"
+                              >
+                                Copy Hook
+                              </button>
                             </div>
-                            <div>
-                              <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mb-2">Expanded</p>
-                              <p className="text-xs text-gray-500 leading-relaxed italic">"{hook.expanded}"</p>
-                            </div>
-                            <button 
-                              onClick={() => copyToClipboard(hook.short + "\n" + hook.expanded)}
-                              className="text-[9px] font-bold text-[#FF0000] hover:opacity-60 transition-opacity uppercase tracking-widest border-b border-[#FF0000]/10 pb-1"
-                            >
-                              Copy Hook
-                            </button>
-                          </div>
-                        </Card>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              )}
+                          </Card>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
           </ResultContainer>
         )}

@@ -5,7 +5,7 @@
 // callable handler signature — do NOT "simplify" this back to 'firebase-functions'.
 import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, SchemaType, Schema } from '@google/generative-ai';
 import * as crypto from 'crypto';
 import { sendTemplate } from './email/send';
 
@@ -237,6 +237,58 @@ const cleanJSON = (text: string) => {
   } catch (e) {
     throw new Error("AI Output Malformed: Not valid JSON");
   }
+};
+
+// --- Angle Miner response contract -------------------------------------------------------------
+// The UI groups hooks into Ads / Organic / Funnel columns. `channel` is pinned by this schema so the
+// model cannot answer with an unrelated vocabulary; `platform` stays free text and is shown as a label
+// on each card. (The prompt previously suggested platforms like "Meta"/"Google" with no channel at all,
+// so the UI's Ads/Organic/Funnel filter matched nothing and every column rendered empty.)
+export const HOOK_CHANNELS = ['Ads', 'Organic', 'Funnel'] as const;
+
+const ANGLE_MINER_SCHEMA: Schema = {
+  type: SchemaType.OBJECT,
+  properties: {
+    angles: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          type: { type: SchemaType.STRING },
+          title: { type: SchemaType.STRING },
+          hook: { type: SchemaType.STRING },
+          rational: { type: SchemaType.STRING },
+          score: { type: SchemaType.NUMBER },
+        },
+        required: ['type', 'title', 'hook', 'rational', 'score'],
+      },
+    },
+    hooks: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          channel: { type: SchemaType.STRING, format: 'enum', enum: [...HOOK_CHANNELS] },
+          platform: { type: SchemaType.STRING },
+          short: { type: SchemaType.STRING },
+          expanded: { type: SchemaType.STRING },
+        },
+        required: ['channel', 'platform', 'short', 'expanded'],
+      },
+    },
+  },
+  required: ['angles', 'hooks'],
+};
+
+// The Goal field on the form (Paid Ads / Organic Content / Sales Funnel / All) previously reached the
+// prompt but never influenced the hooks. Weight the spread toward the chosen channel, still covering
+// the others so no column is empty.
+const hookChannelDirective = (goal?: string): string => {
+  const g = (goal || '').toLowerCase();
+  if (g.includes('paid') || g.includes('ads')) return 'Weight the hooks toward the Ads channel (about half), but still include at least one Organic and one Funnel hook.';
+  if (g.includes('organic')) return 'Weight the hooks toward the Organic channel (about half), but still include at least one Ads and one Funnel hook.';
+  if (g.includes('funnel')) return 'Weight the hooks toward the Funnel channel (about half), but still include at least one Ads and one Organic hook.';
+  return 'Spread the hooks evenly across all three channels, with at least two of each.';
 };
 
 const generateHash = (content: string, prevHash: string): string => {
@@ -621,12 +673,23 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
           ${input.competitors ? `Competitors: ${input.competitors}.` : ''}${input.objections ? ` Objections to overcome: ${input.objections}.` : ''}${input.brandVoice ? ` Brand voice: ${input.brandVoice}.` : ''}${input.proofPoints ? ` Proof / credibility to use: ${input.proofPoints}.` : ''}${input.pricePoint ? ` Price point: ${input.pricePoint}.` : ''}
           Produce angles across these 8 types: Emotional, Fear, Aspiration, Curiosity, Authority, Differentiation, Story, Contrarian (at least one of each; more for the strongest).
           For each angle: 'type' (one of the 8 exact labels), 'title' (the angle name), 'hook' (a ready-to-use headline/opening line, written in the chosen tone and specific to THIS product and audience), 'rational' (2-3 sentences on the psychology of why it works for this audience and when to use it), 'score' (0-100 estimated strength).
-          Also produce 'hooks': 3-5 platform-ready variations, each { platform (e.g. Meta, Google, Email, LinkedIn), short (a punchy hook under 15 words), expanded (a 1-2 sentence version) }.
-          Return strict JSON: { angles: [{type, title, hook, rational, score}], hooks: [{platform, short, expanded}] }
+          Also produce 'hooks': 6-9 ready-to-use variations. Each hook has:
+            'channel' — EXACTLY one of "Ads", "Organic", or "Funnel". This is the marketing channel and drives how the hook is written: Ads = paid placements (short, scroll-stopping, ad-policy safe); Organic = social/content (native, conversational, no hard sell); Funnel = owned journey such as landing page, email or checkout (benefit-led, reassurance, momentum).
+            'platform' — the specific placement the hook is written for (e.g. Meta, Google, TikTok, LinkedIn, YouTube, Email, Landing Page, Checkout). Must be consistent with the channel.
+            'short' — a punchy hook under 15 words.
+            'expanded' — a 1-2 sentence version.
+          ${hookChannelDirective(input.goal)}
+          Return strict JSON: { angles: [{type, title, hook, rational, score}], hooks: [{channel, platform, short, expanded}] }
         `;
         const result = await model.generateContent({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { responseMimeType: 'application/json' }
+          // responseSchema (not just responseMimeType) pins `channel` to the three values the UI buckets
+          // by. Previously the prompt suggested platforms like "Meta"/"Google" while the UI filtered for
+          // Ads/Organic/Funnel, so every hook was silently filtered out of every column.
+          generationConfig: {
+            responseMimeType: 'application/json',
+            responseSchema: ANGLE_MINER_SCHEMA,
+          }
         });
         responseText = result.response.text();
       } 
