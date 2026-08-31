@@ -26,7 +26,7 @@ const COPY: Record<Mode, { title: string; subtitle: string; cta: string; busy: s
   },
   signup: {
     title: 'Create your account',
-    subtitle: 'Start free with a monthly token allowance. No card required.',
+    subtitle: 'Start free with a token allowance to try every tool. No card required.',
     cta: 'Create account',
     busy: 'Creating account',
   },

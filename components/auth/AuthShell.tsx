@@ -23,7 +23,7 @@ const VALUE_POINTS = [
   },
   {
     title: 'Start free',
-    body: 'A monthly token allowance on the Free plan. No card required to begin.',
+    body: 'The Free plan includes a token allowance to try every tool. No card required to begin.',
   },
 ];
 

@@ -18,7 +18,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   },
   {
     q: 'How do tokens work?',
-    a: `Each analysis consumes tokens. Free accounts get ${FREE_TOKENS} tokens each month; Pro accounts receive ${PRO_TOKENS} tokens every month and can top up at any time. Tokens are only charged when an analysis completes successfully, and failed runs are automatically refunded.`,
+    a: `Each analysis consumes tokens. Free accounts get a one-time allowance of ${FREE_TOKENS} tokens that does not replenish; Pro accounts receive ${PRO_TOKENS} tokens every month and can top up at any time. Tokens are only charged when an analysis completes successfully, and failed runs are automatically refunded.`,
   },
   {
     q: 'How much does it cost?',

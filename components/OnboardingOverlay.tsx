@@ -25,7 +25,7 @@ const STEPS: Step[] = [
   {
     eyebrow: 'Tokens',
     title: 'How tokens work',
-    body: 'Each analysis consumes tokens. Free accounts start with a monthly allowance, and Pro adds a larger monthly balance plus the option to top up. Tokens are only charged when an analysis completes successfully.',
+    body: 'Each analysis consumes tokens. Free accounts get a one-time starting allowance, while Pro refills your balance every month and lets you top up any time. Tokens are only charged when an analysis completes successfully.',
   },
   {
     eyebrow: 'Your Tools',

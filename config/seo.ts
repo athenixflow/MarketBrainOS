@@ -31,7 +31,7 @@ export const MARKETING_SEO: Record<string, PageSeo> = {
   },
   pricing: {
     title: 'Pricing & Plans',
-    description: 'Simple, transparent pricing for MarketBrain OS. Free, Pro, Team, Agency, and Enterprise plans with a monthly token allowance and pay-as-you-go top-ups.',
+    description: 'Simple, transparent pricing for MarketBrain OS. Free, Pro, Team, Agency, and Enterprise plans with monthly token allowances on paid plans and pay-as-you-go top-ups.',
     path: '/pricing',
   },
   about: {

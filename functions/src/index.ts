@@ -1462,7 +1462,9 @@ export const changeSubscription = functions.https.onCall(async (data: any, conte
         t.set(logRef, { uid, action: 'subscription_cancel', created_at: admin.firestore.FieldValue.serverTimestamp() });
         result = { status: 'cancelled' };
       } else if (action === 'downgrade') {
-        // Keep a renewal date so the free monthly allowance still cycles.
+        // Downgrade grants the free allowance ONCE. It does not cycle: monthlyTokenRefresh skips free
+        // accounts, so the plan_renews_at written here is inert for as long as the account stays free
+        // and only becomes meaningful again if the user upgrades.
         t.update(userRef, { tier: 'free', subscription_status: 'free', ...balanceFields(planMonthlyDefault('free'), readBalances(userData).purchased), plan_renews_at: renewsAt });
         const logRef = db.collection('action_logs').doc();
         t.set(logRef, { uid, action: 'subscription_downgrade', created_at: admin.firestore.FieldValue.serverTimestamp() });
@@ -1486,12 +1488,22 @@ export const changeSubscription = functions.https.onCall(async (data: any, conte
   }
 });
 
-// --- MONTHLY TOKEN REFRESH (all plans, renewal-cycle based) ---
-// Runs DAILY (00:00 UTC). Any account whose plan_renews_at has elapsed has its monthly_tokens reset
-// to its plan's allocation (from the live pricing config), purchased_tokens preserved, and
-// plan_renews_at advanced one cycle. Covers Free/Pro/Team/Agency/Enterprise owners. Every user has a
-// plan_renews_at (set on signup/upgrade/downgrade and backfilled) so a single range query finds the
-// due accounts. DEPLOY-TIME: Cloud Scheduler is provisioned on first deploy (Blaze plan).
+// --- MONTHLY TOKEN REFRESH (paid plans, renewal-cycle based) ---
+// Runs DAILY (00:00 UTC). Any PAID account whose plan_renews_at has elapsed has its monthly_tokens
+// reset to its plan's allocation (from the live pricing config), purchased_tokens preserved, and
+// plan_renews_at advanced one cycle. Covers Pro/Team/Agency/Enterprise owners.
+//
+// FREE ACCOUNTS ARE EXCLUDED (PRD §27): the free allowance is a ONE-TIME grant that never replenishes.
+// A free account keeps whatever balance it has left and is simply skipped here - nothing about its
+// balance or renewal date is rewritten, so this is safe to apply to accounts already in flight. If a
+// free user upgrades, changeSubscription sets a fresh plan_renews_at and they rejoin the cycle.
+//
+// Free accounts therefore stay in the range query's result set indefinitely (they are filtered out in
+// code, not in the query). That costs one document read each per day, which is negligible at current
+// scale; if the free base grows large, move the exclusion into the query with a composite index on
+// (tier, plan_renews_at) rather than rewriting user documents here.
+//
+// DEPLOY-TIME: Cloud Scheduler is provisioned on first deploy (Blaze plan).
 // (Per-container workspace/agency monthly sub-pool resets are added in the allocation phase.)
 export const monthlyTokenRefresh = functions.pubsub
   .schedule('0 0 * * *')
@@ -1503,8 +1515,14 @@ export const monthlyTokenRefresh = functions.pubsub
     const nextRenews = new Date(now.getTime() + cfg.renewalDays * 24 * 60 * 60 * 1000).toISOString();
 
     const snap = await db.collection('users').where('plan_renews_at', '<=', nowIso).get();
-    // 'expired' subscriptions don't renew; everything else (active/cancelled/free/undefined) does.
-    const due = snap.docs.filter((d: admin.firestore.QueryDocumentSnapshot) => d.data().subscription_status !== 'expired');
+    // Renew paid plans only: 'expired' subscriptions don't renew, and free accounts never replenish
+    // (their allowance is one-time). Everything else (active/cancelled/undefined on a paid tier) does.
+    const due = snap.docs.filter((d: admin.firestore.QueryDocumentSnapshot) => {
+      const u = d.data();
+      if (u.subscription_status === 'expired') return false;
+      if (((u.tier as string) || 'free') === 'free') return false;
+      return true;
+    });
 
     let refreshed = 0;
     // Firestore batches cap at 500 ops; each user costs up to 3 writes (user + log + notification).
@@ -1535,7 +1553,7 @@ export const monthlyTokenRefresh = functions.pubsub
       await batch.commit();
     }
 
-    console.log(`monthlyTokenRefresh: refreshed ${refreshed} account(s) across all plans.`);
+    console.log(`monthlyTokenRefresh: refreshed ${refreshed} paid account(s); free accounts are one-time and skipped.`);
     return null;
   });
 

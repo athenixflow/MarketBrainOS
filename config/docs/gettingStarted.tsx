@@ -55,7 +55,7 @@ const account: DocArticle = {
   keywords: ['sign up', 'sign in', 'google', 'oauth', 'onboarding', 'account'],
   blocks: [
     { type: 'heading', id: 'sign-up', text: 'Creating your account' },
-    { type: 'paragraph', text: 'Sign up on the [auth page](/auth) with email and password, or continue with Google. New accounts start on the **Free** plan with a monthly token allowance so you can try the tools immediately.' },
+    { type: 'paragraph', text: 'Sign up on the [auth page](/auth) with email and password, or continue with Google. New accounts start on the **Free** plan with a one-time token allowance so you can try the tools immediately.' },
     { type: 'heading', id: 'onboarding', text: 'The first-run walkthrough' },
     { type: 'paragraph', text: 'On your first login, a short onboarding overlay introduces the platform in five steps: welcome, the connected suite, how tokens work, where to find tools, and running your first analysis. You can skip it at any time, or jump straight into a recommended first tool.' },
     { type: 'callout', tone: 'tip', title: 'Start here', text: 'The walkthrough recommends [Strategy Lab](/documentation/tools/strategy-lab) for your first run — it is a fast way to see the full result format.' },

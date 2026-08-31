@@ -20,7 +20,7 @@ const welcome = (d: { firstName?: string; verifyUrl?: string; monthlyTokens?: nu
     heading: `Welcome aboard${d.firstName ? `, ${esc(d.firstName)}` : ''}.`,
     heroSubtext: "You just added an always-on strategic intelligence layer to your marketing. Let's turn your first idea into a scored, validated decision.",
     body:
-      paragraph(`MarketBrain OS pressure-tests your marketing <em>before</em> you spend — scoring angles, auditing funnels, and simulating campaigns against high-conversion benchmarks. Your account starts with <strong>${d.monthlyTokens ?? 20} free tokens</strong> this month, refreshed every cycle.`) +
+      paragraph(`MarketBrain OS pressure-tests your marketing <em>before</em> you spend — scoring angles, auditing funnels, and simulating campaigns against high-conversion benchmarks. Your account starts with <strong>${d.monthlyTokens ?? 20} free tokens</strong> to try every tool. Upgrade or top up when you need more.`) +
       (d.verifyUrl ? callout(`Please confirm your email to secure your account. <a href="${d.verifyUrl}" style="color:${RED};font-weight:700;">Verify your email &rarr;</a>`, 'One quick thing') : '') +
       button('Run your first analysis →', `${SITE_URL}/strategy-lab`, 'Takes ~60 seconds · costs 3–6 tokens per run') +
       sectionHeading('What you can do today') +

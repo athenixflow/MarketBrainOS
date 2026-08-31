@@ -331,7 +331,8 @@ export const ensureUserProfile = async (userId: string, email: string) => {
     await setDoc(docRef, {
       id: userId,
       email: email,
-      // Free plan monthly allocation (resets each cycle). Mirror `tokens` = monthly + purchased.
+      // Free plan allowance: a ONE-TIME grant that never replenishes (PRD §27, enforced by
+      // monthlyTokenRefresh skipping free accounts). Mirror `tokens` = monthly + purchased.
       tokens: FREE_MONTHLY_TOKENS,
       monthly_tokens: FREE_MONTHLY_TOKENS,
       purchased_tokens: 0,
@@ -339,7 +340,8 @@ export const ensureUserProfile = async (userId: string, email: string) => {
       role: email === 'admin@marketbrainos.app' ? 'super_admin' : 'user',
       onboarded: false,
       subscription_status: 'free',
-      // Renewal date so the free monthly allowance cycles via monthlyTokenRefresh.
+      // Inert while the account is free (monthlyTokenRefresh skips free tiers); it only starts
+      // driving renewals if the user upgrades, which rewrites this date.
       plan_renews_at: new Date(Date.now() + 30 * 86400000).toISOString(),
       created_at: new Date().toISOString(),
       last_active: new Date().toISOString()

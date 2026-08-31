@@ -13,7 +13,7 @@ const PRICING_JSONLD = {
   '@context': 'https://schema.org',
   '@type': 'Product',
   name: SITE_NAME,
-  description: 'AI marketing intelligence platform. Plans from Free to Enterprise, each with a monthly token allowance plus pay-as-you-go token packs.',
+  description: 'AI marketing intelligence platform. Plans from Free to Enterprise, with monthly token allowances on paid plans plus pay-as-you-go token packs.',
   brand: { '@type': 'Brand', name: SITE_NAME },
   offers: PLAN_ORDER.map((tier) => ({
     '@type': 'Offer',
@@ -74,8 +74,8 @@ const Pricing: React.FC = () => {
         <span className="text-sm font-bold text-[#FF0000] uppercase tracking-[0.2em] mb-6 block">Pricing</span>
         <h1 className="text-5xl md:text-6xl font-black text-white tracking-tight mb-8 leading-[1.1]">Scale from solo to enterprise.</h1>
         <p className="text-xl text-gray-400 font-medium leading-relaxed max-w-2xl mx-auto">
-          Every plan includes a monthly token allowance. Buy token packs anytime (they never expire), and add
-          seats, workspaces, or agencies as you grow.
+          Every paid plan refills your tokens each month, and Free starts you with a one-time allowance.
+          Buy token packs anytime (they never expire), and add seats, workspaces, or agencies as you grow.
         </p>
       </AnimatedSection>
 

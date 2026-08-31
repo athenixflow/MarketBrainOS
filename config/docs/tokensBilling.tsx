@@ -29,12 +29,12 @@ const howTokens: DocArticle = {
     { type: 'heading', id: 'two-buckets', text: 'Two kinds of tokens' },
     { type: 'paragraph', text: 'Your balance is split into two buckets:' },
     { type: 'list', items: [
-      '**Monthly tokens** — included with your plan; they **reset every cycle** (about every 30 days).',
+      '**Monthly tokens** — included with your plan; on paid plans they **reset every cycle** (about every 30 days). On the Free plan the allowance is **one-time** and does not reset.',
       '**Purchased tokens** — bought as top-up packs; they **never expire** and roll over indefinitely.',
     ] },
     { type: 'paragraph', text: 'Your total balance is simply monthly + purchased. Analyses **spend monthly tokens first**, then dip into purchased tokens only once the monthly allowance is used up — so your never-expiring tokens are preserved as long as possible.' },
     { type: 'heading', id: 'resets', text: 'Resets' },
-    { type: 'paragraph', text: 'Monthly tokens refresh to your plan\'s allowance at the start of each billing cycle (see your renewal date in the [Billing Center](/documentation/billing/billing-center)). Purchased tokens are untouched by resets.' },
+    { type: 'paragraph', text: 'On paid plans, monthly tokens refresh to your plan\'s allowance at the start of each billing cycle (see your renewal date in the [Billing Center](/documentation/billing/billing-center)). Purchased tokens are untouched by resets. The Free plan does not refresh: its allowance is granted once when you sign up, and topping up or upgrading is how you add more.' },
     { type: 'heading', id: 'costs', text: 'What each tool costs' },
     { type: 'paragraph', text: 'Costs are per run and range from 3 to 6 tokens. If a run fails, the exact tokens are automatically refunded.' },
     { type: 'table', headers: ['Tool', 'Tokens'], rows: [
@@ -65,11 +65,12 @@ const plans: DocArticle = {
   keywords: ['plan', 'pricing', 'free', 'pro', 'team', 'agency', 'enterprise', 'tier', 'compare'],
   blocks: [
     { type: 'heading', id: 'ladder', text: 'The plan ladder' },
-    { type: 'paragraph', text: 'Five plans scale from a solo free account to a multi-agency enterprise. Every plan includes a monthly token allowance; higher plans unlock collaboration layers and larger capacity.' },
-    { type: 'table', headers: ['Plan', 'Price / mo', 'Monthly tokens', 'Capacity'], rows: PLAN_ORDER.map((t) => [
+    { type: 'paragraph', text: 'Five plans scale from a solo free account to a multi-agency enterprise. Paid plans include a monthly token allowance (Free is a one-time allowance); higher plans unlock collaboration layers and larger capacity.' },
+    { type: 'table', headers: ['Plan', 'Price / mo', 'Included tokens', 'Capacity'], rows: PLAN_ORDER.map((t) => [
       PLAN_META[t].name,
       money(cfg.plans[t].price),
-      String(cfg.plans[t].monthlyTokens),
+      // Free is granted once at signup; paid plans refill this amount every cycle.
+      t === 'free' ? `${cfg.plans[t].monthlyTokens} (one-time)` : `${cfg.plans[t].monthlyTokens} / month`,
       planCapacity(t),
     ]) },
     { type: 'heading', id: 'features', text: 'What each plan is for' },
@@ -117,7 +118,7 @@ const billingCenter: DocArticle = {
     ] },
     { type: 'heading', id: 'invoices', text: 'Invoices & export' },
     { type: 'paragraph', text: 'Each invoice row shows the date, a label (subscription, token pack, or expansion), any tokens credited, and the amount paid. Use **Export CSV** to download the full ledger for your records.' },
-    { type: 'callout', tone: 'info', title: 'Reset rule', text: 'Monthly tokens reset each billing cycle; purchased tokens roll over and never expire.' },
+    { type: 'callout', tone: 'info', title: 'Reset rule', text: 'On paid plans, monthly tokens reset each billing cycle. The Free allowance is one-time and does not reset. Purchased tokens roll over and never expire on every plan.' },
   ],
 };
 
