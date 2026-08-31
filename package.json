@@ -24,6 +24,7 @@
     "react-router-dom": "^6.23.1"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^3.0.4",
     "@sparticuz/chromium": "138.0.2",
     "@types/node": "^20.12.12",
     "@types/react": "^18.3.3",
