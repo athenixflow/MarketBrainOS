@@ -357,7 +357,7 @@ const Workflow: React.FC = () => {
                 onChange={e => { setMinerParams({...minerParams, product: e.target.value}); setError(null); }} 
                 multiline 
               />
-              <div className="grid grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
                 <Input 
                   label="Industry" 
                   placeholder="e.g. Fintech, EdTech" 
@@ -410,7 +410,7 @@ const Workflow: React.FC = () => {
               <button 
                 key={i} 
                 onClick={() => toggleAngleSelection(angle.hook)}
-                className={`text-left p-10 rounded-[32px] border transition-all duration-500 ${
+                className={`text-left p-10 rounded-2xl border transition-all duration-500 ${
                   selectedAngleTexts.includes(angle.hook) 
                     ? 'bg-white border-[#FF0000] shadow-xl' 
                     : 'bg-white/50 border-gray-100 opacity-60 hover:opacity-100'
@@ -440,7 +440,7 @@ const Workflow: React.FC = () => {
           <SectionHeader title="Step 3: TestLab Pro" subtitle="Performance prediction results." />
           <div className="mb-12">
             <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-6 text-center">Projected Performance Winner</p>
-            <div className="p-10 bg-gray-50 rounded-[40px] text-center border border-gray-100 shadow-inner">
+            <div className="p-10 bg-gray-50 rounded-2xl text-center border border-gray-100 shadow-inner">
               <p className="text-2xl font-bold text-[#0B0B0B] mb-8 leading-relaxed">"{winningAngleText}"</p>
               <IntelligenceIndicator score={winningAngleScore} />
             </div>
@@ -478,7 +478,7 @@ const Workflow: React.FC = () => {
         <Card className="max-w-4xl mx-auto shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
           <SectionHeader title="Step 5: Improvement Pipeline" subtitle="Synthesizing test results with clinical data." />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
-            <div className="p-10 bg-[#FFF9F9] rounded-[40px] border border-[#FF0000]/10">
+            <div className="p-10 bg-[#FFF9F9] rounded-2xl border border-[#FF0000]/10">
               <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-6">Top Diagnostic Issues</p>
               <ul className="space-y-4">
                 {(auditResult.issues || []).slice(0, 3).map((iss, i) => (
@@ -489,7 +489,7 @@ const Workflow: React.FC = () => {
                 ))}
               </ul>
             </div>
-            <div className="p-10 bg-gray-50 rounded-[40px] border border-gray-100">
+            <div className="p-10 bg-gray-50 rounded-2xl border border-gray-100">
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-6">Strategic Winning Foundation</p>
               <p className="text-sm font-medium text-gray-600 leading-relaxed italic">
                 "{winningAngleText}"
@@ -517,7 +517,7 @@ const Workflow: React.FC = () => {
               />
             </div>
             <div className="text-center mb-20 animate-in fade-in slide-in-from-top-2 duration-500">
-              <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-[0.5em] mb-8">Executive Intelligence Summary</p>
+              <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-[0.3em] mb-8">Executive Intelligence Summary</p>
               <h1 className="text-5xl font-black text-white tracking-tighter mb-6">Strategic Assets Ready.</h1>
               <p className="text-gray-500 text-xl font-medium mb-12">Your strategy has been validated and clinically refined.</p>
               

@@ -53,7 +53,7 @@ const LandingPage: React.FC = () => {
               Without pre-launch validation, you are paying ad networks to tell you what an AI simulation could have told you for free: <strong>Your conversion argument is weak.</strong>
             </p>
           </div>
-          <div className="bg-[#111] p-10 rounded-3xl border border-gray-800 flex flex-col justify-center">
+          <div className="bg-[#111] p-6 sm:p-10 rounded-2xl border border-gray-800 flex flex-col justify-center">
             <div className="space-y-6">
               <div className="flex items-start gap-4 opacity-50">
                 <div className="w-6 h-6 rounded-full border-2 border-red-900 flex items-center justify-center text-red-900 font-bold">×</div>
@@ -127,7 +127,7 @@ const LandingPage: React.FC = () => {
                 <li className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#FF0000]" />Hook Generation</li>
               </ul>
             </div>
-            <div className="lg:col-span-7 bg-[#111] p-12 rounded-[40px] border border-gray-800 shadow-2xl">
+            <div className="lg:col-span-7 bg-[#111] p-6 sm:p-10 rounded-2xl border border-gray-800 shadow-2xl">
               <div className="space-y-6">
                  <div className="bg-gray-900/50 p-6 rounded-2xl border border-gray-800">
                     <p className="text-xs text-gray-500 uppercase mb-2">Input</p>
@@ -145,8 +145,8 @@ const LandingPage: React.FC = () => {
 
           {/* Feature 2 */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 items-center">
-            <div className="lg:col-span-7 order-2 lg:order-1 bg-[#111] p-12 rounded-[40px] border border-gray-800 shadow-2xl">
-               <div className="grid grid-cols-2 gap-6">
+            <div className="lg:col-span-7 order-2 lg:order-1 bg-[#111] p-6 sm:p-10 rounded-2xl border border-gray-800 shadow-2xl">
+               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                  <div className="p-6 rounded-2xl bg-red-900/10 border border-red-900/30">
                     <p className="text-xs text-red-500 font-bold uppercase mb-4">Variant A</p>
                     <div className="text-2xl font-black text-red-500">42/100</div>
@@ -187,7 +187,7 @@ const LandingPage: React.FC = () => {
                 <li className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#FF0000]" />Clinical Rewrite Suggestions</li>
               </ul>
             </div>
-            <div className="lg:col-span-7 bg-[#111] p-12 rounded-[40px] border border-gray-800 shadow-2xl">
+            <div className="lg:col-span-7 bg-[#111] p-6 sm:p-10 rounded-2xl border border-gray-800 shadow-2xl">
                <div className="space-y-4">
                   <div className="flex items-center gap-4 p-4 border border-red-900/30 bg-red-900/5 rounded-xl">
                     <div className="w-2 h-2 rounded-full bg-red-500" />
@@ -209,7 +209,7 @@ const LandingPage: React.FC = () => {
 
       {/* 6. WHAT IT IS NOT */}
       <AnimatedSection as="section" index={5} className="py-24 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" aria-labelledby="distinctions-heading">
-        <div className="bg-[#1A1A1A] p-12 rounded-[32px] border border-gray-800 text-center max-w-3xl mx-auto">
+        <div className="bg-[#1A1A1A] p-6 sm:p-10 rounded-2xl border border-gray-800 text-center max-w-3xl mx-auto">
           <h2 id="distinctions-heading" className="text-2xl font-bold text-white mb-6">Important Distinctions</h2>
           <p className="text-gray-400 mb-8 font-medium">To maintain professional integrity, we are transparent about platform limitations.</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
@@ -262,7 +262,7 @@ const LandingPage: React.FC = () => {
       <AnimatedSection as="section" index={7} className="py-24 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" aria-labelledby="pricing-heading">
         <h2 id="pricing-heading" className="text-center text-3xl font-bold text-white mb-16">Simple, Fair Access</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-          <div className="p-10 border border-gray-800 rounded-3xl bg-[#0B0B0B] flex flex-col">
+          <div className="p-6 sm:p-10 border border-gray-800 rounded-2xl bg-[#0B0B0B] flex flex-col">
             <h3 className="text-2xl font-bold text-white mb-2">Free Tier</h3>
             <p className="text-gray-500 text-sm mb-8">For exploration and light testing.</p>
             <div className="text-4xl font-black text-white mb-8">$0<span className="text-lg font-medium text-gray-600">/mo</span></div>
@@ -276,7 +276,7 @@ const LandingPage: React.FC = () => {
             </Link>
           </div>
 
-          <div className="p-10 border-2 border-white/10 rounded-3xl bg-[#111] relative flex flex-col">
+          <div className="p-6 sm:p-10 border-2 border-white/10 rounded-2xl bg-[#111] relative flex flex-col">
             <div className="absolute top-0 right-0 bg-[#FF0000] text-white text-[10px] font-bold uppercase tracking-widest px-4 py-1 rounded-bl-2xl rounded-tr-2xl">
               Professional
             </div>

@@ -75,7 +75,7 @@ const Security: React.FC = () => {
       <Card title="Security Exceptions Ledger">
         {a.securityLogs.length === 0 ? <p className="text-sm text-gray-400 py-8 text-center font-medium italic">Zero security signatures detected.</p> : (
           <div className="space-y-4">{a.securityLogs.map(log => (
-            <div key={log.id} className={`p-6 border rounded-[24px] flex flex-col gap-3 ${log.severity === 'critical' ? 'bg-red-50 border-red-100' : 'bg-gray-50 border-gray-100'}`}>
+            <div key={log.id} className={`p-6 border rounded-2xl flex flex-col gap-3 ${log.severity === 'critical' ? 'bg-red-50 border-red-100' : 'bg-gray-50 border-gray-100'}`}>
               <div className="flex justify-between items-center gap-4">
                 <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase ${log.severity === 'critical' ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-600'}`}>{log.event_type}</span>
                 <span className="text-[10px] font-bold text-gray-400">{new Date(log.timestamp).toLocaleString()}</span>

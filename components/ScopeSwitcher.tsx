@@ -41,7 +41,7 @@ const ScopeSwitcher: React.FC = () => {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-2 text-[11px] font-bold tracking-[0.1em] text-gray-300 hover:text-white uppercase transition-colors px-3 py-1.5 rounded-lg border border-gray-800 hover:border-gray-700"
+        className="flex items-center gap-2 text-[11px] font-bold tracking-widest text-gray-300 hover:text-white uppercase transition-colors px-3 py-1.5 rounded-lg border border-gray-800 hover:border-gray-700"
       >
         <span className="w-1.5 h-1.5 rounded-full bg-[#FF0000]" />
         <span className="max-w-[140px] truncate">{label}</span>

@@ -56,11 +56,11 @@ const DocsLayout: React.FC = () => {
 
             <div className="flex items-center gap-4 shrink-0">
               {user ? (
-                <Link to="/" className="text-[11px] font-bold uppercase tracking-[0.15em] bg-white/5 border border-gray-800 text-gray-200 px-4 py-2 rounded-xl hover:bg-white/10 transition-colors">Open app</Link>
+                <Link to="/" className="text-[11px] font-bold uppercase tracking-widest bg-white/5 border border-gray-800 text-gray-200 px-4 py-2 rounded-xl hover:bg-white/10 transition-colors">Open app</Link>
               ) : (
                 <>
-                  <Link to="/auth" className="hidden sm:inline text-[11px] font-bold uppercase tracking-[0.15em] text-gray-400 hover:text-white transition-colors">Sign In</Link>
-                  <Link to="/auth" className="text-[11px] font-bold uppercase tracking-[0.15em] bg-[#FF0000] text-white px-4 py-2 rounded-xl hover:bg-[#D40000] transition-colors">Start Free</Link>
+                  <Link to="/auth" className="hidden sm:inline text-[11px] font-bold uppercase tracking-widest text-gray-400 hover:text-white transition-colors">Sign In</Link>
+                  <Link to="/auth" className="text-[11px] font-bold uppercase tracking-widest bg-[#FF0000] text-white px-4 py-2 rounded-xl hover:bg-[#D40000] transition-colors">Start Free</Link>
                 </>
               )}
             </div>

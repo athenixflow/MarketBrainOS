@@ -230,7 +230,7 @@ const AngleMinerX: React.FC = () => {
       </div>
       
       <div className="space-y-8">
-        <div className="p-8 bg-gray-50 rounded-[32px] border border-gray-100">
+        <div className="p-8 bg-gray-50 rounded-2xl border border-gray-100">
           <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-4">Core Hook</p>
           <p className="text-lg font-bold text-[#0B0B0B] leading-relaxed">
             "{angle.improved || angle.hook}"
@@ -489,7 +489,7 @@ const AngleMinerX: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
                   {['Ads', 'Organic', 'Funnel'].map(platform => (
                     <div key={platform} className="space-y-8">
-                      <h4 className="text-[10px] font-bold text-[#FF0000] uppercase tracking-[0.4em] mb-4 text-center">{platform} Hooks</h4>
+                      <h4 className="text-[10px] font-bold text-[#FF0000] uppercase tracking-[0.3em] mb-4 text-center">{platform} Hooks</h4>
                       {(results.hooks || [])
                         .filter(h => h.platform.toLowerCase().includes(platform.toLowerCase()))
                         .map((hook, i) => (

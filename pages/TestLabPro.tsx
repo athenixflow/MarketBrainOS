@@ -345,7 +345,7 @@ const TestLabPro: React.FC = () => {
             </div>
 
             <div className="mb-20">
-              <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-[0.4em] mb-10 text-center">Winning Strategic Asset</p>
+              <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-[0.3em] mb-10 text-center">Winning Strategic Asset</p>
               <Card accent className="!border-[#FF0000]/10 !bg-[#FFF9F9] shadow-2xl scale-[1.02]">
                 <div className="flex justify-between items-start mb-10">
                   <div>
@@ -359,10 +359,10 @@ const TestLabPro: React.FC = () => {
                   </div>
                   {winningVariant && <IntelligenceIndicator score={winningVariant.score} />}
                 </div>
-                <div className="p-10 bg-white rounded-[32px] border border-[#FF0000]/5 text-2xl font-bold text-[#0B0B0B] leading-relaxed mb-10 shadow-inner">
+                <div className="p-10 bg-white rounded-2xl border border-[#FF0000]/5 text-2xl font-bold text-[#0B0B0B] leading-relaxed mb-10 shadow-inner">
                   "{winningVariant?.text}"
                 </div>
-                <div className="p-8 bg-gray-50/50 rounded-[24px] border border-gray-100 text-gray-500 leading-relaxed font-medium whitespace-pre-wrap">
+                <div className="p-8 bg-gray-50/50 rounded-2xl border border-gray-100 text-gray-500 leading-relaxed font-medium whitespace-pre-wrap">
                   {results.explanation}
                 </div>
               </Card>

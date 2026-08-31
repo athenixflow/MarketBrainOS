@@ -107,7 +107,7 @@ export function AdminTable<T extends { id?: string }>({
       )}
       <Card className="!p-0 overflow-hidden">
         {filtered.length === 0 ? (
-          <div className="p-12 text-center text-gray-400 font-medium text-sm">{empty}</div>
+          <div className="p-8 sm:p-12 text-center text-gray-400 font-medium text-sm">{empty}</div>
         ) : (
           // min-w is what actually makes the scroller work: with `w-full` alone the table shrank to
           // its container instead of overflowing, so columns collapsed to 1-2 characters and the

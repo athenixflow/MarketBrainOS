@@ -197,7 +197,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       {/* CONFIRMATION MODAL */}
       {confirmReq && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0B0B0B]/95 backdrop-blur-md p-6">
-          <div className="max-w-md w-full bg-[#1A1A1A] border-2 border-red-600 rounded-[32px] p-10 shadow-2xl shadow-red-900/40 animate-in zoom-in duration-300">
+          <div className="max-w-md w-full bg-[#1A1A1A] border-2 border-red-600 rounded-2xl p-10 shadow-2xl shadow-red-900/40 animate-in zoom-in duration-300">
             <p className="text-[10px] font-black text-red-500 uppercase tracking-[0.3em] mb-4">Destructive Action Protocol</p>
             <h3 className="text-2xl font-black text-white mb-6 uppercase leading-none">{confirmReq.warningTitle}</h3>
             <p className="text-sm font-medium text-gray-400 mb-8 leading-relaxed">{confirmReq.warningMessage}</p>

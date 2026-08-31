@@ -50,12 +50,12 @@ const Audit: React.FC = () => {
       {filtered.length === 0 ? <p className="text-sm text-gray-400 py-8 text-center font-medium italic">No audit events match.</p> : (
         <div className="space-y-4">
           {filtered.map(log => (
-            <div key={log.id} className="p-6 bg-white border border-gray-100 rounded-[24px] flex flex-col gap-3">
+            <div key={log.id} className="p-6 bg-white border border-gray-100 rounded-2xl flex flex-col gap-3">
               <div className="flex justify-between items-start gap-4">
                 <div className="flex items-center gap-3"><div className="w-2 h-2 rounded-full bg-blue-500" /><span className="text-[13px] font-black uppercase text-[#0B0B0B]">{log.action_type}</span></div>
                 <p className="text-[10px] font-bold text-gray-400 uppercase">{new Date(log.timestamp).toLocaleString()}</p>
               </div>
-              <div className="grid grid-cols-2 gap-8 text-[11px]">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-8 text-[11px]">
                 <div><p className="font-bold text-gray-400 uppercase tracking-widest mb-1">Actor</p><p className="font-bold text-[#0B0B0B] truncate">{log.admin_email}</p></div>
                 <div><p className="font-bold text-gray-400 uppercase tracking-widest mb-1">Target</p><p className="font-bold text-[#0B0B0B] truncate">{log.target}</p></div>
               </div>

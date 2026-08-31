@@ -219,7 +219,7 @@ const Dashboard: React.FC = () => {
 
         {/* ===================== ROW 2 — AI INSIGHTS ===================== */}
         <AnimatedSection as="section" index={1}>
-          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-[0.4em] mb-6">AI Insights</h2>
+          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-[0.3em] mb-6">AI Insights</h2>
           {hasData ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <Card accent>
@@ -257,7 +257,7 @@ const Dashboard: React.FC = () => {
 
         {/* ===================== ROW 3 — PERFORMANCE METRICS ===================== */}
         <AnimatedSection as="section" index={2}>
-          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-[0.4em] mb-6">Performance Metrics</h2>
+          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-[0.3em] mb-6">Performance Metrics</h2>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
             <Stat label="Analyses Generated" value={analyses.length} />
             <Stat label="Reports Generated" value={reports.length} />
@@ -268,7 +268,7 @@ const Dashboard: React.FC = () => {
 
         {/* ===================== ROW 4 — BI SUMMARY ===================== */}
         <AnimatedSection as="section" index={3}>
-          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-[0.4em] mb-6">Business Intelligence Summary</h2>
+          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-[0.3em] mb-6">Business Intelligence Summary</h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card title="Most Used Tools">
               {metrics.mostUsed.length === 0 ? (
@@ -309,7 +309,7 @@ const Dashboard: React.FC = () => {
 
         {/* ===================== ROW 5 — RECENT ACTIVITY ===================== */}
         <AnimatedSection as="section" index={4}>
-          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-[0.4em] mb-6">Recent Activity</h2>
+          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-[0.3em] mb-6">Recent Activity</h2>
           <Card>
             {loadingData ? (
               <p className="text-sm text-gray-400 font-medium py-8 text-center">Loading activity…</p>
@@ -349,7 +349,7 @@ const Dashboard: React.FC = () => {
         {/* ===================== ANALYSIS TOOLS ===================== */}
         <AnimatedSection index={6} className="grid grid-cols-1 gap-12">
           <div id="tools-section" />
-          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-[0.4em] mb-4">Analysis Tools</h2>
+          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-[0.3em] mb-4">Analysis Tools</h2>
           {NAV_SUITES.map((group, gi) => (
             <div key={group.suite} className="mb-4">
               <div className="flex items-center gap-4 mb-8">

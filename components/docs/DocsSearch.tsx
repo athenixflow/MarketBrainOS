@@ -44,7 +44,7 @@ const DocsSearch: React.FC<{ open: boolean; onClose: () => void }> = ({ open, on
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[10vh] px-4" role="dialog" aria-modal="true" aria-label="Search documentation">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-2xl bg-[#0F0F0F] border border-gray-800 rounded-3xl shadow-2xl overflow-hidden" onKeyDown={onKeyDown}>
+      <div className="relative w-full max-w-2xl bg-[#0F0F0F] border border-gray-800 rounded-2xl shadow-2xl overflow-hidden" onKeyDown={onKeyDown}>
         <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-800">
           <Icon name="search" className="w-5 h-5 text-gray-500 shrink-0" />
           <input

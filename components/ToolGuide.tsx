@@ -11,7 +11,7 @@ export const ExpectedOutcome: React.FC<{
   estimatedTime?: string;
   analyzes?: string;
 }> = ({ outcomes, estimatedTime, analyzes }) => (
-  <div className="bg-[#121212] border border-gray-900 rounded-[32px] p-8 lg:p-10">
+  <div className="bg-[#121212] border border-gray-900 rounded-2xl p-8 lg:p-10">
     <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em]">What this analysis generates</p>
       {estimatedTime && <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Est. {estimatedTime}</span>}
@@ -79,7 +79,7 @@ export const RunProgress: React.FC<{ stage: RunStage; isTakingLong?: boolean }> 
           </React.Fragment>
         ))}
       </div>
-      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.4em]">
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em]">
         {stage === 'queued' ? 'Preparing analysis…' : stage === 'running' ? 'Running deep analysis…' : 'Analysis complete'}
       </p>
       {isTakingLong && stage === 'running' && (

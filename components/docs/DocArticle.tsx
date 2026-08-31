@@ -73,7 +73,7 @@ const DocArticle: React.FC = () => {
         </header>
 
         {/* Body card */}
-        <div className="bg-white text-[#0B0B0B] rounded-[32px] p-7 lg:p-12 shadow-[0_15px_50px_rgba(0,0,0,0.15)]">
+        <div className="bg-white text-[#0B0B0B] rounded-2xl p-7 lg:p-12 shadow-[0_15px_50px_rgba(0,0,0,0.15)]">
           <DocsBlocks blocks={article.blocks} />
         </div>
 

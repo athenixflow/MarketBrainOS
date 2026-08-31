@@ -55,7 +55,7 @@ const AdminPortalInner: React.FC = () => {
       {a.isEmergencyActive && (
         <div className="fixed top-16 left-0 lg:left-72 right-0 bg-red-600 text-white py-2 px-12 z-40 flex items-center justify-center gap-4 animate-pulse">
           <div className="w-2 h-2 rounded-full bg-white" />
-          <span className="text-[10px] font-black uppercase tracking-[0.5em]">Global Operational Lockdown Active — Limited Investigation Mode</span>
+          <span className="text-[10px] font-black uppercase tracking-[0.3em]">Global Operational Lockdown Active — Limited Investigation Mode</span>
           <div className="w-2 h-2 rounded-full bg-white" />
         </div>
       )}

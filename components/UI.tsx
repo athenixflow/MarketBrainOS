@@ -68,7 +68,7 @@ export const Card: React.FC<{
     {title && (
       <div className="flex items-center gap-4 mb-6">
         <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000] flex-shrink-0" />
-        <h2 className={`text-sm font-bold uppercase tracking-[0.1em] ${dark ? 'text-white/90' : 'text-[#0B0B0B]/80'}`}>{title}</h2>
+        <h2 className={`text-sm font-bold uppercase tracking-widest ${dark ? 'text-white/90' : 'text-[#0B0B0B]/80'}`}>{title}</h2>
       </div>
     )}
     {children}
@@ -190,7 +190,7 @@ export const LoadingState: React.FC<{
 }> = ({ message = "Analyzing...", isTakingLong, onCancel }) => (
   <div className="flex flex-col items-center justify-center py-24 animate-in fade-in duration-500">
     <div className="w-1.5 h-1.5 bg-[#FF0000] rounded-full mb-6 animate-pulse" />
-    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.5em] mb-4">{message}</span>
+    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.3em] mb-4">{message}</span>
     {isTakingLong && (
       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest animate-in fade-in">
         This is taking longer than usual. Still working…
@@ -242,7 +242,7 @@ export const AnalysisFailureState: React.FC<{
   message: string;
   onRetry?: () => void;
 }> = ({ message, onRetry }) => (
-  <div className="py-12 px-8 rounded-[32px] bg-red-50/30 border border-red-100 flex flex-col items-center text-center animate-in fade-in duration-500 my-8">
+  <div className="py-12 px-8 rounded-2xl bg-red-50/30 border border-red-100 flex flex-col items-center text-center animate-in fade-in duration-500 my-8">
     <div className="w-12 h-12 bg-red-100 text-red-500 rounded-full flex items-center justify-center mb-6 shadow-sm">
        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
@@ -269,7 +269,7 @@ export const AnalysisFailureState: React.FC<{
 
 // 11b. SYSTEM BLOCK STATE (MAINTENANCE / PAUSE)
 export const SystemBlockState: React.FC<{ message: string }> = ({ message }) => (
-  <div className="py-12 px-8 rounded-[32px] bg-yellow-50/50 border border-yellow-100 flex flex-col items-center text-center animate-in fade-in duration-500 my-8">
+  <div className="py-12 px-8 rounded-2xl bg-yellow-50/50 border border-yellow-100 flex flex-col items-center text-center animate-in fade-in duration-500 my-8">
     <div className="w-12 h-12 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mb-6 shadow-sm">
        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
@@ -289,7 +289,7 @@ export const SystemBlockState: React.FC<{ message: string }> = ({ message }) => 
 
 // 11c. RATE LIMIT STATE (COOLDOWN)
 export const RateLimitState: React.FC<{ message: string }> = ({ message }) => (
-  <div className="py-12 px-8 rounded-[32px] bg-blue-50/50 border border-blue-100 flex flex-col items-center text-center animate-in fade-in duration-500 my-8">
+  <div className="py-12 px-8 rounded-2xl bg-blue-50/50 border border-blue-100 flex flex-col items-center text-center animate-in fade-in duration-500 my-8">
     <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-6 shadow-sm">
        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -316,7 +316,7 @@ export const RateLimitState: React.FC<{ message: string }> = ({ message }) => (
 
 // 11d. NETWORK ERROR STATE (CONNECTIVITY/CORS)
 export const NetworkErrorState: React.FC<{ message: string; onRetry?: () => void }> = ({ message, onRetry }) => (
-  <div className="py-12 px-8 rounded-[32px] bg-gray-50 border border-gray-200 flex flex-col items-center text-center animate-in fade-in duration-500 my-8">
+  <div className="py-12 px-8 rounded-2xl bg-gray-50 border border-gray-200 flex flex-col items-center text-center animate-in fade-in duration-500 my-8">
     <div className="w-12 h-12 bg-gray-200 text-gray-500 rounded-full flex items-center justify-center mb-6 shadow-sm">
        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
          <path strokeLinecap="round" strokeLinejoin="round" d="M3 3l1.664 1.664M21 21l-1.5-1.5m-5.485-1.242L12 17.25 4.5 12.75m0 0l7.5-4.5 4.885 2.932m-4.885 5.568l3-1.8m-3 1.8L9 15.75m3-3v3m0-3l-3-3m3 3l3 3" />
@@ -442,7 +442,7 @@ export const UsageLimitModal: React.FC<{
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0B0B0B]/90 backdrop-blur-md p-6 animate-in fade-in duration-300">
-      <div className="bg-white text-[#0B0B0B] max-w-md w-full p-12 rounded-[40px] shadow-2xl relative">
+      <div className="bg-white text-[#0B0B0B] max-w-md w-full p-6 sm:p-10 rounded-2xl shadow-2xl relative">
         <div className="w-2 h-2 rounded-full bg-[#FF0000] mb-8" />
         <h3 className="text-2xl font-bold mb-4 tracking-tight">{content.title}</h3>
         <p className="text-gray-500 font-medium mb-10 leading-relaxed whitespace-pre-line">
@@ -520,7 +520,7 @@ export const UpgradeCard: React.FC<{ onClick: () => void }> = ({ onClick }) => (
   <Card className="!bg-[#FF0000] !text-white !border-none shadow-2xl shadow-[#FF0000]/20 hover:scale-[1.01] transition-transform cursor-pointer" onClick={onClick}>
     <div className="flex flex-col h-full justify-between">
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-[0.4em] mb-8 opacity-60">Elite Intelligence</p>
+        <p className="text-[10px] font-bold uppercase tracking-[0.3em] mb-8 opacity-60">Elite Intelligence</p>
         <h3 className="text-3xl font-bold tracking-tight mb-8 leading-tight">Upgrade to Pro to keep working without interruption.</h3>
       </div>
       <div className="flex items-center gap-4">
@@ -543,13 +543,13 @@ export const LockedFeatureCard: React.FC<{
   return (
     <div
       onClick={go}
-      className="bg-[#121212] text-white p-10 rounded-[32px] border border-gray-800 relative overflow-hidden cursor-pointer hover:border-[#FF0000]/40 transition-all duration-500 group"
+      className="bg-[#121212] text-white p-10 rounded-2xl border border-gray-800 relative overflow-hidden cursor-pointer hover:border-[#FF0000]/40 transition-all duration-500 group"
     >
       <div className="flex items-center gap-3 mb-6">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-gray-500">
           <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
         </svg>
-        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-[0.4em]">Locked</p>
+        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-[0.3em]">Locked</p>
       </div>
       <h3 className="text-xl font-bold tracking-tight mb-3">{title}</h3>
       <p className="text-sm text-gray-400 font-medium leading-relaxed mb-8">{description}</p>
@@ -675,7 +675,7 @@ export const TokenHistoryModal: React.FC<{ onClose: () => void }> = ({ onClose }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0B0B0B]/90 backdrop-blur-md p-6 animate-in fade-in duration-300">
-      <div className="bg-white text-[#0B0B0B] max-w-2xl w-full p-10 rounded-[40px] shadow-2xl relative max-h-[85vh] overflow-hidden flex flex-col">
+      <div className="bg-white text-[#0B0B0B] max-w-2xl w-full p-10 rounded-2xl shadow-2xl relative max-h-[85vh] overflow-hidden flex flex-col">
         <div className="flex justify-between items-center mb-8 shrink-0">
           <div>
             <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000] mb-2" />
@@ -779,7 +779,7 @@ export const PaymentHistoryModal: React.FC<{ onClose: () => void }> = ({ onClose
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0B0B0B]/90 backdrop-blur-md p-6 animate-in fade-in duration-300">
-      <div className="bg-white text-[#0B0B0B] max-w-2xl w-full p-10 rounded-[40px] shadow-2xl relative max-h-[85vh] overflow-hidden flex flex-col">
+      <div className="bg-white text-[#0B0B0B] max-w-2xl w-full p-10 rounded-2xl shadow-2xl relative max-h-[85vh] overflow-hidden flex flex-col">
         <div className="flex justify-between items-center mb-8 shrink-0">
           <div>
             <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000] mb-2" />

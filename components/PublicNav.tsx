@@ -27,7 +27,7 @@ const PublicNav: React.FC = () => {
             <Link
               key={l.to}
               to={l.to}
-              className={`text-[11px] font-bold uppercase tracking-[0.15em] transition-colors ${location.pathname === l.to ? 'text-white' : 'text-gray-500 hover:text-white'}`}
+              className={`text-[11px] font-bold uppercase tracking-widest transition-colors ${location.pathname === l.to ? 'text-white' : 'text-gray-500 hover:text-white'}`}
             >
               {l.label}
             </Link>
@@ -35,8 +35,8 @@ const PublicNav: React.FC = () => {
         </nav>
 
         <div className="hidden md:flex items-center gap-6">
-          <Link to="/auth" className="text-[11px] font-bold uppercase tracking-[0.15em] text-gray-400 hover:text-white transition-colors">Sign In</Link>
-          <Link to="/auth" className="text-[11px] font-bold uppercase tracking-[0.15em] bg-[#FF0000] text-white px-5 py-2.5 rounded-xl hover:bg-[#D40000] transition-colors">Start Free</Link>
+          <Link to="/auth" className="text-[11px] font-bold uppercase tracking-widest text-gray-400 hover:text-white transition-colors">Sign In</Link>
+          <Link to="/auth" className="text-[11px] font-bold uppercase tracking-widest bg-[#FF0000] text-white px-5 py-2.5 rounded-xl hover:bg-[#D40000] transition-colors">Start Free</Link>
         </div>
 
         {/* Mobile toggle */}
@@ -51,13 +51,13 @@ const PublicNav: React.FC = () => {
       {open && (
         <div className="md:hidden border-t border-gray-900/50 px-6 py-6 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
           {LINKS.map((l) => (
-            <Link key={l.to} to={l.to} onClick={() => setOpen(false)} className="block text-xs font-bold uppercase tracking-[0.15em] text-gray-400 hover:text-white transition-colors">
+            <Link key={l.to} to={l.to} onClick={() => setOpen(false)} className="block text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-white transition-colors">
               {l.label}
             </Link>
           ))}
           <div className="pt-4 flex items-center gap-4 border-t border-gray-900/50">
-            <Link to="/auth" onClick={() => setOpen(false)} className="text-xs font-bold uppercase tracking-[0.15em] text-gray-400">Sign In</Link>
-            <Link to="/auth" onClick={() => setOpen(false)} className="text-xs font-bold uppercase tracking-[0.15em] bg-[#FF0000] text-white px-4 py-2 rounded-xl">Start Free</Link>
+            <Link to="/auth" onClick={() => setOpen(false)} className="text-xs font-bold uppercase tracking-widest text-gray-400">Sign In</Link>
+            <Link to="/auth" onClick={() => setOpen(false)} className="text-xs font-bold uppercase tracking-widest bg-[#FF0000] text-white px-4 py-2 rounded-xl">Start Free</Link>
           </div>
         </div>
       )}

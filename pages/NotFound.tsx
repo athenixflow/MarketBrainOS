@@ -50,9 +50,9 @@ const NotFound: React.FC = () => {
         </div>
       </div>
 
-      <p className="text-[10px] font-black text-[#FF0000] uppercase tracking-[0.4em] mb-6">Page not found</p>
+      <p className="text-[10px] font-black text-[#FF0000] uppercase tracking-[0.3em] mb-6">Page not found</p>
       <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight mb-5 max-w-xl">
-        This page doesn’t exist — or it moved.
+        This page doesn’t exist, or it moved.
       </h1>
       <p className="text-gray-500 font-medium leading-relaxed max-w-md mb-12">
         The link may be broken, or the page may have been retired. Let’s get you back to something useful.

@@ -362,7 +362,7 @@ const ConversionDoctor: React.FC = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
               <Card className="lg:col-span-1 flex flex-col justify-center items-center py-20 bg-gray-50/30" accent>
-                 <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-[0.4em] mb-10">Conversion Grade</p>
+                 <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-[0.3em] mb-10">Conversion Grade</p>
                  <div className="text-8xl font-black tracking-tighter mb-4 text-[#0B0B0B]">{result.score}</div>
                  {(() => {
                    const b = getScoreBand(result.score);
@@ -379,7 +379,7 @@ const ConversionDoctor: React.FC = () => {
                 <div className="space-y-8">
                   <div className="flex items-center gap-4 mb-4">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000]" />
-                    <h2 className="text-lg font-bold tracking-tight text-[#0B0B0B] opacity-80 uppercase tracking-[0.1em]">Executive Diagnostic</h2>
+                    <h2 className="text-lg font-bold tracking-tight text-[#0B0B0B] opacity-80 uppercase tracking-widest">Executive Diagnostic</h2>
                   </div>
                   {result.auditedUrl && (
                     <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 rounded-lg w-fit">
@@ -403,7 +403,7 @@ const ConversionDoctor: React.FC = () => {
               <Card className="mt-12">
                 <div className="flex items-center gap-4 mb-8">
                   <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000]" />
-                  <h2 className="text-lg font-bold tracking-tight text-[#0B0B0B] uppercase tracking-[0.1em]">Conversion Blockers</h2>
+                  <h2 className="text-lg font-bold tracking-tight text-[#0B0B0B] uppercase tracking-widest">Conversion Blockers</h2>
                 </div>
                 <div className="space-y-3">
                   {result.issues.map((issue, i) => (
@@ -431,7 +431,7 @@ const ConversionDoctor: React.FC = () => {
               <Card className="mt-12">
                 <div className="flex items-center gap-4 mb-8">
                   <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000]" />
-                  <h2 className="text-lg font-bold tracking-tight text-[#0B0B0B] uppercase tracking-[0.1em]">Prioritized Fixes</h2>
+                  <h2 className="text-lg font-bold tracking-tight text-[#0B0B0B] uppercase tracking-widest">Prioritized Fixes</h2>
                 </div>
                 <div className="space-y-3">
                   {result.fixes.map((fix, i) => (
