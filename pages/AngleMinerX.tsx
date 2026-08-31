@@ -309,7 +309,7 @@ const AngleMinerX: React.FC = () => {
                       value={productName}
                       onChange={(e) => { setProductName(e.target.value); setError(null); }}
                     />
-                    <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">The name of what you’re selling.<span className="text-gray-500"> e.g. MarketBrain OS.</span></p>
+                    <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">The name of what you’re selling.<span className="text-gray-500"> e.g. MarketBrain OS.</span></p>
                   </div>
                   <div className="md:col-span-2">
                     <Input
@@ -331,7 +331,7 @@ const AngleMinerX: React.FC = () => {
                       value={industry}
                       onChange={(e) => { setIndustry(e.target.value); setError(null); }}
                     />
-                    <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">Your sector — shapes language and proof.<span className="text-gray-500"> e.g. B2B SaaS.</span></p>
+                    <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">Your sector — shapes language and proof.<span className="text-gray-500"> e.g. B2B SaaS.</span></p>
                   </div>
                   <div>
                     <Input
@@ -340,7 +340,7 @@ const AngleMinerX: React.FC = () => {
                       value={market}
                       onChange={(e) => { setMarket(e.target.value); setError(null); }}
                     />
-                    <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">The segment you’re targeting.<span className="text-gray-500"> e.g. North America SMBs.</span></p>
+                    <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">The segment you’re targeting.<span className="text-gray-500"> e.g. North America SMBs.</span></p>
                   </div>
                   <div>
                     <Input
@@ -349,7 +349,7 @@ const AngleMinerX: React.FC = () => {
                       value={target}
                       onChange={(e) => { setTarget(e.target.value); setError(null); }}
                     />
-                    <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">The exact person you’re speaking to.<span className="text-gray-500"> e.g. Solo founders running lean teams.</span></p>
+                    <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">The exact person you’re speaking to.<span className="text-gray-500"> e.g. Solo founders running lean teams.</span></p>
                   </div>
                   
                   <div className="mb-12">
@@ -398,15 +398,15 @@ const AngleMinerX: React.FC = () => {
                   {showAdvanced && (
                     <div>
                       <Input label="Competitors" placeholder="Who else competes for this attention?" value={competitors} onChange={(e) => setCompetitors(e.target.value)} />
-                      <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">Rivals to differentiate against.<span className="text-gray-500"> e.g. Asana, Monday, ClickUp.</span></p>
+                      <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">Rivals to differentiate against.<span className="text-gray-500"> e.g. Asana, Monday, ClickUp.</span></p>
                       <Input label="Buyer Objections" placeholder="Why might they hesitate?" value={objections} onChange={(e) => setObjections(e.target.value)} multiline />
-                      <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">Doubts the angles should defuse.<span className="text-gray-500"> e.g. “Too expensive”, “We already use X”.</span></p>
+                      <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">Doubts the angles should defuse.<span className="text-gray-500"> e.g. “Too expensive”, “We already use X”.</span></p>
                       <Input label="Brand Voice" placeholder="The tone to match" value={brandVoice} onChange={(e) => setBrandVoice(e.target.value)} />
-                      <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">How the copy should sound.<span className="text-gray-500"> e.g. Confident, plain-spoken, a little playful.</span></p>
+                      <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">How the copy should sound.<span className="text-gray-500"> e.g. Confident, plain-spoken, a little playful.</span></p>
                       <Input label="Proof / Credibility" placeholder="Results, stats, testimonials to lean on" value={proofPoints} onChange={(e) => setProofPoints(e.target.value)} multiline />
-                      <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">Evidence the angles can use.<span className="text-gray-500"> e.g. “Used by 4,000 teams”, “2.3× ROI in 30 days”.</span></p>
+                      <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">Evidence the angles can use.<span className="text-gray-500"> e.g. “Used by 4,000 teams”, “2.3× ROI in 30 days”.</span></p>
                       <Input label="Price Point" placeholder="e.g. $49/mo" value={pricePoint} onChange={(e) => setPricePoint(e.target.value)} />
-                      <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">Shapes how the value is framed.<span className="text-gray-500"> e.g. $49/mo, or $2k one-time.</span></p>
+                      <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">Shapes how the value is framed.<span className="text-gray-500"> e.g. $49/mo, or $2k one-time.</span></p>
                     </div>
                   )}
                 </div>
@@ -493,7 +493,7 @@ const AngleMinerX: React.FC = () => {
                       {(results.hooks || [])
                         .filter(h => h.platform.toLowerCase().includes(platform.toLowerCase()))
                         .map((hook, i) => (
-                        <Card key={i} className="!p-8 !rounded-[24px]">
+                        <Card key={i}>
                           <div className="space-y-6">
                             <div>
                               <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mb-2">Short Hook</p>

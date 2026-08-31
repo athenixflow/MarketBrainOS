@@ -25,12 +25,14 @@ const LANGUAGES = ['English', 'Spanish', 'French', 'German', 'Portuguese', 'Arab
 // --- small primitives ---
 const Select: React.FC<{ label: string; value: string; options: string[]; onChange: (v: string) => void; placeholder?: string }> =
   ({ label, value, options, onChange, placeholder }) => (
-    <div className="flex flex-col mb-8">
-      <label className="text-xs font-bold text-gray-700 mb-5 tracking-widest uppercase">{label}</label>
+    // Geometry mirrors UI.Input exactly: these two controls sit side by side in the same grid row on
+    // the Profile/Account tabs, and previously differed in height, radius and label offset.
+    <div className="flex flex-col mb-6">
+      <label className="text-[11px] font-bold text-gray-500 mb-2 tracking-widest uppercase">{label}</label>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="bg-[#FBFBFB] border border-gray-100 p-6 rounded-[24px] focus:ring-4 focus:ring-[#FF0000]/5 focus:border-[#FF0000]/20 outline-none transition-all text-base text-[#0B0B0B]"
+        className="w-full min-w-0 bg-[#FBFBFB] border border-gray-200 px-4 py-3.5 rounded-2xl focus:ring-4 focus:ring-[#FF0000]/10 focus:border-[#FF0000] outline-none transition-all text-[15px] text-[#0B0B0B]"
       >
         <option value="">{placeholder || 'Select…'}</option>
         {options.map(o => <option key={o} value={o}>{o}</option>)}
@@ -217,7 +219,7 @@ const Settings: React.FC = () => {
       {activeTab === 'Account' && (
         <Card>
           <Input label="Email Address" placeholder="" value={profile.email} onChange={() => {}} disabled />
-          <p className="-mt-8 mb-8 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Email changes coming soon</p>
+          <p className="-mt-2 mb-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Email changes coming soon</p>
           <Input label="Username" placeholder="janedoe" value={form.username} onChange={set('username')} />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
             <Select label="Time Zone" value={form.timezone} options={TIMEZONES} onChange={(v) => setForm(f => ({ ...f, timezone: v }))} />

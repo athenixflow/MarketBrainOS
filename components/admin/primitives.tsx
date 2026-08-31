@@ -7,7 +7,7 @@ import { Card } from '../UI';
 
 export const KpiCard: React.FC<{ label: string; value: React.ReactNode; hint?: string; accent?: boolean; tone?: 'default' | 'danger' | 'good' }> =
   ({ label, value, hint, accent, tone = 'default' }) => (
-    <Card accent={accent} className="!p-8">
+    <Card accent={accent}>
       <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-3">{label}</p>
       <p className={`text-3xl font-black leading-none ${tone === 'danger' ? 'text-red-500' : tone === 'good' ? 'text-green-600' : 'text-[#0B0B0B]'}`}>{value}</p>
       {hint && <p className="text-[11px] font-medium text-gray-400 mt-3">{hint}</p>}
@@ -46,7 +46,7 @@ export const ComingSoon: React.FC<{ title: string; description: string }> = ({ t
 );
 
 export const ComingSoonCard: React.FC<{ title: string; description: string }> = ({ title, description }) => (
-  <Card className="!p-10">
+  <Card>
     <div className="flex items-center gap-3 mb-4">
       <span className="px-3 py-1 rounded-full bg-gray-100 text-gray-400 text-[9px] font-bold uppercase tracking-widest">Coming soon</span>
     </div>

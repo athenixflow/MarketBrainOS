@@ -413,9 +413,12 @@ const AppContainer: React.FC = () => {
       {showSidebar && <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />}
       {showSidebar && <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />}
       
+      {/* Content container: max-w-5xl + p-20 previously left only 576px of content at a 1024px laptop,
+          which is why the two-column tool layout collapsed to ~108px of typing width and the admin
+          tables scrolled horizontally on desktop. */}
       <main className={`${showSidebar ? 'lg:ml-72 ml-0 pt-16' : ''} min-h-screen flex flex-col`}>
         {showSidebar ? (
-          <div className="p-6 lg:p-20 max-w-5xl w-full mx-auto flex-grow animate-in fade-in slide-in-from-bottom-2 duration-500">
+          <div className="px-6 lg:px-12 py-8 lg:py-12 max-w-7xl w-full mx-auto flex-grow animate-in fade-in slide-in-from-bottom-2 duration-500">
             <AppRoutes />
           </div>
         ) : (

@@ -45,7 +45,7 @@ const Reports: React.FC = () => {
   ];
 
   const Btn: React.FC<{ onClick: () => void; label: string; sub: string }> = ({ onClick, label, sub }) => (
-    <Card className="!p-8 flex items-center justify-between">
+    <Card className="flex items-center justify-between">
       <div><p className="text-sm font-bold text-[#0B0B0B]">{label}</p><p className="text-xs text-gray-400 font-medium mt-1">{sub}</p></div>
       <button onClick={onClick} className="px-5 py-2.5 rounded-xl bg-[#FF0000] text-white text-[10px] font-bold uppercase tracking-widest hover:bg-[#D40000]">Export CSV</button>
     </Card>

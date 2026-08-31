@@ -74,9 +74,10 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
   // One renderer for both groups (option button-group OR text Input + helper/example + counter).
   const renderField = (field: ToolConfig['inputs'][number]) => (
     field.options ? (
-      <div key={field.key} className="mb-12">
-        <label className="block text-xs font-bold text-gray-700 mb-5 tracking-widest uppercase">{field.label}</label>
-        <div className="grid grid-cols-2 gap-2">
+      <div key={field.key} className="mb-6">
+        <label className="block text-[11px] font-bold text-gray-500 mb-2 tracking-widest uppercase">{field.label}</label>
+        {/* grid-cols-1 base: at 390px two columns left ~119px per button for a bold label. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {field.options.map(opt => (
             <button
               key={opt}
@@ -104,7 +105,7 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
           multiline={field.multiline}
         />
         {(field.description || field.example) && (
-          <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">
+          <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">
             {field.description}{field.example ? <span className="text-gray-500"> e.g. {field.example}</span> : null}
           </p>
         )}

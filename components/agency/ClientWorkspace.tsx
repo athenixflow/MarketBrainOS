@@ -112,10 +112,10 @@ const ClientWorkspace: React.FC<{
       {tab === 'Overview' && (
         <div className="space-y-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            <Card className="!p-6"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Analyses</p><p className="text-3xl font-black text-[#0B0B0B]">{analyses.length}</p></Card>
-            <Card className="!p-6"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Notes</p><p className="text-3xl font-black text-[#0B0B0B]">{notes.length}</p></Card>
-            <Card className="!p-6"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Assigned</p><p className="text-3xl font-black text-[#0B0B0B]">{assignments.length}</p></Card>
-            <Card className="!p-6"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Status</p><p className="text-xl font-black text-[#0B0B0B] capitalize">{client.status.replace('_', ' ')}</p></Card>
+            <Card><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Analyses</p><p className="text-3xl font-black text-[#0B0B0B]">{analyses.length}</p></Card>
+            <Card><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Notes</p><p className="text-3xl font-black text-[#0B0B0B]">{notes.length}</p></Card>
+            <Card><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Assigned</p><p className="text-3xl font-black text-[#0B0B0B]">{assignments.length}</p></Card>
+            <Card><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Status</p><p className="text-xl font-black text-[#0B0B0B] capitalize">{client.status.replace('_', ' ')}</p></Card>
           </div>
           <Card title={`Run an analysis for ${client.name}`}>
             <p className="text-sm text-gray-500 font-medium mb-6">

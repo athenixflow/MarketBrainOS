@@ -91,7 +91,7 @@ export const RunProgress: React.FC<{ stage: RunStage; isTakingLong?: boolean }> 
 
 // Character counter for text inputs.
 export const CharCounter: React.FC<{ value: string; max: number }> = ({ value, max }) => (
-  <div className="-mt-10 mb-8 flex justify-end">
+  <div className="-mt-4 mb-6 flex justify-end">
     <span className={`text-[10px] font-bold uppercase tracking-widest ${value.length > max ? 'text-[#FF0000]' : 'text-gray-300'}`}>
       {value.length} / {max}
     </span>

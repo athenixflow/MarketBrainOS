@@ -254,7 +254,7 @@ const ConversionDoctor: React.FC = () => {
                   />
                 </div>
 
-                <div className="flex justify-between items-start mt-[-40px] mb-8">
+                <div className="flex justify-between items-start -mt-4 mb-6">
                   <div className="flex items-center gap-2">
                     {showInlineError && (
                       <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2">
@@ -298,11 +298,11 @@ const ConversionDoctor: React.FC = () => {
                   {showAdvanced && (
                     <div>
                       <Input label="Target Audience" placeholder="Who is this page for?" value={audience} onChange={(e) => setAudience(e.target.value)} />
-                      <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">Who you’re trying to convert — the audit weighs friction differently per audience.<span className="text-gray-500"> e.g. First-time visitors from cold Meta ads.</span></p>
+                      <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">Who you’re trying to convert — the audit weighs friction differently per audience.<span className="text-gray-500"> e.g. First-time visitors from cold Meta ads.</span></p>
                       <Input label="Conversion Goal" placeholder="The one action you want" value={goal} onChange={(e) => setGoal(e.target.value)} />
-                      <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">The single action this page should drive.<span className="text-gray-500"> e.g. Start a free trial.</span></p>
+                      <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">The single action this page should drive.<span className="text-gray-500"> e.g. Start a free trial.</span></p>
                       <Input label="Traffic Source" placeholder="Where visitors come from" value={trafficSource} onChange={(e) => setTrafficSource(e.target.value)} />
-                      <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">How people arrive — intent differs by source.<span className="text-gray-500"> e.g. Google search, cold ads, email list.</span></p>
+                      <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">How people arrive — intent differs by source.<span className="text-gray-500"> e.g. Google search, cold ads, email list.</span></p>
                     </div>
                   )}
                 </div>

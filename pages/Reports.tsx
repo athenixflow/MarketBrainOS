@@ -62,7 +62,7 @@ const Reports: React.FC = () => {
           {reports.map((r) => {
             const date = r.created_at ? new Date(r.created_at) : null;
             return (
-              <Card key={r.id} accent className="!p-8">
+              <Card key={r.id} accent>
                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-3">
                   {r.report_type || 'Report'}
                   {date && <> • {date.toLocaleDateString()}</>}

@@ -7,7 +7,7 @@ const BAND_COLOR: Record<string, string> = {
   critical: 'text-red-600', weak: 'text-orange-500', stable: 'text-yellow-500', strong: 'text-blue-500', excellent: 'text-green-600',
 };
 const Stat: React.FC<{ label: string; value: string | number }> = ({ label, value }) => (
-  <Card className="!p-6"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">{label}</p><p className="text-3xl font-black text-[#0B0B0B]">{value}</p></Card>
+  <Card><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">{label}</p><p className="text-3xl font-black text-[#0B0B0B]">{value}</p></Card>
 );
 
 const EnterpriseDashboard: React.FC<{
@@ -16,7 +16,7 @@ const EnterpriseDashboard: React.FC<{
 }> = ({ enterprise, health, analytics, memberCount, onRefresh, refreshing, onQuickAction }) => (
   <div className="space-y-10">
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-      <Card className="!p-8 lg:col-span-1 flex flex-col items-center justify-center text-center">
+      <Card className="lg:col-span-1 flex flex-col items-center justify-center text-center">
         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">Enterprise Health</p>
         {health ? (
           <>

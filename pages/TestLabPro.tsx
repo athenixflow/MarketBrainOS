@@ -251,7 +251,7 @@ const TestLabPro: React.FC = () => {
                       onChange={(e) => handleUpdateVariant(i, e.target.value)}
                       multiline
                     />
-                    <p className={`text-right text-[9px] font-bold uppercase tracking-widest mt-[-40px] mb-8 ${v.length > MAX_INPUT_CHARS ? 'text-[#FF0000]' : 'text-gray-300'}`}>
+                    <p className={`text-right text-[9px] font-bold uppercase tracking-widest -mt-4 mb-6 ${v.length > MAX_INPUT_CHARS ? 'text-[#FF0000]' : 'text-gray-300'}`}>
                       {v.length} / {MAX_INPUT_CHARS}
                     </p>
                   </div>
@@ -267,13 +267,13 @@ const TestLabPro: React.FC = () => {
                 {showAdvanced && (
                   <div>
                     <Input label="Target Audience" placeholder="Who will see these?" value={audience} onChange={(e) => setAudience(e.target.value)} />
-                    <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">Who you’re testing against.<span className="text-gray-500"> e.g. Cold Meta traffic, first-time buyers.</span></p>
+                    <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">Who you’re testing against.<span className="text-gray-500"> e.g. Cold Meta traffic, first-time buyers.</span></p>
                     <Input label="Desired Action" placeholder="What should a winner drive?" value={goal} onChange={(e) => setGoal(e.target.value)} />
-                    <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">The action a winning variant should produce.<span className="text-gray-500"> e.g. Click through to the offer.</span></p>
+                    <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">The action a winning variant should produce.<span className="text-gray-500"> e.g. Click through to the offer.</span></p>
                     <Input label="Channel / Placement" placeholder="Where these run" value={channel} onChange={(e) => setChannel(e.target.value)} />
-                    <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">The placement and its constraints.<span className="text-gray-500"> e.g. Meta feed, email subject line.</span></p>
+                    <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">The placement and its constraints.<span className="text-gray-500"> e.g. Meta feed, email subject line.</span></p>
                     <Input label="Product / Offer" placeholder="What’s being promoted" value={product} onChange={(e) => setProduct(e.target.value)} />
-                    <p className="-mt-10 mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">What the variants are selling.<span className="text-gray-500"> e.g. A $29/mo analytics tool.</span></p>
+                    <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">What the variants are selling.<span className="text-gray-500"> e.g. A $29/mo analytics tool.</span></p>
                   </div>
                 )}
               </div>

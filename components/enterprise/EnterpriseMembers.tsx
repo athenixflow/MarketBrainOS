@@ -68,24 +68,24 @@ const EnterpriseMembers: React.FC<{
             <div><p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Unallocated</p><p className="text-lg font-black text-[#0B0B0B] mt-1">{remaining.toLocaleString()}</p></div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 [&>div]:mb-6">
             <Input label="Email" placeholder="exec@company.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={!!editingUid} />
             {!editingUid && <Input label="Temporary password" type="password" autoComplete="new-password" placeholder="They can change it after first login" value={password} onChange={(e) => setPassword(e.target.value)} />}
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-3 tracking-widest uppercase">Role</label>
-              <select value={role} onChange={(e) => setRole(e.target.value as EnterpriseRole)} className="w-full bg-[#FBFBFB] border border-gray-100 p-4 rounded-2xl text-sm outline-none">
+              <label className="block text-[11px] font-bold text-gray-500 mb-2 tracking-widest uppercase">Role</label>
+              <select value={role} onChange={(e) => setRole(e.target.value as EnterpriseRole)} className="w-full min-w-0 bg-[#FBFBFB] border border-gray-200 px-4 py-3.5 rounded-2xl text-[15px] outline-none">
                 {ASSIGNABLE.map(r => <option key={r} value={r}>{ROLE_LABELS[r] || r}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-3 tracking-widest uppercase">Monthly token budget</label>
-              <input type="number" min={0} value={budget} onChange={(e) => setBudget(Math.max(0, parseInt(e.target.value, 10) || 0))} className="w-full bg-[#FBFBFB] border border-gray-100 p-4 rounded-2xl text-sm outline-none text-gray-700" />
+              <label className="block text-[11px] font-bold text-gray-500 mb-2 tracking-widest uppercase">Monthly token budget</label>
+              <input type="number" min={0} value={budget} onChange={(e) => setBudget(Math.max(0, parseInt(e.target.value, 10) || 0))} className="w-full min-w-0 bg-[#FBFBFB] border border-gray-200 px-4 py-3.5 rounded-2xl text-[15px] outline-none text-gray-700" />
               <p className="text-[10px] font-medium text-gray-400 mt-2">0 = unlimited within the pool.</p>
             </div>
           </div>
 
           <div className="mt-6">
-            <label className="block text-xs font-bold text-gray-700 mb-3 tracking-widest uppercase">Tools this member can use</label>
+            <label className="block text-[11px] font-bold text-gray-500 mb-2 tracking-widest uppercase">Tools this member can use</label>
             <p className="text-[11px] text-gray-400 font-medium mb-3">Leave all unchecked to allow every tool.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
               {TOOL_CONFIG_LIST.map((t) => (

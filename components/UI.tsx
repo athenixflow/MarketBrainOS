@@ -49,19 +49,26 @@ export const SecondaryButton: React.FC<{
 );
 
 // 3. CARD COMPONENT
+// Padding is responsive: a flat p-12 left only 246px of interior on a 390px screen, which clipped
+// numbers and table cells. `dark` is a real variant because overriding the base bg via className left
+// `text-[#0B0B0B]` in place (near-black text on a near-black card) and depended on utility order.
 export const Card: React.FC<{
   children: React.ReactNode;
   className?: string;
   title?: string;
   accent?: boolean;
+  dark?: boolean;
   onClick?: () => void;
-}> = ({ children, className, title, accent, onClick }) => (
-  <div onClick={onClick} className={`bg-[#FFFFFF] text-[#0B0B0B] p-12 rounded-[40px] shadow-[0_15px_50px_rgba(0,0,0,0.02)] border border-gray-50/50 relative overflow-hidden transition-all duration-500 ${className}`}>
-    {accent && <div className="absolute top-12 left-0 w-1 h-8 bg-[#FF0000] rounded-r-full" />}
+}> = ({ children, className, title, accent, dark, onClick }) => (
+  <div
+    onClick={onClick}
+    className={`${dark ? 'bg-[#121212] text-white border-gray-900' : 'bg-[#FFFFFF] text-[#0B0B0B] border-gray-100'} p-6 sm:p-8 rounded-2xl shadow-[0_15px_50px_rgba(0,0,0,0.02)] border relative overflow-hidden transition-all duration-500 ${className}`}
+  >
+    {accent && <div className="absolute top-8 left-0 w-1 h-8 bg-[#FF0000] rounded-r-full" />}
     {title && (
-      <div className="flex items-center gap-4 mb-10">
-        <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000]" />
-        <h2 className="text-lg font-bold tracking-tight text-[#0B0B0B] opacity-80 uppercase tracking-[0.1em]">{title}</h2>
+      <div className="flex items-center gap-4 mb-6">
+        <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000] flex-shrink-0" />
+        <h2 className={`text-sm font-bold uppercase tracking-[0.1em] ${dark ? 'text-white/90' : 'text-[#0B0B0B]/80'}`}>{title}</h2>
       </div>
     )}
     {children}
@@ -85,15 +92,18 @@ export const Tabs: React.FC<{
   activeTab: string;
   onTabChange: (tab: string) => void;
 }> = ({ tabs, activeTab, onTabChange }) => (
-  <div className="flex gap-12 border-b border-gray-100 mb-12 overflow-x-auto no-scrollbar">
+  // Renders on the dark page (Settings, AngleMinerX), so the active label must be white: it was
+  // text-[#0B0B0B] on the #0B0B0B background, i.e. the selected tab was invisible. gap-12 also put
+  // 48px between tabs, which pushed 5+ tabs far off-screen on mobile.
+  <div className="flex gap-6 border-b border-gray-900/50 mb-8 overflow-x-auto no-scrollbar">
     {tabs.map((tab) => (
       <button
         key={tab}
         onClick={() => onTabChange(tab)}
-        className={`pb-5 text-xs font-bold uppercase tracking-widest transition-all relative ${
-          activeTab === tab 
-            ? 'text-[#0B0B0B]' 
-            : 'text-gray-400 hover:text-gray-600'
+        className={`pb-4 text-[11px] font-bold uppercase tracking-widest whitespace-nowrap transition-all relative ${
+          activeTab === tab
+            ? 'text-white'
+            : 'text-gray-500 hover:text-gray-300'
         }`}
       >
         {tab}
@@ -119,13 +129,16 @@ export const Input: React.FC<{
   type?: 'text' | 'email' | 'password' | 'number';
   autoComplete?: string;
 }> = ({ label, placeholder, value, onChange, multiline, error, disabled, name, type = 'text', autoComplete }) => (
-  <div className="flex flex-col mb-12">
-    <label className="text-xs font-bold text-gray-700 mb-5 tracking-widest uppercase">{label}</label>
+  // Geometry matches components/auth/AuthField (the settled-correct form geometry in this repo).
+  // The bottom margin is mb-6, not mb-12: the old 48px was un-overridable and every consumer cancelled
+  // it with a -mt-10 hack, which in one case dragged the char counter on top of its own helper text.
+  <div className="flex flex-col mb-6">
+    <label className="text-[11px] font-bold text-gray-500 mb-2 tracking-widest uppercase">{label}</label>
     {multiline ? (
       <textarea
         name={name}
         disabled={disabled}
-        className={`w-full min-w-0 bg-[#FBFBFB] border ${error ? 'border-[#FF0000]/20' : 'border-gray-100'} p-8 rounded-[32px] focus:ring-4 focus:ring-[#FF0000]/5 focus:border-[#FF0000]/20 outline-none min-h-[180px] transition-all text-lg text-[#0B0B0B] placeholder:text-gray-400 leading-relaxed disabled:opacity-50`}
+        className={`w-full min-w-0 bg-[#FBFBFB] border ${error ? 'border-red-300' : 'border-gray-200'} px-4 py-3.5 rounded-2xl focus:ring-4 focus:ring-[#FF0000]/10 focus:border-[#FF0000] outline-none min-h-[150px] transition-all text-[15px] text-[#0B0B0B] placeholder:text-gray-500 leading-relaxed disabled:opacity-50`}
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e)}
@@ -136,22 +149,23 @@ export const Input: React.FC<{
         type={type}
         autoComplete={autoComplete}
         disabled={disabled}
-        className={`w-full min-w-0 bg-[#FBFBFB] border ${error ? 'border-[#FF0000]/20' : 'border-gray-100'} p-8 rounded-[32px] focus:ring-4 focus:ring-[#FF0000]/5 focus:border-[#FF0000]/20 outline-none transition-all text-lg text-[#0B0B0B] placeholder:text-gray-400 disabled:opacity-50`}
+        className={`w-full min-w-0 bg-[#FBFBFB] border ${error ? 'border-red-300' : 'border-gray-200'} px-4 py-3.5 rounded-2xl focus:ring-4 focus:ring-[#FF0000]/10 focus:border-[#FF0000] outline-none transition-all text-[15px] text-[#0B0B0B] placeholder:text-gray-500 disabled:opacity-50`}
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e)}
       />
     )}
-    {error && <p className="mt-4 text-[10px] font-bold text-[#FF0000] uppercase tracking-widest opacity-60">{error}</p>}
+    {error && <p className="mt-2 text-[13px] font-medium text-red-600">{error}</p>}
   </div>
 );
 
 // 7. SECTION HEADER COMPONENT
 export const SectionHeader: React.FC<{ title: string; subtitle?: string }> = ({ title, subtitle }) => (
-  <div className="mb-12 mt-16">
+  <div className="mb-8 mt-12">
     <div className="flex items-center gap-4 mb-4">
       <div className="w-8 h-[2px] bg-[#FF0000] rounded-full" />
-      <h3 className="text-xl font-bold tracking-tight text-[#0B0B0B] uppercase tracking-[0.2em]">{title}</h3>
+      {/* was `tracking-tight ... tracking-[0.2em]` - the second silently won */}
+      <h3 className="text-xl font-bold text-[#0B0B0B] uppercase tracking-[0.2em]">{title}</h3>
     </div>
     {subtitle && <p className="text-gray-400 font-medium text-base ml-12">{subtitle}</p>}
   </div>
@@ -159,7 +173,7 @@ export const SectionHeader: React.FC<{ title: string; subtitle?: string }> = ({ 
 
 // 8. EMPTY STATE COMPONENT
 export const EmptyState: React.FC<{ message: string; submessage?: string }> = ({ message, submessage }) => (
-  <div className="py-32 flex flex-col items-center justify-center text-center animate-in fade-in duration-500">
+  <div className="py-16 flex flex-col items-center justify-center text-center animate-in fade-in duration-500">
     <div className="w-12 h-12 bg-[#F9F9F9] border border-gray-100 rounded-full mb-8 flex items-center justify-center">
       <div className="w-1.5 h-1.5 bg-[#FF0000] rounded-full opacity-30" />
     </div>
@@ -355,14 +369,14 @@ export const isNetworkError = (msg: string | null): boolean => {
 
 // 12. RESULT CONTAINER
 export const ResultContainer: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="mt-24 space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+  <div className="mt-10 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
     {children}
   </div>
 );
 
 // Page Title Template
 export const PageHeader: React.FC<{ title: string; subtitle: string }> = ({ title, subtitle }) => (
-  <div className="mb-24">
+  <div className="mb-10">
     <h1 className="text-4xl font-bold tracking-tight text-white mb-6 leading-tight">{title}</h1>
     <div className="w-12 h-[2px] bg-[#FF0000] rounded-full mb-8" />
     <p className="text-gray-500 font-medium text-xl max-w-2xl leading-relaxed">{subtitle}</p>
@@ -565,7 +579,9 @@ export const ExportControls: React.FC<{
   };
 
   return (
-    <div className="flex items-center gap-8 py-8 px-10 bg-gray-50/50 rounded-2xl border border-gray-100 w-fit">
+    // `w-fit` + no wrap gave this a ~450px intrinsic width; it renders inside a Card that has ~246px
+    // of interior on a 390px screen, and Card's overflow-hidden made the last buttons unreachable.
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-3 p-4 bg-gray-50/50 rounded-2xl border border-gray-100">
       <button 
         onClick={handleCopy}
         className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors flex items-center gap-2"

@@ -32,7 +32,7 @@ const Support: React.FC = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         {channels.map((c) => (
-          <Card key={c.title} accent className="!p-10">
+          <Card key={c.title} accent>
             <h3 className="text-lg font-bold text-[#0B0B0B] tracking-tight mb-3">{c.title}</h3>
             <p className="text-sm text-gray-500 font-medium leading-relaxed mb-8">{c.body}</p>
             <Link
@@ -45,7 +45,7 @@ const Support: React.FC = () => {
         ))}
       </div>
 
-      <Card className="!p-10">
+      <Card>
         <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-3">Contact</p>
         <h3 className="text-lg font-bold text-[#0B0B0B] tracking-tight mb-3">Email our team</h3>
         <p className="text-sm text-gray-500 font-medium leading-relaxed mb-8">

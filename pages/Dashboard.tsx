@@ -25,7 +25,7 @@ const moduleLabel = (m: string): string =>
 
 // Small stat tile used across the metrics rows.
 const Stat: React.FC<{ label: string; value: React.ReactNode; hint?: string }> = ({ label, value, hint }) => (
-  <Card className="!p-8">
+  <Card>
     <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-4">{label}</p>
     <p className="text-4xl font-black text-[#0B0B0B] leading-none">{value}</p>
     {hint && <p className="text-[11px] font-medium text-gray-400 mt-3">{hint}</p>}
@@ -166,7 +166,7 @@ const Dashboard: React.FC = () => {
             subtitle="Your command center for predictive marketing intelligence — track activity, surface insights, and launch your next analysis."
           />
 
-          <Card className="!p-10 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-8 bg-[#121212] border-gray-900">
+          <Card dark className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-8">
             <div className="flex flex-wrap items-center gap-x-12 gap-y-6">
               <div>
                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-2">Plan</p>
@@ -222,19 +222,19 @@ const Dashboard: React.FC = () => {
           <h2 className="text-xs font-bold text-gray-500 uppercase tracking-[0.4em] mb-6">AI Insights</h2>
           {hasData ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <Card accent className="!p-8">
+              <Card accent>
                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-3">Most Active Tool</p>
                 <p className="text-xl font-bold text-[#0B0B0B] tracking-tight">{metrics.topLabel || '—'}</p>
                 <p className="text-[11px] text-gray-400 mt-2 font-medium">Your most-used analysis so far.</p>
               </Card>
-              <Card className="!p-8">
+              <Card>
                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-3">Recommended Next</p>
                 {metrics.recommended ? (
                   <Link to={`/${metrics.recommended.slug}`} className="text-xl font-bold text-[#0B0B0B] tracking-tight hover:text-[#FF0000] transition-colors">{metrics.recommended.navLabel}</Link>
                 ) : <p className="text-xl font-bold text-[#0B0B0B]">—</p>}
                 <p className="text-[11px] text-gray-400 mt-2 font-medium">Pairs well with your recent work.</p>
               </Card>
-              <Card className="!p-8">
+              <Card>
                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-3">Unused Opportunity</p>
                 {metrics.unusedTool ? (
                   <Link to={`/${metrics.unusedTool.slug}`} className="text-xl font-bold text-[#0B0B0B] tracking-tight hover:text-[#FF0000] transition-colors">{metrics.unusedTool.navLabel}</Link>
@@ -270,7 +270,7 @@ const Dashboard: React.FC = () => {
         <AnimatedSection as="section" index={3}>
           <h2 className="text-xs font-bold text-gray-500 uppercase tracking-[0.4em] mb-6">Business Intelligence Summary</h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="!p-8" title="Most Used Tools">
+            <Card title="Most Used Tools">
               {metrics.mostUsed.length === 0 ? (
                 <p className="text-sm text-gray-400 font-medium py-8 text-center">No tool usage yet.</p>
               ) : (
@@ -291,7 +291,7 @@ const Dashboard: React.FC = () => {
                 </div>
               )}
             </Card>
-            <Card className="!p-8" title="Recent Recommendations">
+            <Card title="Recent Recommendations">
               {metrics.recSection && Array.isArray(metrics.recSection.items) && metrics.recSection.items.length > 0 ? (
                 <ul className="space-y-4">
                   {metrics.recSection.items.slice(0, 4).map((it: any, i: number) => (
@@ -310,7 +310,7 @@ const Dashboard: React.FC = () => {
         {/* ===================== ROW 5 — RECENT ACTIVITY ===================== */}
         <AnimatedSection as="section" index={4}>
           <h2 className="text-xs font-bold text-gray-500 uppercase tracking-[0.4em] mb-6">Recent Activity</h2>
-          <Card className="!p-8">
+          <Card>
             {loadingData ? (
               <p className="text-sm text-gray-400 font-medium py-8 text-center">Loading activity…</p>
             ) : recentActivity.length === 0 ? (
