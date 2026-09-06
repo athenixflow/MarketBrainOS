@@ -28,4 +28,5 @@ functions/lib
 functions/node_modules
 .env
 .env.*
+!.env.example
 .firebase

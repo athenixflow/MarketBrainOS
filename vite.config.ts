@@ -32,9 +32,7 @@ export default defineConfig(({ mode }) => {
   // Load env file based on `mode` in the current working directory.
   const env = loadEnv(mode, (process as any).cwd(), '');
 
-  // Prioritize Google_api from process.env (Vercel) or loaded env files
-  const googleApi = process.env.Google_api || env.Google_api;
-  const apiKey = process.env.API_KEY || env.API_KEY || googleApi;
+  // NOTE: no secret is derived from `env` here on purpose - see the define block below.
 
   return {
     plugins: [react()],
@@ -55,15 +53,18 @@ export default defineConfig(({ mode }) => {
       },
     },
     define: {
-      // Expose the specific Google API key requested to import.meta.env
-      'import.meta.env.Google_api': JSON.stringify(googleApi),
-      
-      // Polyfill process.env.Google_api explicitly
-      'process.env.Google_api': JSON.stringify(googleApi),
-
-      // Polyfill process.env.API_KEY with fallback
-      'process.env.API_KEY': JSON.stringify(apiKey),
-      
+      // ⚠ SECURITY: everything in this block is INLINED INTO THE PUBLIC JS BUNDLE.
+      // Only values that are public by design may appear here.
+      //
+      // `loadEnv(mode, cwd, '')` above uses an EMPTY prefix, so it loads *every*
+      // variable from a root .env - not just VITE_* ones. Combined with an entry
+      // here, that silently ships a secret to every visitor. Google_api / API_KEY
+      // (the Gemini server key) were previously inlined this way; no frontend code
+      // read them, so they are removed rather than left as a loaded gun. The Gemini
+      // key is server-only and lives in functions/.env.
+      //
+      // Firebase Config - public client config, safe to expose (access is enforced
+      // by firestore.rules, not by hiding these values).
       // Firebase Config - Injected from prompt requirements or env
       'process.env.FIREBASE_API_KEY': JSON.stringify(process.env.FIREBASE_API_KEY || env.FIREBASE_API_KEY || "AIzaSyBDM5em2UN034YAd-ihukHOssL_Jr4AmqU"),
       'process.env.FIREBASE_AUTH_DOMAIN': JSON.stringify(process.env.FIREBASE_AUTH_DOMAIN || env.FIREBASE_AUTH_DOMAIN || "marketbrainosweb.firebaseapp.com"),
