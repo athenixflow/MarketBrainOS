@@ -1,17 +1,18 @@
 
 import React, { useState, useEffect } from 'react';
 import AnimatedSection from '../components/AnimatedSection';
-import { ExpectedOutcome } from '../components/ToolGuide';
+import { ExpectedOutcome, FieldHint, CharCounter } from '../components/ToolGuide';
 import {
   PageHeader,
   Card,
-  Input, 
-  PrimaryButton, 
-  IntelligenceIndicator, 
-  EmptyState, 
-  LoadingState, 
-  ResultContainer, 
+  Input,
+  PrimaryButton,
+  IntelligenceIndicator,
+  EmptyState,
+  LoadingState,
+  ResultContainer,
   SectionHeader,
+  Badge,
   ErrorMessage,
   ExportControls,
   HoneypotField,
@@ -30,6 +31,10 @@ import { TestLabResults, TOKEN_COSTS } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { copyToClipboard, downloadAsText, printAsPDF, formatTestLabExport } from '../services/exportService';
 import { SecurityEngine } from '../services/securityEngine';
+import { isFixtureRequested } from '../services/devFixtures';
+
+const chip = (active: boolean) =>
+  `px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${active ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`;
 
 const TestLabPro: React.FC = () => {
   const { user, profile, refreshProfile } = useAuth();
@@ -62,6 +67,12 @@ const TestLabPro: React.FC = () => {
     }
     return () => clearTimeout(timer);
   }, [loading]);
+
+  // Dev-only: render a sample result (no tokens spent) for screenshots. Dead code in production.
+  useEffect(() => {
+    if (!isFixtureRequested()) return;
+    import('../services/devFixtures').then((m) => setResults(m.TESTLAB_FIXTURE));
+  }, []);
 
   const handleAddVariant = () => {
     if (variants.length < 5) {
@@ -116,7 +127,7 @@ const TestLabPro: React.FC = () => {
     const normalizedVariants = variants
       .map(v => v.trim())
       .filter(v => v !== '');
-    
+
     const uniqueVariants: string[] = Array.from(new Set(normalizedVariants));
 
     if (uniqueVariants.length < 2) {
@@ -137,6 +148,11 @@ const TestLabPro: React.FC = () => {
     // Token Check
     if (!checkTokenAvailability()) return;
 
+    if (profile && profile.is_suspended) {
+      setError("Account operations suspended.");
+      return;
+    }
+
     // Check for extreme similarity
     for (let i = 0; i < uniqueVariants.length; i++) {
       for (let j = i + 1; j < uniqueVariants.length; j++) {
@@ -154,12 +170,12 @@ const TestLabPro: React.FC = () => {
     try {
       const data = await runTestLabComparison(comparisonType, uniqueVariants, user?.uid, { audience, goal, channel, product });
       setResults(data);
-      
+
       if (user) await refreshProfile();
-      
+
     } catch (err: any) {
       console.error(err);
-      setExecutionError(err.message || "Stability interruption in the performance engine. Please retry.");
+      setExecutionError(err.message || "The comparison was interrupted before it finished. No tokens were deducted.");
     } finally {
       setLoading(false);
     }
@@ -205,19 +221,20 @@ const TestLabPro: React.FC = () => {
     return scoredVariants.reduce((best, v) => ((v.score || 0) > (best.score || 0) ? v : best), scoredVariants[0]);
   })();
 
+  const isSuspended = profile?.is_suspended;
   const isPro = profile?.tier === 'pro';
 
   return (
     <div className="space-y-12">
       {profile && <TokenStatusBanner tier={profile.tier} tokens={profile.tokens} />}
-      <UsageLimitModal 
-        isOpen={showUsageModal} 
-        tier={profile?.tier || 'free'} 
-        reason={usageReason} 
-        onClose={() => setShowUsageModal(false)} 
+      <UsageLimitModal
+        isOpen={showUsageModal}
+        tier={profile?.tier || 'free'}
+        reason={usageReason}
+        onClose={() => setShowUsageModal(false)}
       />
 
-      <div className="space-y-24">
+      <div className="space-y-16">
         <AnimatedSection index={0}>
           <PageHeader
             title="TestLab Pro: Performance Simulation"
@@ -230,102 +247,95 @@ const TestLabPro: React.FC = () => {
           />
         </AnimatedSection>
 
-        <AnimatedSection index={1} className="max-w-4xl mx-auto w-full">
+        <AnimatedSection index={1}>
           <Card className="shadow-2xl">
-            {error && <div className="mb-12"><ErrorMessage message={error} action={{ label: "Dismiss", onClick: () => setError(null) }} /></div>}
-            
-            <form onSubmit={(e) => { e.preventDefault(); handleRunTest(); }}>
-              <HoneypotField value={honeypotValue} onChange={setHoneypotValue} />
-              <div className="mb-12">
-                <label className="text-xs font-bold text-gray-700 mb-5 tracking-widest uppercase block">Comparison Type</label>
-                <div className="flex flex-wrap gap-3">
-                  {comparisonTypes.map(t => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => setComparisonType(t)}
-                      className={`px-6 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
-                        comparisonType === t ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-                      }`}
-                    >
-                      {t}
-                    </button>
-                  ))}
+            {isSuspended && <div className="mb-10"><ErrorMessage message="Your account is suspended. Analyses are disabled until an administrator restores access." /></div>}
+            {error && <div className="mb-10"><ErrorMessage message={error} action={{ label: "Dismiss", onClick: () => setError(null) }} /></div>}
+
+            {!isSuspended && (
+              <form onSubmit={(e) => { e.preventDefault(); handleRunTest(); }}>
+                <HoneypotField value={honeypotValue} onChange={setHoneypotValue} />
+                <div className="mb-8">
+                  <p className="text-[11px] font-bold text-gray-500 mb-3 tracking-widest uppercase">Comparison type</p>
+                  <div className="flex flex-wrap gap-2">
+                    {comparisonTypes.map(t => (
+                      <button key={t} type="button" onClick={() => setComparisonType(t)} aria-pressed={comparisonType === t} className={chip(comparisonType === t)}>
+                        {t}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              <p className="mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">Paste 2–5 versions you want to test against each other — we predict a winner and explain why.<span className="text-gray-500"> e.g. two headline options, or two ad primary texts.</span></p>
+                <p className="mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">Paste 2 to 5 versions you want to test against each other. We predict a winner and explain why.<span className="text-gray-500"> e.g. two headline options, or two ad primary texts.</span></p>
 
-              <div className="space-y-2">
-                {variants.map((v, i) => (
-                  <div key={i}>
+                <div>
+                  {variants.map((v, i) => (
                     <Input
+                      key={i}
                       label={`Variant ${String.fromCharCode(65 + i)}`}
-                      placeholder={`Enter ${comparisonType.toLowerCase()} content...`}
+                      placeholder={`Enter ${comparisonType.toLowerCase()} content…`}
                       value={v}
                       onChange={(e) => handleUpdateVariant(i, e.target.value)}
                       multiline
+                      hint={<CharCounter value={v} max={MAX_INPUT_CHARS} />}
                     />
-                    <p className={`text-right text-[9px] font-bold uppercase tracking-widest -mt-4 mb-6 ${v.length > MAX_INPUT_CHARS ? 'text-[#FF0000]' : 'text-gray-300'}`}>
-                      {v.length} / {MAX_INPUT_CHARS}
-                    </p>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-8 mb-2">
-                <button type="button" onClick={() => setShowAdvanced(v => !v)} className="flex items-center gap-2 text-[10px] font-bold text-gray-600 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">
-                  <span className="text-base leading-none w-4 text-center">{showAdvanced ? '−' : '+'}</span>
-                  Advanced context (optional)
-                </button>
-                <p className="mt-2 mb-6 text-[11px] font-medium text-gray-500 leading-relaxed pl-6">Context makes the prediction sharper and the explanation more useful. All optional.</p>
-                {showAdvanced && (
-                  <div>
-                    <Input label="Target Audience" placeholder="Who will see these?" value={audience} onChange={(e) => setAudience(e.target.value)} />
-                    <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">Who you’re testing against.<span className="text-gray-500"> e.g. Cold Meta traffic, first-time buyers.</span></p>
-                    <Input label="Desired Action" placeholder="What should a winner drive?" value={goal} onChange={(e) => setGoal(e.target.value)} />
-                    <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">The action a winning variant should produce.<span className="text-gray-500"> e.g. Click through to the offer.</span></p>
-                    <Input label="Channel / Placement" placeholder="Where these run" value={channel} onChange={(e) => setChannel(e.target.value)} />
-                    <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">The placement and its constraints.<span className="text-gray-500"> e.g. Meta feed, email subject line.</span></p>
-                    <Input label="Product / Offer" placeholder="What’s being promoted" value={product} onChange={(e) => setProduct(e.target.value)} />
-                    <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">What the variants are selling.<span className="text-gray-500"> e.g. A $29/mo analytics tool.</span></p>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex flex-col gap-8 mt-8">
-                <div className="flex justify-between items-center">
-                  {variants.length < 5 ? (
-                    <button 
-                      type="button"
-                      onClick={handleAddVariant}
-                      className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest hover:opacity-60 transition-opacity"
-                    >
-                      + Add Variant
-                    </button>
-                  ) : <div />}
-                  <button 
-                    type="button"
-                    onClick={handleReset}
-                    className="text-[10px] font-bold text-gray-300 hover:text-gray-500 uppercase tracking-widest transition-colors"
-                  >
-                    Reset Test
-                  </button>
+                  ))}
                 </div>
 
-                <PrimaryButton 
-                  type="submit"
-                  disabled={loading || variants.filter(v => v.trim() !== '').length < 2 || variants.some(v => v.length > MAX_INPUT_CHARS)}
-                  className="w-full"
-                >
-                  {loading ? 'Comparing variations...' : 'Run Test'}
-                </PrimaryButton>
-              </div>
-            </form>
+                <div className="mt-2 mb-2">
+                  <button type="button" onClick={() => setShowAdvanced(v => !v)} aria-expanded={showAdvanced} className="flex items-center gap-2 text-[10px] font-bold text-gray-600 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">
+                    <span className="text-base leading-none w-4 text-center">{showAdvanced ? '−' : '+'}</span>
+                    Advanced context (optional)
+                  </button>
+                  <p className="mt-2 mb-6 text-[11px] font-medium text-gray-500 leading-relaxed pl-6">Context makes the prediction sharper and the explanation more useful. All optional.</p>
+                  {showAdvanced && (
+                    <div>
+                      <Input label="Target audience" placeholder="Who will see these?" value={audience} onChange={(e) => setAudience(e.target.value)}
+                        hint={<FieldHint example="Cold Meta traffic, first-time buyers.">Who you’re testing against.</FieldHint>} />
+                      <Input label="Desired action" placeholder="What should a winner drive?" value={goal} onChange={(e) => setGoal(e.target.value)}
+                        hint={<FieldHint example="Click through to the offer.">The action a winning variant should produce.</FieldHint>} />
+                      <Input label="Channel / placement" placeholder="Where these run" value={channel} onChange={(e) => setChannel(e.target.value)}
+                        hint={<FieldHint example="Meta feed, email subject line.">The placement and its constraints.</FieldHint>} />
+                      <Input label="Product / offer" placeholder="What’s being promoted" value={product} onChange={(e) => setProduct(e.target.value)}
+                        hint={<FieldHint example="A $29/mo analytics tool.">What the variants are selling.</FieldHint>} />
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-8 mt-8">
+                  <div className="flex flex-wrap justify-between items-center gap-4">
+                    {variants.length < 5 ? (
+                      <button
+                        type="button"
+                        onClick={handleAddVariant}
+                        className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest hover:opacity-60 transition-opacity"
+                      >
+                        + Add variant
+                      </button>
+                    ) : <div />}
+                    <button
+                      type="button"
+                      onClick={handleReset}
+                      className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors"
+                    >
+                      Reset test
+                    </button>
+                  </div>
+
+                  <PrimaryButton
+                    type="submit"
+                    disabled={loading || variants.filter(v => v.trim() !== '').length < 2 || variants.some(v => v.length > MAX_INPUT_CHARS)}
+                    className="w-full"
+                  >
+                    {loading ? 'Comparing variations…' : 'Run test'}
+                  </PrimaryButton>
+                </div>
+              </form>
+            )}
           </Card>
         </AnimatedSection>
 
-        {loading && <LoadingState message="Predicting market performance..." isTakingLong={isTakingLong} onCancel={() => setLoading(false)} />}
+        {loading && <LoadingState message="Scoring your variations…" isTakingLong={isTakingLong} onCancel={() => setLoading(false)} />}
 
         {executionError && isSystemBlockError(executionError) ? (
            <SystemBlockState message={executionError} />
@@ -338,37 +348,41 @@ const TestLabPro: React.FC = () => {
         ) : null}
 
         {!results && !loading && !executionError && (
-          <EmptyState 
-            message="No comparison yet." 
-            submessage="Add at least two variations to begin the predictive intelligence test." 
+          <EmptyState
+            card
+            message="No comparison yet"
+            submessage="Add at least two variations above and run the test to see a predicted winner."
           />
         )}
 
         {results && !loading && (
           <ResultContainer>
-            <div className="flex justify-between items-end mb-12">
-              <SectionHeader 
-                title="Performance Simulation" 
-                subtitle="The following results represent predicted conversion benchmarks." 
+            <div className="flex flex-wrap justify-between items-end gap-4 mb-4">
+              <SectionHeader
+                onDark
+                title="Performance simulation"
+                subtitle="Predicted performance for each variation, and why the winner wins."
+                className="mb-0"
               />
-              <ExportControls 
-                onCopy={handleCopy} 
-                onExportText={handleExportTxt} 
-                onExportPDF={handleExportPDF} 
-                isPro={isPro} 
+              <ExportControls
+                tone="dark"
+                onCopy={handleCopy}
+                onExportText={handleExportTxt}
+                onExportPDF={handleExportPDF}
+                isPro={isPro}
               />
             </div>
 
             {/* Heading and body are guarded together: an unmatched winner used to leave the heading
                 painted over an empty quote block. */}
             {winningVariant && (
-              <div className="mb-16">
-                <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-[0.3em] mb-8 text-center">Winning Strategic Asset</p>
+              <div className="mb-12">
+                <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-6 text-center">Predicted winner</p>
                 <Card accent className="!border-[#FF0000]/10 !bg-[#FFF9F9] shadow-2xl">
-                  <div className="flex justify-between items-start gap-6 mb-8 flex-wrap">
+                  <div className="flex flex-wrap justify-between items-start gap-6 mb-8">
                     <div className="min-w-0">
                       <h3 className="text-2xl sm:text-3xl font-bold text-[#0B0B0B] tracking-tight mb-2">
-                        {winningVariant.label || 'Top variant'} is the Projected Winner
+                        {winningVariant.label || 'Top variant'} is the projected winner
                       </h3>
                       <div className="flex items-center gap-3">
                         <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000]" />
@@ -394,22 +408,21 @@ const TestLabPro: React.FC = () => {
             {/* Per-variant scores: promised by the "Variation Scores" deliverable and present in the
                 data (and in the export), but never rendered anywhere until now. */}
             {scoredVariants.length > 0 && (
-              <div className="mb-16">
-                <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-[0.3em] mb-8 text-center">All Variation Scores</p>
+              <div className="mb-12">
+                <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-6 text-center">All variation scores</p>
                 <div className="space-y-4">
                   {[...scoredVariants].sort((a, b) => (b.score || 0) - (a.score || 0)).map((v, i) => {
                     const isWinner = v === winningVariant;
                     return (
                       <Card key={i} className={isWinner ? '!border-[#FF0000]/20' : ''}>
-                        <div className="flex items-start justify-between gap-4 flex-wrap mb-3">
+                        <div className="flex flex-wrap items-start justify-between gap-4 mb-3">
                           <div className="flex items-center gap-3 min-w-0">
                             <p className="text-sm font-bold text-[#0B0B0B]">{v.label || `Variant ${i + 1}`}</p>
-                            {isWinner && <span className="text-[9px] font-bold text-[#FF0000] uppercase tracking-widest px-2 py-0.5 rounded-full bg-[#FF0000]/10">Winner</span>}
+                            {isWinner && <Badge tone="red">Winner</Badge>}
                           </div>
-                          <span className="text-sm font-black text-[#0B0B0B] tabular-nums">{v.score ?? '—'}<span className="text-gray-400 font-bold">/100</span></span>
+                          <span className="text-sm font-black text-[#0B0B0B] tabular-nums">{v.score ?? '–'}<span className="text-gray-400 font-bold">/100</span></span>
                         </div>
                         {v.text && <p className="text-sm text-gray-600 leading-relaxed">"{v.text}"</p>}
-                        
                       </Card>
                     );
                   })}
@@ -417,10 +430,12 @@ const TestLabPro: React.FC = () => {
               </div>
             )}
 
-            {!winningVariant && variants.length === 0 && (
-              <p className="text-gray-500 text-sm font-medium py-8 text-center">
-                No variations were scored for this input. Try rerunning with more distinct variants.
-              </p>
+            {scoredVariants.length === 0 && (
+              <EmptyState
+                card
+                message="No variations were scored for this input"
+                submessage="Try rerunning with more distinct variants."
+              />
             )}
           </ResultContainer>
         )}

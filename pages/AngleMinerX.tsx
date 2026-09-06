@@ -1,18 +1,19 @@
 
 import React, { useState, useEffect } from 'react';
 import AnimatedSection from '../components/AnimatedSection';
-import { ExpectedOutcome } from '../components/ToolGuide';
+import { ExpectedOutcome, FieldHint, CharCounter } from '../components/ToolGuide';
 import {
   PageHeader,
   Card,
   Input,
-  PrimaryButton, 
-  IntelligenceIndicator, 
-  EmptyState, 
-  LoadingState, 
-  ResultContainer, 
+  PrimaryButton,
+  IntelligenceIndicator,
+  EmptyState,
+  LoadingState,
+  ResultContainer,
   SectionHeader,
   Tabs,
+  Badge,
   ErrorMessage,
   ExportControls,
   HoneypotField,
@@ -31,6 +32,7 @@ import { MarketingAngle, AngleMinerResults, AngleType, ANGLE_TYPES, TOKEN_COSTS,
 import { useAuth } from '../context/AuthContext';
 import { copyToClipboard, downloadAsText, printAsPDF, formatAngleMinerExport } from '../services/exportService';
 import { SecurityEngine } from '../services/securityEngine';
+import { isFixtureRequested } from '../services/devFixtures';
 
 // Platform keywords used ONLY to rescue results saved before `channel` existed (those records carry a
 // platform like "Meta"/"Email" and no channel). Anything unrecognised lands in "Other" and is still
@@ -56,6 +58,10 @@ const bucketHooks = (hooks: AngleHook[]): Record<HookChannel | 'Other', AngleHoo
   return buckets;
 };
 
+// Option chips (goal / tone). Pills, per the radius rule; selected state is solid.
+const chip = (active: boolean, activeCls = 'bg-[#0B0B0B] text-white') =>
+  `px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${active ? activeCls : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`;
+
 const AngleMinerX: React.FC = () => {
   const { user, profile, refreshProfile } = useAuth();
   const [product, setProduct] = useState('');
@@ -64,7 +70,7 @@ const AngleMinerX: React.FC = () => {
   const [goal, setGoal] = useState('All');
   const [selectedTones, setSelectedTones] = useState<string[]>([]);
   const [honeypotValue, setHoneypotValue] = useState('');
-  
+
   const [loading, setLoading] = useState(false);
   const [isTakingLong, setIsTakingLong] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,8 +103,17 @@ const AngleMinerX: React.FC = () => {
     return () => clearTimeout(timer);
   }, [loading]);
 
+  // Dev-only: render a sample result (no tokens spent) for screenshots. Dead code in production.
+  useEffect(() => {
+    if (!isFixtureRequested()) return;
+    import('../services/devFixtures').then((m) => {
+      setResults(m.ANGLE_MINER_FIXTURE);
+      setActiveTab(ANGLE_TYPES[0]);
+    });
+  }, []);
+
   const handleToggleTone = (tone: string) => {
-    setSelectedTones(prev => 
+    setSelectedTones(prev =>
       prev.includes(tone) ? prev.filter(t => t !== tone) : [...prev, tone]
     );
   };
@@ -169,12 +184,12 @@ const AngleMinerX: React.FC = () => {
       // Open the first angle type that actually has results.
       const firstType = ANGLE_TYPES.find(t => (data.angles || []).some((a: MarketingAngle) => (a.type || 'Emotional') === t)) || ANGLE_TYPES[0];
       setActiveTab(firstType);
-      
+
       if (user) await refreshProfile();
-      
+
     } catch (err: any) {
       console.error(err);
-      setExecutionError(err.message || "The neural engine encountered an unexpected interruption. Please retry.");
+      setExecutionError(err.message || "The analysis was interrupted before it finished. No tokens were deducted.");
     } finally {
       setLoading(false);
     }
@@ -203,7 +218,7 @@ const AngleMinerX: React.FC = () => {
       if (user) await refreshProfile();
     } catch (err: any) {
       console.error(err);
-      setExecutionError(err.message || "Failed to refine angle. Operational throttle may be active.");
+      setExecutionError(err.message || "We could not refine this angle. Please try again in a moment.");
       mark(false);
     }
   };
@@ -245,46 +260,43 @@ const AngleMinerX: React.FC = () => {
 
   const renderAngleCard = (angle: MarketingAngle) => (
     <Card key={angle.hook} className="group hover:shadow-xl transition-all duration-500">
-      <div className="flex justify-between items-start mb-8">
-        <div>
+      <div className="flex flex-wrap justify-between items-start gap-4 mb-8">
+        <div className="min-w-0">
           <h3 className="text-xl font-bold text-[#0B0B0B] mb-2">{angle.title}</h3>
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{angle.type || 'Emotional'} Angle</p>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{angle.type || 'Emotional'} angle</p>
         </div>
         <IntelligenceIndicator score={angle.score} />
       </div>
-      
+
       <div className="space-y-8">
-        <div className="p-8 bg-gray-50 rounded-2xl border border-gray-100">
-          <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-4">Core Hook</p>
+        <div className="p-6 sm:p-8 bg-gray-50 rounded-2xl border border-gray-100">
+          <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-4">Core hook</p>
           <p className="text-lg font-bold text-[#0B0B0B] leading-relaxed">
             "{angle.improved || angle.hook}"
           </p>
           {angle.improved && (
-            <div className="mt-4 flex items-center gap-2">
-              <div className="w-1 h-1 rounded-full bg-green-500" />
-              <span className="text-[9px] font-bold text-green-600 uppercase tracking-widest">Clinically Refined</span>
-            </div>
+            <div className="mt-4"><Badge tone="green">Refined</Badge></div>
           )}
         </div>
 
         <div>
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">Strategic Rational</p>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">Strategic rationale</p>
           <p className="text-sm font-medium text-gray-500 leading-relaxed">{angle.rational}</p>
         </div>
 
-        <div className="flex items-center gap-6 pt-6 border-t border-gray-50">
+        <div className="flex flex-wrap items-center gap-6 pt-6 border-t border-gray-100">
           <button
             onClick={() => handleImprove(angle)}
             disabled={angle.improving}
             className="text-[10px] font-bold text-[#FF0000] hover:opacity-60 transition-opacity uppercase tracking-widest disabled:opacity-30"
           >
-            {angle.improving ? 'Refining...' : 'Refine Angle'}
+            {angle.improving ? 'Refining…' : 'Refine angle'}
           </button>
-          <button 
+          <button
             onClick={() => copyToClipboard(angle.improved || angle.hook)}
-            className="text-[10px] font-bold text-gray-300 hover:text-[#0B0B0B] transition-colors uppercase tracking-widest"
+            className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] transition-colors uppercase tracking-widest"
           >
-            Copy Hook
+            Copy hook
           </button>
         </div>
       </div>
@@ -297,14 +309,14 @@ const AngleMinerX: React.FC = () => {
   return (
     <div className="space-y-12">
       {profile && <TokenStatusBanner tier={profile.tier} tokens={profile.tokens} />}
-      <UsageLimitModal 
-        isOpen={showUsageModal} 
-        tier={profile?.tier || 'free'} 
-        reason={usageReason} 
-        onClose={() => setShowUsageModal(false)} 
+      <UsageLimitModal
+        isOpen={showUsageModal}
+        tier={profile?.tier || 'free'}
+        reason={usageReason}
+        onClose={() => setShowUsageModal(false)}
       />
 
-      <div className="space-y-24">
+      <div className="space-y-16">
         <AnimatedSection index={0}>
           <PageHeader
             title="AngleMiner X: Psychological Profiling"
@@ -317,36 +329,38 @@ const AngleMinerX: React.FC = () => {
           />
         </AnimatedSection>
 
-        <AnimatedSection index={1} className="max-w-4xl mx-auto w-full">
+        <AnimatedSection index={1}>
           <Card className="shadow-2xl">
-            {isSuspended && <div className="mb-12"><ErrorMessage message="SECURITY PROTOCOL ACTIVE: Account suspended due to risk threshold violations." /></div>}
-            {error && <div className="mb-12"><ErrorMessage message={error} action={{ label: "Dismiss", onClick: () => setError(null) }} /></div>}
-            
+            {isSuspended && <div className="mb-10"><ErrorMessage message="Your account is suspended. Analyses are disabled until an administrator restores access." /></div>}
+            {error && <div className="mb-10"><ErrorMessage message={error} action={{ label: "Dismiss", onClick: () => setError(null) }} /></div>}
+
             {!isSuspended && (
               <form onSubmit={(e) => { e.preventDefault(); handleRun(); }}>
                 <HoneypotField value={honeypotValue} onChange={setHoneypotValue} />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10">
                   <div className="md:col-span-2">
                     <Input
-                      label="Product Name"
+                      label="Product name"
                       placeholder="e.g. MarketBrain OS"
                       value={productName}
                       onChange={(e) => { setProductName(e.target.value); setError(null); }}
+                      hint={<FieldHint example="MarketBrain OS.">The name of what you’re selling.</FieldHint>}
                     />
-                    <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">The name of what you’re selling.<span className="text-gray-500"> e.g. MarketBrain OS.</span></p>
                   </div>
                   <div className="md:col-span-2">
                     <Input
-                      label="Product / Offer Description"
+                      label="Product / offer description"
                       placeholder="Describe what you’re selling and why it matters…"
                       value={product}
                       onChange={(e) => { setProduct(e.target.value); setError(null); }}
                       multiline
+                      hint={
+                        <>
+                          <FieldHint example="A done-for-you content marketing subscription for busy founders.">What it does and the core benefit. The more specific, the sharper the angles.</FieldHint>
+                          <CharCounter value={product} max={MAX_INPUT_CHARS} />
+                        </>
+                      }
                     />
-                    <p className={`text-right text-[9px] font-bold uppercase tracking-widest ${product.length > MAX_INPUT_CHARS ? 'text-[#FF0000]' : 'text-gray-400'}`}>
-                      {product.length} / {MAX_INPUT_CHARS} characters
-                    </p>
-                    <p className="mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">What it does and the core benefit — the more specific, the sharper the angles.<span className="text-gray-500"> e.g. A done-for-you content marketing subscription for busy founders.</span></p>
                   </div>
                   <div>
                     <Input
@@ -354,8 +368,8 @@ const AngleMinerX: React.FC = () => {
                       placeholder="e.g. SaaS, E-commerce, Real Estate"
                       value={industry}
                       onChange={(e) => { setIndustry(e.target.value); setError(null); }}
+                      hint={<FieldHint example="B2B SaaS.">Your sector. It shapes language and proof.</FieldHint>}
                     />
-                    <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">Your sector — shapes language and proof.<span className="text-gray-500"> e.g. B2B SaaS.</span></p>
                   </div>
                   <div>
                     <Input
@@ -363,49 +377,35 @@ const AngleMinerX: React.FC = () => {
                       placeholder="e.g. North America SMBs, Gen-Z creators"
                       value={market}
                       onChange={(e) => { setMarket(e.target.value); setError(null); }}
+                      hint={<FieldHint example="North America SMBs.">The segment you’re targeting.</FieldHint>}
                     />
-                    <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">The segment you’re targeting.<span className="text-gray-500"> e.g. North America SMBs.</span></p>
                   </div>
                   <div>
                     <Input
-                      label="Target Audience"
+                      label="Target audience"
                       placeholder="Who is this for? Be specific."
                       value={target}
                       onChange={(e) => { setTarget(e.target.value); setError(null); }}
+                      hint={<FieldHint example="Solo founders running lean teams.">The exact person you’re speaking to.</FieldHint>}
                     />
-                    <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">The exact person you’re speaking to.<span className="text-gray-500"> e.g. Solo founders running lean teams.</span></p>
                   </div>
-                  
-                  <div className="mb-12">
-                    <label className="text-xs font-bold text-gray-700 mb-5 tracking-widest uppercase block">Goal</label>
-                    <div className="flex flex-wrap gap-3">
+
+                  <div className="mb-8">
+                    <p className="text-[11px] font-bold text-gray-500 mb-3 tracking-widest uppercase">Goal</p>
+                    <div className="flex flex-wrap gap-2">
                       {goals.map(g => (
-                        <button
-                          key={g}
-                          type="button"
-                          onClick={() => setGoal(g)}
-                          className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
-                            goal === g ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-                          }`}
-                        >
+                        <button key={g} type="button" onClick={() => setGoal(g)} aria-pressed={goal === g} className={chip(goal === g)}>
                           {g}
                         </button>
                       ))}
                     </div>
                   </div>
 
-                  <div className="mb-12">
-                    <label className="text-xs font-bold text-gray-700 mb-5 tracking-widest uppercase block">Tone Profile</label>
-                    <div className="flex flex-wrap gap-3">
+                  <div className="mb-8 md:col-span-2">
+                    <p className="text-[11px] font-bold text-gray-500 mb-3 tracking-widest uppercase">Tone profile</p>
+                    <div className="flex flex-wrap gap-2">
                       {tones.map(t => (
-                        <button
-                          key={t}
-                          type="button"
-                          onClick={() => handleToggleTone(t)}
-                          className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
-                            selectedTones.includes(t) ? 'bg-[#FF0000] text-white shadow-md shadow-[#FF0000]/20' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-                          }`}
-                        >
+                        <button key={t} type="button" onClick={() => handleToggleTone(t)} aria-pressed={selectedTones.includes(t)} className={chip(selectedTones.includes(t), 'bg-[#FF0000] text-white shadow-md shadow-[#FF0000]/20')}>
                           {t}
                         </button>
                       ))}
@@ -414,23 +414,23 @@ const AngleMinerX: React.FC = () => {
                 </div>
 
                 <div className="mb-10">
-                  <button type="button" onClick={() => setShowAdvanced(v => !v)} className="flex items-center gap-2 text-[10px] font-bold text-gray-600 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">
+                  <button type="button" onClick={() => setShowAdvanced(v => !v)} aria-expanded={showAdvanced} className="flex items-center gap-2 text-[10px] font-bold text-gray-600 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">
                     <span className="text-base leading-none w-4 text-center">{showAdvanced ? '−' : '+'}</span>
                     Advanced context (optional)
                   </button>
                   <p className="mt-2 mb-6 text-[11px] font-medium text-gray-500 leading-relaxed pl-6">The more context you add, the sharper and more tailored the angles. All optional.</p>
                   {showAdvanced && (
                     <div>
-                      <Input label="Competitors" placeholder="Who else competes for this attention?" value={competitors} onChange={(e) => setCompetitors(e.target.value)} />
-                      <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">Rivals to differentiate against.<span className="text-gray-500"> e.g. Asana, Monday, ClickUp.</span></p>
-                      <Input label="Buyer Objections" placeholder="Why might they hesitate?" value={objections} onChange={(e) => setObjections(e.target.value)} multiline />
-                      <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">Doubts the angles should defuse.<span className="text-gray-500"> e.g. “Too expensive”, “We already use X”.</span></p>
-                      <Input label="Brand Voice" placeholder="The tone to match" value={brandVoice} onChange={(e) => setBrandVoice(e.target.value)} />
-                      <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">How the copy should sound.<span className="text-gray-500"> e.g. Confident, plain-spoken, a little playful.</span></p>
-                      <Input label="Proof / Credibility" placeholder="Results, stats, testimonials to lean on" value={proofPoints} onChange={(e) => setProofPoints(e.target.value)} multiline />
-                      <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">Evidence the angles can use.<span className="text-gray-500"> e.g. “Used by 4,000 teams”, “2.3× ROI in 30 days”.</span></p>
-                      <Input label="Price Point" placeholder="e.g. $49/mo" value={pricePoint} onChange={(e) => setPricePoint(e.target.value)} />
-                      <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">Shapes how the value is framed.<span className="text-gray-500"> e.g. $49/mo, or $2k one-time.</span></p>
+                      <Input label="Competitors" placeholder="Who else competes for this attention?" value={competitors} onChange={(e) => setCompetitors(e.target.value)}
+                        hint={<FieldHint example="Asana, Monday, ClickUp.">Rivals to differentiate against.</FieldHint>} />
+                      <Input label="Buyer objections" placeholder="Why might they hesitate?" value={objections} onChange={(e) => setObjections(e.target.value)} multiline
+                        hint={<FieldHint example="“Too expensive”, “We already use X”.">Doubts the angles should defuse.</FieldHint>} />
+                      <Input label="Brand voice" placeholder="The tone to match" value={brandVoice} onChange={(e) => setBrandVoice(e.target.value)}
+                        hint={<FieldHint example="Confident, plain-spoken, a little playful.">How the copy should sound.</FieldHint>} />
+                      <Input label="Proof / credibility" placeholder="Results, stats, testimonials to lean on" value={proofPoints} onChange={(e) => setProofPoints(e.target.value)} multiline
+                        hint={<FieldHint example="“Used by 4,000 teams”, “2.3× ROI in 30 days”.">Evidence the angles can use.</FieldHint>} />
+                      <Input label="Price point" placeholder="e.g. $49/mo" value={pricePoint} onChange={(e) => setPricePoint(e.target.value)}
+                        hint={<FieldHint example="$49/mo, or $2k one-time.">Shapes how the value is framed.</FieldHint>} />
                     </div>
                   )}
                 </div>
@@ -441,15 +441,15 @@ const AngleMinerX: React.FC = () => {
                     disabled={loading || !product || !target || !industry || product.length > MAX_INPUT_CHARS}
                     className="w-full"
                   >
-                    {loading ? 'Mining high-performing angles...' : 'Generate Angles'}
+                    {loading ? 'Generating angles…' : 'Generate angles'}
                   </PrimaryButton>
                   <div className="flex justify-center">
-                    <button 
+                    <button
                       type="button"
                       onClick={handleReset}
-                      className="text-[10px] font-bold text-gray-300 hover:text-gray-500 uppercase tracking-widest transition-colors"
+                      className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors"
                     >
-                      Reset Inputs
+                      Reset inputs
                     </button>
                   </div>
                 </div>
@@ -458,7 +458,7 @@ const AngleMinerX: React.FC = () => {
           </Card>
         </AnimatedSection>
 
-        {loading && <LoadingState message="Evaluating market patterns..." isTakingLong={isTakingLong} onCancel={() => setLoading(false)} />}
+        {loading && <LoadingState message="Analyzing your product and audience…" isTakingLong={isTakingLong} onCancel={() => setLoading(false)} />}
 
         {executionError && isSystemBlockError(executionError) ? (
            <SystemBlockState message={executionError} />
@@ -471,24 +471,28 @@ const AngleMinerX: React.FC = () => {
         ) : null}
 
         {!results && !loading && !executionError && (
-          <EmptyState 
-            message="No angles yet." 
-            submessage="Define your product and target audience to extract market intelligence." 
+          <EmptyState
+            card
+            message="No angles yet"
+            submessage="Describe your product and target audience above to generate angles and hooks."
           />
         )}
 
         {results && !loading && (
           <ResultContainer>
-            <div className="flex justify-between items-end mb-12">
-              <SectionHeader 
-                title="Strategic Angles" 
-                subtitle="The neural engine has extracted the following conversion paths." 
+            <div className="flex flex-wrap justify-between items-end gap-4 mb-4">
+              <SectionHeader
+                onDark
+                title="Strategic angles"
+                subtitle="Angles ranked by predicted conversion strength, grouped by psychological type."
+                className="mb-0"
               />
-              <ExportControls 
-                onCopy={handleCopy} 
-                onExportText={handleExportTxt} 
-                onExportPDF={handleExportPDF} 
-                isPro={isPro} 
+              <ExportControls
+                tone="dark"
+                onCopy={handleCopy}
+                onExportText={handleExportTxt}
+                onExportPDF={handleExportPDF}
+                isPro={isPro}
               />
             </div>
 
@@ -498,12 +502,12 @@ const AngleMinerX: React.FC = () => {
               onTabChange={setActiveTab}
             />
 
-            <div className="grid grid-cols-1 gap-12">
+            <div className="grid grid-cols-1 gap-8">
               {ANGLE_TYPES.includes(activeTab as AngleType) && (
                 (() => {
                   const inType = (results.angles || []).filter(a => (a.type || 'Emotional') === activeTab);
                   if (inType.length === 0) {
-                    return <p className="text-gray-500 text-sm font-medium py-8 text-center">No {activeTab} angles generated for this input.</p>;
+                    return <EmptyState card message={`No ${activeTab} angles for this input`} submessage="Try another angle type, or add more product context and run again." />;
                   }
                   return inType.map(a => renderAngleCard(a));
                 })()
@@ -513,37 +517,35 @@ const AngleMinerX: React.FC = () => {
                 const hooks = results.hooks || [];
                 const buckets = bucketHooks(hooks);
                 if (hooks.length === 0) {
-                  return <p className="text-gray-500 text-sm font-medium py-8 text-center">No hooks were generated for this input.</p>;
+                  return <EmptyState card message="No hooks were generated for this input" submessage="Run the analysis again with a goal selected to get channel-specific hooks." />;
                 }
                 // "Other" only appears when something genuinely failed to classify, so a hook can never
                 // be silently dropped the way it was when every one was filtered out of all three columns.
                 const columns: (HookChannel | 'Other')[] = [...HOOK_CHANNELS, ...(buckets.Other.length > 0 ? ['Other' as const] : [])];
                 return (
-                  <div className={`grid grid-cols-1 gap-8 md:gap-10 ${columns.length > 3 ? 'md:grid-cols-2 xl:grid-cols-4' : 'md:grid-cols-3'}`}>
+                  <div className={`grid grid-cols-1 gap-8 ${columns.length > 3 ? 'md:grid-cols-2 xl:grid-cols-4' : 'md:grid-cols-3'}`}>
                     {columns.map(channel => (
                       <div key={channel} className="space-y-6">
-                        <h4 className="text-[10px] font-bold text-[#FF0000] uppercase tracking-[0.3em] mb-4 text-center">{channel} Hooks</h4>
+                        <h4 className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-4 text-center">{channel} hooks</h4>
                         {buckets[channel].length === 0 ? (
                           <p className="text-gray-500 text-xs font-medium text-center py-4">No {channel.toLowerCase()} hooks for this input.</p>
                         ) : buckets[channel].map((hook, i) => (
                           <Card key={i}>
                             <div className="space-y-6">
-                              {hook.platform && (
-                                <span className="inline-block text-[9px] font-bold text-gray-500 uppercase tracking-widest px-2.5 py-1 rounded-full bg-gray-100">{hook.platform}</span>
-                              )}
+                              {hook.platform && <Badge tone="neutral">{hook.platform}</Badge>}
                               <div>
-                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-2">Short Hook</p>
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Short hook</p>
                                 <p className="text-sm font-bold text-[#0B0B0B]">"{hook.short}"</p>
                               </div>
                               <div>
-                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-2">Expanded</p>
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Expanded</p>
                                 <p className="text-xs text-gray-500 leading-relaxed italic">"{hook.expanded}"</p>
                               </div>
                               <button
                                 onClick={() => copyToClipboard(hook.short + "\n" + hook.expanded)}
-                                className="text-[9px] font-bold text-[#FF0000] hover:opacity-60 transition-opacity uppercase tracking-widest border-b border-[#FF0000]/10 pb-1"
+                                className="text-[10px] font-bold text-[#FF0000] hover:opacity-60 transition-opacity uppercase tracking-widest border-b border-[#FF0000]/10 pb-1"
                               >
-                                Copy Hook
+                                Copy hook
                               </button>
                             </div>
                           </Card>
