@@ -30,3 +30,6 @@ functions/node_modules
 .env.*
 !.env.example
 .firebase
+
+# raw AI-generated media candidates (regenerate with `npm run media:generate`)
+media-src/

@@ -8,42 +8,62 @@ import FaqAccordion from '../components/FaqAccordion';
 import { FAQ_ITEMS, TESTIMONIALS } from '../config/marketingContent';
 import Seo from '../components/Seo';
 import { MARKETING_SEO } from '../config/seo';
+import Picture from '../components/media/Picture';
+import HeroVideo from '../components/media/HeroVideo';
+import * as media from '../assets/media';
+
+const AUDIENCE = [
+  { title: 'Founders', desc: 'Save capital by validating your core value proposition before hiring agencies or spending on ads.', asset: media.audienceFounders },
+  { title: 'Marketing Agencies', desc: 'Audit client assets instantly to find low-hanging fruit and justify your strategy with data-backed simulations.', asset: media.audienceAgencies },
+  { title: 'Growth Teams', desc: 'Systematize your creative testing workflow. Reduce the time between ideation and validated launch.', asset: media.audienceGrowth },
+];
 
 const LandingPage: React.FC = () => {
   return (
     <PublicLayout>
       <Seo {...MARKETING_SEO.home} />
 
-      {/* 1. HERO SECTION */}
-      <AnimatedSection as="section" index={0} className="relative pt-32 pb-24 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" role="banner">
-        <div className="max-w-4xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-gray-800 bg-gray-900/50 mb-8">
-            <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000] animate-pulse" />
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">System Online v1.0</span>
-          </div>
-          <h1 className="text-5xl md:text-7xl font-black text-white tracking-tight mb-8 leading-[1.1]">
-            The Operating System for <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-600">High-Stakes Marketing Decisions.</span>
-          </h1>
-          <p className="text-xl md:text-2xl text-gray-400 font-medium leading-relaxed max-w-2xl mb-12">
-            MarketBrainOS is a predictive marketing intelligence platform. Validate strategies, audit funnels, and simulate performance before you spend a single dollar on ads.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-6">
-            <Link to="/auth" aria-label="Sign up for MarketBrainOS">
-              <PrimaryButton className="!text-sm !px-12 !py-5">Initialize Free Account</PrimaryButton>
-            </Link>
-            <Link to="/documentation" aria-label="Read platform documentation">
-              <SecondaryButton className="!text-sm !px-10 !py-5 !bg-transparent !text-white !border-gray-700 hover:!border-white">
-                Read Documentation
-              </SecondaryButton>
-            </Link>
+      {/* 1. HERO SECTION - full-bleed ambient video behind the copy, scrimmed so the text sits on solid dark. */}
+      <AnimatedSection as="section" index={0} className="relative overflow-hidden border-b border-gray-900/50" role="banner">
+        {media.hero && (
+          <>
+            <HeroVideo asset={media.hero} />
+            {/* Scrim: solid on the left where the copy lives, opening up toward the right; fades into the page at the bottom. */}
+            <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-[#0B0B0B] via-[#0B0B0B]/85 to-[#0B0B0B]/30" />
+            <div aria-hidden="true" className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-[#0B0B0B] to-transparent" />
+            <div aria-hidden="true" className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-[#0B0B0B]/80 to-transparent" />
+          </>
+        )}
+        <div className="relative pt-32 pb-24 px-6 md:px-12 max-w-7xl mx-auto lg:min-h-[640px] flex items-center">
+          <div className="max-w-4xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-gray-800 bg-gray-900/50 mb-8">
+              <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000] animate-pulse" />
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">System Online v1.0</span>
+            </div>
+            <h1 className="text-5xl md:text-6xl font-black text-white tracking-tight mb-8 leading-[1.1]">
+              The Operating System for <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-500">High-Stakes Marketing Decisions.</span>
+            </h1>
+            <p className="text-xl md:text-2xl text-gray-400 font-medium leading-relaxed max-w-2xl mb-12">
+              MarketBrainOS is a predictive marketing intelligence platform. Validate strategies, audit funnels, and simulate performance before you spend a single dollar on ads.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-6">
+              <Link to="/auth" aria-label="Sign up for MarketBrainOS">
+                <PrimaryButton className="!text-sm !px-12 !py-5">Initialize Free Account</PrimaryButton>
+              </Link>
+              <Link to="/documentation" aria-label="Read platform documentation">
+                <SecondaryButton className="!text-sm !px-10 !py-5 !bg-transparent !text-white !border-gray-700 hover:!border-white">
+                  Read Documentation
+                </SecondaryButton>
+              </Link>
+            </div>
           </div>
         </div>
       </AnimatedSection>
 
       {/* 2. PROBLEM SECTION */}
       <AnimatedSection as="section" index={1} className="py-24 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" aria-labelledby="problem-heading">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-16">
-          <div>
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-12 lg:gap-16">
+          <div className="md:col-span-7">
             <span className="text-sm font-bold text-[#FF0000] uppercase tracking-[0.2em] mb-6 block">The Deployment Problem</span>
             <h2 id="problem-heading" className="text-3xl md:text-4xl font-bold text-white mb-6">Why do 80% of marketing campaigns fail in the first 48 hours?</h2>
             <p className="text-lg text-gray-500 leading-relaxed mb-6">
@@ -52,23 +72,28 @@ const LandingPage: React.FC = () => {
             <p className="text-lg text-gray-500 leading-relaxed">
               Without pre-launch validation, you are paying ad networks to tell you what an AI simulation could have told you for free: <strong>Your conversion argument is weak.</strong>
             </p>
+            <ul className="mt-10 space-y-4">
+              <li className="flex items-center gap-4 text-gray-500">
+                <span aria-hidden="true" className="w-6 h-6 shrink-0 rounded-full border-2 border-red-900 flex items-center justify-center text-red-900 font-bold text-sm">×</span>
+                <span className="font-medium">Writing copy based on "gut feeling"</span>
+              </li>
+              <li className="flex items-center gap-4 text-gray-500">
+                <span aria-hidden="true" className="w-6 h-6 shrink-0 rounded-full border-2 border-red-900 flex items-center justify-center text-red-900 font-bold text-sm">×</span>
+                <span className="font-medium">Launching without conversion audits</span>
+              </li>
+              <li className="flex items-center gap-4 text-white">
+                <span aria-hidden="true" className="w-6 h-6 shrink-0 rounded-full bg-[#FF0000] flex items-center justify-center text-black font-bold text-sm">✓</span>
+                <span className="font-bold">Simulating performance outcomes before spend</span>
+              </li>
+            </ul>
           </div>
-          <div className="bg-[#111] p-6 sm:p-10 rounded-2xl border border-gray-800 flex flex-col justify-center">
-            <div className="space-y-6">
-              <div className="flex items-start gap-4 opacity-50">
-                <div className="w-6 h-6 rounded-full border-2 border-red-900 flex items-center justify-center text-red-900 font-bold">×</div>
-                <p className="font-medium">Writing copy based on "gut feeling"</p>
-              </div>
-              <div className="flex items-start gap-4 opacity-50">
-                <div className="w-6 h-6 rounded-full border-2 border-red-900 flex items-center justify-center text-red-900 font-bold">×</div>
-                <p className="font-medium">Launching without conversion audits</p>
-              </div>
-              <div className="flex items-start gap-4 text-white">
-                <div className="w-6 h-6 rounded-full bg-[#FF0000] flex items-center justify-center text-black font-bold">✓</div>
-                <p className="font-bold">Simulating performance outcomes before spend</p>
-              </div>
-            </div>
-          </div>
+          {media.problem && (
+            <Picture
+              asset={media.problem}
+              sizes="(min-width: 768px) 40vw, 100vw"
+              className="md:col-span-5 rounded-2xl overflow-hidden border border-gray-800 bg-[#111] self-center"
+            />
+          )}
         </div>
       </AnimatedSection>
 
@@ -127,38 +152,46 @@ const LandingPage: React.FC = () => {
                 <li className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#FF0000]" />Hook Generation</li>
               </ul>
             </div>
-            <div className="lg:col-span-7 bg-[#111] p-6 sm:p-10 rounded-2xl border border-gray-800 shadow-2xl">
-              <div className="space-y-6">
-                 <div className="bg-gray-900/50 p-6 rounded-2xl border border-gray-800">
-                    <p className="text-xs text-gray-500 uppercase mb-2">Input</p>
-                    <p className="text-white font-medium">"SaaS for remote project management"</p>
-                 </div>
-                 <div className="flex justify-center text-gray-600">↓</div>
-                 <div className="bg-white p-6 rounded-2xl border border-gray-200">
-                    <p className="text-xs text-[#FF0000] font-bold uppercase mb-2">Generated Prime Angle</p>
-                    <p className="text-[#0B0B0B] font-bold text-lg">"The Async Synchronicity Paradox"</p>
-                    <p className="text-xs text-gray-500 mt-2">Rational: Targets the anxiety of remote disconnection while promising the speed of in-person collaboration.</p>
-                 </div>
+            {media.shotAngleminer ? (
+              <Picture asset={media.shotAngleminer} sizes="(min-width: 1024px) 58vw, 100vw" className="lg:col-span-7 rounded-2xl overflow-hidden border border-gray-800 bg-[#111] shadow-2xl" />
+            ) : (
+              <div className="lg:col-span-7 bg-[#111] p-6 sm:p-10 rounded-2xl border border-gray-800 shadow-2xl">
+                <div className="space-y-6">
+                   <div className="bg-gray-900/50 p-6 rounded-2xl border border-gray-800">
+                      <p className="text-xs text-gray-500 uppercase mb-2">Input</p>
+                      <p className="text-white font-medium">"SaaS for remote project management"</p>
+                   </div>
+                   <div className="flex justify-center text-gray-600">↓</div>
+                   <div className="bg-white p-6 rounded-2xl border border-gray-200">
+                      <p className="text-xs text-[#FF0000] font-bold uppercase mb-2">Generated Prime Angle</p>
+                      <p className="text-[#0B0B0B] font-bold text-lg">"The Async Synchronicity Paradox"</p>
+                      <p className="text-xs text-gray-500 mt-2">Rational: Targets the anxiety of remote disconnection while promising the speed of in-person collaboration.</p>
+                   </div>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Feature 2 */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 items-center">
-            <div className="lg:col-span-7 order-2 lg:order-1 bg-[#111] p-6 sm:p-10 rounded-2xl border border-gray-800 shadow-2xl">
-               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                 <div className="p-6 rounded-2xl bg-red-900/10 border border-red-900/30">
-                    <p className="text-xs text-red-500 font-bold uppercase mb-4">Variant A</p>
-                    <div className="text-2xl font-black text-red-500">42/100</div>
-                    <p className="text-[10px] text-red-400 mt-2">Predicted Low Performance</p>
+            {media.shotTestlab ? (
+              <Picture asset={media.shotTestlab} sizes="(min-width: 1024px) 58vw, 100vw" className="lg:col-span-7 order-2 lg:order-1 rounded-2xl overflow-hidden border border-gray-800 bg-[#111] shadow-2xl" />
+            ) : (
+              <div className="lg:col-span-7 order-2 lg:order-1 bg-[#111] p-6 sm:p-10 rounded-2xl border border-gray-800 shadow-2xl">
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                   <div className="p-6 rounded-2xl bg-red-900/10 border border-red-900/30">
+                      <p className="text-xs text-red-500 font-bold uppercase mb-4">Variant A</p>
+                      <div className="text-2xl font-black text-red-500">42/100</div>
+                      <p className="text-[10px] text-red-400 mt-2">Predicted Low Performance</p>
+                   </div>
+                   <div className="p-6 rounded-2xl bg-green-900/10 border border-green-900/30">
+                      <p className="text-xs text-green-500 font-bold uppercase mb-4">Variant B</p>
+                      <div className="text-2xl font-black text-green-500">94/100</div>
+                      <p className="text-[10px] text-green-400 mt-2">Projected Winner</p>
+                   </div>
                  </div>
-                 <div className="p-6 rounded-2xl bg-green-900/10 border border-green-900/30">
-                    <p className="text-xs text-green-500 font-bold uppercase mb-4">Variant B</p>
-                    <div className="text-2xl font-black text-green-500">94/100</div>
-                    <p className="text-[10px] text-green-400 mt-2">Projected Winner</p>
-                 </div>
-               </div>
-            </div>
+              </div>
+            )}
             <div className="lg:col-span-5 order-1 lg:order-2">
               <span className="text-[#FF0000] font-bold text-xs uppercase tracking-[0.3em] mb-4 block">Performance Simulation</span>
               <h3 className="text-4xl font-bold text-white mb-6">TestLab Pro</h3>
@@ -187,22 +220,26 @@ const LandingPage: React.FC = () => {
                 <li className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#FF0000]" />Clinical Rewrite Suggestions</li>
               </ul>
             </div>
-            <div className="lg:col-span-7 bg-[#111] p-6 sm:p-10 rounded-2xl border border-gray-800 shadow-2xl">
-               <div className="space-y-4">
-                  <div className="flex items-center gap-4 p-4 border border-red-900/30 bg-red-900/5 rounded-xl">
-                    <div className="w-2 h-2 rounded-full bg-red-500" />
-                    <p className="text-gray-300 text-sm"><strong className="text-white">Blocker Detected:</strong> Headline lacks specific benefit.</p>
-                  </div>
-                  <div className="flex items-center gap-4 p-4 border border-red-900/30 bg-red-900/5 rounded-xl">
-                    <div className="w-2 h-2 rounded-full bg-red-500" />
-                    <p className="text-gray-300 text-sm"><strong className="text-white">Friction Point:</strong> CTA is buried below fold.</p>
-                  </div>
-                  <div className="flex items-center gap-4 p-4 border border-green-900/30 bg-green-900/5 rounded-xl mt-8">
-                    <div className="w-2 h-2 rounded-full bg-green-500" />
-                    <p className="text-gray-300 text-sm"><strong className="text-white">Prescription:</strong> Move CTA to hero section and make benefit concrete.</p>
-                  </div>
-               </div>
-            </div>
+            {media.shotDoctor ? (
+              <Picture asset={media.shotDoctor} sizes="(min-width: 1024px) 58vw, 100vw" className="lg:col-span-7 rounded-2xl overflow-hidden border border-gray-800 bg-[#111] shadow-2xl" />
+            ) : (
+              <div className="lg:col-span-7 bg-[#111] p-6 sm:p-10 rounded-2xl border border-gray-800 shadow-2xl">
+                 <div className="space-y-4">
+                    <div className="flex items-center gap-4 p-4 border border-red-900/30 bg-red-900/5 rounded-xl">
+                      <div className="w-2 h-2 rounded-full bg-red-500" />
+                      <p className="text-gray-300 text-sm"><strong className="text-white">Blocker Detected:</strong> Headline lacks specific benefit.</p>
+                    </div>
+                    <div className="flex items-center gap-4 p-4 border border-red-900/30 bg-red-900/5 rounded-xl">
+                      <div className="w-2 h-2 rounded-full bg-red-500" />
+                      <p className="text-gray-300 text-sm"><strong className="text-white">Friction Point:</strong> CTA is buried below fold.</p>
+                    </div>
+                    <div className="flex items-center gap-4 p-4 border border-green-900/30 bg-green-900/5 rounded-xl mt-8">
+                      <div className="w-2 h-2 rounded-full bg-green-500" />
+                      <p className="text-gray-300 text-sm"><strong className="text-white">Prescription:</strong> Move CTA to hero section and make benefit concrete.</p>
+                    </div>
+                 </div>
+              </div>
+            )}
           </div>
         </div>
       </AnimatedSection>
@@ -237,24 +274,17 @@ const LandingPage: React.FC = () => {
       <AnimatedSection as="section" index={6} className="py-24 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" aria-labelledby="audience-heading">
          <h2 id="audience-heading" className="text-3xl font-bold text-white mb-12">Who Uses MarketBrainOS?</h2>
          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="p-8 border border-gray-800 rounded-2xl bg-[#0F0F0F]">
-              <h3 className="text-xl font-bold text-white mb-4">Founders</h3>
-              <p className="text-gray-500 text-sm leading-relaxed">
-                Save capital by validating your core value proposition before hiring agencies or spending on ads.
-              </p>
-            </div>
-            <div className="p-8 border border-gray-800 rounded-2xl bg-[#0F0F0F]">
-              <h3 className="text-xl font-bold text-white mb-4">Marketing Agencies</h3>
-              <p className="text-gray-500 text-sm leading-relaxed">
-                Audit client assets instantly to find low-hanging fruit and justify your strategy with data-backed simulations.
-              </p>
-            </div>
-            <div className="p-8 border border-gray-800 rounded-2xl bg-[#0F0F0F]">
-              <h3 className="text-xl font-bold text-white mb-4">Growth Teams</h3>
-              <p className="text-gray-500 text-sm leading-relaxed">
-                Systematize your creative testing workflow. Reduce the time between ideation and validated launch.
-              </p>
-            </div>
+            {AUDIENCE.map((a) => (
+              <div key={a.title} className="border border-gray-800 rounded-2xl bg-[#0F0F0F] overflow-hidden flex flex-col">
+                {a.asset && (
+                  <Picture asset={a.asset} sizes="(min-width: 768px) 33vw, 100vw" className="border-b border-gray-800" imgClassName="aspect-[2/1] object-cover" />
+                )}
+                <div className="p-8">
+                  <h3 className="text-xl font-bold text-white mb-4">{a.title}</h3>
+                  <p className="text-gray-500 text-sm leading-relaxed">{a.desc}</p>
+                </div>
+              </div>
+            ))}
          </div>
       </AnimatedSection>
 
@@ -272,7 +302,7 @@ const LandingPage: React.FC = () => {
               <li className="flex items-center gap-3 text-sm text-gray-400"><div className="w-1.5 h-1.5 bg-gray-600 rounded-full" />Limited Simulation</li>
             </ul>
             <Link to="/auth" className="w-full">
-               <SecondaryButton className="w-full">Start Free</SecondaryButton>
+               <SecondaryButton tone="dark" className="w-full">Start Free</SecondaryButton>
             </Link>
           </div>
 

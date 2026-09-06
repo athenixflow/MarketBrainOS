@@ -5,17 +5,32 @@ import AnimatedSection from '../components/AnimatedSection';
 import { PrimaryButton } from '../components/UI';
 import Seo from '../components/Seo';
 import { MARKETING_SEO } from '../config/seo';
+import Picture from '../components/media/Picture';
+import { about as aboutImage } from '../assets/media';
 
 const About: React.FC = () => (
   <PublicLayout>
     <Seo {...MARKETING_SEO.about} />
     <AnimatedSection as="section" index={0} className="pt-24 pb-16 px-6 md:px-12 max-w-4xl mx-auto">
-      <span className="text-sm font-bold text-[#FF0000] uppercase tracking-[0.2em] mb-6 block">About</span>
-      <h1 className="text-5xl md:text-6xl font-black text-white tracking-tight mb-8 leading-[1.1]">Turn uncertainty into clarity.</h1>
-      <p className="text-xl text-gray-400 font-medium leading-relaxed">
-        MarketBrain OS exists to help founders, marketers, agencies, and operators make better decisions —
-        faster, and with less guesswork.
-      </p>
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-10 items-center">
+        <div className="md:col-span-7">
+          <span className="text-sm font-bold text-[#FF0000] uppercase tracking-[0.2em] mb-6 block">About</span>
+          <h1 className="text-5xl md:text-6xl font-black text-white tracking-tight mb-8 leading-[1.1]">Turn uncertainty into clarity.</h1>
+          <p className="text-xl text-gray-400 font-medium leading-relaxed">
+            MarketBrain OS exists to help founders, marketers, agencies, and operators make better decisions —
+            faster, and with less guesswork.
+          </p>
+        </div>
+        {aboutImage && (
+          <Picture
+            asset={aboutImage}
+            priority
+            sizes="(min-width: 768px) 380px, 100vw"
+            className="md:col-span-5 rounded-2xl overflow-hidden border border-gray-800 bg-[#111]"
+            imgClassName="aspect-[4/5] object-cover"
+          />
+        )}
+      </div>
     </AnimatedSection>
 
     <AnimatedSection as="section" index={1} className="py-12 px-6 md:px-12 max-w-4xl mx-auto border-t border-gray-900/50">
