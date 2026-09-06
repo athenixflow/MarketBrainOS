@@ -17,8 +17,10 @@ const ScopeSwitcher: React.FC = () => {
     const onClick = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
     document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onClick); document.removeEventListener('keydown', onKey); };
   }, []);
 
   // V1 users (no memberships) get no switcher — the spine is present but invisible.
@@ -41,7 +43,10 @@ const ScopeSwitcher: React.FC = () => {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-2 text-[11px] font-bold tracking-widest text-gray-300 hover:text-white uppercase transition-colors px-3 py-1.5 rounded-lg border border-gray-800 hover:border-gray-700"
+        aria-expanded={open}
+        aria-haspopup="true"
+        aria-label={`Scope: ${label}`}
+        className="flex items-center gap-2 text-[11px] font-bold tracking-widest text-gray-300 hover:text-white uppercase transition-colors px-3 py-1.5 rounded-full border border-gray-800 hover:border-gray-700"
       >
         <span className="w-1.5 h-1.5 rounded-full bg-[#FF0000]" />
         <span className="max-w-[140px] truncate">{label}</span>
@@ -49,7 +54,7 @@ const ScopeSwitcher: React.FC = () => {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-[min(15rem,calc(100vw-2rem))] bg-white text-[#0B0B0B] rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+        <div className="paper absolute right-0 mt-2 w-[min(15rem,calc(100vw-2rem))] bg-white text-[#0B0B0B] rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
           <button
             onClick={() => { resetToPersonal(); setOpen(false); }}
             className={`w-full text-left px-5 py-3 text-sm font-bold hover:bg-gray-50 transition-colors ${scope.level === 'personal' ? 'text-[#FF0000]' : ''}`}
@@ -71,7 +76,7 @@ const ScopeSwitcher: React.FC = () => {
                 className={`w-full text-left px-5 py-3 hover:bg-gray-50 transition-colors ${active ? 'text-[#FF0000]' : ''}`}
               >
                 <p className="text-sm font-bold truncate">{m.name}</p>
-                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{m.family}</p>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{m.family}</p>
               </button>
             );
           })}

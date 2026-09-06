@@ -279,12 +279,12 @@ const Workflow: React.FC = () => {
         onClose={() => setShowUsageModal(false)} 
       />
 
-      <AnimatedSection index={0} className="flex justify-between items-center mb-8">
-        <div className="flex items-center gap-6">
-          <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2 bg-[#121212] rounded-full border border-gray-900">
+      <AnimatedSection index={0} className="flex flex-wrap justify-between items-center gap-4 mb-8">
+        <div className="flex flex-wrap items-center gap-4 min-w-0">
+          <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2 bg-[#121212] rounded-full border border-gray-900 tabular-nums whitespace-nowrap">
             Step {Math.max(1, step)} of 6
           </div>
-          <div className="h-1 w-48 bg-gray-900 rounded-full overflow-hidden">
+          <div className="h-1 w-full sm:w-48 bg-gray-900 rounded-full overflow-hidden">
             <div 
               className="h-full bg-[#FF0000] transition-all duration-700" 
               style={{ width: `${(step / 6) * 100}%` }} 
@@ -296,7 +296,7 @@ const Workflow: React.FC = () => {
             onClick={() => setStep(0)}
             className="text-[10px] font-bold text-gray-500 hover:text-white uppercase tracking-widest transition-colors"
           >
-            Exit Workflow
+            Exit workflow
           </button>
         )}
       </AnimatedSection>
@@ -328,19 +328,20 @@ const Workflow: React.FC = () => {
       ) : null}
 
       {step === 0 && (
-        <AnimatedSection index={1} className="max-w-2xl mx-auto text-center py-24">
-          <PageHeader
-            title="Integrated Campaign Workflow"
-            subtitle="Connect ideation, testing, and auditing into one seamless executive process. Build and validate your marketing before you launch."
-          />
+        <AnimatedSection index={1} className="max-w-2xl mx-auto text-center py-12 sm:py-20">
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white mb-5 leading-tight">Integrated Campaign Workflow</h1>
+          <div className="w-12 h-[2px] bg-[#FF0000] rounded-full mb-6 mx-auto" />
+          <p className="text-gray-500 font-medium text-lg sm:text-xl leading-relaxed mb-10">
+            Connect ideation, testing, and auditing into one guided process. Build and validate your marketing before you launch.
+          </p>
           <div className="mb-12 text-left">
             <ExpectedOutcome
               estimatedTime="2–3 minutes"
-              analyzes="Chains four tools into one guided pipeline: ideation → selection → simulation → audit."
+              analyzes="Chains four tools into one guided pipeline: ideation, selection, simulation, audit."
               outcomes={['Marketing Angles (AngleMiner)', 'Hook Selection', 'Performance Simulation (TestLab)', 'Conversion Audit (Conversion Doctor)']}
             />
           </div>
-          <PrimaryButton onClick={() => setStep(1)} className="!px-16 !py-6 !text-lg">Start Workflow</PrimaryButton>
+          <PrimaryButton size="lg" onClick={() => setStep(1)}>Start workflow</PrimaryButton>
         </AnimatedSection>
       )}
 
@@ -366,7 +367,7 @@ const Workflow: React.FC = () => {
                 />
                 <Input 
                   label="Target Audience" 
-                  placeholder="Who is the primary decision makers?" 
+                  placeholder="Who are the primary decision makers?"
                   value={minerParams.target} 
                   onChange={e => setMinerParams({...minerParams, target: e.target.value})} 
                 />
@@ -387,49 +388,50 @@ const Workflow: React.FC = () => {
               )}
             </div>
 
-            <div className="mt-12 flex justify-between">
+            <div className="mt-10 flex flex-wrap justify-between gap-4">
               <SecondaryButton onClick={() => setStep(0)}>Cancel</SecondaryButton>
-              <PrimaryButton 
+              <PrimaryButton
                 type="submit"
                 disabled={loading || !minerParams.product}
               >
-                Generate Angles
+                Generate angles
               </PrimaryButton>
             </div>
           </form>
         </Card>
       )}
 
-      {loading && <LoadingState message="Neural engine processing active..." isTakingLong={isTakingLong} onCancel={() => setLoading(false)} />}
+      {loading && <LoadingState message="Working on it…" isTakingLong={isTakingLong} onCancel={() => setLoading(false)} />}
 
       {step === 2 && !loading && minerResults && (
-        <div className="max-w-4xl mx-auto space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <SectionHeader title="Step 2: Selection" subtitle="Choose hooks to enter performance simulator (Max 3)." />
-          <div className="grid grid-cols-1 gap-6">
-            {[...(minerResults.angles || [])].sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 6).map((angle, i) => (
-              <button 
-                key={i} 
-                onClick={() => toggleAngleSelection(angle.hook)}
-                className={`text-left p-10 rounded-2xl border transition-all duration-500 ${
-                  selectedAngleTexts.includes(angle.hook) 
-                    ? 'bg-white border-[#FF0000] shadow-xl' 
-                    : 'bg-white/50 border-gray-100 opacity-60 hover:opacity-100'
-                }`}
-              >
-                <div className="flex justify-between items-center">
-                  <h4 className="text-xl font-bold text-[#0B0B0B]">{angle.title}</h4>
-                  {selectedAngleTexts.includes(angle.hook) && (
-                    <div className="w-4 h-4 rounded-full bg-[#FF0000]" />
-                  )}
-                </div>
-                <p className="text-gray-500 mt-4 leading-relaxed font-medium italic">"{angle.hook}"</p>
-              </button>
-            ))}
+        <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <SectionHeader onDark title="Step 2: Selection" subtitle="Choose two or three angles to send into the performance simulator." />
+          <div className="grid grid-cols-1 gap-4">
+            {[...(minerResults.angles || [])].sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 6).map((angle, i) => {
+              const selected = selectedAngleTexts.includes(angle.hook);
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => toggleAngleSelection(angle.hook)}
+                  aria-pressed={selected}
+                  className={`paper text-left p-6 sm:p-8 rounded-2xl border bg-white transition-all duration-300 ${
+                    selected ? 'border-[#FF0000] shadow-xl' : 'border-gray-100 opacity-70 hover:opacity-100'
+                  }`}
+                >
+                  <div className="flex flex-wrap justify-between items-center gap-3">
+                    <h4 className="text-xl font-bold text-[#0B0B0B]">{angle.title}</h4>
+                    {selected && <div className="w-4 h-4 rounded-full bg-[#FF0000]" />}
+                  </div>
+                  <p className="text-gray-500 mt-4 leading-relaxed font-medium italic">"{angle.hook}"</p>
+                </button>
+              );
+            })}
           </div>
-          <div className="flex justify-between pt-12">
-            <SecondaryButton onClick={prevStep}>Back</SecondaryButton>
+          <div className="flex flex-wrap justify-between gap-4 pt-8">
+            <SecondaryButton tone="dark" onClick={prevStep}>Back</SecondaryButton>
             <PrimaryButton onClick={handleStartTest} disabled={selectedAngleTexts.length < 2}>
-              Continue to Simulator ({selectedAngleTexts.length}/3)
+              Continue to simulator ({selectedAngleTexts.length}/3)
             </PrimaryButton>
           </div>
         </div>
@@ -438,16 +440,16 @@ const Workflow: React.FC = () => {
       {step === 3 && !loading && testResults && (
         <Card className="max-w-4xl mx-auto shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
           <SectionHeader title="Step 3: TestLab Pro" subtitle="Performance prediction results." />
-          <div className="mb-12">
-            <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-6 text-center">Projected Performance Winner</p>
-            <div className="p-10 bg-gray-50 rounded-2xl text-center border border-gray-100 shadow-inner">
+          <div className="mb-10">
+            <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-6 text-center">Predicted winner</p>
+            <div className="p-6 sm:p-8 bg-gray-50 rounded-2xl text-center border border-gray-100 shadow-inner">
               <p className="text-2xl font-bold text-[#0B0B0B] mb-8 leading-relaxed">"{winningAngleText}"</p>
               <IntelligenceIndicator score={winningAngleScore} />
             </div>
           </div>
-          <div className="flex justify-between pt-12">
+          <div className="flex flex-wrap justify-between gap-4 pt-8">
             <SecondaryButton onClick={prevStep}>Retest</SecondaryButton>
-            <PrimaryButton onClick={nextStep}>Audit Landing Page</PrimaryButton>
+            <PrimaryButton onClick={nextStep}>Audit landing page</PrimaryButton>
           </div>
         </Card>
       )}
@@ -464,10 +466,10 @@ const Workflow: React.FC = () => {
               onChange={e => { setAuditInput(e.target.value); setError(null); }} 
               multiline 
             />
-            <div className="flex justify-between pt-12">
+            <div className="flex flex-wrap justify-between gap-4 pt-8">
               <SecondaryButton onClick={prevStep}>Back</SecondaryButton>
               <PrimaryButton type="submit" disabled={loading || !auditInput}>
-                Run Clinical Audit
+                Run conversion audit
               </PrimaryButton>
             </div>
           </form>
@@ -476,10 +478,10 @@ const Workflow: React.FC = () => {
 
       {step === 5 && !loading && auditResult && (
         <Card className="max-w-4xl mx-auto shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <SectionHeader title="Step 5: Improvement Pipeline" subtitle="Synthesizing test results with clinical data." />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+          <SectionHeader title="Step 5: Improvement Pipeline" subtitle="Combine the winning angle with the audit findings to produce final assets." />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
             <div className="p-6 sm:p-8 bg-[#FFF9F9] rounded-2xl border border-[#FF0000]/10">
-              <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-6">Top Diagnostic Issues</p>
+              <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-6">Top conversion blockers</p>
               {(auditResult.issues || []).length === 0 ? (
                 <p className="text-sm font-medium text-gray-500">No conversion blockers were flagged in the audit.</p>
               ) : (
@@ -494,7 +496,7 @@ const Workflow: React.FC = () => {
               )}
             </div>
             <div className="p-6 sm:p-8 bg-gray-50 rounded-2xl border border-gray-100">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-6">Strategic Winning Foundation</p>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-6">Winning angle</p>
               {winningAngleText ? (
                 <p className="text-sm font-medium text-gray-600 leading-relaxed italic">"{winningAngleText}"</p>
               ) : (
@@ -506,7 +508,7 @@ const Workflow: React.FC = () => {
             <PrimaryButton onClick={handleRunImprovement} disabled={loading} className="w-full">
               Generate final improved assets
             </PrimaryButton>
-            <button onClick={nextStep} className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Skip to Summary</button>
+            <button onClick={nextStep} className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest text-center transition-colors">Skip to summary</button>
           </div>
         </Card>
       )}
@@ -515,29 +517,30 @@ const Workflow: React.FC = () => {
         <ResultContainer>
           <div className="max-w-5xl mx-auto space-y-12">
             <div className="flex justify-center mb-12">
-              <ExportControls 
-                onCopy={handleCopy} 
-                onExportText={handleExportTxt} 
-                onExportPDF={handleExportPDF} 
-                isPro={isPro} 
+              <ExportControls
+                tone="dark"
+                onCopy={handleCopy}
+                onExportText={handleExportTxt}
+                onExportPDF={handleExportPDF}
+                isPro={isPro}
               />
             </div>
             {/* The headline must not claim success when there is nothing to show: "Skip to Summary"
                 reaches this screen without ever generating assets. */}
             <div className="text-center mb-20 animate-in fade-in slide-in-from-top-2 duration-500">
-              <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-[0.3em] mb-8">Executive Intelligence Summary</p>
+              <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-8">Workflow summary</p>
               {finalImprovements ? (
                 <>
-                  <h1 className="text-4xl sm:text-5xl font-black text-white tracking-tighter mb-6">Strategic Assets Ready.</h1>
-                  <p className="text-gray-500 text-lg sm:text-xl font-medium mb-12">Your strategy has been validated and clinically refined.</p>
+                  <h1 className="text-4xl sm:text-5xl font-black text-white tracking-tighter mb-6">Your assets are ready.</h1>
+                  <p className="text-gray-500 text-lg sm:text-xl font-medium mb-12">The winning angle, the audit findings and the refined assets, in one place.</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-10 text-left">
-                    <Card title="Improved Headline">
+                    <Card title="Improved headline">
                       <p className="text-lg font-bold text-[#0B0B0B] leading-relaxed">"{finalImprovements.headline}"</p>
                     </Card>
-                    <Card title="Benefit CTA">
+                    <Card title="Call to action">
                       <p className="text-lg font-bold text-[#0B0B0B] leading-relaxed">"{finalImprovements.cta}"</p>
                     </Card>
-                    <Card title="Offer Messaging">
+                    <Card title="Offer messaging">
                       <p className="text-lg font-bold text-[#0B0B0B] leading-relaxed">"{finalImprovements.offer}"</p>
                     </Card>
                   </div>

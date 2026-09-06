@@ -1,19 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader, Card, PrimaryButton } from '../components/UI';
+import {
+  PageHeader, Card, PrimaryButton, Stat, Skeleton, EmptyState, LedgerRow, ErrorMessage, LoadingState,
+} from '../components/UI';
 import { TokenStore } from '../components/TokenStore';
 import { useAuth } from '../context/AuthContext';
 import { getUserPaymentHistory } from '../services/persistenceService';
 import { downloadAsCSV, paymentsToCSV } from '../services/exportService';
 import { PaymentRecord } from '../types';
 import { PLAN_META, DEFAULT_PRICING_CONFIG, Tier } from '../config/pricingConfig';
-
-const Stat: React.FC<{ label: string; value: string | number }> = ({ label, value }) => (
-  <div>
-    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{label}</p>
-    <p className="text-xl font-black text-[#0B0B0B] mt-1">{typeof value === 'number' ? value.toLocaleString() : value}</p>
-  </div>
-);
 
 const toDate = (v: any): Date | null => {
   if (!v) return null;
@@ -22,29 +17,40 @@ const toDate = (v: any): Date | null => {
 
 const payLabel = (p: PaymentRecord): string => {
   const t = (p as any).type;
-  if (t === 'expansion') return `Expansion — ${(p as any).expansion_type || 'capacity'}`;
+  if (t === 'expansion') return `Expansion: ${(p as any).expansion_type || 'capacity'}`;
   if (t === 'subscription') return 'Subscription';
   if (t === 'token_pack') return 'Token pack';
   return 'Token top-up';
 };
 
+const LOAD_ERROR = 'We could not load your billing history. Please try again.';
+
 const BillingCenter: React.FC = () => {
   const { user, profile } = useAuth();
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const load = () => {
     if (!user) return;
     setLoading(true);
-    getUserPaymentHistory(user.uid).then(setPayments).catch(() => {}).finally(() => setLoading(false));
+    setError(null);
+    getUserPaymentHistory(user.uid)
+      .then(setPayments)
+      .catch(() => setError(LOAD_ERROR))
+      .finally(() => setLoading(false));
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [user]);
 
-  if (!profile) return null;
+  if (!profile) return <LoadingState message="Loading your billing" />;
   const tier = (profile.tier as Tier) || 'free';
+  const isFree = tier === 'free';
   const monthly = profile.monthly_tokens ?? profile.tokens ?? 0;
   const purchased = profile.purchased_tokens ?? 0;
-  const renews = profile.plan_renews_at ? new Date(profile.plan_renews_at).toLocaleDateString() : '—';
+  // The Free plan never renews: its allowance is a one-time balance.
+  const renews = isFree
+    ? 'Never'
+    : profile.plan_renews_at ? new Date(profile.plan_renews_at).toLocaleDateString() : 'Not set';
   const planName = PLAN_META[tier]?.name || tier;
   const price = DEFAULT_PRICING_CONFIG.plans[tier]?.price ?? 0;
   const expansions = payments.filter((p) => (p as any).type === 'expansion');
@@ -55,9 +61,9 @@ const BillingCenter: React.FC = () => {
       <div className="space-y-6">
         <Card title="Current plan">
           <div className="flex flex-wrap items-end justify-between gap-6">
-            <div className="flex flex-wrap gap-10">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 flex-1 min-w-0">
               <Stat label="Plan" value={planName} />
-              <Stat label="Price" value={`$${price}/mo`} />
+              <Stat label="Price" value={isFree ? '$0' : `$${price}/mo`} />
               <Stat label="Renews" value={renews} />
             </div>
             <Link to="/pricing"><PrimaryButton>Change plan</PrimaryButton></Link>
@@ -65,12 +71,16 @@ const BillingCenter: React.FC = () => {
         </Card>
 
         <Card title="Token balance">
-          <div className="flex flex-wrap gap-10">
-            <Stat label="Total" value={monthly + purchased} />
-            <Stat label="Monthly allowance" value={monthly} />
-            <Stat label="Purchased (never expire)" value={purchased} />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <Stat label="Total" value={(monthly + purchased).toLocaleString()} />
+            <Stat label={isFree ? 'Free allowance' : 'Monthly allowance'} value={monthly.toLocaleString()} />
+            <Stat label="Purchased (never expire)" value={purchased.toLocaleString()} />
           </div>
-          <p className="mt-4 text-sm text-gray-500 font-medium">Monthly tokens reset each billing cycle; purchased tokens roll over and never expire.</p>
+          <p className="mt-6 text-sm text-gray-500 font-medium">
+            {isFree
+              ? 'Your Free allowance is a one-time balance and does not refill. Purchased tokens never expire.'
+              : 'Monthly tokens reset each billing cycle; purchased tokens roll over and never expire.'}
+          </p>
         </Card>
 
         <Card title="Token store">
@@ -80,47 +90,47 @@ const BillingCenter: React.FC = () => {
         {expansions.length > 0 && (
           <Card title="Expansion purchases">
             <div className="space-y-3">
-              {expansions.map((p) => {
-                const d = toDate(p.created_at);
-                return (
-                  <div key={p.id} className="flex items-center justify-between p-4 rounded-2xl bg-gray-50 border border-gray-100">
-                    <div>
-                      <p className="text-sm font-bold text-[#0B0B0B] capitalize">{(p as any).expansion_type || 'capacity'} expansion</p>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">{d ? d.toLocaleDateString() : ''} • recurring</p>
-                    </div>
-                    <p className="text-sm font-black text-[#0B0B0B]">${p.amount_paid}/mo</p>
-                  </div>
-                );
-              })}
+              {expansions.map((p) => (
+                <LedgerRow
+                  key={p.id}
+                  when={toDate(p.created_at) || new Date(0)}
+                  title={`${(p as any).expansion_type || 'capacity'} expansion`}
+                  detail="Recurring"
+                  right={<p className="text-sm font-black text-[#0B0B0B]">${p.amount_paid}/mo</p>}
+                />
+              ))}
             </div>
           </Card>
         )}
 
         <Card title="Invoices">
           {loading ? (
-            <p className="text-sm text-gray-400 font-medium py-6 text-center">Loading…</p>
+            <div className="space-y-3" aria-busy="true">
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-20 w-full" />
+            </div>
+          ) : error ? (
+            <ErrorMessage message={error} action={{ label: 'Retry', onClick: load }} />
           ) : payments.length === 0 ? (
-            <p className="text-sm text-gray-400 font-medium py-6 text-center">No transactions yet.</p>
+            <EmptyState message="No transactions yet" submessage="Subscription payments, token packs and expansions will show up here." />
           ) : (
             <>
               <div className="space-y-3 mb-6">
-                {payments.map((p) => {
-                  const d = toDate(p.created_at);
-                  return (
-                    <div key={p.id} className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-gray-50 border border-gray-100">
-                      <div className="min-w-0">
-                        <p className="text-sm font-bold text-[#0B0B0B] truncate">{payLabel(p)}</p>
-                        {/* payment refs are unbreakable tokens; without truncate they forced the row
-                            wider than the card and the amount column got clipped by overflow-hidden */}
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1 truncate">{d ? d.toLocaleDateString() : ''} • Ref {p.payment_reference || 'N/A'}</p>
+                {payments.map((p) => (
+                  <LedgerRow
+                    key={p.id}
+                    when={toDate(p.created_at) || new Date(0)}
+                    title={payLabel(p)}
+                    detail={<span className="font-mono">Ref: {p.payment_reference || 'N/A'}</span>}
+                    right={
+                      <div>
+                        {p.tokens_credited ? <p className="text-sm font-black text-green-600">+{p.tokens_credited.toLocaleString()} tokens</p> : null}
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">${p.amount_paid}</p>
                       </div>
-                      <div className="text-right shrink-0">
-                        {p.tokens_credited ? <p className="text-sm font-black text-green-600 tabular-nums">+{p.tokens_credited.toLocaleString()} tokens</p> : null}
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums">${p.amount_paid}</p>
-                      </div>
-                    </div>
-                  );
-                })}
+                    }
+                  />
+                ))}
               </div>
               <button onClick={() => downloadAsCSV('MarketBrainOS_Billing_History', paymentsToCSV(payments))} className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">Export CSV</button>
             </>

@@ -8,24 +8,29 @@ import { Report } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useScope } from '../context/ScopeContext';
 import { getReportsForScope } from '../services/persistenceService';
-import { PageHeader, Card, EmptyState, LoadingState } from '../components/UI';
+import { PageHeader, Card, EmptyState, Skeleton, ErrorMessage, Badge } from '../components/UI';
+
+const LOAD_ERROR = 'We could not load your reports. Please try again.';
 
 const Reports: React.FC = () => {
   const { user } = useAuth();
   const { scope } = useScope();
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
 
   useEffect(() => {
     let active = true;
     if (!user) return;
     setLoading(true);
+    setError(null);
     getReportsForScope(user.uid, scope)
       .then(rows => { if (active) setReports(rows); })
-      .catch(console.error)
+      .catch((e) => { console.error(e); if (active) setError(LOAD_ERROR); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [user, scope]);
+  }, [user, scope, reloadTick]);
 
   const scopeLabel =
     scope.level === 'personal' ? 'Personal'
@@ -34,41 +39,41 @@ const Reports: React.FC = () => {
     : 'Enterprise';
 
   return (
-    <div>
+    <div className="space-y-8">
       <PageHeader
         title="Reports"
-        subtitle={`Saved intelligence reports in your ${scopeLabel} scope. Generate new ones from any analysis tool.`}
+        subtitle={`Saved reports in your ${scopeLabel} scope. Save a report from any analysis result.`}
       />
 
+      {error && <ErrorMessage message={error} action={{ label: 'Retry', onClick: () => setReloadTick((t) => t + 1) }} />}
+
       {loading ? (
-        <LoadingState message="Loading Reports..." />
-      ) : reports.length === 0 ? (
-        <Card>
-          <EmptyState
-            message="No reports yet"
-            submessage="Run an analysis and save it as a report to start building your reporting library. Reports you generate in this scope will appear here."
-          />
-          <div className="flex justify-center">
-            <Link
-              to="/"
-              className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest hover:opacity-60 transition-opacity border-b border-[#FF0000]/20 pb-1"
-            >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6" aria-busy="true">
+          {[0, 1, 2, 3].map((i) => <Skeleton key={i} tone="dark" className="h-32 w-full" />)}
+        </div>
+      ) : !error && reports.length === 0 ? (
+        <EmptyState
+          card
+          message="No reports yet"
+          submessage="Run an analysis and use Save as report on the result to start building your reporting library."
+          action={
+            <Link to="/" className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest hover:opacity-60 transition-opacity border-b border-[#FF0000]/20 pb-1">
               Run your first analysis →
             </Link>
-          </div>
-        </Card>
+          }
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {reports.map((r) => {
             const date = r.created_at ? new Date(r.created_at) : null;
             return (
               <Card key={r.id} accent>
-                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-3">
-                  {r.report_type || 'Report'}
-                  {date && <> • {date.toLocaleDateString()}</>}
-                </p>
+                <div className="flex flex-wrap items-center gap-3 mb-4">
+                  <Badge tone="neutral">{r.report_type || 'Report'}</Badge>
+                  {date && <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums">{date.toLocaleDateString()}</span>}
+                </div>
                 <h3 className="text-lg font-bold text-[#0B0B0B] tracking-tight leading-snug">
-                  {r.title || 'Untitled Report'}
+                  {r.title || 'Untitled report'}
                 </h3>
               </Card>
             );

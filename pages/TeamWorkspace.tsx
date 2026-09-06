@@ -3,11 +3,11 @@
 // and an active workspace (tabbed: Overview/Members/Library/Reports/Analytics/Activity/Settings).
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PageHeader, Card, PrimaryButton, Input, LoadingState, ErrorMessage } from '../components/UI';
+import { PageHeader, Card, PrimaryButton, Input, LoadingState, ErrorMessage, Tabs, Badge } from '../components/UI';
 import AnimatedSection from '../components/AnimatedSection';
 import { useAuth } from '../context/AuthContext';
 import { useScope } from '../context/ScopeContext';
-import { Membership } from '../services/permissionService';
+import { Membership, ROLE_LABELS } from '../services/permissionService';
 import {
   Workspace, WorkspaceMember, WorkspaceInvitation,
 } from '../types';
@@ -28,6 +28,13 @@ import TeamReports from '../components/team/TeamReports';
 
 const TABS = ['Overview', 'Members', 'Library', 'Reports', 'Analytics', 'Activity', 'Settings'] as const;
 type Tab = typeof TABS[number];
+
+// Container switcher pills sit on the dark page, so the active state is white-on-dark (a black pill
+// on the #0B0B0B page had no visible edge).
+const switcherPill = (on: boolean) =>
+  `px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-colors ${
+    on ? 'bg-white text-[#0B0B0B] border-white' : 'border-gray-700 text-gray-400 hover:border-white hover:text-white'
+  }`;
 
 const TeamWorkspace: React.FC = () => {
   const { user, profile, refreshProfile } = useAuth();
@@ -115,97 +122,99 @@ const TeamWorkspace: React.FC = () => {
   // --- No workspace: show pending invites and/or the create/upgrade pitch ---
   if (!workspace) {
     return (
-      <div className="space-y-10">
+      <div>
         <PageHeader title="Team Workspace" subtitle="Collaborate with your team — shared analyses, reports, and intelligence." />
-        {error && <ErrorMessage message={error} />}
+        <div className="space-y-10">
+          {error && <ErrorMessage message={error} />}
 
-        {invites.length > 0 && (
-          <AnimatedSection index={0}>
-            <Card title="Pending invitations">
-              <div className="space-y-3">
-                {invites.map(inv => (
-                  <div key={inv.id} className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100 flex-wrap">
-                    <div><p className="text-sm font-bold text-[#0B0B0B]">{inv.workspace_name}</p><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Role: {inv.role}</p></div>
-                    <PrimaryButton onClick={() => acceptInvite(inv)} disabled={busy}>Accept & Join</PrimaryButton>
-                  </div>
-                ))}
+          {invites.length > 0 && (
+            <AnimatedSection index={0}>
+              <Card title="Pending invitations">
+                <div className="space-y-3">
+                  {invites.map(inv => (
+                    <div key={inv.id} className="flex flex-wrap items-center justify-between gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-[#0B0B0B] truncate">{inv.workspace_name}</p>
+                        <div className="mt-1.5"><Badge tone="neutral">{ROLE_LABELS[inv.role] || inv.role}</Badge></div>
+                      </div>
+                      <PrimaryButton size="sm" onClick={() => acceptInvite(inv)} disabled={busy}>Accept & Join</PrimaryButton>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </AnimatedSection>
+          )}
+
+          <AnimatedSection index={1}>
+            <Card title="Create a Team Workspace">
+              <p className="text-sm text-gray-500 font-medium mb-6 leading-relaxed">
+                Spin up a shared workspace to invite teammates, share analyses, and build collective intelligence.
+                {profile?.tier === 'free' || profile?.tier === 'pro'
+                  ? ' Creating one upgrades you to the Team plan.'
+                  : ''}
+              </p>
+              <div className="max-w-xl">
+                <Input label="Workspace name" placeholder="e.g. Acme Growth Team" value={name} onChange={(e) => setName(e.target.value)} />
+                <Input label="Description (optional)" placeholder="What this workspace is for" value={description} onChange={(e) => setDescription(e.target.value)} multiline />
+                <PrimaryButton onClick={createWorkspace} disabled={busy}>{busy ? 'Creating…' : 'Create Workspace'}</PrimaryButton>
               </div>
             </Card>
           </AnimatedSection>
-        )}
-
-        <AnimatedSection index={1}>
-          <Card title="Create a Team Workspace">
-            <p className="text-sm text-gray-500 font-medium mb-6 leading-relaxed">
-              Spin up a shared workspace to invite teammates, share analyses, and build collective intelligence.
-              {profile?.tier === 'free' || profile?.tier === 'pro'
-                ? ' Creating one upgrades you to the Team plan (simulated billing).'
-                : ''}
-            </p>
-            <div className="space-y-4 max-w-xl">
-              <Input label="Workspace name" placeholder="e.g. Acme Growth Team" value={name} onChange={(e) => setName(e.target.value)} />
-              <Input label="Description (optional)" placeholder="What this workspace is for" value={description} onChange={(e) => setDescription(e.target.value)} multiline />
-              <PrimaryButton onClick={createWorkspace} disabled={busy}>{busy ? 'Creating…' : 'Create Workspace'}</PrimaryButton>
-            </div>
-          </Card>
-        </AnimatedSection>
+        </div>
       </div>
     );
   }
 
   // --- Active workspace ---
   return (
-    <div className="space-y-8">
+    <div>
       <PageHeader title={workspace.name} subtitle={workspace.description || 'Team Workspace'} />
 
       {/* Workspace selector (if user belongs to several) */}
       {workspaceMemberships.length > 1 && (
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex flex-wrap items-center gap-2 mb-8" role="group" aria-label="Switch workspace">
           {workspaceMemberships.map(m => (
-            <button key={m.containerId} onClick={() => { setActiveId(m.containerId); setScope({ level: 'team', workspaceId: m.containerId }); }}
-              className={`px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-widest border transition-colors ${activeId === m.containerId ? 'bg-[#0B0B0B] text-white border-[#0B0B0B]' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}>
+            <button
+              key={m.containerId}
+              aria-pressed={activeId === m.containerId}
+              onClick={() => { setActiveId(m.containerId); setScope({ level: 'team', workspaceId: m.containerId }); }}
+              className={switcherPill(activeId === m.containerId)}
+            >
               {m.name}
             </button>
           ))}
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="flex gap-6 border-b border-gray-900/50 overflow-x-auto no-scrollbar">
-        {TABS.map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            className={`pb-3 text-[11px] font-bold uppercase tracking-widest whitespace-nowrap transition-all relative ${tab === t ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}>
-            {t}
-            {tab === t && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#FF0000] rounded-full" />}
-          </button>
-        ))}
+      <Tabs tabs={[...TABS]} activeTab={tab} onTabChange={(t) => setTab(t as Tab)} tone="dark" />
+
+      <div className="space-y-8">
+        {error && <ErrorMessage message={error} />}
+
+        {tab === 'Overview' && <TeamOverview workspace={workspace} onQuickAction={handleQuickAction} />}
+        {tab === 'Members' && (
+          <div className="space-y-6">
+            <CapacityPanel
+              title="Plan capacity & expansions"
+              rows={[{
+                label: 'Members',
+                used: members.length,
+                cap: (DEFAULT_PRICING_CONFIG.plans.team.membersPerWorkspace || 0) + (workspace?.extra_seats || 0),
+                ...(workspace && workspace.owner_id === user?.uid ? {
+                  buyLabel: `Add seat $${DEFAULT_PRICING_CONFIG.expansion.member}`,
+                  onBuy: async () => { await callPurchaseExpansion({ type: 'member', level: 'workspace', containerId: workspace.id }); await loadWorkspace(); },
+                } : {}),
+              }]}
+            />
+            <TeamMembers workspace={workspace} members={members} membership={membership} selfUid={user?.uid || ''} onReload={loadWorkspace} />
+          </div>
+        )}
+        {tab === 'Library' && <SharedLibrary workspace={workspace} selfUid={user?.uid || ''} selfName={selfName} />}
+        {tab === 'Reports' && <TeamReports workspace={workspace} />}
+        {tab === 'Analytics' && <TeamAnalytics workspace={workspace} />}
+        {tab === 'Activity' && <TeamActivity workspace={workspace} />}
+        {tab === 'Settings' && <TeamSettings workspace={workspace} membership={membership} members={members} selfUid={user?.uid || ''} onChanged={loadWorkspace} />}
       </div>
-
-      {error && <ErrorMessage message={error} />}
-
-      {tab === 'Overview' && <TeamOverview workspace={workspace} onQuickAction={handleQuickAction} />}
-      {tab === 'Members' && (
-        <div className="space-y-6">
-          <CapacityPanel
-            title="Plan capacity & expansions"
-            rows={[{
-              label: 'Members',
-              used: members.length,
-              cap: (DEFAULT_PRICING_CONFIG.plans.team.membersPerWorkspace || 0) + (workspace?.extra_seats || 0),
-              ...(workspace && workspace.owner_id === user?.uid ? {
-                buyLabel: `Add seat $${DEFAULT_PRICING_CONFIG.expansion.member}`,
-                onBuy: async () => { await callPurchaseExpansion({ type: 'member', level: 'workspace', containerId: workspace.id }); await loadWorkspace(); },
-              } : {}),
-            }]}
-          />
-          <TeamMembers workspace={workspace} members={members} membership={membership} selfUid={user?.uid || ''} onReload={loadWorkspace} />
-        </div>
-      )}
-      {tab === 'Library' && <SharedLibrary workspace={workspace} selfUid={user?.uid || ''} selfName={selfName} />}
-      {tab === 'Reports' && <TeamReports workspace={workspace} />}
-      {tab === 'Analytics' && <TeamAnalytics workspace={workspace} />}
-      {tab === 'Activity' && <TeamActivity workspace={workspace} />}
-      {tab === 'Settings' && <TeamSettings workspace={workspace} membership={membership} members={members} selfUid={user?.uid || ''} onChanged={loadWorkspace} />}
     </div>
   );
 };

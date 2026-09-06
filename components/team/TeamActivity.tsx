@@ -1,6 +1,6 @@
 // Team Workspace — Activity Feed (Phase 6.1)
 import React, { useEffect, useState } from 'react';
-import { Card, EmptyState } from '../UI';
+import { Card, EmptyState, ErrorMessage, Skeleton } from '../UI';
 import { Workspace, WorkspaceActivity } from '../../types';
 import { getWorkspaceActivity } from '../../services/persistenceService';
 
@@ -13,10 +13,29 @@ const TYPE_COLORS: Record<string, string> = {
 const TeamActivity: React.FC<{ workspace: Workspace }> = ({ workspace }) => {
   const [items, setItems] = useState<WorkspaceActivity[]>([]);
   const [loading, setLoading] = useState(true);
-  useEffect(() => { getWorkspaceActivity(workspace.id, 100).then(setItems).finally(() => setLoading(false)); }, [workspace.id]);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
 
-  if (loading) return <p className="text-gray-400 text-sm font-medium py-8">Loading activity…</p>;
-  if (items.length === 0) return <EmptyState message="No activity yet." submessage="Workspace events appear here as your team works." />;
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    getWorkspaceActivity(workspace.id, 100)
+      .then((rows) => { if (!cancelled) setItems(rows); })
+      .catch(() => { if (!cancelled) setError('We could not load the activity feed. Please try again.'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [workspace.id, reloadTick]);
+
+  if (loading) {
+    return (
+      <div className="space-y-4" aria-busy="true">
+        {[0, 1, 2, 3].map((i) => <Skeleton key={i} tone="dark" className="h-14 w-full" />)}
+      </div>
+    );
+  }
+  if (error) return <ErrorMessage message={error} action={{ label: 'Retry', onClick: () => setReloadTick((t) => t + 1) }} />;
+  if (items.length === 0) return <EmptyState card message="No activity yet" submessage="Workspace events appear here as your team works." />;
 
   return (
     <Card title="Activity Feed">
@@ -26,7 +45,7 @@ const TeamActivity: React.FC<{ workspace: Workspace }> = ({ workspace }) => {
             <div className={`w-1.5 h-1.5 rounded-full mt-2 shrink-0 ${TYPE_COLORS[ev.type] || 'bg-gray-400'}`} />
             <div className="min-w-0">
               <p className="text-sm font-medium text-gray-700">{ev.summary}</p>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums">
                 {ev.actor_name || 'Someone'} · {ev.created_at ? new Date(ev.created_at).toLocaleString() : ''}
               </p>
             </div>

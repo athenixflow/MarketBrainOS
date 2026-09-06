@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import AnimatedSection from '../components/AnimatedSection';
-import { PageHeader, Card, EmptyState, LoadingState } from '../components/UI';
+import { PageHeader, Card, EmptyState, Skeleton, ErrorMessage, Input, Select, Badge } from '../components/UI';
 import { useAuth } from '../context/AuthContext';
 import { getAnalysesForScope, deleteAnalysisRecord, ToolAnalysisRecord } from '../services/persistenceService';
 import { useScope } from '../context/ScopeContext';
@@ -18,11 +18,16 @@ const BESPOKE_SLUG: Record<string, string> = {
   workflow_runs: 'workflow',
 };
 
+const LOAD_ERROR = 'We could not load your history. Please try again.';
+const rowAction = 'text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors';
+
 const History: React.FC = () => {
   const { user } = useAuth();
   const { scope } = useScope();
   const [records, setRecords] = useState<ToolAnalysisRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
   const [search, setSearch] = useState('');
   const [toolFilter, setToolFilter] = useState('all');
   const [expandedId, setExpandedId] = useState<string>('');
@@ -32,11 +37,13 @@ const History: React.FC = () => {
     if (!user) { setLoading(false); return; }
     let cancelled = false;
     setLoading(true);
+    setError(null);
     getAnalysesForScope(user.uid, scope)
       .then((rows) => { if (!cancelled) setRecords(rows); })
+      .catch((e) => { console.error(e); if (!cancelled) setError(LOAD_ERROR); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [user, scope]);
+  }, [user, scope, reloadTick]);
 
   // Distinct tools present in history, for the filter dropdown.
   const toolOptions = useMemo(() => {
@@ -67,49 +74,60 @@ const History: React.FC = () => {
   };
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       <PageHeader
         title="Analysis History"
         subtitle="Every analysis you run is saved here. Search, revisit, reopen, or remove past results."
       />
 
-      {loading && <LoadingState message="Loading your history..." />}
+      {error && <ErrorMessage message={error} action={{ label: 'Retry', onClick: () => setReloadTick((t) => t + 1) }} />}
 
-      {!loading && records.length === 0 && (
-        <Card>
-          <EmptyState message="No saved analyses yet." submessage="Run any analysis tool and it appears here automatically — searchable, exportable, and saved for good." />
-          <div className="flex justify-center">
+      {loading && (
+        <div className="space-y-4" aria-busy="true">
+          {[0, 1, 2].map((i) => <Skeleton key={i} tone="dark" className="h-32 w-full" />)}
+        </div>
+      )}
+
+      {!loading && !error && records.length === 0 && (
+        <EmptyState
+          card
+          message="No saved analyses yet"
+          submessage="Run any analysis tool and it appears here automatically: searchable, exportable, and saved for good."
+          action={
             <Link to="/" className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest hover:opacity-60 transition-opacity border-b border-[#FF0000]/20 pb-1">
               Run your first analysis →
             </Link>
-          </div>
-        </Card>
+          }
+        />
       )}
 
       {!loading && records.length > 0 && (
         <>
-          {/* Controls */}
-          <AnimatedSection index={0} className="flex flex-col md:flex-row gap-4">
-            <input
+          {/* Controls sit on the page background, so they use the dark field tone. */}
+          <AnimatedSection index={0} className="flex flex-col sm:flex-row gap-3">
+            <Input
+              tone="dark"
+              compact
+              type="search"
+              ariaLabel="Search analyses"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search analyses..."
-              className="flex-grow bg-[#FBFBFB] border border-gray-100 p-4 rounded-2xl text-sm text-[#0B0B0B] outline-none focus:ring-4 focus:ring-[#FF0000]/5 focus:border-[#FF0000]/20 transition-all"
+              placeholder="Search analyses…"
+              className="flex-grow"
             />
-            <select
+            <Select
+              tone="dark"
+              compact
+              ariaLabel="Filter by tool"
               value={toolFilter}
-              onChange={(e) => setToolFilter(e.target.value)}
-              className="bg-[#FBFBFB] border border-gray-100 p-4 rounded-2xl text-sm text-[#0B0B0B] outline-none focus:ring-4 focus:ring-[#FF0000]/5 focus:border-[#FF0000]/20 transition-all"
-            >
-              <option value="all">All tools</option>
-              {toolOptions.map(([mod, label]) => (
-                <option key={mod} value={mod}>{label}</option>
-              ))}
-            </select>
+              onChange={setToolFilter}
+              options={[{ value: 'all', label: 'All tools' }, ...toolOptions.map(([mod, label]) => ({ value: mod, label }))]}
+              className="sm:w-64"
+            />
           </AnimatedSection>
 
           {filtered.length === 0 && (
-            <p className="text-gray-400 text-sm font-medium py-8 text-center">No analyses match your filters.</p>
+            <EmptyState card message="No analyses match your filters" submessage="Try a different search term or clear the tool filter." />
           )}
 
           <div className="space-y-4">
@@ -127,14 +145,12 @@ const History: React.FC = () => {
                         <h3 className="text-lg font-bold text-[#0B0B0B] tracking-tight">{label}</h3>
                         {typeof score === 'number' && (() => {
                           const b = getScoreBand(score);
-                          return <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${b.bgClass} ${b.textClass}`}>{score} · {b.band}</span>;
+                          return <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border tabular-nums ${b.bgClass} ${b.textClass}`}>{score} · {b.band}</span>;
                         })()}
-                        {rec.result?.verdict && (
-                          <span className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-[#0B0B0B] text-white">{rec.result.verdict}</span>
-                        )}
+                        {rec.result?.verdict && <Badge tone="dark">{rec.result.verdict}</Badge>}
                       </div>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">
-                        {rec.timestamp ? new Date(rec.timestamp).toLocaleString() : '—'}
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 tabular-nums">
+                        {rec.timestamp ? new Date(rec.timestamp).toLocaleString() : 'Date unknown'}
                       </p>
                       {rec.result?.summary && (
                         <p className="text-sm text-gray-500 font-medium leading-relaxed line-clamp-2">{rec.result.summary}</p>
@@ -142,25 +158,17 @@ const History: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-5 flex-wrap pt-5 mt-5 border-t border-gray-50">
-                    <button onClick={() => setExpandedId(isOpen ? '' : rec.id)} className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">
+                  <div className="flex items-center gap-5 flex-wrap pt-5 mt-5 border-t border-gray-100">
+                    <button onClick={() => setExpandedId(isOpen ? '' : rec.id)} aria-expanded={isOpen} className={rowAction}>
                       {isOpen ? 'Hide' : 'View'}
                     </button>
-                    {slug && (
-                      <Link to={`/${slug}`} className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">Reopen Tool</Link>
-                    )}
+                    {slug && <Link to={`/${slug}`} className={rowAction}>Reopen tool</Link>}
                     {rec.result && (
                       <>
-                        <button
-                          onClick={() => downloadAsCSV(`${label.replace(/\s+/g, '_')}_Report`, toolResultToCSV(rec.result))}
-                          className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors"
-                        >
+                        <button onClick={() => downloadAsCSV(`${label.replace(/\s+/g, '_')}_Report`, toolResultToCSV(rec.result))} className={rowAction}>
                           Export CSV
                         </button>
-                        <button
-                          onClick={() => printToolResultPDF(`${label} Report`, rec.result)}
-                          className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors"
-                        >
+                        <button onClick={() => printToolResultPDF(`${label} Report`, rec.result)} className={rowAction}>
                           Export PDF
                         </button>
                       </>
@@ -178,7 +186,7 @@ const History: React.FC = () => {
                       )}
                       {(rec.result?.sections || []).map((section: any, si: number) => (
                         <div key={si}>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-3">{section.title}</p>
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3">{section.title}</p>
                           <ResultItemList items={section.items || []} compact />
                         </div>
                       ))}

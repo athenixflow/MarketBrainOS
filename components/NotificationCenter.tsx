@@ -34,13 +34,15 @@ const NotificationCenter: React.FC = () => {
     return () => clearInterval(t);
   }, [load]);
 
-  // Close on outside click.
+  // Close on outside click or Escape.
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
     document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onClick); document.removeEventListener('keydown', onKey); };
   }, []);
 
   const unread = items.filter((n) => !n.read).length;
@@ -67,7 +69,7 @@ const NotificationCenter: React.FC = () => {
 
   return (
     <div className="relative" ref={ref}>
-      <button onClick={handleToggle} className="relative text-gray-400 hover:text-white transition-colors p-1" aria-label="Notifications">
+      <button onClick={handleToggle} className="relative text-gray-400 hover:text-white transition-colors p-1" aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'} aria-expanded={open} aria-haspopup="true">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
           <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
         </svg>
@@ -79,11 +81,11 @@ const NotificationCenter: React.FC = () => {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-3 w-[min(20rem,calc(100vw-2rem))] max-h-[28rem] overflow-hidden flex flex-col bg-white text-[#0B0B0B] rounded-2xl shadow-2xl border border-gray-100 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+        <div className="paper absolute right-0 mt-3 w-[min(20rem,calc(100vw-2rem))] max-h-[28rem] overflow-hidden flex flex-col bg-white text-[#0B0B0B] rounded-2xl shadow-2xl border border-gray-100 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
             <p className="text-xs font-bold uppercase tracking-widest">Notifications</p>
             {unread > 0 && (
-              <button onClick={handleReadAll} className="text-[9px] font-bold text-[#FF0000] hover:opacity-70 uppercase tracking-widest transition-opacity">
+              <button onClick={handleReadAll} className="text-[10px] font-bold text-[#FF0000] hover:opacity-70 uppercase tracking-widest transition-opacity">
                 Mark all read
               </button>
             )}
@@ -97,7 +99,7 @@ const NotificationCenter: React.FC = () => {
                 <button
                   key={n.id}
                   onClick={() => handleRead(n)}
-                  className={`w-full text-left px-5 py-4 border-b border-gray-50 hover:bg-gray-50 transition-colors flex gap-3 ${n.read ? 'opacity-60' : ''}`}
+                  className={`w-full text-left px-5 py-4 border-b border-gray-100 hover:bg-gray-50 transition-colors flex gap-3 ${n.read ? 'opacity-60' : ''}`}
                 >
                   <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${CATEGORY_COLORS[n.category] || 'bg-gray-400'}`} />
                   <div className="min-w-0">
@@ -106,7 +108,7 @@ const NotificationCenter: React.FC = () => {
                       {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-[#FF0000] shrink-0" />}
                     </div>
                     {n.body && <p className="text-xs text-gray-500 font-medium leading-relaxed mt-0.5">{n.body}</p>}
-                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1 tabular-nums">
                       {n.category} · {n.created_at ? new Date(n.created_at).toLocaleDateString() : ''}
                     </p>
                   </div>

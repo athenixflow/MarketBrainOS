@@ -3,6 +3,8 @@
 // pre-submission analysis preview, and a staged Queued → Running → Completed progress indicator.
 
 import React from 'react';
+import { Badge } from './UI';
+import { getScoreBand } from '../services/scoreBands';
 
 // Dark panel summarizing what the analysis produces + how long it takes. Sits on the dark page,
 // above the white input/result cards.
@@ -11,9 +13,9 @@ export const ExpectedOutcome: React.FC<{
   estimatedTime?: string;
   analyzes?: string;
 }> = ({ outcomes, estimatedTime, analyzes }) => (
-  <div className="bg-[#121212] border border-gray-900 rounded-2xl p-8 lg:p-10">
+  <div className="bg-[#121212] border border-gray-900 rounded-2xl p-6 sm:p-8">
     <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
-      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em]">What this analysis generates</p>
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">What this analysis generates</p>
       {estimatedTime && <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Est. {estimatedTime}</span>}
     </div>
     {analyzes && <p className="text-sm text-gray-400 font-medium leading-relaxed mb-6">{analyzes}</p>}
@@ -51,7 +53,7 @@ export const AnalysisPreview: React.FC<{
           </div>
         ))}
       </div>
-      <div className="flex items-center justify-between pt-4 border-t border-gray-100 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-4 border-t border-gray-100 text-[10px] font-bold uppercase tracking-widest text-gray-500 tabular-nums">
         <span>{analysisType} • {deliverables} deliverables</span>
         <span className="text-[#0B0B0B]">{cost} {cost === 1 ? 'Token' : 'Tokens'}</span>
       </div>
@@ -79,7 +81,7 @@ export const RunProgress: React.FC<{ stage: RunStage; isTakingLong?: boolean }> 
           </React.Fragment>
         ))}
       </div>
-      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em]">
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
         {stage === 'queued' ? 'Preparing analysis…' : stage === 'running' ? 'Running deep analysis…' : 'Analysis complete'}
       </p>
       {isTakingLong && stage === 'running' && (
@@ -89,11 +91,26 @@ export const RunProgress: React.FC<{ stage: RunStage; isTakingLong?: boolean }> 
   );
 };
 
-// Character counter for text inputs.
-export const CharCounter: React.FC<{ value: string; max: number }> = ({ value, max }) => (
-  <div className="-mt-4 mb-6 flex justify-end">
-    <span className={`text-[10px] font-bold uppercase tracking-widest ${value.length > max ? 'text-[#FF0000]' : 'text-gray-300'}`}>
-      {value.length} / {max}
-    </span>
-  </div>
+// Helper text under a field. Pass it as the Input `hint` (optionally followed by a CharCounter) instead
+// of the old `-mt-4 mb-6` paragraph that fought the field's own bottom margin.
+export const FieldHint: React.FC<{ children?: React.ReactNode; example?: string; className?: string }> = ({ children, example, className = '' }) => (
+  <span className={`block text-[11px] font-medium text-gray-600 leading-relaxed ${className}`}>
+    {children}
+    {example ? <span className="text-gray-500"> e.g. {example}</span> : null}
+  </span>
 );
+
+// Character counter for text inputs. A small right-aligned line so it can be passed as the Input `hint`,
+// alone or after a FieldHint.
+export const CharCounter: React.FC<{ value: string; max: number }> = ({ value, max }) => (
+  <span className={`block text-right text-[10px] font-bold uppercase tracking-widest tabular-nums ${value.length > max ? 'text-[#FF0000]' : 'text-gray-400'}`}>
+    {value.length} / {max}
+  </span>
+);
+
+// Score band pill for scored results. One band-to-tone mapping so every tool colours bands the same way.
+export const ScoreBandBadge: React.FC<{ score: number; className?: string }> = ({ score, className }) => {
+  const { band } = getScoreBand(score);
+  const tone = band === 'Critical' ? 'red' : band === 'Weak' || band === 'Average' ? 'yellow' : 'green';
+  return <Badge tone={tone} className={className}>{band}</Badge>;
+};

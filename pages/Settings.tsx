@@ -6,15 +6,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  sendPasswordResetEmail, updatePassword, EmailAuthProvider, reauthenticateWithCredential,
+  updatePassword, EmailAuthProvider, reauthenticateWithCredential,
 } from 'firebase/auth';
-import { PageHeader, Card, PrimaryButton, Input, Tabs } from '../components/UI';
+import {
+  PageHeader, Card, PrimaryButton, SecondaryButton, Input, Select, Tabs, ComingSoon, LoadingState,
+  SuccessMessage, ErrorMessage, Skeleton, EmptyState, LedgerRow,
+} from '../components/UI';
 import SubscriptionPanel from '../components/SubscriptionPanel';
 import { TokenStore } from '../components/TokenStore';
 import { useAuth } from '../context/AuthContext';
 import { useScope } from '../context/ScopeContext';
-import { auth } from '../services/firebase';
-import { updateUserProfile, getUserPaymentHistory, callConfirmTopUp, createNotification, callRequestPasswordReset } from '../services/persistenceService';
+import { updateUserProfile, getUserPaymentHistory, callRequestPasswordReset } from '../services/persistenceService';
 import { downloadAsCSV, paymentsToCSV } from '../services/exportService';
 import { PaymentRecord, NotificationPrefs } from '../types';
 import { canSeeFeature, tierAtLeast } from '../config/access';
@@ -22,53 +24,46 @@ import { canSeeFeature, tierAtLeast } from '../config/access';
 const TIMEZONES = ['UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Europe/London', 'Europe/Berlin', 'Africa/Lagos', 'Asia/Dubai', 'Asia/Kolkata', 'Asia/Singapore', 'Australia/Sydney'];
 const LANGUAGES = ['English', 'Spanish', 'French', 'German', 'Portuguese', 'Arabic', 'Hindi', 'Chinese'];
 
-// --- small primitives ---
-const Select: React.FC<{ label: string; value: string; options: string[]; onChange: (v: string) => void; placeholder?: string }> =
-  ({ label, value, options, onChange, placeholder }) => (
-    // Geometry mirrors UI.Input exactly: these two controls sit side by side in the same grid row on
-    // the Profile/Account tabs, and previously differed in height, radius and label offset.
-    <div className="flex flex-col mb-6">
-      <label className="text-[11px] font-bold text-gray-500 mb-2 tracking-widest uppercase">{label}</label>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full min-w-0 bg-[#FBFBFB] border border-gray-200 px-4 py-3.5 rounded-2xl focus:ring-4 focus:ring-[#FF0000]/10 focus:border-[#FF0000] outline-none transition-all text-[15px] text-[#0B0B0B]"
-      >
-        <option value="">{placeholder || 'Select…'}</option>
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
-    </div>
-  );
+const toOptions = (values: string[], placeholder: string) => [
+  { value: '', label: placeholder },
+  ...values.map((v) => ({ value: v, label: v })),
+];
 
+// --- small local pieces ---
 const Toggle: React.FC<{ label: string; description?: string; checked: boolean; onChange: (v: boolean) => void }> =
   ({ label, description, checked, onChange }) => (
-    <div className="flex items-center justify-between py-5 border-b border-gray-100 last:border-0">
-      <div className="pr-6">
+    <div className="flex items-center justify-between gap-6 py-5 border-b border-gray-100 last:border-0">
+      <div className="min-w-0">
         <p className="text-sm font-bold text-[#0B0B0B]">{label}</p>
         {description && <p className="text-xs text-gray-400 font-medium mt-1">{description}</p>}
       </div>
       <button
+        type="button"
         onClick={() => onChange(!checked)}
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
         className={`shrink-0 w-12 h-7 rounded-full p-1 transition-colors ${checked ? 'bg-[#FF0000]' : 'bg-gray-200'}`}
-        aria-pressed={checked}
       >
         <span className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-0'}`} />
       </button>
     </div>
   );
 
-const ComingSoon: React.FC<{ title: string; description: string }> = ({ title, description }) => (
-  <div className="p-6 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-between gap-4">
-    <div>
+// A roadmap item: something the product will do, shown with a single shared "Coming soon" badge.
+const RoadmapRow: React.FC<{ title: string; description: string }> = ({ title, description }) => (
+  <div className="p-5 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-between gap-4">
+    <div className="min-w-0">
       <p className="text-sm font-bold text-[#0B0B0B]">{title}</p>
       <p className="text-xs text-gray-400 font-medium mt-1">{description}</p>
     </div>
-    <span className="shrink-0 px-3 py-1 rounded-full bg-white border border-gray-200 text-gray-400 text-[9px] font-bold uppercase tracking-widest">Coming soon</span>
+    <ComingSoon className="shrink-0" />
   </div>
 );
 
-const SavedFlash: React.FC<{ msg: string; error?: boolean }> = ({ msg, error }) =>
-  msg ? <p className={`mt-6 text-[10px] font-bold uppercase tracking-widest ${error ? 'text-red-500' : 'text-green-600'}`}>{msg}</p> : null;
+// Save feedback: the tone is tracked explicitly rather than inferred from the message text.
+const Flash: React.FC<{ msg: string; error: boolean }> = ({ msg, error }) =>
+  msg ? (error ? <ErrorMessage message={msg} className="mt-6" /> : <SuccessMessage message={msg} className="mt-6" />) : null;
 
 const Settings: React.FC = () => {
   const { user, profile, refreshProfile } = useAuth();
@@ -110,31 +105,34 @@ const Settings: React.FC = () => {
 
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMsg, setProfileMsg] = useState('');
+  const [profileErr, setProfileErr] = useState(false);
   const saveProfile = async (fields: Partial<typeof form>) => {
     if (!user) return;
-    setSavingProfile(true); setProfileMsg('');
+    setSavingProfile(true); setProfileMsg(''); setProfileErr(false);
     try {
       await updateUserProfile(user.uid, fields);
       await refreshProfile();
       setProfileMsg('Saved.');
       setTimeout(() => setProfileMsg(''), 3000);
     } catch (e: any) {
+      setProfileErr(true);
       setProfileMsg(e.message || 'Save failed.');
     } finally { setSavingProfile(false); }
   };
 
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [prefsMsg, setPrefsMsg] = useState('');
+  const [prefsErr, setPrefsErr] = useState(false);
   const savePrefs = async (next: NotificationPrefs) => {
     setPrefs(next);
     if (!user) return;
-    setSavingPrefs(true); setPrefsMsg('');
+    setSavingPrefs(true); setPrefsMsg(''); setPrefsErr(false);
     try {
       await updateUserProfile(user.uid, { notification_prefs: next });
       await refreshProfile();
       setPrefsMsg('Preferences saved.');
       setTimeout(() => setPrefsMsg(''), 3000);
-    } catch (e: any) { setPrefsMsg(e.message || 'Save failed.'); }
+    } catch (e: any) { setPrefsErr(true); setPrefsMsg(e.message || 'Save failed.'); }
     finally { setSavingPrefs(false); }
   };
 
@@ -164,27 +162,20 @@ const Settings: React.FC = () => {
   // --- billing ---
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
-  const [topUpMsg, setTopUpMsg] = useState('');
+  const [paymentsErr, setPaymentsErr] = useState<string | null>(null);
   useEffect(() => {
     if (!user || activeTab !== 'Billing') return;
     setLoadingPayments(true);
-    getUserPaymentHistory(user.uid).then(setPayments).catch(console.error).finally(() => setLoadingPayments(false));
+    setPaymentsErr(null);
+    getUserPaymentHistory(user.uid)
+      .then(setPayments)
+      .catch(() => setPaymentsErr('We could not load your transactions. Please try again.'))
+      .finally(() => setLoadingPayments(false));
   }, [user, activeTab]);
-  const topUp = async () => {
-    if (!user || profile?.tier !== 'pro') return;
-    setTopUpMsg('Processing…');
-    try {
-      await callConfirmTopUp(`tx_${Date.now()}_${Math.random().toString(36).slice(7)}`);
-      await refreshProfile();
-      const fresh = await getUserPaymentHistory(user.uid); setPayments(fresh);
-      createNotification(user.uid, 'Token', 'Top-up successful', '100 tokens added.');
-      setTopUpMsg('100 tokens credited.');
-      setTimeout(() => setTopUpMsg(''), 3000);
-    } catch (e: any) { setTopUpMsg(e.message || 'Top-up failed.'); }
-  };
 
-  if (!profile) return null;
+  if (!profile) return <LoadingState message="Loading your settings" />;
   const initials = (profile.first_name?.[0] || profile.email?.[0] || 'U').toUpperCase();
+  const isFree = profile.tier === 'free';
 
   return (
     <div>
@@ -194,41 +185,47 @@ const Settings: React.FC = () => {
       {/* ---------- PROFILE ---------- */}
       {activeTab === 'Profile' && (
         <Card>
-          <div className="flex items-center gap-6 mb-12">
-            <div className="w-20 h-20 rounded-full bg-[#FF0000] text-white flex items-center justify-center text-2xl font-black">{initials}</div>
-            <div>
-              <p className="text-sm font-bold text-[#0B0B0B]">{[form.first_name, form.last_name].filter(Boolean).join(' ') || profile.email}</p>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Photo upload coming soon</p>
+          <div className="flex flex-wrap items-center gap-6 mb-10">
+            <div className="w-20 h-20 rounded-full bg-[#FF0000] text-white flex items-center justify-center text-2xl font-black shrink-0">{initials}</div>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-[#0B0B0B] truncate">{[form.first_name, form.last_name].filter(Boolean).join(' ') || profile.email}</p>
+              <div className="mt-2"><ComingSoon label="Photo upload coming soon" /></div>
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
-            <Input label="First Name" placeholder="Jane" value={form.first_name} onChange={set('first_name')} />
-            <Input label="Last Name" placeholder="Doe" value={form.last_name} onChange={set('last_name')} />
-            <Input label="Company Name" placeholder="Acme Inc." value={form.company_name} onChange={set('company_name')} />
-            <Input label="Job Title" placeholder="Head of Growth" value={form.job_title} onChange={set('job_title')} />
+            <Input label="First name" placeholder="Your first name" autoComplete="given-name" value={form.first_name} onChange={set('first_name')} />
+            <Input label="Last name" placeholder="Your last name" autoComplete="family-name" value={form.last_name} onChange={set('last_name')} />
+            <Input label="Company" placeholder="Where you work" autoComplete="organization" value={form.company_name} onChange={set('company_name')} />
+            <Input label="Job title" placeholder="Your role" autoComplete="organization-title" value={form.job_title} onChange={set('job_title')} />
           </div>
-          <Input label="Bio" placeholder="A short description about you and what you do…" value={form.bio} onChange={set('bio')} multiline />
+          <Input label="Bio" placeholder="A short description of you and what you do" value={form.bio} onChange={set('bio')} multiline />
           <PrimaryButton onClick={() => saveProfile({ first_name: form.first_name, last_name: form.last_name, company_name: form.company_name, job_title: form.job_title, bio: form.bio })} disabled={savingProfile}>
-            {savingProfile ? 'Saving…' : 'Save Profile'}
+            {savingProfile ? 'Saving…' : 'Save profile'}
           </PrimaryButton>
-          <SavedFlash msg={profileMsg} error={profileMsg !== '' && profileMsg !== 'Saved.'} />
+          <Flash msg={profileMsg} error={profileErr} />
         </Card>
       )}
 
       {/* ---------- ACCOUNT ---------- */}
       {activeTab === 'Account' && (
         <Card>
-          <Input label="Email Address" placeholder="" value={profile.email} onChange={() => {}} disabled />
-          <p className="-mt-2 mb-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Email changes coming soon</p>
-          <Input label="Username" placeholder="janedoe" value={form.username} onChange={set('username')} />
+          <Input
+            label="Email address"
+            placeholder=""
+            value={profile.email}
+            onChange={() => {}}
+            disabled
+            labelRight={<ComingSoon label="Changes coming soon" />}
+          />
+          <Input label="Username" placeholder="Choose a username" autoComplete="username" value={form.username} onChange={set('username')} />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
-            <Select label="Time Zone" value={form.timezone} options={TIMEZONES} onChange={(v) => setForm(f => ({ ...f, timezone: v }))} />
-            <Select label="Language" value={form.language} options={LANGUAGES} onChange={(v) => setForm(f => ({ ...f, language: v }))} />
+            <Select label="Time zone" value={form.timezone} options={toOptions(TIMEZONES, 'Select a time zone')} onChange={(v) => setForm(f => ({ ...f, timezone: v }))} />
+            <Select label="Language" value={form.language} options={toOptions(LANGUAGES, 'Select a language')} onChange={(v) => setForm(f => ({ ...f, language: v }))} />
           </div>
           <PrimaryButton onClick={() => saveProfile({ username: form.username, timezone: form.timezone, language: form.language })} disabled={savingProfile}>
-            {savingProfile ? 'Saving…' : 'Save Account'}
+            {savingProfile ? 'Saving…' : 'Save account'}
           </PrimaryButton>
-          <SavedFlash msg={profileMsg} error={profileMsg !== '' && profileMsg !== 'Saved.'} />
+          <Flash msg={profileMsg} error={profileErr} />
         </Card>
       )}
 
@@ -239,27 +236,27 @@ const Settings: React.FC = () => {
             {isPasswordUser ? (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
-                  <Input label="Current Password" type="password" autoComplete="current-password" placeholder="Enter your current password" value={pwd.current} onChange={(e) => setPwd(p => ({ ...p, current: e.target.value }))} />
-                  <Input label="New Password" type="password" autoComplete="new-password" placeholder="At least 6 characters" value={pwd.next} onChange={(e) => setPwd(p => ({ ...p, next: e.target.value }))} />
+                  <Input label="Current password" type="password" autoComplete="current-password" placeholder="Enter your current password" value={pwd.current} onChange={(e) => setPwd(p => ({ ...p, current: e.target.value }))} />
+                  <Input label="New password" type="password" autoComplete="new-password" placeholder="At least 6 characters" value={pwd.next} onChange={(e) => setPwd(p => ({ ...p, next: e.target.value }))} />
                 </div>
                 <div className="flex flex-wrap gap-4">
-                  <PrimaryButton onClick={changePassword}>Update Password</PrimaryButton>
-                  <button onClick={sendReset} className="px-8 py-3.5 rounded-2xl font-bold text-xs uppercase tracking-widest border border-gray-200 text-gray-500 hover:text-[#0B0B0B] transition-colors">Send Reset Email</button>
+                  <PrimaryButton onClick={changePassword}>Update password</PrimaryButton>
+                  <SecondaryButton onClick={sendReset}>Send reset email</SecondaryButton>
                 </div>
               </>
             ) : (
               <>
-                <p className="text-sm text-gray-500 font-medium leading-relaxed mb-8">You signed in with Google, so there's no password to change here. You can still send a reset email to set one.</p>
-                <button onClick={sendReset} className="px-8 py-3.5 rounded-2xl font-bold text-xs uppercase tracking-widest border border-gray-200 text-gray-500 hover:text-[#0B0B0B] transition-colors">Send Password Reset Email</button>
+                <p className="text-sm text-gray-500 font-medium leading-relaxed mb-8">You signed in with Google, so there is no password to change here. You can still send a reset email to set one.</p>
+                <SecondaryButton onClick={sendReset}>Send password reset email</SecondaryButton>
               </>
             )}
-            <SavedFlash msg={securityMsg} error={securityErr} />
+            <Flash msg={securityMsg} error={securityErr} />
           </Card>
-          <Card title="Advanced Security">
+          <Card title="Advanced security">
             <div className="space-y-3">
-              <ComingSoon title="Two-Factor Authentication" description="Add a second step at sign-in for extra protection." />
-              <ComingSoon title="Active Sessions" description="See and revoke devices currently signed in." />
-              <ComingSoon title="Login History" description="Review recent sign-in activity on your account." />
+              <RoadmapRow title="Two-factor authentication" description="Add a second step at sign-in for extra protection." />
+              <RoadmapRow title="Active sessions" description="See and revoke devices currently signed in." />
+              <RoadmapRow title="Login history" description="Review recent sign-in activity on your account." />
             </div>
           </Card>
         </div>
@@ -267,13 +264,13 @@ const Settings: React.FC = () => {
 
       {/* ---------- NOTIFICATIONS ---------- */}
       {activeTab === 'Notifications' && (
-        <Card title="Notification Preferences">
-          <Toggle label="Analysis Complete" description="When an analysis finishes running." checked={!!prefs.analysis} onChange={(v) => savePrefs({ ...prefs, analysis: v })} />
-          <Toggle label="Token Alerts" description="Low balance and top-up confirmations." checked={!!prefs.token} onChange={(v) => savePrefs({ ...prefs, token: v })} />
-          <Toggle label="Product Updates" description="New features and improvements." checked={!!prefs.product} onChange={(v) => savePrefs({ ...prefs, product: v })} />
-          <Toggle label="Workspace Notifications" description="Member, client, and report activity." checked={!!prefs.workspace} onChange={(v) => savePrefs({ ...prefs, workspace: v })} />
-          <Toggle label="Email Preferences" description="Master switch for the email channel." checked={!!prefs.email} onChange={(v) => savePrefs({ ...prefs, email: v })} />
-          <SavedFlash msg={prefsMsg} error={prefsMsg !== '' && prefsMsg !== 'Preferences saved.'} />
+        <Card title="Notification preferences">
+          <Toggle label="Analysis complete" description="When an analysis finishes running." checked={!!prefs.analysis} onChange={(v) => savePrefs({ ...prefs, analysis: v })} />
+          <Toggle label="Token alerts" description="Low balance and top-up confirmations." checked={!!prefs.token} onChange={(v) => savePrefs({ ...prefs, token: v })} />
+          <Toggle label="Product updates" description="New features and improvements." checked={!!prefs.product} onChange={(v) => savePrefs({ ...prefs, product: v })} />
+          <Toggle label="Workspace notifications" description="Member, client, and report activity." checked={!!prefs.workspace} onChange={(v) => savePrefs({ ...prefs, workspace: v })} />
+          <Toggle label="Email" description="Master switch for the email channel." checked={!!prefs.email} onChange={(v) => savePrefs({ ...prefs, email: v })} />
+          <Flash msg={prefsMsg} error={prefsErr} />
           {savingPrefs && <p className="mt-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Saving…</p>}
         </Card>
       )}
@@ -284,40 +281,47 @@ const Settings: React.FC = () => {
       {/* ---------- BILLING ---------- */}
       {activeTab === 'Billing' && (
         <div className="space-y-6">
-          <Card title="Billing Center">
-            <div className="flex items-center justify-between gap-4">
+          <Card title="Billing center">
+            <div className="flex flex-wrap items-center justify-between gap-4">
               <p className="text-sm text-gray-500 font-medium">See your plan, renewal date, token balance, expansions and invoices in one place.</p>
-              <Link to="/billing"><PrimaryButton>Open Billing Center</PrimaryButton></Link>
+              <Link to="/billing"><PrimaryButton size="sm">Open billing center</PrimaryButton></Link>
             </div>
           </Card>
-          <Card title="Token Store">
+          <Card title="Token store">
             <p className="text-sm text-gray-500 font-medium mb-8">
-              Buy token packs to top up your balance. Purchased tokens never expire and are spent only
-              after your monthly allowance runs out.
+              {isFree
+                ? 'Token packs are available on Pro and higher. Your Free allowance is a one-time balance and does not refill.'
+                : 'Buy token packs to top up your balance. Purchased tokens never expire and are spent only after your monthly allowance runs out.'}
             </p>
             <TokenStore onPurchased={() => { if (user) getUserPaymentHistory(user.uid).then(setPayments).catch(() => {}); }} />
           </Card>
-          <Card title="Transaction History">
+          <Card title="Transaction history">
             {loadingPayments ? (
-              <p className="text-sm text-gray-400 font-medium py-6 text-center">Loading…</p>
+              <div className="space-y-3" aria-busy="true">
+                {[0, 1, 2].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
+              </div>
+            ) : paymentsErr ? (
+              <ErrorMessage message={paymentsErr} />
             ) : payments.length === 0 ? (
-              <p className="text-sm text-gray-400 font-medium py-6 text-center">No transactions yet.</p>
+              <EmptyState message="No transactions yet" submessage="Token purchases and plan changes will show up here." />
             ) : (
               <>
                 <div className="space-y-3 mb-8">
                   {payments.map(p => {
-                    const date = p.created_at ? new Date(p.created_at.toMillis ? p.created_at.toMillis() : p.created_at) : null;
+                    const date = p.created_at ? new Date(p.created_at.toMillis ? p.created_at.toMillis() : p.created_at) : new Date(0);
                     return (
-                      <div key={p.id} className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-gray-50 border border-gray-100">
-                        <div className="min-w-0">
-                          <p className="text-sm font-bold text-[#0B0B0B] truncate">Token Top-Up</p>
-                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1 truncate">{date ? date.toLocaleDateString() : ''} • Ref {p.payment_reference || 'N/A'}</p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-sm font-black text-green-600 tabular-nums">+{p.tokens_credited} Tokens</p>
-                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums">${p.amount_paid}.00</p>
-                        </div>
-                      </div>
+                      <LedgerRow
+                        key={p.id}
+                        when={date}
+                        title="Token top-up"
+                        detail={<span className="font-mono">Ref {p.payment_reference || 'N/A'}</span>}
+                        right={
+                          <div>
+                            <p className="text-sm font-black text-green-600">+{p.tokens_credited} tokens</p>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">${p.amount_paid}.00</p>
+                          </div>
+                        }
+                      />
                     );
                   })}
                 </div>
@@ -326,7 +330,7 @@ const Settings: React.FC = () => {
             )}
           </Card>
           <Card title="Invoices">
-            <ComingSoon title="Downloadable PDF Invoices" description="Formatted invoices for each transaction." />
+            <RoadmapRow title="Downloadable PDF invoices" description="Formatted invoices for each transaction." />
           </Card>
         </div>
       )}
@@ -336,8 +340,8 @@ const Settings: React.FC = () => {
         <Card title="Integrations">
           <p className="text-sm text-gray-500 font-medium mb-8">Connect your marketing stack to enrich analyses. These integrations are on the roadmap.</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {['Google Analytics', 'Search Console', 'Meta', 'LinkedIn', 'HubSpot', 'CRM Systems'].map(name => (
-              <ComingSoon key={name} title={name} description="Connect to import data and context." />
+            {['Google Analytics', 'Search Console', 'Meta', 'LinkedIn', 'HubSpot', 'CRM systems'].map(name => (
+              <RoadmapRow key={name} title={name} description="Connect to import data and context." />
             ))}
           </div>
         </Card>
@@ -347,14 +351,14 @@ const Settings: React.FC = () => {
       {activeTab === 'Workspace' && showWorkspace && (
         <Card title="Workspace">
           <p className="text-sm text-gray-500 font-medium leading-relaxed mb-8">
-            Manage your workspace — members, permissions, branding, and settings — from the Team Workspace.
+            Manage your workspace (members, permissions, branding, and settings) from the Team Workspace.
           </p>
           <Link to="/team">
             <PrimaryButton>Open Team Workspace</PrimaryButton>
           </Link>
           {canSeeFeature('agencyHub', accessCtx) && (
             <div className="mt-6">
-              <Link to="/agency" className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest hover:opacity-60 transition-opacity border-b border-[#FF0000]/20 pb-1">Manage Agency clients →</Link>
+              <Link to="/agency" className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest hover:opacity-60 transition-opacity border-b border-[#FF0000]/20 pb-1">Manage agency clients →</Link>
             </div>
           )}
         </Card>

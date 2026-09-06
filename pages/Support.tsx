@@ -27,7 +27,7 @@ const Support: React.FC = () => {
     <div>
       <PageHeader
         title="Support"
-        subtitle="Find answers fast, or reach the team directly. We're here to help you get the most out of MarketBrain OS."
+        subtitle="Find answers fast, or reach the team directly. We are here to help you get the most out of MarketBrain OS."
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -46,15 +46,15 @@ const Support: React.FC = () => {
       </div>
 
       <Card>
-        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-3">Contact</p>
+        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Contact</p>
         <h3 className="text-lg font-bold text-[#0B0B0B] tracking-tight mb-3">Email our team</h3>
         <p className="text-sm text-gray-500 font-medium leading-relaxed mb-8">
-          Can't find what you need? Send us a message and we'll get back to you. Include your account
-          email and a description of what you're trying to do.
+          Can't find what you need? Send us a message and we will get back to you. Include your account
+          email and a description of what you are trying to do.
         </p>
         <a
           href={`mailto:${SUPPORT_EMAIL}`}
-          className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest hover:opacity-60 transition-opacity border-b border-[#FF0000]/20 pb-1"
+          className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest hover:opacity-60 transition-opacity border-b border-[#FF0000]/20 pb-1 break-all"
         >
           {SUPPORT_EMAIL} →
         </a>

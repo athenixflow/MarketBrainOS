@@ -20,7 +20,7 @@ const STEPS: Step[] = [
   {
     eyebrow: 'The Platform',
     title: 'One connected intelligence suite',
-    body: 'Thirteen specialized AI tools across Marketing, Sales, Business Strategy, and Operations. Each analysis follows the same rigorous, structured format so results are easy to compare and act on.',
+    body: 'Fourteen analysis tools across Marketing, Sales, Business Strategy, and Operations. Each analysis follows the same rigorous, structured format so results are easy to compare and act on.',
   },
   {
     eyebrow: 'Tokens',
@@ -73,17 +73,17 @@ const OnboardingOverlay: React.FC = () => {
         initial={reduce ? false : { opacity: 0, y: 20, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-        className="bg-white text-[#0B0B0B] max-w-lg w-full p-10 sm:p-12 rounded-2xl shadow-2xl relative"
+        className="paper bg-white text-[#0B0B0B] max-w-lg w-full p-6 sm:p-8 rounded-2xl shadow-2xl relative"
       >
         <button
           onClick={() => finish(false)}
-          className="absolute top-8 right-8 text-[11px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors"
+          className="absolute top-6 right-6 sm:top-8 sm:right-8 text-[11px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors"
         >
           Skip
         </button>
 
         {/* Step position, so the reader knows how long this takes. */}
-        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-8">
+        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-8 tabular-nums">
           Step {step + 1} of {STEPS.length}
         </p>
 
@@ -126,9 +126,9 @@ const OnboardingOverlay: React.FC = () => {
             Back
           </button>
           {isLast ? (
-            <PrimaryButton onClick={() => finish(true)} className="!px-10">Run first analysis</PrimaryButton>
+            <PrimaryButton onClick={() => finish(true)}>Run first analysis</PrimaryButton>
           ) : (
-            <PrimaryButton onClick={() => setStep((s) => s + 1)} className="!px-10">Next</PrimaryButton>
+            <PrimaryButton onClick={() => setStep((s) => s + 1)}>Next</PrimaryButton>
           )}
         </div>
       </motion.div>

@@ -104,7 +104,9 @@ export const NAV_COLLABORATION: NavGroup = {
 export const NAV_ACCOUNT: NavGroup = {
   heading: 'Account',
   links: [
-    { label: 'Billing', path: '/pricing', feature: 'billing' },
+    // In-app billing center (plan, balance, store, invoices). /pricing is the public marketing page and
+    // dropped signed-in users out of the shell.
+    { label: 'Billing', path: '/billing', feature: 'billing' },
     { label: 'Settings', path: '/settings', feature: 'settings' },
     { label: 'Support', path: '/support', feature: 'support' },
   ],

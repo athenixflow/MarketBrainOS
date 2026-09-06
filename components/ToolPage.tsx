@@ -12,6 +12,9 @@ import {
   ExportControls,
   HoneypotField,
   UsageLimitModal,
+  Tabs,
+  Select,
+  Badge,
 } from './UI';
 import { runToolAnalysis, MAX_INPUT_CHARS } from '../services/geminiService';
 import { ToolAnalysisResult, TOKEN_COSTS } from '../types';
@@ -22,7 +25,7 @@ import { SecurityEngine } from '../services/securityEngine';
 import { ToolConfig, getToolMeta, getToolGuide } from '../config/toolConfigs';
 import { getUserToolAnalyses, ToolAnalysisRecord, deleteGenericAnalysis, saveReport } from '../services/persistenceService';
 import { getScoreBand } from '../services/scoreBands';
-import { ExpectedOutcome, AnalysisPreview, RunProgress, CharCounter, RunStage } from './ToolGuide';
+import { ExpectedOutcome, AnalysisPreview, RunProgress, CharCounter, FieldHint, RunStage } from './ToolGuide';
 import { ResultItemList } from './ResultSections';
 
 const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
@@ -76,7 +79,7 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
   const renderField = (field: ToolConfig['inputs'][number]) => (
     field.options ? (
       <div key={field.key} className="mb-6">
-        <label className="block text-[11px] font-bold text-gray-500 mb-2 tracking-widest uppercase">{field.label}</label>
+        <p className="text-[11px] font-bold text-gray-500 mb-2 tracking-widest uppercase">{field.label}</p>
         {/* grid-cols-1 base: at 390px two columns left ~119px per button for a bold label. */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {field.options.map(opt => (
@@ -84,36 +87,34 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
               key={opt}
               type="button"
               onClick={() => setField(field.key, opt)}
-              className={`px-4 py-3 rounded-xl text-xs font-bold transition-all ${values[field.key] === opt ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
+              aria-pressed={values[field.key] === opt}
+              className={`px-4 py-3 rounded-full text-xs font-bold transition-all ${values[field.key] === opt ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
             >
               {opt}
             </button>
           ))}
         </div>
         {(field.description || field.example) && (
-          <p className="mt-4 text-[11px] font-medium text-gray-600 leading-relaxed">
-            {field.description}{field.example ? <span className="text-gray-500"> e.g. {field.example}</span> : null}
-          </p>
+          <FieldHint example={field.example} className="mt-3">{field.description}</FieldHint>
         )}
       </div>
     ) : (
-      <div key={field.key}>
-        <Input
-          label={field.label}
-          placeholder={field.placeholder}
-          value={values[field.key] || ''}
-          onChange={(e) => setField(field.key, e.target.value)}
-          multiline={field.multiline}
-        />
-        {(field.description || field.example) && (
-          <p className="-mt-4 mb-6 text-[11px] font-medium text-gray-600 leading-relaxed">
-            {field.description}{field.example ? <span className="text-gray-500"> e.g. {field.example}</span> : null}
-          </p>
-        )}
-        {field.multiline && (
-          <CharCounter value={values[field.key] || ''} max={field.maxLength || MAX_INPUT_CHARS} />
-        )}
-      </div>
+      <Input
+        key={field.key}
+        label={field.label}
+        placeholder={field.placeholder}
+        value={values[field.key] || ''}
+        onChange={(e) => setField(field.key, e.target.value)}
+        multiline={field.multiline}
+        hint={
+          (field.description || field.example || field.multiline) ? (
+            <>
+              {(field.description || field.example) && <FieldHint example={field.example}>{field.description}</FieldHint>}
+              {field.multiline && <CharCounter value={values[field.key] || ''} max={field.maxLength || MAX_INPUT_CHARS} />}
+            </>
+          ) : undefined
+        }
+      />
     )
   );
 
@@ -225,7 +226,7 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
       if (user) await refreshProfile();
     } catch (err: any) {
       console.error(err);
-      setExecutionError(err.message || 'The neural engine encountered an unexpected interruption. Please retry.');
+      setExecutionError(err.message || 'The analysis was interrupted before it finished. No tokens were deducted.');
     } finally {
       setLoading(false);
     }
@@ -309,38 +310,35 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
               )}
 
               {priorAnalyses.length > 0 && (
-                <div className="mb-12">
-                  <label className="block text-xs font-bold text-gray-700 mb-5 tracking-widest uppercase">
-                    Add context from a prior analysis (optional)
-                  </label>
-                  <select
+                <div className="mb-4">
+                  <Select
+                    label="Add context from a prior analysis (optional)"
                     value={selectedContextId}
-                    onChange={(e) => setSelectedContextId(e.target.value)}
-                    className="w-full bg-[#FBFBFB] border border-gray-100 p-5 rounded-2xl text-sm text-[#0B0B0B] outline-none focus:ring-4 focus:ring-[#FF0000]/5 focus:border-[#FF0000]/20 transition-all"
-                  >
-                    <option value="">None</option>
-                    {priorAnalyses.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {(getToolMeta(a.module)?.label || a.module)} — {new Date(a.timestamp).toLocaleDateString()}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="mt-3 text-[10px] font-medium text-gray-600 leading-relaxed">
-                    Feeds a related saved analysis into this tool for connected intelligence.
-                  </p>
+                    onChange={setSelectedContextId}
+                    options={[
+                      { value: '', label: 'None' },
+                      ...priorAnalyses.map((a) => ({
+                        value: a.id,
+                        label: `${getToolMeta(a.module)?.label || a.module} · ${new Date(a.timestamp).toLocaleDateString()}`,
+                      })),
+                    ]}
+                    compact
+                  />
+                  <FieldHint className="mt-2">Feeds a related saved analysis into this tool for connected intelligence.</FieldHint>
                 </div>
               )}
 
               {inTeamScope && (
                 <div className="mb-8">
-                  <label className="block text-xs font-bold text-gray-700 mb-3 tracking-widest uppercase">Save this analysis as</label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <p className="text-[11px] font-bold text-gray-500 mb-2 tracking-widest uppercase">Save this analysis as</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {(['workspace', 'private'] as const).map(opt => (
                       <button
                         key={opt}
                         type="button"
                         onClick={() => setVisibilityChoice(opt)}
-                        className={`px-4 py-3 rounded-xl text-xs font-bold transition-all ${visibilityChoice === opt ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
+                        aria-pressed={visibilityChoice === opt}
+                        className={`px-4 py-3 rounded-full text-xs font-bold transition-all ${visibilityChoice === opt ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
                       >
                         {opt === 'workspace' ? 'Shared with team' : 'Private to me'}
                       </button>
@@ -361,7 +359,7 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
               {error && <div className="mb-8"><ErrorMessage message={error} /></div>}
 
               <PrimaryButton onClick={handleRun} disabled={loading} className="w-full">
-                {loading ? 'Analyzing...' : `${config.ctaVerb} (${cost} Tokens)`}
+                {loading ? 'Analyzing…' : `${config.ctaVerb} (${cost} tokens)`}
               </PrimaryButton>
             </div>
           </Card>
@@ -373,8 +371,9 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
           {loading && <RunProgress stage={runStage} isTakingLong={isTakingLong} />}
           {!loading && !result && !executionError && (
             <EmptyState
-              message={deleted ? 'Analysis deleted.' : 'Your analysis will appear here.'}
-              submessage={deleted ? 'Run the tool again to generate a new analysis.' : 'Fill in the inputs and run the tool to generate strategic intelligence.'}
+              card
+              message={deleted ? 'Analysis deleted' : 'Your analysis will appear here'}
+              submessage={deleted ? 'Run the tool again to generate a new analysis.' : 'Fill in the inputs and run the tool to generate your analysis.'}
             />
           )}
 
@@ -390,7 +389,7 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
                           {(() => {
                             const b = getScoreBand(result.score);
                             return (
-                              <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border ${b.bgClass} ${b.textClass}`}>
+                              <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border ${b.bgClass} ${b.textClass}`}>
                                 {b.band}
                               </span>
                             );
@@ -398,18 +397,16 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
                         </>
                       )}
                     </div>
-                    {result.verdict && (
-                      <span className="text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-[#0B0B0B] text-white">{result.verdict}</span>
-                    )}
+                    {result.verdict && <Badge tone="dark">{result.verdict}</Badge>}
                   </div>
                 )}
                 {result.summary && (
                   <>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Executive Summary</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Summary</p>
                     <p className="text-sm text-gray-600 leading-relaxed font-medium">{result.summary}</p>
                   </>
                 )}
-                <div className="flex items-center justify-between gap-4 flex-wrap pt-6 mt-6 border-t border-gray-50">
+                <div className="flex items-center justify-between gap-4 flex-wrap pt-6 mt-6 border-t border-gray-100">
                   <div className="flex items-center gap-4 flex-wrap">
                     <span className="inline-flex items-center gap-2 text-[10px] font-bold text-green-600 uppercase tracking-widest">
                       <span className="w-1.5 h-1.5 rounded-full bg-green-500" /> Saved
@@ -434,22 +431,12 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
 
               {result.sections.length > 0 && (
                 <Card>
-                  {/* Tabs (Tabs component takes no children, so render content below) */}
-                  <div className="flex gap-8 border-b border-gray-100 mb-8 overflow-x-auto no-scrollbar">
-                    {result.sections.map(section => (
-                      <button
-                        key={section.title}
-                        onClick={() => setActiveTab(section.title)}
-                        className={`pb-4 text-[11px] font-bold uppercase tracking-widest transition-all relative whitespace-nowrap ${activeSection?.title === section.title ? 'text-[#0B0B0B]' : 'text-gray-400 hover:text-gray-600'}`}
-                      >
-                        {section.title}
-                        {activeSection?.title === section.title && (
-                          <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#FF0000] rounded-full" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-
+                  <Tabs
+                    tone="light"
+                    tabs={result.sections.map(s => s.title)}
+                    activeTab={activeSection?.title || ''}
+                    onTabChange={setActiveTab}
+                  />
                   {activeSection && <ResultItemList items={activeSection.items} />}
                 </Card>
               )}

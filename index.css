@@ -11,6 +11,25 @@ html,
 body {
   background-color: #0b0b0b;
   overflow-x: clip;
+  /* Native scrollbars, form controls and the overscroll area follow the dark shell instead of
+     rendering as light-grey strips inside the sidebar and tab rails. White Cards set their own
+     `color-scheme: light` (see .paper) so their inputs keep light chrome. */
+  color-scheme: dark;
+}
+
+@layer utilities {
+  /* Used by every horizontally scrolling tab rail and the sidebar nav. It was referenced in seven
+     components but never defined, which is why a light scrollbar showed under each tab strip. */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .paper {
+    color-scheme: light;
+  }
 }
 
 /* Accessibility: tailwindcss-animate does not honour prefers-reduced-motion on its own, and the app

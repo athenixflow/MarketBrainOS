@@ -3,7 +3,7 @@
 // Agency Hub, Team Workspace and Enterprise Suite.
 
 import React, { useState } from 'react';
-import { Card } from './UI';
+import { Card, PrimaryButton, Badge, SuccessMessage, ErrorMessage } from './UI';
 
 export interface CapacityRow {
   label: string;
@@ -16,11 +16,13 @@ export interface CapacityRow {
 const CapacityPanel: React.FC<{ title?: string; rows: CapacityRow[] }> = ({ title = 'Plan capacity', rows }) => {
   const [busy, setBusy] = useState<number | null>(null);
   const [msg, setMsg] = useState('');
+  // Tone of `msg` is tracked here rather than inferred from the text.
+  const [msgErr, setMsgErr] = useState(false);
 
   const buy = async (i: number, fn: () => Promise<void>) => {
-    setBusy(i); setMsg('');
+    setBusy(i); setMsg(''); setMsgErr(false);
     try { await fn(); setMsg('Capacity added.'); setTimeout(() => setMsg(''), 3000); }
-    catch (e: any) { setMsg(e.message || 'Purchase failed.'); }
+    catch (e: any) { setMsgErr(true); setMsg(e.message || 'Purchase failed.'); }
     finally { setBusy(null); }
   };
 
@@ -30,27 +32,26 @@ const CapacityPanel: React.FC<{ title?: string; rows: CapacityRow[] }> = ({ titl
         {rows.map((r, i) => {
           const full = r.used >= r.cap;
           return (
-            <div key={i} className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-gray-50 border border-gray-100">
+            <div key={i} className="flex flex-wrap items-center justify-between gap-4 p-5 sm:p-6 rounded-2xl bg-gray-50 border border-gray-100">
               <div className="min-w-0">
                 <p className="text-sm font-bold text-[#0B0B0B]">{r.label}</p>
-                <p className={`text-[10px] font-bold uppercase tracking-widest mt-1 ${full ? 'text-[#FF0000]' : 'text-gray-400'}`}>
-                  {r.used.toLocaleString()} of {r.cap.toLocaleString()} used{full ? ' • full' : ''}
-                </p>
+                <div className="flex flex-wrap items-center gap-2 mt-1">
+                  <p className={`text-[10px] font-bold uppercase tracking-widest tabular-nums ${full ? 'text-[#FF0000]' : 'text-gray-400'}`}>
+                    {r.used.toLocaleString()} of {r.cap.toLocaleString()} used
+                  </p>
+                  {full && <Badge tone="red">Full</Badge>}
+                </div>
               </div>
               {r.onBuy && r.buyLabel && (
-                <button
-                  onClick={() => buy(i, r.onBuy!)}
-                  disabled={busy !== null}
-                  className="px-4 py-2 rounded-xl bg-[#FF0000] text-white text-[10px] font-bold uppercase tracking-widest disabled:opacity-40 whitespace-nowrap"
-                >
-                  {busy === i ? '…' : r.buyLabel}
-                </button>
+                <PrimaryButton size="sm" onClick={() => buy(i, r.onBuy!)} disabled={busy !== null}>
+                  {busy === i ? 'Processing…' : r.buyLabel}
+                </PrimaryButton>
               )}
             </div>
           );
         })}
       </div>
-      {msg && <p className="mt-4 text-sm font-semibold text-[#0B0B0B]">{msg}</p>}
+      {msg && (msgErr ? <ErrorMessage message={msg} className="mt-6" /> : <SuccessMessage message={msg} className="mt-6" />)}
     </Card>
   );
 };

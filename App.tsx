@@ -60,14 +60,18 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const accessCtx = { profile, memberships };
 
   const renderNavLink = (link: NavLink, size: 'lg' | 'sm' = 'lg') => {
-    const isActive = link.exact ? location.pathname === link.path : location.pathname === link.path;
-    const pad = size === 'lg' ? 'py-5 text-[13px]' : 'py-4 text-[12px]';
+    // Non-exact links also highlight on their sub-paths (e.g. /team/... keeps Team Workspace lit).
+    const isActive = link.exact
+      ? location.pathname === link.path
+      : location.pathname === link.path || location.pathname.startsWith(`${link.path}/`);
+    const pad = size === 'lg' ? 'py-3.5 text-[12px]' : 'py-3 text-[11px]';
     return (
       <Link
         key={link.path}
         to={link.path}
         onClick={onClose}
-        className={`flex items-center gap-5 px-6 ${pad} font-bold tracking-widest uppercase rounded-2xl transition-all duration-500 mb-3 group ${
+        aria-current={isActive ? 'page' : undefined}
+        className={`flex items-center gap-4 px-5 ${pad} font-bold tracking-widest uppercase rounded-2xl transition-all duration-300 mb-1 group ${
           isActive ? 'bg-[#121212] text-white shadow-lg shadow-black/20' : 'text-gray-500 hover:text-white'
         }`}
       >
@@ -113,13 +117,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
              </button>
           </div>
 
-          <nav className="flex-grow py-8 px-6 lg:py-12 lg:px-8 overflow-y-auto">
-            <div className="px-6 pb-6 mb-6 border-b border-gray-900/50">
-               <p className="text-[10px] font-bold text-red-500 uppercase tracking-[0.3em]">Control Center</p>
+          <nav className="flex-grow py-6 px-4 lg:py-8 lg:px-6 overflow-y-auto no-scrollbar">
+            <div className="px-5 pb-6 mb-6 border-b border-gray-900/50">
+               <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest">Control Center</p>
             </div>
             {visibleAdminSections(profile?.role).map((grp) => (
               <div key={grp.group} className="mb-6">
-                <p className="px-6 mb-3 text-[9px] font-bold text-gray-600 uppercase tracking-[0.3em]">{grp.group}</p>
+                <p className="px-5 mb-3 text-[10px] font-bold text-gray-600 uppercase tracking-widest">{grp.group}</p>
                 {grp.items.map((item) => {
                   const path = adminPath(item.key);
                   const isActive = location.pathname === path || (item.key === '' && location.pathname === '/admin');
@@ -165,14 +169,14 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
            </button>
         </div>
 
-        <nav className="flex-grow py-8 px-6 lg:py-16 lg:px-8 overflow-y-auto">
+        <nav className="flex-grow py-6 px-4 lg:py-8 lg:px-6 overflow-y-auto no-scrollbar">
           {/* Core — Dashboard, History, Reports (always visible to a signed-in user) */}
           {visibleLinks(NAV_CORE, accessCtx).map((link) => renderNavLink(link, 'lg'))}
 
           {/* Analysis Tools — data-driven suites (V1 Tool Architecture grouping) */}
           {NAV_SUITES.map((group) => (
-            <div key={group.suite} className="mt-8">
-              <p className="px-6 mb-4 text-[9px] font-bold text-gray-600 uppercase tracking-[0.3em]">{group.suite}</p>
+            <div key={group.suite} className="mt-6">
+              <p className="px-5 mb-2 text-[10px] font-bold text-gray-600 uppercase tracking-widest">{group.suite}</p>
               {group.items.map((item) => renderNavLink({ label: item.label, path: item.path }, 'sm'))}
             </div>
           ))}
@@ -182,46 +186,45 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             const links = visibleLinks(NAV_COLLABORATION, accessCtx);
             if (links.length === 0) return null;
             return (
-              <div className="mt-8">
-                <p className="px-6 mb-4 text-[9px] font-bold text-gray-600 uppercase tracking-[0.3em]">{NAV_COLLABORATION.heading}</p>
+              <div className="mt-6">
+                <p className="px-5 mb-2 text-[10px] font-bold text-gray-600 uppercase tracking-widest">{NAV_COLLABORATION.heading}</p>
                 {links.map((link) => renderNavLink(link, 'sm'))}
               </div>
             );
           })()}
 
           {/* Account — Billing / Settings / Support */}
-          <div className="mt-8">
-            <p className="px-6 mb-4 text-[9px] font-bold text-gray-600 uppercase tracking-[0.3em]">{NAV_ACCOUNT.heading}</p>
+          <div className="mt-6">
+            <p className="px-5 mb-2 text-[10px] font-bold text-gray-600 uppercase tracking-widest">{NAV_ACCOUNT.heading}</p>
             {visibleLinks(NAV_ACCOUNT, accessCtx).map((link) => renderNavLink(link, 'sm'))}
           </div>
         </nav>
-        <div className="p-8 lg:p-12 border-t border-gray-900/30">
+        <div className="p-4 lg:p-6 border-t border-gray-900/30">
           {isAdminRole && (
-            <Link 
-              to="/admin" 
+            <Link
+              to="/admin"
               onClick={onClose}
-              className="block mb-8 p-6 bg-red-950/20 rounded-2xl border border-red-900/30 hover:bg-red-950/40 transition-colors"
+              className="block mb-4 px-5 py-4 bg-red-950/20 rounded-2xl border border-red-900/30 hover:bg-red-950/40 transition-colors"
             >
               <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest">Admin Control</p>
-              <p className="text-[8px] text-red-500/60 uppercase font-bold mt-1">{profile?.role.replace('_', ' ')}</p>
+              <p className="text-[9px] text-red-500/60 uppercase font-bold mt-1">{profile?.role.replace('_', ' ')}</p>
             </Link>
           )}
           {profile && (
-            <div className="mb-8 p-6 bg-[#121212] rounded-2xl border border-gray-900">
-              <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-4 opacity-60">Usage remaining this month</p>
-              <div className="flex items-end gap-3">
-                <span className="text-2xl font-black text-white">{profile.tokens}</span>
-                <span className="text-[10px] font-bold text-gray-700 uppercase mb-1.5">Credits</span>
+            <Link to="/billing" onClick={onClose} className="block px-5 py-4 bg-[#121212] rounded-2xl border border-gray-900 hover:border-gray-700 transition-colors">
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Token balance</p>
+              <div className="flex items-end gap-2">
+                <span className="text-2xl font-black text-white tabular-nums leading-none">{profile.tokens}</span>
+                <span className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-0.5">tokens</span>
               </div>
               {profile.tokens === 0 && (
-                <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-900">
+                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-900">
                   <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000]" />
-                  <p className="text-[8px] font-bold text-[#FF0000] uppercase tracking-widest">Allowance Exhausted</p>
+                  <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest">Balance exhausted</p>
                 </div>
               )}
-            </div>
+            </Link>
           )}
-          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.4em] opacity-30">Premium Intelligence Layer</p>
         </div>
       </aside>
     </>
@@ -265,7 +268,7 @@ const Header: React.FC<{ onToggleSidebar?: () => void }> = ({ onToggleSidebar })
         </Link>
       </div>
       <div className="ml-auto flex items-center gap-3 sm:gap-6 lg:gap-10 min-w-0">
-        <div className="flex gap-3 sm:gap-6 lg:gap-8 text-[11px] font-bold tracking-[0.1em] text-gray-500 uppercase">
+        <div className="flex gap-3 sm:gap-6 lg:gap-8 text-[11px] font-bold tracking-widest text-gray-500 uppercase">
           {!isAdminPath && profile?.tier === 'free' && (
             <Link to="/pricing" className="text-[#FF0000] animate-pulse cursor-pointer hidden sm:block">Upgrade to Pro</Link>
           )}
@@ -273,12 +276,12 @@ const Header: React.FC<{ onToggleSidebar?: () => void }> = ({ onToggleSidebar })
           <Link to="/documentation" className="hover:text-white cursor-pointer transition-colors sm:hidden">?</Link>
           
           {user ? (
-            <span onClick={signOut} className="hover:text-white cursor-pointer transition-colors">Sign Out</span>
+            <button type="button" onClick={signOut} className="hover:text-white cursor-pointer transition-colors uppercase tracking-widest font-bold">Sign Out</button>
           ) : (
             <Link to="/auth" className="hover:text-white cursor-pointer transition-colors">Sign In</Link>
           )}
         </div>
-        {user && !isAdminPath && <ScopeSwitcher />}
+        {user && !isAdminPath && <div className="hidden sm:block"><ScopeSwitcher /></div>}
         {user && !isAdminPath && <NotificationCenter />}
         <div className={`w-1.5 h-1.5 rounded-full animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.3)] ${isEmergency ? 'bg-red-500' : 'bg-green-500/80'}`} />
       </div>
@@ -404,8 +407,8 @@ const AppContainer: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#0B0B0B] text-white selection:bg-[#FF0000] selection:text-white antialiased">
       {isEmergency && !location.pathname.startsWith('/admin') && (
-        <div className="fixed top-16 left-0 lg:left-72 right-0 bg-red-600/90 backdrop-blur-md text-white py-1.5 px-4 lg:px-12 z-40 flex items-center justify-center gap-4 animate-pulse">
-          <span className="text-[9px] font-black uppercase tracking-[0.4em] text-center">Strategic Lockdown Protocol Active — Intelligence Engine Offline</span>
+        <div role="status" className="fixed top-16 left-0 lg:left-72 right-0 bg-red-600/90 backdrop-blur-md text-white py-1.5 px-4 lg:px-12 z-40 flex items-center justify-center gap-4">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-center truncate">System lockdown active. Analyses are paused.</span>
         </div>
       )}
       

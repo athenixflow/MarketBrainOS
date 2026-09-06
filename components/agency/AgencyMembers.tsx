@@ -1,7 +1,8 @@
 // Agency Hub — Members panel. Owner/director provisions members directly (active immediately) with a
 // role, a per-member tool allowlist, and a per-cycle token budget drawn from the agency pool.
+// Markup is kept identical to team/TeamMembers and enterprise/EnterpriseMembers.
 import React, { useMemo, useState } from 'react';
-import { Card, PrimaryButton, Input, ErrorMessage } from '../UI';
+import { Card, PrimaryButton, SecondaryButton, Input, Select, Checkbox, Stat, Badge, ErrorMessage, SuccessMessage } from '../UI';
 import { Agency, WorkspaceMember, AgencyRole } from '../../types';
 import { callCreateAgencyMember, callUpdateAgencyMember, callManageAgencyMember } from '../../services/persistenceService';
 import { can, Membership, ROLE_LABELS } from '../../services/permissionService';
@@ -10,6 +11,17 @@ import { DEFAULT_PRICING_CONFIG } from '../../config/pricingConfig';
 
 const ASSIGNABLE: AgencyRole[] = ['agency_director', 'account_manager', 'strategist', 'analyst', 'viewer'];
 const DEFAULT_BUDGET = 200;
+const OWNER_ROLE = 'agency_owner';
+const POOL_LABEL = 'Agency pool';
+const BUDGET_HINT = 'From the agency pool. 0 = unlimited within the pool.';
+const EMAIL_PLACEHOLDER = 'colleague@agency.com';
+
+const roleTone = (role: string): 'red' | 'blue' | 'neutral' => {
+  if (role === 'owner' || role === 'agency_owner' || role === 'enterprise_owner') return 'red';
+  if (role === 'admin' || role === 'agency_director' || role === 'executive_admin') return 'blue';
+  return 'neutral';
+};
+const rowAction = 'text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors';
 
 const AgencyMembers: React.FC<{
   agency: Agency; members: WorkspaceMember[]; membership: Membership | null; selfUid: string; onReload: () => void;
@@ -61,46 +73,41 @@ const AgencyMembers: React.FC<{
     <div className="space-y-8">
       {canManage && (
         <Card title={editingUid ? 'Edit member' : 'Add a team member'}>
-          <div className="flex flex-wrap gap-8 mb-6">
-            <div><p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Agency pool</p><p className="text-lg font-black text-[#0B0B0B] mt-1">{pool.toLocaleString()}</p></div>
-            <div><p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Allocated</p><p className="text-lg font-black text-[#0B0B0B] mt-1">{allocated.toLocaleString()}</p></div>
-            <div><p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Unallocated</p><p className="text-lg font-black text-[#0B0B0B] mt-1">{remaining.toLocaleString()}</p></div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+            <Stat label={POOL_LABEL} value={pool.toLocaleString()} />
+            <Stat label="Allocated" value={allocated.toLocaleString()} />
+            <Stat label="Unallocated" value={remaining.toLocaleString()} />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 [&>div]:mb-6">
-            <Input label="Email" placeholder="colleague@agency.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={!!editingUid} />
-            {!editingUid && <Input label="Temporary password" type="password" autoComplete="new-password" placeholder="They can change it after first login" value={password} onChange={(e) => setPassword(e.target.value)} />}
-            <div>
-              <label className="block text-[11px] font-bold text-gray-500 mb-2 tracking-widest uppercase">Role</label>
-              <select value={role} onChange={(e) => setRole(e.target.value as AgencyRole)} className="w-full min-w-0 bg-[#FBFBFB] border border-gray-200 px-4 py-3.5 rounded-2xl text-[15px] outline-none">
-                {ASSIGNABLE.map(r => <option key={r} value={r}>{ROLE_LABELS[r] || r}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[11px] font-bold text-gray-500 mb-2 tracking-widest uppercase">Monthly token budget</label>
-              <input type="number" min={0} value={budget} onChange={(e) => setBudget(Math.max(0, parseInt(e.target.value, 10) || 0))} className="w-full min-w-0 bg-[#FBFBFB] border border-gray-200 px-4 py-3.5 rounded-2xl text-[15px] outline-none text-gray-700" />
-              <p className="text-[10px] font-medium text-gray-400 mt-2">From the agency pool. 0 = unlimited within the pool.</p>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-3 items-end">
+            <Input compact label="Email" placeholder={EMAIL_PLACEHOLDER} value={email} onChange={(e) => setEmail(e.target.value)} disabled={!!editingUid} />
+            <Select compact label="Role" value={role} onChange={(v) => setRole(v as AgencyRole)} options={ASSIGNABLE.map(r => ({ value: r, label: ROLE_LABELS[r] || r }))} className="md:w-52" />
+            <Input compact label="Monthly token budget" type="number" placeholder="0" value={String(budget)} onChange={(e) => setBudget(Math.max(0, parseInt(e.target.value, 10) || 0))} className="md:w-44" />
           </div>
+          <p className="mt-2 text-xs text-gray-500">{BUDGET_HINT}</p>
+          {!editingUid && (
+            <div className="mt-6">
+              <Input compact label="Temporary password" type="password" autoComplete="new-password" placeholder="They can change it after first login" value={password} onChange={(e) => setPassword(e.target.value)} />
+            </div>
+          )}
 
-          <div className="mt-6">
-            <label className="block text-[11px] font-bold text-gray-500 mb-2 tracking-widest uppercase">Tools this member can use</label>
-            <p className="text-[11px] text-gray-400 font-medium mb-3">Leave all unchecked to allow every tool.</p>
+          <div className="mt-8">
+            <p className="text-[11px] font-bold text-gray-500 tracking-widest uppercase mb-2">Tools this member can use</p>
+            <p className="text-xs text-gray-500 mb-3">Leave all unchecked to allow every tool.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
               {TOOL_CONFIG_LIST.map((t) => (
-                <label key={t.slug} className="flex items-center gap-2 p-3 rounded-xl bg-gray-50 border border-gray-100 cursor-pointer">
-                  <input type="checkbox" checked={tools.has(t.module)} onChange={() => toggleTool(t.module)} className="accent-[#FF0000]" />
-                  <span className="text-sm font-medium text-gray-700">{t.navLabel}</span>
-                </label>
+                <div key={t.slug} className="p-3 rounded-2xl bg-gray-50 border border-gray-100">
+                  <Checkbox label={t.navLabel} checked={tools.has(t.module)} onChange={() => toggleTool(t.module)} className="w-full" />
+                </div>
               ))}
             </div>
           </div>
 
-          <div className="flex items-center gap-3 mt-6">
-            <PrimaryButton onClick={submit} disabled={busy || (!editingUid && !email)}>{busy ? 'Saving…' : (editingUid ? 'Save changes' : 'Add member')}</PrimaryButton>
-            {editingUid && <button onClick={reset} className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest">Cancel</button>}
+          <div className="flex flex-wrap items-center gap-3 mt-8">
+            <PrimaryButton size="sm" onClick={submit} disabled={busy || (!editingUid && !email)}>{busy ? 'Saving…' : (editingUid ? 'Save changes' : 'Add member')}</PrimaryButton>
+            {editingUid && <SecondaryButton size="sm" onClick={reset}>Cancel</SecondaryButton>}
           </div>
-          {msg && <p className="mt-3 text-[10px] font-bold text-green-600 uppercase tracking-widest">{msg}</p>}
+          {msg && <SuccessMessage message={msg} className="mt-4" />}
         </Card>
       )}
 
@@ -109,24 +116,27 @@ const AgencyMembers: React.FC<{
       <Card title={`Team (${members.length})`}>
         <div className="space-y-3">
           {members.map(m => {
-            const isOwner = m.role === 'agency_owner';
+            const isOwner = m.role === OWNER_ROLE;
             const used = m.consumed_this_cycle || 0;
             const cap = m.token_budget || 0;
             const toolCount = (m.allowed_tools || []).length;
             return (
-              <div key={m.id} className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100 flex-wrap">
+              <div key={m.id} className="flex flex-wrap items-center justify-between gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
                 <div className="min-w-0">
-                  <p className="text-sm font-bold text-[#0B0B0B] truncate">{m.email}{m.uid === selfUid ? ' (you)' : ''}</p>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
-                    {ROLE_LABELS[m.role] || m.role}
-                    {!isOwner && ` • ${toolCount === 0 ? 'all tools' : `${toolCount} tools`} • budget ${cap > 0 ? `${used}/${cap}` : 'unlimited'}`}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-bold text-[#0B0B0B] truncate">{m.email}{m.uid === selfUid ? ' (you)' : ''}</p>
+                    <Badge tone={roleTone(m.role)}>{ROLE_LABELS[m.role] || m.role}</Badge>
+                  </div>
+                  {!isOwner && (
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums mt-1">
+                      {toolCount === 0 ? 'All tools' : `${toolCount} tools`} · Budget {cap > 0 ? `${used}/${cap}` : 'unlimited'}
+                    </p>
+                  )}
                 </div>
-                {isOwner && <span className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-[#0B0B0B] text-white">Owner</span>}
                 {canManage && !isOwner && m.uid !== selfUid && (
                   <div className="flex items-center gap-3 shrink-0">
-                    <button onClick={() => startEdit(m)} className="text-[10px] font-bold text-gray-500 hover:text-[#0B0B0B] uppercase tracking-widest">Edit</button>
-                    <button onClick={() => remove(m.uid)} className="text-[10px] font-bold text-gray-400 hover:text-[#FF0000] uppercase tracking-widest">Remove</button>
+                    <button onClick={() => startEdit(m)} className={rowAction}>Edit</button>
+                    <button onClick={() => remove(m.uid)} className={`${rowAction} hover:text-[#FF0000]`}>Remove</button>
                   </div>
                 )}
               </div>

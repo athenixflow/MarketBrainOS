@@ -1,6 +1,6 @@
 // Team Workspace — Settings (Phase 6.1)
 import React, { useState } from 'react';
-import { Card, PrimaryButton, Input, ErrorMessage } from '../UI';
+import { Card, PrimaryButton, SecondaryButton, Input, Select, ErrorMessage, SuccessMessage, PermissionDenied } from '../UI';
 import { Workspace, WorkspaceMember } from '../../types';
 import { callManageWorkspace } from '../../services/persistenceService';
 import { can, Membership } from '../../services/permissionService';
@@ -12,6 +12,7 @@ const TeamSettings: React.FC<{
   const [name, setName] = useState(workspace.name);
   const [description, setDescription] = useState(workspace.description || '');
   const [transferTo, setTransferTo] = useState('');
+  const [confirmArchive, setConfirmArchive] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
@@ -29,7 +30,7 @@ const TeamSettings: React.FC<{
   const archive = async () => {
     setError(''); setBusy(true);
     try { await callManageWorkspace('delete', { workspaceId: workspace.id }); flash('Workspace archived'); onChanged(); }
-    catch (e: any) { setError(e.message || 'Archive failed'); } finally { setBusy(false); }
+    catch (e: any) { setError(e.message || 'Archive failed'); } finally { setBusy(false); setConfirmArchive(false); }
   };
 
   const transfer = async () => {
@@ -39,40 +40,50 @@ const TeamSettings: React.FC<{
     catch (e: any) { setError(e.message || 'Transfer failed'); } finally { setBusy(false); }
   };
 
-  if (!canSettings) return <p className="text-gray-400 text-sm font-medium py-8">You don't have permission to manage workspace settings.</p>;
+  if (!canSettings) return <PermissionDenied message="You do not have permission to manage workspace settings" />;
 
   const others = members.filter(m => m.uid !== selfUid && m.status !== 'removed');
 
   return (
-    <div className="space-y-8 max-w-2xl">
+    <div className="space-y-6 max-w-2xl">
       {error && <ErrorMessage message={error} />}
-      {msg && <p className="text-[10px] font-bold text-green-600 uppercase tracking-widest">{msg}</p>}
+      {msg && <SuccessMessage message={msg} />}
 
       <Card title="General">
-        <div className="space-y-4">
-          <Input label="Workspace name" placeholder="Workspace name" value={name} onChange={(e) => setName(e.target.value)} />
-          <Input label="Description" placeholder="What this workspace is for" value={description} onChange={(e) => setDescription(e.target.value)} multiline />
-          <PrimaryButton onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</PrimaryButton>
-        </div>
+        <Input label="Workspace name" placeholder="Workspace name" value={name} onChange={(e) => setName(e.target.value)} />
+        <Input label="Description" placeholder="What this workspace is for" value={description} onChange={(e) => setDescription(e.target.value)} multiline />
+        <PrimaryButton onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</PrimaryButton>
       </Card>
 
       {isOwner && (
-        <Card title="Ownership & lifecycle">
-          <div className="space-y-6">
+        <Card title="Danger zone">
+          <div className="space-y-8">
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-3 tracking-widest uppercase">Transfer ownership</label>
-              <div className="flex gap-2">
-                <select value={transferTo} onChange={(e) => setTransferTo(e.target.value)} className="flex-grow bg-[#FBFBFB] border border-gray-100 p-4 rounded-2xl text-sm outline-none">
-                  <option value="">Select a member…</option>
-                  {others.map(m => <option key={m.uid} value={m.uid}>{m.email}</option>)}
-                </select>
-                <button onClick={transfer} disabled={!transferTo || busy} className="px-5 rounded-xl bg-[#0B0B0B] text-white text-[11px] font-bold uppercase tracking-widest disabled:opacity-30">Transfer</button>
+              <Select
+                label="Transfer ownership"
+                value={transferTo}
+                onChange={setTransferTo}
+                compact
+                options={[
+                  { value: '', label: 'Select a member…' },
+                  ...others.map(m => ({ value: m.uid, label: m.email })),
+                ]}
+              />
+              <div className="mt-4">
+                <SecondaryButton size="sm" onClick={transfer} disabled={!transferTo || busy}>Transfer ownership</SecondaryButton>
               </div>
             </div>
-            <div className="pt-6 border-t border-gray-100">
-              <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-2">Danger zone</p>
-              <p className="text-xs text-gray-500 mb-4">Archiving disables the workspace. Analyses and history are preserved (Master Wiring: no data loss).</p>
-              <button onClick={archive} disabled={busy} className="px-5 py-3 rounded-xl border border-red-200 text-[#FF0000] text-[11px] font-bold uppercase tracking-widest hover:bg-red-50 transition-colors">Archive workspace</button>
+            <div className="pt-8 border-t border-gray-100">
+              <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-2">Archive workspace</p>
+              <p className="text-xs text-gray-500 mb-4 leading-relaxed">Archiving disables the workspace. Analyses and history are preserved.</p>
+              {confirmArchive ? (
+                <div className="flex flex-wrap items-center gap-3">
+                  <PrimaryButton size="sm" onClick={archive} disabled={busy}>Yes, archive workspace</PrimaryButton>
+                  <SecondaryButton size="sm" onClick={() => setConfirmArchive(false)} disabled={busy}>Cancel</SecondaryButton>
+                </div>
+              ) : (
+                <SecondaryButton size="sm" onClick={() => setConfirmArchive(true)} disabled={busy}>Archive workspace</SecondaryButton>
+              )}
             </div>
           </div>
         </Card>

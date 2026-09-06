@@ -4,7 +4,7 @@
 
 import React, { useState } from 'react';
 import { Enterprise } from '../../types';
-import { Card } from '../UI';
+import { Card, Stat, Input, PrimaryButton, EmptyState, ErrorMessage, SuccessMessage } from '../UI';
 import { callAllocateTokens } from '../../services/persistenceService';
 import { DEFAULT_PRICING_CONFIG } from '../../config/pricingConfig';
 
@@ -21,27 +21,28 @@ const EnterpriseBudgets: React.FC<{
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
+  const [error, setError] = useState('');
 
   const save = async (agencyId: string) => {
     const amount = Math.max(0, parseInt(edits[agencyId] ?? '', 10) || 0);
-    setBusy(agencyId); setMsg('');
+    setBusy(agencyId); setMsg(''); setError('');
     try {
       await callAllocateTokens({ level: 'agency', enterpriseId, agencyId, amount });
       setMsg('Allocation updated.');
       onReload();
-    } catch (e: any) { setMsg(e.message || 'Allocation failed.'); }
+    } catch (e: any) { setError(e.message || 'Allocation failed.'); }
     finally { setBusy(null); }
   };
 
   return (
     <div className="space-y-6">
       <Card title="Enterprise token pool">
-        <div className="flex flex-wrap gap-10">
-          <div><p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Monthly pool</p><p className="text-xl font-black text-[#0B0B0B] mt-1">{pool.toLocaleString()}</p></div>
-          <div><p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Allocated</p><p className="text-xl font-black text-[#0B0B0B] mt-1">{totalAllocated.toLocaleString()}</p></div>
-          <div><p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Unallocated</p><p className="text-xl font-black text-[#0B0B0B] mt-1">{unallocated.toLocaleString()}</p></div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <Stat label="Monthly pool" value={pool.toLocaleString()} />
+          <Stat label="Allocated" value={totalAllocated.toLocaleString()} />
+          <Stat label="Unallocated" value={unallocated.toLocaleString()} />
         </div>
-        <p className="mt-4 text-sm text-gray-500 font-medium">
+        <p className="mt-6 text-sm text-gray-500 font-medium leading-relaxed">
           Set a per-cycle token budget for each linked agency. The amount becomes that agency's pool
           (which it then divides among its clients and members). Budget 0 means the agency uses its own
           plan allowance. Only linked agencies appear here — link agencies in Settings.
@@ -50,31 +51,33 @@ const EnterpriseBudgets: React.FC<{
 
       <Card title="Agency budgets">
         {agencies.length === 0 ? (
-          <p className="text-sm text-gray-400 font-medium py-6 text-center">No linked agencies yet. Link agencies in Settings.</p>
+          <EmptyState message="No linked agencies yet" submessage="Link agencies in Settings to set per-agency budgets." />
         ) : (
           <div className="space-y-3">
             {agencies.map((a) => {
               const cap = Number(a.enterprise_allocation) || 0;
               return (
-                <div key={a.id} className="flex items-center justify-between gap-4 p-5 rounded-2xl bg-gray-50 border border-gray-100">
+                <div key={a.id} className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-2xl bg-gray-50 border border-gray-100">
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-[#0B0B0B] truncate">{a.name || a.id}</p>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
-                      {cap > 0 ? `Allocated ${cap.toLocaleString()} tokens/cycle` : 'Using own plan allowance'}
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums mt-1">
+                      {cap > 0 ? `Allocated ${cap.toLocaleString()} tokens per cycle` : 'Using own plan allowance'}
                     </p>
                   </div>
                   {canManage && (
-                    <div className="flex items-center gap-2 shrink-0">
-                      <input
-                        type="number" min={0}
-                        defaultValue={cap || ''}
-                        onChange={(e) => setEdits((p) => ({ ...p, [a.id]: e.target.value }))}
+                    <div className="flex items-center gap-3 shrink-0">
+                      <Input
+                        compact
+                        type="number"
+                        ariaLabel={`Token budget for ${a.name || a.id}`}
                         placeholder="0 = own allowance"
-                        className="w-36 px-3 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-700"
+                        value={edits[a.id] ?? (cap ? String(cap) : '')}
+                        onChange={(e) => setEdits((p) => ({ ...p, [a.id]: e.target.value }))}
+                        className="w-40"
                       />
-                      <button onClick={() => save(a.id)} disabled={busy !== null} className="px-4 py-2 rounded-xl bg-[#FF0000] text-white text-[10px] font-bold uppercase tracking-widest disabled:opacity-40">
-                        {busy === a.id ? '…' : 'Set'}
-                      </button>
+                      <PrimaryButton size="sm" onClick={() => save(a.id)} disabled={busy !== null}>
+                        {busy === a.id ? 'Saving…' : 'Set'}
+                      </PrimaryButton>
                     </div>
                   )}
                 </div>
@@ -82,7 +85,8 @@ const EnterpriseBudgets: React.FC<{
             })}
           </div>
         )}
-        {msg && <p className="mt-4 text-sm font-semibold text-[#0B0B0B]">{msg}</p>}
+        {msg && <SuccessMessage message={msg} className="mt-4" />}
+        {error && <ErrorMessage message={error} className="mt-4" />}
       </Card>
     </div>
   );
