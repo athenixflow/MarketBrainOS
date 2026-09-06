@@ -10,10 +10,13 @@ import Seo from '../components/Seo';
 import { MARKETING_SEO } from '../config/seo';
 import Picture from '../components/media/Picture';
 import HeroVideo from '../components/media/HeroVideo';
+import AudienceStory from '../components/landing/AudienceStory';
 import * as media from '../assets/media';
 
 const AUDIENCE = [
   { title: 'Founders', desc: 'Save capital by validating your core value proposition before hiring agencies or spending on ads.', asset: media.audienceFounders },
+  // Reuses the Founders image until an `audience-smb` slot is generated in scripts/media/manifest.ts.
+  { title: 'Small Business Owners', desc: 'Get the judgement of a marketing team without the payroll. Check an offer, a landing page or an ad before you spend money on it.', asset: media.audienceFounders },
   { title: 'Marketing Agencies', desc: 'Audit client assets instantly to find low-hanging fruit and justify your strategy with data-backed simulations.', asset: media.audienceAgencies },
   { title: 'Growth Teams', desc: 'Systematize your creative testing workflow. Reduce the time between ideation and validated launch.', asset: media.audienceGrowth },
 ];
@@ -271,22 +274,7 @@ const LandingPage: React.FC = () => {
       </AnimatedSection>
 
       {/* 7. WHO IT IS FOR */}
-      <AnimatedSection as="section" index={6} className="py-24 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" aria-labelledby="audience-heading">
-         <h2 id="audience-heading" className="text-3xl font-bold text-white mb-12">Who Uses MarketBrainOS?</h2>
-         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {AUDIENCE.map((a) => (
-              <div key={a.title} className="border border-gray-800 rounded-2xl bg-[#0F0F0F] overflow-hidden flex flex-col">
-                {a.asset && (
-                  <Picture asset={a.asset} sizes="(min-width: 768px) 33vw, 100vw" className="border-b border-gray-800" imgClassName="aspect-[2/1] object-cover" />
-                )}
-                <div className="p-8">
-                  <h3 className="text-xl font-bold text-white mb-4">{a.title}</h3>
-                  <p className="text-gray-500 text-sm leading-relaxed">{a.desc}</p>
-                </div>
-              </div>
-            ))}
-         </div>
-      </AnimatedSection>
+      <AudienceStory audiences={AUDIENCE} index={6} />
 
       {/* 8. PRICING */}
       <AnimatedSection as="section" index={7} className="py-24 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" aria-labelledby="pricing-heading">
