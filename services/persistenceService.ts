@@ -16,7 +16,8 @@ import {
   getCountFromServer,
   getAggregateFromServer,
   sum,
-  where
+  where,
+  onSnapshot
 } from 'firebase/firestore';
 import { 
   AngleMinerResults, 
@@ -106,6 +107,27 @@ export const getSystemSettings = async (): Promise<SystemSettings> => {
     }
   }
   return { emergency_lockdown: false, last_updated: new Date().toISOString(), updated_by: 'system' };
+};
+
+/**
+ * Live subscription to the emergency-lockdown flag. Returns an unsubscribe function.
+ *
+ * Replaces two independent `setInterval(check, 10000)` pollers that each re-read
+ * `system_settings/global` every ten seconds for the life of the session — roughly 17,000 reads per
+ * user per day for one boolean. A snapshot listener costs one read plus pushes on change.
+ *
+ * The caller must only subscribe once Firebase Auth has a user: the rule is `allow read: if
+ * isSignedIn()`, and the old pollers fired on mount before auth had restored, which is what produced
+ * the repeated "Missing or insufficient permissions" errors in the console.
+ */
+export const subscribeToSystemLock = (onChange: (locked: boolean) => void): (() => void) => {
+  if (!isFirebaseInitialized) return () => undefined;
+  return onSnapshot(
+    doc(db, 'system_settings', 'global'),
+    (snap) => onChange(snap.exists() ? snap.data()?.emergency_lockdown === true : false),
+    // Fail open: a listener error must not strand the app behind a lockdown banner it cannot clear.
+    (e) => { console.error('system lock subscription failed', e); onChange(false); },
+  );
 };
 
 export const getAdminSettings = async (): Promise<AdminSettings> => {

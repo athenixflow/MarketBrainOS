@@ -33,7 +33,6 @@ const NotFound = lazy(() => import('./pages/NotFound'));
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ScopeProvider, useScope } from './context/ScopeContext';
 import { Honeypot, LoadingState } from './components/UI';
-import { SecurityEngine } from './services/securityEngine';
 import OnboardingOverlay from './components/OnboardingOverlay';
 import NotificationCenter from './components/NotificationCenter';
 import ScopeSwitcher from './components/ScopeSwitcher';
@@ -232,20 +231,14 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 };
 
 const Header: React.FC<{ onToggleSidebar?: () => void }> = ({ onToggleSidebar }) => {
-  const { user, profile, signOut } = useAuth();
+  // isSystemLocked comes from one auth-gated subscription in AuthContext. This used to be a local
+  // 10s poller here and an identical one in AppContainer.
+  const { user, profile, signOut, isSystemLocked: isEmergency } = useAuth();
   const location = useLocation();
   // Ensure title reflects Admin only if user is authorized
   const isAdminRole = profile?.role === 'super_admin' || profile?.role === 'ops_admin';
   const isAdminPath = location.pathname.startsWith('/admin') && isAdminRole;
-  const [isEmergency, setIsEmergency] = useState(false);
 
-  useEffect(() => {
-    const check = async () => setIsEmergency(await SecurityEngine.isSystemLocked());
-    check();
-    const interval = setInterval(check, 10000);
-    return () => clearInterval(interval);
-  }, []);
-  
   return (
     <header className="h-16 bg-[#0B0B0B] flex items-center px-4 sm:px-6 lg:px-12 fixed top-0 left-0 right-0 border-b border-gray-900/30 z-20 backdrop-blur-2xl bg-opacity-95">
       <div className="flex items-center gap-3 sm:gap-6 min-w-0">
@@ -372,18 +365,11 @@ const AppRoutes: React.FC = () => {
 };
 
 const AppContainer: React.FC = () => {
-  const [isEmergency, setIsEmergency] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
-
-  useEffect(() => {
-    const check = async () => setIsEmergency(await SecurityEngine.isSystemLocked());
-    check();
-    const interval = setInterval(check, 10000);
-    return () => clearInterval(interval);
-  }, []);
+  // Shares the single lockdown subscription with Header rather than polling separately.
+  const { user, profile, isSystemLocked: isEmergency } = useAuth();
 
   // Back-compat: the app moved from HashRouter to clean URLs. Old links like
   // https://…/#/pricing still land here — redirect the hash path to the real route once on load.
