@@ -32,6 +32,7 @@ import { useAuth } from '../context/AuthContext';
 import { copyToClipboard, downloadAsText, printAsPDF, formatTestLabExport } from '../services/exportService';
 import { SecurityEngine } from '../services/securityEngine';
 import { isFixtureRequested } from '../services/devFixtures';
+import { checkTokenBalance } from '../config/access';
 
 const chip = (active: boolean) =>
   `px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${active ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`;
@@ -103,18 +104,13 @@ const TestLabPro: React.FC = () => {
   };
 
   const checkTokenAvailability = (): boolean => {
-    if (!profile) return false;
-    if (profile.tokens === 0) {
-      setUsageReason('exhausted');
-      setShowUsageModal(true);
-      return false;
-    }
-    if (profile.tier === 'free' && profile.tokens < TOKEN_COSTS.TestLab) {
-      setUsageReason('insufficient');
-      setShowUsageModal(true);
-      return false;
-    }
-    return true;
+    // Shared guard - see checkTokenBalance in config/access.ts for why the old inline version
+    // let an unhydrated profile and low-balance paid accounts through to the paid endpoint.
+    const verdict = checkTokenBalance(profile, TOKEN_COSTS.TestLab);
+    if (verdict === "ok") return true;
+    setUsageReason(verdict);
+    setShowUsageModal(true);
+    return false;
   };
 
   const handleRunTest = async () => {

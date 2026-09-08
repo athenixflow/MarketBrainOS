@@ -115,3 +115,32 @@ export const NAV_ACCOUNT: NavGroup = {
 /** Visible links within a group for the given access context. */
 export const visibleLinks = (group: NavGroup, ctx: AccessContext): NavLink[] =>
   group.links.filter(l => !l.feature || canSeeFeature(l.feature, ctx));
+
+// ---------------------------------------------------------------------------------------------
+// TOKEN AFFORDABILITY
+// ---------------------------------------------------------------------------------------------
+
+/** 'ok' to run; otherwise the reason, matching the usage modal's existing reasons. */
+export type TokenVerdict = 'ok' | 'exhausted' | 'insufficient';
+
+/**
+ * Can this profile afford a run costing `cost`? One implementation for all five tool pages, which
+ * previously each carried their own copy with the same two holes:
+ *
+ *  - `profile.tokens === 0` is a strict comparison, so an unhydrated profile (`tokens` still
+ *    undefined) slipped straight through it. `undefined < cost` is also false, so the second guard
+ *    missed it too, and the click reached the paid endpoint. Anything non-numeric now blocks.
+ *  - the `< cost` check was gated on `tier === 'free'`, so ANY paying user holding less than the
+ *    tool's cost round-tripped into a server 429 instead of being told up front. Cost applies to
+ *    every tier; a pro account with 3 tokens cannot afford a 5-token run either.
+ *
+ * `profile.tokens` is the mirror of monthly + purchased that the server bills against, so this
+ * reads the same number the backend will.
+ */
+export const checkTokenBalance = (profile: UserProfile | null | undefined, cost: number): TokenVerdict => {
+  if (!profile) return 'exhausted';
+  const balance = Number(profile.tokens);
+  // Covers undefined, null, NaN and a still-loading profile: never assume the user can pay.
+  if (!Number.isFinite(balance) || balance <= 0) return 'exhausted';
+  return balance < cost ? 'insufficient' : 'ok';
+};

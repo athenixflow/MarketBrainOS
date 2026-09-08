@@ -35,6 +35,7 @@ import { AngleMinerResults, TestLabResults, AuditResult, TOKEN_COSTS } from '../
 import { useAuth } from '../context/AuthContext';
 import { copyToClipboard, downloadAsText, printAsPDF, formatWorkflowExport } from '../services/exportService';
 import { SecurityEngine } from '../services/securityEngine';
+import { checkTokenBalance } from '../config/access';
 
 const Workflow: React.FC = () => {
   const { user, profile, refreshProfile } = useAuth();
@@ -98,19 +99,13 @@ const Workflow: React.FC = () => {
   };
 
   const checkTokenAvailability = (cost: number = 0): boolean => {
-    if (!profile) return false;
-    if (profile.tokens === 0) {
-      setUsageReason('exhausted');
-      setShowUsageModal(true);
-      return false;
-    }
-    
-    if (profile.tier === 'free' && profile.tokens < cost) {
-      setUsageReason('insufficient');
-      setShowUsageModal(true);
-      return false;
-    }
-    return true;
+    // Shared guard - see checkTokenBalance in config/access.ts for why the old inline version
+    // let an unhydrated profile and low-balance paid accounts through to the paid endpoint.
+    const verdict = checkTokenBalance(profile, cost);
+    if (verdict === "ok") return true;
+    setUsageReason(verdict);
+    setShowUsageModal(true);
+    return false;
   };
 
   const handleStartMiner = async () => {

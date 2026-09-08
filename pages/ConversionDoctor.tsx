@@ -31,6 +31,7 @@ import { copyToClipboard, downloadAsText, printAsPDF, formatConversionDoctorExpo
 import { SecurityEngine } from '../services/securityEngine';
 import { getScoreBand } from '../services/scoreBands';
 import { isFixtureRequested } from '../services/devFixtures';
+import { checkTokenBalance } from '../config/access';
 
 const chip = (active: boolean) =>
   `px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${active ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`;
@@ -129,18 +130,13 @@ const ConversionDoctor: React.FC = () => {
   const showInlineError = input.trim().length > 0 && !validation.isValid;
 
   const checkTokenAvailability = (): boolean => {
-    if (!profile) return false;
-    if (profile.tokens === 0) {
-      setUsageReason('exhausted');
-      setShowUsageModal(true);
-      return false;
-    }
-    if (profile.tier === 'free' && profile.tokens < TOKEN_COSTS.ConversionDoctor) {
-      setUsageReason('insufficient');
-      setShowUsageModal(true);
-      return false;
-    }
-    return true;
+    // Shared guard - see checkTokenBalance in config/access.ts for why the old inline version
+    // let an unhydrated profile and low-balance paid accounts through to the paid endpoint.
+    const verdict = checkTokenBalance(profile, TOKEN_COSTS.ConversionDoctor);
+    if (verdict === "ok") return true;
+    setUsageReason(verdict);
+    setShowUsageModal(true);
+    return false;
   };
 
   const handleAudit = async () => {

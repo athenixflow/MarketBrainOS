@@ -27,6 +27,7 @@ import { getUserToolAnalyses, ToolAnalysisRecord, deleteGenericAnalysis, saveRep
 import { getScoreBand } from '../services/scoreBands';
 import { ExpectedOutcome, AnalysisPreview, RunProgress, CharCounter, FieldHint, RunStage } from './ToolGuide';
 import { ResultItemList } from './ResultSections';
+import { checkTokenBalance } from '../config/access';
 
 const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
   const { user, profile, refreshProfile } = useAuth();
@@ -154,18 +155,13 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
   const setField = (key: string, val: string) => setValues(prev => ({ ...prev, [key]: val }));
 
   const checkTokenAvailability = (): boolean => {
-    if (!profile) return false;
-    if (profile.tokens === 0) {
-      setUsageReason('exhausted');
-      setShowUsageModal(true);
-      return false;
-    }
-    if (profile.tier === 'free' && profile.tokens < cost) {
-      setUsageReason('insufficient');
-      setShowUsageModal(true);
-      return false;
-    }
-    return true;
+    // Shared guard - see checkTokenBalance in config/access.ts for why the old inline version
+    // let an unhydrated profile and low-balance paid accounts through to the paid endpoint.
+    const verdict = checkTokenBalance(profile, cost);
+    if (verdict === "ok") return true;
+    setUsageReason(verdict);
+    setShowUsageModal(true);
+    return false;
   };
 
   const handleRun = async () => {

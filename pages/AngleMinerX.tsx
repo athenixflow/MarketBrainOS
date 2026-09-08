@@ -33,6 +33,7 @@ import { useAuth } from '../context/AuthContext';
 import { copyToClipboard, downloadAsText, printAsPDF, formatAngleMinerExport } from '../services/exportService';
 import { SecurityEngine } from '../services/securityEngine';
 import { isFixtureRequested } from '../services/devFixtures';
+import { checkTokenBalance } from '../config/access';
 
 // Platform keywords used ONLY to rescue results saved before `channel` existed (those records carry a
 // platform like "Meta"/"Email" and no channel). Anything unrecognised lands in "Other" and is still
@@ -119,18 +120,13 @@ const AngleMinerX: React.FC = () => {
   };
 
   const checkTokenAvailability = (): boolean => {
-    if (!profile) return false;
-    if (profile.tokens === 0) {
-      setUsageReason('exhausted');
-      setShowUsageModal(true);
-      return false;
-    }
-    if (profile.tier === 'free' && profile.tokens < TOKEN_COSTS.AngleMiner) {
-      setUsageReason('insufficient');
-      setShowUsageModal(true);
-      return false;
-    }
-    return true;
+    // Shared guard - see checkTokenBalance in config/access.ts for why the old inline version
+    // let an unhydrated profile and low-balance paid accounts through to the paid endpoint.
+    const verdict = checkTokenBalance(profile, TOKEN_COSTS.AngleMiner);
+    if (verdict === "ok") return true;
+    setUsageReason(verdict);
+    setShowUsageModal(true);
+    return false;
   };
 
   const handleRun = async () => {
