@@ -18,8 +18,11 @@ import { readFileSync } from 'node:fs';
 process.env.FIRESTORE_EMULATOR_HOST ||= '127.0.0.1:8080';
 
 const OWNER = 'user_owner';       // member of workspace_A
-const OUTSIDER = 'user_outsider'; // member of nothing
+const OUTSIDER = 'user_outsider'; // member of workspace_B ONLY — never of workspace_A/agency/enterprise
 const WS = 'workspace_A';
+// OUTSIDER belongs to this one so the activity tests distinguish "is a member of some workspace" from
+// "is a member of THIS workspace". Without it a passing read test would prove less than it looks.
+const WS_B = 'workspace_B';
 const AGENCY = 'agency_A';
 const ENTERPRISE = 'ent_A';
 
@@ -54,6 +57,16 @@ await testEnv.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(db, 'workspace_members', `${WS}_${OWNER}`), { uid: OWNER, container_id: WS, role: 'owner', status: 'active' });
   await setDoc(doc(db, 'agency_members', `${AGENCY}_${OWNER}`), { uid: OWNER, container_id: AGENCY, role: 'agency_owner', status: 'active' });
   await setDoc(doc(db, 'enterprise_members', `${ENTERPRISE}_${OWNER}`), { uid: OWNER, container_id: ENTERPRISE, role: 'enterprise_owner', status: 'active' });
+  await setDoc(doc(db, 'workspace_members', `${WS_B}_${OUTSIDER}`), { uid: OUTSIDER, container_id: WS_B, role: 'member', status: 'active' });
+  // Activity rows in two different tenants, for the cross-tenant read tests below.
+  await setDoc(doc(db, 'workspace_activity', 'act_A'), {
+    workspace_id: WS, type: 'analysis_run', actor_uid: OWNER, actor_name: 'Owner One',
+    summary: 'Ran StrategyLab on the Q3 launch', created_at: new Date().toISOString(),
+  });
+  await setDoc(doc(db, 'workspace_activity', 'act_B'), {
+    workspace_id: WS_B, type: 'analysis_run', actor_uid: OUTSIDER, actor_name: 'Outsider Two',
+    summary: 'Ran StrategyLab in their own workspace', created_at: new Date().toISOString(),
+  });
 });
 
 const ownerDb = testEnv.authenticatedContext(OWNER).firestore();
@@ -114,6 +127,54 @@ await check('member can read a team-scoped analysis in their workspace', () =>
 
 await check('outsider cannot read another tenant team-scoped analysis', () =>
   assertFails(getDoc(doc(outsiderDb, 'tool_analysis_results', 'ok1'))));
+
+// ---------------------------------------------------------------------------------------------
+// Security review follow-ups: cross-tenant activity reads, and forged audit-ledger entries.
+// ---------------------------------------------------------------------------------------------
+
+console.log('\nCROSS-TENANT ACTIVITY (these must all be DENIED):');
+
+await check('outsider cannot read activity from a workspace they are not in', () =>
+  assertFails(getDoc(doc(outsiderDb, 'workspace_activity', 'act_A'))));
+
+await check('agency/enterprise membership alone does not grant workspace activity', () =>
+  assertFails(getDoc(doc(testEnv.authenticatedContext('user_nobody').firestore(), 'workspace_activity', 'act_A'))));
+
+console.log('\nFORGED AUDIT ENTRIES (these must all be DENIED):');
+
+await check('user cannot write an action_log attributed to someone else via user_id', () =>
+  assertFails(setDoc(doc(outsiderDb, 'action_logs', 'forge1'),
+    { user_id: OWNER, module: 'System_Core', action: 'FORGED', timestamp: new Date().toISOString() })));
+
+await check('user cannot write an action_log attributed to someone else via uid', () =>
+  assertFails(setDoc(doc(outsiderDb, 'action_logs', 'forge2'),
+    { uid: OWNER, module: 'System_Core', action: 'FORGED', timestamp: new Date().toISOString() })));
+
+await check('user cannot write a security event attributed to someone else', () =>
+  assertFails(setDoc(doc(outsiderDb, 'security_audit_logs', 'forge3'),
+    { user_id: OWNER, event_type: 'UNAUTHORIZED_ACCESS', severity: 'high', timestamp: new Date().toISOString() })));
+
+console.log('\nLEGITIMATE LOGGING STILL WORKS (these must all be ALLOWED):');
+
+await check('member reads activity in their own workspace', () =>
+  assertSucceeds(getDoc(doc(outsiderDb, 'workspace_activity', 'act_B'))));
+
+await check('owner reads activity in their own workspace', () =>
+  assertSucceeds(getDoc(doc(ownerDb, 'workspace_activity', 'act_A'))));
+
+await check('user writes an action_log for themselves (logUserAction)', () =>
+  assertSucceeds(setDoc(doc(outsiderDb, 'action_logs', 'own1'),
+    { user_id: OUTSIDER, module: 'AngleMiner X', action: 'SAVE_ARTIFACT', timestamp: new Date().toISOString() })));
+
+// logExecutionTrace and securityEngine can both omit user_id; a missing field must not be a denial,
+// or the fix would silently break client-side logging instead of only blocking forgery.
+await check('user writes an action_log with NO uid/user_id field at all', () =>
+  assertSucceeds(setDoc(doc(outsiderDb, 'action_logs', 'own2'),
+    { module: 'System_Core', action: 'EXECUTION_TRACE:UNKNOWN', timestamp: new Date().toISOString() })));
+
+await check('user writes a security event for themselves', () =>
+  assertSucceeds(setDoc(doc(outsiderDb, 'security_audit_logs', 'own3'),
+    { user_id: OUTSIDER, event_type: 'RATE_LIMIT_EXCEEDED', severity: 'low', timestamp: new Date().toISOString() })));
 
 await testEnv.cleanup();
 

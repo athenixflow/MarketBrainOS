@@ -50,6 +50,16 @@ const escapeCSVField = (value: unknown): string => {
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
+/**
+ * HTML text escaping for the print/PDF windows below. Those windows are opened with
+ * `window.open('', '_blank')`, which inherits this app's origin, so anything interpolated into them
+ * unescaped would execute with access to the user's session. Every value written into print markup
+ * must go through this. `& < >` covers it because all three sinks are text contexts (<title>, <h1>,
+ * <pre>, <li>) — never an attribute or URL, which would need wider escaping.
+ */
+const esc = (s: unknown): string =>
+  String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] as string));
+
 /** Serialize a 2D array of cells to a CSV string (one row per inner array). */
 export const rowsToCSV = (rows: (string | number)[][]): string =>
   rows.map(row => row.map(escapeCSVField).join(',')).join('\r\n');
@@ -103,7 +113,7 @@ export const printAsPDF = (title: string, content: string) => {
   printWindow.document.write(`
     <html>
       <head>
-        <title>${title}</title>
+        <title>${esc(title)}</title>
         <style>
           body { font-family: sans-serif; line-height: 1.6; color: #333; padding: 40px; max-width: 800px; margin: auto; }
           h1 { border-bottom: 2px solid #333; padding-bottom: 10px; font-size: 24px; text-transform: uppercase; letter-spacing: 1px; }
@@ -115,10 +125,10 @@ export const printAsPDF = (title: string, content: string) => {
         </style>
       </head>
       <body>
-        <h1>${title}</h1>
+        <h1>${esc(title)}</h1>
         <div class="meta">MarketBrainOS Intelligence Report | Generated: ${new Date().toLocaleDateString()}</div>
         <div class="section">
-          <pre>${content}</pre>
+          <pre>${esc(content)}</pre>
         </div>
       </body>
     </html>
@@ -133,8 +143,6 @@ export const printAsPDF = (title: string, content: string) => {
 export const printToolResultPDF = (title: string, result: ToolAnalysisResult) => {
   const printWindow = window.open('', '_blank');
   if (!printWindow) return;
-
-  const esc = (s: unknown) => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] as string));
 
   const meta: string[] = [];
   if (typeof result.score === 'number') meta.push(`Score: ${result.score}/100`);

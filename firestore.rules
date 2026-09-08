@@ -148,7 +148,15 @@ service cloud.firestore {
 
     // ---------- action logs (client + server append, immutable) ----------
     match /action_logs/{id} {
-      allow create: if isSignedIn();
+      // The entry must be attributed to the caller. Clients set `user_id`, the server sets `uid`, and
+      // both are optional on ActionLogEntry — so a missing field defaults to the caller rather than
+      // failing a legitimate write (logExecutionTrace / securityEngine can omit it). Previously any
+      // signed-in user could append entries naming someone else into this immutable ledger, which
+      // feeds admin usage stats and runEnterpriseAggregation's per-workspace rollups.
+      // Cloud Functions use the Admin SDK and bypass rules, so server writes are unaffected.
+      allow create: if isSignedIn()
+        && request.resource.data.get('user_id', request.auth.uid) == request.auth.uid
+        && request.resource.data.get('uid', request.auth.uid) == request.auth.uid;
       allow read:   if isSignedIn()
         && (resource.data.get('uid', '') == request.auth.uid
             || resource.data.get('user_id', '') == request.auth.uid
@@ -182,7 +190,15 @@ service cloud.firestore {
       allow write: if false;
     }
     match /admin_audit_logs/{id}    { allow read: if isPlatformAdmin(); allow write: if false; }
-    match /security_audit_logs/{id} { allow read: if isPlatformAdmin(); allow create: if isSignedIn(); allow update, delete: if false; }
+    // Same ownership constraint as action_logs — a forged security event is worse than a missing one,
+    // because this is the ledger an admin reads while working out what happened.
+    match /security_audit_logs/{id} {
+      allow read:   if isPlatformAdmin();
+      allow create: if isSignedIn()
+        && request.resource.data.get('user_id', request.auth.uid) == request.auth.uid
+        && request.resource.data.get('uid', request.auth.uid) == request.auth.uid;
+      allow update, delete: if false;
+    }
     match /rate_limits/{id}         { allow read, write: if false; } // server only
 
     // ============================================================
@@ -203,10 +219,17 @@ service cloud.firestore {
                    || isWorkspaceMember(resource.data.container_id) || isPlatformAdmin();
       allow write: if false;
     }
-    match /workspace_permissions/{id} { allow read: if isSignedIn(); allow write: if false; }
+    // Currently unreferenced by the app. Scoped to the owning workspace anyway so it is not
+    // pre-authorised for every signed-in user the day something starts writing to it. If the doc
+    // shape turns out not to carry workspace_id, this denies rather than leaks — confirm the field
+    // when the collection is actually wired up.
+    match /workspace_permissions/{id} { allow read: if isWorkspaceMember(resource.data.workspace_id) || isPlatformAdmin(); allow write: if false; }
     // Members log their own activity (actor_uid must be the caller); immutable thereafter.
     match /workspace_activity/{id} {
-      allow read:   if isSignedIn();
+      // Read is scoped to the workspace, mirroring the create rule below and workspace_comments
+      // above. It was `isSignedIn()`, which let any account — including a fresh signup — dump every
+      // tenant's activity feed, exposing member names and free-text summaries across the platform.
+      allow read:   if isWorkspaceMember(resource.data.workspace_id) || isPlatformAdmin();
       allow create: if isWorkspaceMember(request.resource.data.workspace_id)
                     && request.resource.data.actor_uid == request.auth.uid;
       allow update, delete: if false;
@@ -229,7 +252,9 @@ service cloud.firestore {
     match /agency_members/{id}   { allow read: if resource.data.uid == request.auth.uid || isAgencyMember(resource.data.container_id) || isPlatformAdmin(); allow write: if false; }
     // A client is visible to owner/director or members assigned to it.
     match /agency_clients/{cid}  { allow read: if canAccessClient(resource.data.agency_id, cid) || isPlatformAdmin(); allow write: if false; }
-    match /client_workspaces/{id}{ allow read: if isSignedIn(); allow write: if false; }
+    // Also unreferenced today; scoped to the owning agency like its siblings above rather than left
+    // open to every signed-in user. Denies rather than leaks if the doc shape differs.
+    match /client_workspaces/{id}{ allow read: if isAgencyMember(resource.data.agency_id) || isPlatformAdmin(); allow write: if false; }
     match /client_assignments/{id} {
       // List access is query-constant via agency membership (queries constrain agency_id); a member
       // also reads their own assignment rows.
