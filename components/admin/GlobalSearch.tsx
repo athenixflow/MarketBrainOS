@@ -43,7 +43,8 @@ const GlobalSearch: React.FC<{ placeholder?: string }> = ({ placeholder = 'Searc
                 <Pill tone={r.tone}>{r.type}</Pill>
                 <span className="text-sm font-bold text-[#0B0B0B] truncate">{r.label}</span>
               </div>
-              {r.sub && <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest shrink-0">{r.sub}</span>}
+              {/* Capped and truncating: shrink-0 alone would let a long subtitle squeeze the label away. */}
+              {r.sub && <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest shrink-0 max-w-[40%] truncate">{r.sub}</span>}
             </button>
           ))}
         </div>

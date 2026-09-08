@@ -449,7 +449,8 @@ export const ErrorMessage: React.FC<{
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-white/90 flex-shrink-0 mt-px">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
       </svg>
-      <p className="text-[13px] font-medium text-white leading-relaxed min-w-0">{message}</p>
+      {/* break-words so an unbroken token in an error (a URL, a doc id) wraps instead of overflowing. */}
+      <p className="text-[13px] font-medium text-white leading-relaxed min-w-0 break-words">{message}</p>
     </div>
     {action && (
       <button

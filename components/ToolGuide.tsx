@@ -45,11 +45,15 @@ export const AnalysisPreview: React.FC<{
         {filled.length === 0 ? (
           <p className="text-xs text-gray-400 font-medium">Fill in the inputs to preview your analysis.</p>
         ) : filled.slice(0, 5).map((i) => (
-          // Stacks on mobile so a long label cannot force the row (and the page) wider than the
-          // viewport. `shrink-0` here previously made the label contribute its full max-content width.
-          <div key={i.label} className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-4 text-xs">
-            <span className="font-bold text-gray-500 uppercase tracking-widest min-w-0">{i.label}</span>
-            <span className="text-gray-600 font-medium truncate sm:text-right min-w-0">{i.value}</span>
+          // Stacks on mobile; fixed label column from `sm` up. The label needs a width of its own: as a
+          // flex child with `min-w-0` it shrank below its own text in a narrow card, and because
+          // `tracking-widest` uppercase words cannot break, the text overflowed its box and painted on
+          // top of the value. `w-36 shrink-0` is safe where a bare `shrink-0` was not - the width is
+          // fixed rather than max-content, so a long label wraps inside 9rem instead of widening the row.
+          // Deliberately plain utilities, no arbitrary values, so the classes cannot go missing.
+          <div key={i.label} className="flex flex-col gap-1 text-xs sm:flex-row sm:items-baseline sm:gap-4">
+            <span className="font-bold text-gray-500 uppercase tracking-widest break-words sm:w-36 sm:shrink-0">{i.label}</span>
+            <span className="text-gray-600 font-medium truncate sm:flex-1 sm:text-right">{i.value}</span>
           </div>
         ))}
       </div>
