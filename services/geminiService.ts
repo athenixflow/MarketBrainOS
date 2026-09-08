@@ -51,7 +51,11 @@ const wait = (ms: number) => new Promise(res => setTimeout(res, ms));
 // We issue one authenticated POST and surface the server's error message
 // verbatim so the UI error-classifiers (rate limit / maintenance / network)
 // and "no tokens deducted" messaging keep working.
-const ANALYSIS_TIMEOUT_MS = 70000;
+// Must stay ABOVE executeAnalysis's own 300s timeout (functions/src/index.ts). This browser is what
+// persists the result, so if it gave up first the server could still finish, bill the run, and leave the
+// caller with nothing saved. At 70s it sat below even the old 60s server limit, which is why a
+// gemini-2.5-pro analysis taking ~55s was so close to failing from both ends at once.
+const ANALYSIS_TIMEOUT_MS = 310000;
 
 const executeAsyncJob = async (module: string, input: any, scope?: Scope): Promise<any> => {
   const user = auth.currentUser;

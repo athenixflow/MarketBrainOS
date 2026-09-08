@@ -327,7 +327,15 @@ const logAdminAudit = async (adminUid: string, adminEmail: string, action: strin
 
 // --- CORE FUNCTION (Converted to onRequest for strict CORS control) ---
 
-export const executeAnalysis = functions.https.onRequest(async (req: any, res: any) => {
+// Runs on an explicit timeout because the platform default is 60s and a gemini-2.5-pro analysis takes
+// ~55s: runs were being killed at the limit (see `firebase functions:log` - repeated
+// "finished with status: 'timeout'" at 60001ms against one success at 54442ms). More memory also buys
+// more CPU on Cloud Functions, which helps the JSON parsing around the call.
+// Keep this BELOW the client's abort in services/geminiService.ts, so the browser always outlives the
+// server. If the client gave up first the server could still finish and bill for a result nobody received.
+export const executeAnalysis = functions
+  .runWith({ timeoutSeconds: 300, memory: '1GB' })
+  .https.onRequest(async (req: any, res: any) => {
   // 1. CORS MIDDLEWARE
   const allowedOrigins = [
     'https://marketbrainosweb.web.app',          // Firebase Hosting (primary)
@@ -593,7 +601,16 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
     let deductedMonthly = 0;    // exact amounts spent per bucket, for a precise refund on failure
     let deductedPurchased = 0;
 
-    try {
+    // Validation and the charge share one transaction body. `commit: false` runs exactly the same
+    // checks without writing, so a request is still rejected up-front with the right status code, and
+    // the debit only happens once an analysis actually exists to hand back.
+    //
+    // Ordering is the whole point. This function ran on the platform default 60s timeout while a
+    // gemini-2.5-pro call takes ~55s, so most runs were killed mid-analysis - and a killed container
+    // never reaches the refund handler below, so each timeout silently cost the caller their tokens
+    // with nothing to show for it. Debiting after the result removes that failure mode entirely:
+    // a process that dies before producing anything cannot charge anyone.
+    const applyBilling = async (commit: boolean) => {
       await db.runTransaction(async (t: admin.firestore.Transaction) => {
         const userDoc = await t.get(userRef);
         if (!userDoc.exists) throw new Error('User profile not found.');
@@ -632,6 +649,9 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
         if (monthly + purchased < cost) {
           throw new Error('Insufficient analysis credits.');
         }
+        // Validation pass: every check above has run, nothing is written.
+        if (!commit) return;
+
         const fromMonthly = Math.min(monthly, cost);
         const fromPurchased = cost - fromMonthly;
         deductedMonthly = fromMonthly;
@@ -647,6 +667,10 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
         }
         tokensDeducted = true;
       });
+    };
+
+    try {
+      await applyBilling(false);
     } catch (e: any) {
       if (e.message === 'Insufficient analysis credits.') {
         res.status(429).json({ error: { message: e.message, code: 'resource-exhausted' } });
@@ -762,6 +786,21 @@ export const executeAnalysis = functions.https.onRequest(async (req: any, res: a
       } else {
         finalOutput = responseText.trim();
         if (!finalOutput) throw new Error("Empty Response");
+      }
+
+      // The analysis exists - only now is anyone charged for it.
+      try {
+        await applyBilling(true);
+      } catch (chargeErr: any) {
+        // The result is already produced, so hand it over rather than charging-then-failing. Reaching
+        // here needs the balance to change between the pre-check and now, which the per-user rate
+        // limit above largely prevents. Logged so a systematic version of this is visible.
+        console.error(`executeAnalysis charge failed after a successful analysis [${module}]:`, chargeErr?.message || chargeErr);
+        await db.collection('action_logs').add({
+          uid, billing_uid: billingUid, module, tokens_used: 0, status: 'charge_failed',
+          error_code: chargeErr?.message || 'unknown',
+          created_at: admin.firestore.FieldValue.serverTimestamp(),
+        });
       }
 
       await db.collection('action_logs').add({
@@ -2832,7 +2871,11 @@ export const runEnterpriseAggregation = functions.https.onCall(async (data: any,
 
 // --- AI EXECUTIVE INSIGHTS / BRIEFINGS ---
 // Synthesizes the latest aggregates into an executive briefing via Gemini.
-export const generateExecutiveBriefing = functions.https.onCall(async (data: any, context: any) => {
+// Same reasoning as executeAnalysis: a gemini-2.5-pro call does not reliably fit the platform's default
+// 60s timeout, and this one was silently exposed to the same failure.
+export const generateExecutiveBriefing = functions
+  .runWith({ timeoutSeconds: 300, memory: '1GB' })
+  .https.onCall(async (data: any, context: any) => {
   if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
   const uid = context.auth.uid;
   const eid = (data?.enterpriseId || '').toString();
