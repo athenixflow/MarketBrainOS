@@ -125,6 +125,16 @@ async function main() {
     fs.writeFileSync(file, rendered[route], 'utf8');
   }
 
+  // 404.html — served by Vercel with a real 404 status for anything outside the route allowlist in
+  // vercel.json. Without this every typo returned 200 with the app shell, which Google treats as a
+  // soft-404. The homepage snapshot is reused as the shell: React takes over on load and its own
+  // catch-all route renders NotFound, so the visitor still gets the right page, but the STATUS is
+  // now honest. The <title> is overridden so a crawler reading only raw HTML sees it too.
+  const notFound = rendered['/']
+    .replace(/<title>[^<]*<\/title>/i, '<title>Page not found | MarketBrain OS</title>')
+    .replace(/(<meta name="robots" content=")[^"]*(")/i, '$1noindex, follow$2');
+  fs.writeFileSync(path.join(DIST, '404.html'), notFound, 'utf8');
+
   // sitemap.xml (clean canonical URLs + real lastmod; no changefreq/priority — ignored by Google).
   const today = new Date().toISOString().slice(0, 10);
   const urls = [...MARKETING, ...DOCS.filter((r) => r !== '/')];
@@ -157,6 +167,28 @@ async function main() {
     }
   }
   fs.writeFileSync(path.join(DIST, 'llms.txt'), lines.join('\n') + '\n', 'utf8');
+
+  // IndexNow - notifies Bing, Yandex and Naver that these URLs changed. No account and no third
+  // party involved: the key is just a static file at /<key>.txt, echoed back in the payload.
+  // Google does not participate. Best-effort by design - a failure here must never fail a build.
+  if (process.env.INDEXNOW !== 'off') {
+    const indexNowKey = '53cced001d074ecd864d9a166cff359d';
+    try {
+      const res = await fetch('https://api.indexnow.org/indexnow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+        body: JSON.stringify({
+          host: new URL(SITE_URL).host,
+          key: indexNowKey,
+          keyLocation: `${SITE_URL}/${indexNowKey}.txt`,
+          urlList: urls.map((r) => `${SITE_URL}${r === '/' ? '/' : r}`),
+        }),
+      });
+      console.log(`IndexNow: submitted ${urls.length} URLs (HTTP ${res.status})`);
+    } catch (e) {
+      console.warn('IndexNow: submission skipped -', (e as Error).message);
+    }
+  }
 
   console.log(`\nPrerender complete: ${ROUTES.length} routes, sitemap.xml (${urls.length} urls), llms.txt.`);
 }
