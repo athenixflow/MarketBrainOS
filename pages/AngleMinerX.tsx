@@ -236,7 +236,7 @@ const AngleMinerX: React.FC = () => {
   const handleCopy = () => {
     if (results) {
       const text = formatAngleMinerExport(results);
-      copyToClipboard(text);
+      return copyToClipboard(text);
     }
   };
 

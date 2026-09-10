@@ -234,7 +234,7 @@ const Workflow: React.FC = () => {
         conversionScore: auditResult.score,
         finalAssets: finalImprovements
       });
-      copyToClipboard(text);
+      return copyToClipboard(text);
     }
   };
 

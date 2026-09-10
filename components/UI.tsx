@@ -845,7 +845,8 @@ export const LockedFeatureCard: React.FC<{
 
 // 16. EXPORT CONTROLS
 export const ExportControls: React.FC<{
-  onCopy: () => void;
+  /** Return copyToClipboard's boolean (it already returns one) so failure is not reported as success. */
+  onCopy: () => unknown;
   onExportText?: () => void;
   onExportCSV?: () => void;
   onExportPDF?: () => void;
@@ -853,12 +854,14 @@ export const ExportControls: React.FC<{
   /** dark = on the page background (AngleMinerX / TestLabPro headers); light = inside a Card. */
   tone?: Tone;
 }> = ({ onCopy, onExportText, onExportCSV, onExportPDF, isPro, tone = 'light' }) => {
-  const [copied, setCopied] = useState(false);
+  const [copyState, setCopyState] = useState<'idle' | 'ok' | 'fail'>('idle');
 
-  const handleCopy = () => {
-    onCopy();
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  // This used to set "copied" unconditionally the instant the click fired, so a rejected clipboard
+  // write - denied permission, a non-secure context - still told the user their text was copied.
+  const handleCopy = async () => {
+    const result = await onCopy();
+    setCopyState(result === false ? 'fail' : 'ok');
+    setTimeout(() => setCopyState('idle'), 2000);
   };
 
   const btn = tone === 'dark'
@@ -870,8 +873,8 @@ export const ExportControls: React.FC<{
     // `w-fit` + no wrap gave this a ~450px intrinsic width; it renders inside a Card that has ~246px
     // of interior on a 390px screen, and Card's overflow-hidden made the last buttons unreachable.
     <div className={`flex flex-wrap items-center gap-x-6 gap-y-3 p-4 rounded-2xl border ${tone === 'dark' ? 'bg-[#121212] border-gray-800' : 'bg-gray-50/50 border-gray-100'}`}>
-      <button onClick={handleCopy} className={`${btn} flex items-center gap-2`}>
-        {copied ? 'Text copied' : 'Copy to clipboard'}
+      <button onClick={handleCopy} className={`${btn} flex items-center gap-2 ${copyState === 'fail' ? '!text-[#FF0000]' : ''}`}>
+        {copyState === 'ok' ? 'Text copied' : copyState === 'fail' ? 'Copy failed' : 'Copy to clipboard'}
       </button>
 
       {isPro && (

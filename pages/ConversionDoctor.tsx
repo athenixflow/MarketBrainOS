@@ -195,7 +195,7 @@ const ConversionDoctor: React.FC = () => {
   const handleCopy = () => {
     if (result) {
       const text = formatConversionDoctorExport(result);
-      copyToClipboard(text);
+      return copyToClipboard(text);
     }
   };
 

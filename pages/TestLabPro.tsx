@@ -180,7 +180,7 @@ const TestLabPro: React.FC = () => {
   const handleCopy = () => {
     if (results) {
       const text = formatTestLabExport(results);
-      copyToClipboard(text);
+      return copyToClipboard(text);
     }
   };
 
