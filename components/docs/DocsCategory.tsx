@@ -5,6 +5,7 @@ import { useParams, Link, Navigate } from 'react-router-dom';
 import { getCategory, articlesByCategory } from '../../config/docs/registry';
 import Icon from './icons';
 import Seo from '../Seo';
+import { SITE_NAME, SITE_URL } from '../../config/seo';
 
 const DocsCategory: React.FC = () => {
   const { categoryId } = useParams();
@@ -15,9 +16,37 @@ const DocsCategory: React.FC = () => {
   if (!category) return <Navigate to="/documentation" replace />;
   const articles = articlesByCategory(category.id);
 
+  // Category pages had only the sitewide Organization/SoftwareApplication schema, while the articles
+  // beneath them already ship TechArticle + BreadcrumbList (see DocArticle). CollectionPage states what
+  // this page is, and the breadcrumb mirrors the visual one rendered below.
+  const collectionJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: category.title,
+    description: category.summary,
+    url: `${SITE_URL}/documentation/${category.id}`,
+    inLanguage: 'en-US',
+    isPartOf: { '@id': `${SITE_URL}/#website` },
+    publisher: { '@type': 'Organization', name: SITE_NAME },
+    hasPart: articles.map((a) => ({
+      '@type': 'TechArticle',
+      headline: a.title,
+      description: a.summary,
+      url: `${SITE_URL}/documentation/${category.id}/${a.id}`,
+    })),
+  };
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Docs', item: `${SITE_URL}/documentation` },
+      { '@type': 'ListItem', position: 2, name: category.title, item: `${SITE_URL}/documentation/${category.id}` },
+    ],
+  };
+
   return (
     <div className="max-w-4xl">
-      <Seo title={category.title} description={category.summary} path={`/documentation/${category.id}`} />
+      <Seo title={category.title} description={category.summary} path={`/documentation/${category.id}`} jsonLd={[collectionJsonLd, breadcrumbJsonLd]} />
       <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-gray-500 mb-6">
         <Link to="/documentation" className="hover:text-white transition-colors">Docs</Link>
         <Icon name="chevronRight" className="w-3 h-3 text-gray-700" />
