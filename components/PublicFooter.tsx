@@ -16,25 +16,25 @@ const PublicFooter: React.FC = () => {
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-12 sm:gap-16">
           <div>
             <h4 className="text-white font-bold mb-6 text-sm">Product</h4>
-            <ul className="space-y-4 text-sm text-gray-500">
-              <li><Link to="/features" className="hover:text-white transition-colors">Features</Link></li>
-              <li><Link to="/pricing" className="hover:text-white transition-colors">Pricing</Link></li>
-              <li><Link to="/auth" className="hover:text-white transition-colors">Sign In</Link></li>
+            <ul className="text-sm text-gray-500">
+              <li><Link to="/features" className="block py-4 hover:text-white transition-colors">Features</Link></li>
+              <li><Link to="/pricing" className="block py-4 hover:text-white transition-colors">Pricing</Link></li>
+              <li><Link to="/auth" className="block py-4 hover:text-white transition-colors">Sign In</Link></li>
             </ul>
           </div>
           <div>
             <h4 className="text-white font-bold mb-6 text-sm">Resources</h4>
-            <ul className="space-y-4 text-sm text-gray-500">
-              <li><Link to="/documentation" className="hover:text-white transition-colors">Documentation</Link></li>
-              <li><Link to="/faq" className="hover:text-white transition-colors">FAQ</Link></li>
+            <ul className="text-sm text-gray-500">
+              <li><Link to="/documentation" className="block py-4 hover:text-white transition-colors">Documentation</Link></li>
+              <li><Link to="/faq" className="block py-4 hover:text-white transition-colors">FAQ</Link></li>
             </ul>
           </div>
           <div>
             <h4 className="text-white font-bold mb-6 text-sm">Company</h4>
-            <ul className="space-y-4 text-sm text-gray-500">
-              <li><Link to="/about" className="hover:text-white transition-colors">About</Link></li>
-              <li><Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
-              <li><Link to="/terms" className="hover:text-white transition-colors">Terms of Service</Link></li>
+            <ul className="text-sm text-gray-500">
+              <li><Link to="/about" className="block py-4 hover:text-white transition-colors">About</Link></li>
+              <li><Link to="/privacy" className="block py-4 hover:text-white transition-colors">Privacy Policy</Link></li>
+              <li><Link to="/terms" className="block py-4 hover:text-white transition-colors">Terms of Service</Link></li>
             </ul>
           </div>
         </div>
