@@ -37,12 +37,25 @@ const HeroVideo: React.FC<HeroVideoProps> = ({ asset, className = '' }) => {
     if (p && typeof p.catch === 'function') p.catch(() => {});
   }, [src]);
 
-  const posterStyle = asset.poster ? { backgroundImage: `url(${asset.posterWebp ?? asset.poster})` } : undefined;
-
   return (
     <div aria-hidden="true" className={`absolute inset-0 overflow-hidden bg-[#0B0B0B] ${className}`}>
-      {/* Poster paints immediately (also the reduced-motion / data-saver state). */}
-      <div className="absolute inset-0 bg-cover bg-center" style={posterStyle} />
+      {/* Poster paints immediately (also the reduced-motion / data-saver state).
+          A real <img>, not a CSS background: this is the LCP element on the homepage, and a background
+          image is only discovered after CSS parses and the element lays out, so the browser's preload
+          scanner never saw it. Measured desktop LCP was 3056ms against a 2500ms target while mobile,
+          which skips the video entirely, managed 1264ms. width/height are set to keep CLS at 0. */}
+      <picture>
+        {asset.posterWebp && <source type="image/webp" srcSet={asset.posterWebp} />}
+        <img
+          src={asset.poster}
+          alt=""
+          width={asset.width}
+          height={asset.height}
+          fetchPriority="high"
+          decoding="async"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      </picture>
       {src && (
         <video
           ref={ref}
