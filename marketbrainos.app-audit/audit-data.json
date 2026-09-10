@@ -1,0 +1,234 @@
+{
+  "summary": {
+    "health_score": 78,
+    "domain": "www.marketbrainos.app",
+    "audit_date": "2026-09-10",
+    "business_type": "B2B SaaS (AI marketing intelligence), self-serve tiered plans",
+    "scope": "57 public prerendered routes (8 marketing + 49 documentation); signed-in app correctly excluded",
+    "data_caveat": "All performance figures are lab data from headless Chrome on a single connection. Not CrUX field data; no Google API credentials configured. The claude-seo CLI this skill expects is not installed, so Puppeteer/curl/source inspection were used instead.",
+    "top_findings": [
+      "CRITICAL: all 57 pages ship two canonical tags; the first (index.html:14) points at the homepage, so up to 56 pages may be canonicalised away as duplicates",
+      "Unknown URLs return HTTP 200 instead of 404 (soft-404 across the whole SPA)",
+      "Duplicate meta description on all 57 pages; the stale hardcoded one precedes the correct per-page one",
+      "Desktop LCP 3056ms - the LCP image is a CSS background, invisible to the preload scanner",
+      "Duplicate H1 on all 57 pages from a now-redundant noscript fallback",
+      "Only HSTS present; no X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy or CSP"
+    ],
+    "quick_wins": [
+      "Delete index.html:14 (hardcoded homepage canonical) - highest-value SEO action on the site",
+      "Delete the hardcoded meta description at index.html:11 - one line, unlocks per-page descriptions already written in config/seo.ts",
+      "Preload the hero poster or render it as an <img> with fetchpriority=high - targets the 3056ms desktop LCP",
+      "Shorten the 81-character homepage title to about 51",
+      "Remove the redundant noscript block - prerendering supersedes it",
+      "Add security headers in vercel.json (not firebase.json - the live domain is served by Vercel)"
+    ],
+    "revision": "Revised 2026-09-10 after the /seo-technical pass. Technical SEO 72 -> 63 on a critical canonical conflict the first pass missed (it checked canonical presence, not count). Performance 70 -> 75 after measuring INP at 64ms. The composite understates the risk: canonicalisation is binary."
+  },
+  "categories": [
+    {
+      "name": "Technical SEO",
+      "score": 63,
+      "weight": 22,
+      "what_works": [
+        "robots.txt allows all crawlers, names the sitemap, explicitly welcomes AI answer engines",
+        "sitemap.xml valid, 57 URLs, lastmod current, contains no private app routes",
+        "Canonical tag on every page; apex 308-redirects to www",
+        "HTTPS with HSTS max-age=63072000",
+        "No horizontal overflow at 1366 or 390 viewport",
+        "No redirect chains: every hop count measured 0 or 1",
+        "Zero mixed content",
+        "No back-button hijacking: 0 pushState / 1 legitimate replaceState (spam policy enforced since 2026-06-15)",
+        "Page weight 23-60KB, far inside Googlebot's 2MB HTML fetch limit"
+      ],
+      "findings": [
+        {
+          "title": "Conflicting canonical tags on all 57 pages",
+          "severity": "Critical",
+          "description": "Every page carries two <link rel=canonical>: a hardcoded homepage canonical from index.html:14, then react-helmet's correct per-page one. Google's December 2025 JavaScript SEO guidance states that when a raw-HTML canonical differs from a JS-injected one it may use either. If it takes the first, 56 of 57 pages declare themselves duplicates of the homepage. Cause: react-helmet-async replaces singleton elements like <title> but appends <meta> and <link>, leaving the static tag in front.",
+          "recommendation": "Delete the hardcoded canonical at index.html:14 (and the description at index.html:11, same mechanism). Verify each page then reports exactly one canonical."
+        },
+        {
+          "title": "Unknown URLs return HTTP 200 (soft-404)",
+          "severity": "High",
+          "description": "/no-such-page-xyz returns 200 OK with the app shell. The SPA rewrite sends every unmatched path to index.html, so typos, stale links and crawler-invented URLs become indexable pages under a success status. Google treats these as soft-404s, wasting crawl budget.",
+          "recommendation": "Serve a genuine 404 status for paths outside the known route list via vercel.json, or emit a prerender-time 404 for unmatched routes. The NotFound route already exists in the app."
+        },
+        {
+          "title": "Security headers missing",
+          "severity": "Medium",
+          "description": "Only Strict-Transport-Security is present. Absent: X-Content-Type-Options, X-Frame-Options (or CSP frame-ancestors), Referrer-Policy, Permissions-Policy, Content-Security-Policy. HSTS also lacks includeSubDomains and preload.",
+          "recommendation": "Add them in vercel.json headers. The header block in firebase.json does not apply, because the live domain is served by Vercel rather than Firebase Hosting."
+        }
+      ]
+    },
+    {
+      "name": "Content Quality",
+      "score": 85,
+      "weight": 23,
+      "what_works": [
+        "49 documentation pages give real topical depth",
+        "Marketing copy is specific rather than generic",
+        "All 57 routes prerender real per-route content"
+      ],
+      "findings": [
+        {
+          "title": "Identical noscript boilerplate on all 57 pages",
+          "severity": "Medium",
+          "description": "index.html carries a noscript semantic fallback with generic homepage prose. It appears in the raw HTML of every page including /privacy and /terms, and is redundant now that prerendering supplies full per-route content without JavaScript.",
+          "recommendation": "Remove the noscript block or reduce it to a short pointer."
+        }
+      ]
+    },
+    {
+      "name": "On-Page SEO",
+      "score": 68,
+      "weight": 20,
+      "what_works": [
+        "Per-page titles, correct and within length on 7 of 8 marketing routes",
+        "Per-page descriptions exist and are well written in config/seo.ts",
+        "Open Graph complete with 15 properties per page",
+        "Per-page H1s that match page intent"
+      ],
+      "findings": [
+        {
+          "title": "Duplicate meta description on every page, stale one first",
+          "severity": "High",
+          "description": "Every page ships two meta description tags: a hardcoded sitewide one at index.html:11, then react-helmet's correct per-page one. Engines generally take the first, so the per-page descriptions already written in config/seo.ts are very likely never used and all 57 pages present the same snippet.",
+          "recommendation": "Delete the hardcoded meta description from index.html:11. Helmet already supplies one on every route."
+        },
+        {
+          "title": "Two H1s per page, the first identical sitewide",
+          "severity": "Medium",
+          "description": "index.html:100 places an H1 inside the noscript fallback. It precedes the real per-page H1 in the raw HTML of all 57 pages, so every page has two H1s and the first is generic homepage text.",
+          "recommendation": "Remove the noscript block; prerendering supersedes its purpose."
+        },
+        {
+          "title": "Homepage title is 81 characters",
+          "severity": "Low",
+          "description": "Truncates in SERPs at roughly 60 characters. All other pages are 22-43.",
+          "recommendation": "Shorten to about 'MarketBrain OS | AI Marketing Intelligence Platform' (51 characters)."
+        }
+      ]
+    },
+    {
+      "name": "Schema / Structured Data",
+      "score": 95,
+      "weight": 10,
+      "what_works": [
+        "JSON-LD on every page",
+        "Organization and SoftwareApplication, with publisher wired by @id",
+        "FAQPage on /faq"
+      ],
+      "findings": [
+        {
+          "title": "Documentation pages carry only sitewide schema",
+          "severity": "Low",
+          "description": "The 49 docs pages inherit Organization/SoftwareApplication but have no page-level type.",
+          "recommendation": "Add TechArticle or HowTo to the tool guides and BreadcrumbList across the docs hierarchy."
+        },
+        {
+          "title": "Docs hub and category pages lacked page-level schema (fixed)",
+          "severity": "Low",
+          "description": "CORRECTED: articles already shipped TechArticle + BreadcrumbList (DocArticle.tsx:59); the original finding wrongly generalised from the docs hub. Only the hub and category pages were missing page-level types.",
+          "recommendation": "Done - CollectionPage + BreadcrumbList added to DocsCategory."
+        }
+      ]
+    },
+    {
+      "name": "Performance (CWV)",
+      "score": 75,
+      "weight": 10,
+      "what_works": [
+        "INP 64ms across 19 interaction events - a strong pass against the 200ms target",
+        "CLS 0.000 with zero layout shifts, on both desktop and mobile",
+        "Mobile LCP 1264ms, comfortably good",
+        "Lean payload: 338KB across 15 requests"
+      ],
+      "findings": [
+        {
+          "title": "Desktop LCP 3056ms; the LCP image cannot be preload-scanned",
+          "severity": "High",
+          "description": "The LCP element on both viewports is the hero poster, rendered in HeroVideo.tsx:45 as a CSS background-image on a div. A CSS background is discovered only after CSS parses and the element lays out, so the preload scanner never sees it, and there is no link rel=preload in index.html. On desktop the ~1MB hero video downloads concurrently and competes for bandwidth, which is why desktop is nearly 3x slower than mobile, where the video is skipped.",
+          "recommendation": "Add <link rel=\"preload\" as=\"image\"> for the hero poster, or render it as a real <img> with fetchpriority=\"high\". Optionally defer the video until after LCP; preload=\"metadata\" is already correct."
+        },
+        {
+          "title": "TTFB 1255ms",
+          "severity": "Low",
+          "description": "Above the 800ms target, but measured from a single location and possibly a cold edge cache.",
+          "recommendation": "Confirm against CrUX field data before acting."
+        }
+      ]
+    },
+    {
+      "name": "AI Search Readiness",
+      "score": 95,
+      "weight": 10,
+      "what_works": [
+        "llms.txt present, rich and correctly structured with per-page links",
+        "robots.txt names AI crawlers explicitly and allows them",
+        "Prerendered content means answer engines that do not execute JavaScript still get full pages",
+        "Semantic heading structure"
+      ],
+      "findings": []
+    },
+    {
+      "name": "Images",
+      "score": 95,
+      "weight": 5,
+      "what_works": [
+        "Every img has an alt attribute; 4 intentionally empty for decorative art, which is correct",
+        "Explicit width and height on all images - the direct cause of CLS 0.000",
+        "7 of 8 lazy-loaded",
+        "Responsive AVIF/WebP/JPG from the media pipeline"
+      ],
+      "findings": []
+    }
+  ],
+  "action_plan": {
+    "phases": [
+      {
+        "name": "Phase 1: Quick wins",
+        "timeframe": "Under an hour",
+        "items": [
+          "Delete the hardcoded canonical at index.html:14 - CRITICAL",
+          "Delete the hardcoded meta description at index.html:11",
+          "Preload the hero poster or render it as an img with fetchpriority=high",
+          "Shorten the homepage title from 81 to about 51 characters"
+        ]
+      },
+      {
+        "name": "Phase 2: Structural",
+        "timeframe": "Week 1",
+        "items": [
+          "Return a real 404 status for unknown URLs via vercel.json",
+          "Remove the redundant noscript fallback from index.html",
+          "Add security headers in vercel.json, not firebase.json",
+          "Raise 22 touch targets below 48x48 (padding, not font size)",
+          "Normalise trailing slashes to one form"
+        ]
+      },
+      {
+        "name": "Phase 3: Content & Authority",
+        "timeframe": "Month 2",
+        "items": [
+          "Add TechArticle/HowTo schema to tool guides and BreadcrumbList across the docs tree",
+          "Keep llms.txt in step with the product"
+        ]
+      },
+      {
+        "name": "Phase 4: Monitoring & Iteration",
+        "timeframe": "Ongoing",
+        "items": [
+          "Connect Search Console and the CrUX API to replace lab data with field data",
+          "Re-audit after Phases 1 and 2 to confirm the On-Page and Technical scores moved",
+          "Add an IndexNow key file for faster Bing/Yandex/Naver indexing"
+        ]
+      }
+    ]
+  },
+  "artifacts": {
+    "findings_dir": "findings/ (technical.md written by the /seo-technical pass)",
+    "screenshots_dir": "screenshots/",
+    "note": "Per-category findings are consolidated in FULL-AUDIT-REPORT.md rather than split into separate files. No screenshots captured. PDF generation requires the claude-seo CLI, which is not installed."
+  }
+}

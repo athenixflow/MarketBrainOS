@@ -1,0 +1,87 @@
+{
+  "_README": {
+    "purpose": "JSON-LD for /compare/chatgpt. Pass via the existing Seo component's jsonLd prop (components/Seo.tsx), which already renders arrays of blocks into the prerendered HTML.",
+    "verified": "2026-09-10",
+    "deliberate_omissions": [
+      "No aggregateRating on the SoftwareApplication. Google requires ratings to come from real, collectable user reviews; inventing one is a structured-data policy violation and risks a manual action. Add it only when you have genuine reviews, with the count matching what is visible on the page.",
+      "No Offer block for ChatGPT. Its pricing did not render to us on 2026-09-10, and asserting a price we could not verify would be a false claim in markup.",
+      "No review or Product schema wrapping the competitor. Marking up a competitor as your own Product is misrepresentation."
+    ]
+  },
+
+  "breadcrumb": {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://www.marketbrainos.app/" },
+      { "@type": "ListItem", "position": 2, "name": "Compare", "item": "https://www.marketbrainos.app/compare" },
+      { "@type": "ListItem", "position": 3, "name": "MarketBrain OS vs ChatGPT", "item": "https://www.marketbrainos.app/compare/chatgpt" }
+    ]
+  },
+
+  "softwareApplication": {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "MarketBrain OS",
+    "applicationCategory": "BusinessApplication",
+    "applicationSubCategory": "Marketing Intelligence",
+    "operatingSystem": "Web browser",
+    "url": "https://www.marketbrainos.app/",
+    "description": "AI marketing intelligence platform: validate strategy, audit landing pages, simulate ad performance, and generate high-converting angles before you spend.",
+    "publisher": { "@id": "https://www.marketbrainos.app/#organization" },
+    "offers": [
+      { "@type": "Offer", "name": "Free", "price": "0", "priceCurrency": "USD", "description": "20 included tokens per month" },
+      { "@type": "Offer", "name": "Pro", "price": "7", "priceCurrency": "USD", "description": "100 included tokens per month" },
+      { "@type": "Offer", "name": "Team", "price": "49", "priceCurrency": "USD", "description": "400 included tokens per month, up to 10 members" },
+      { "@type": "Offer", "name": "Agency", "price": "199", "priceCurrency": "USD", "description": "2000 included tokens per month, 5 workspaces" },
+      { "@type": "Offer", "name": "Enterprise", "price": "999", "priceCurrency": "USD", "description": "10000 included tokens per month" }
+    ]
+  },
+
+  "faqPage": {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Can't I just ask ChatGPT to audit my landing page?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "You can, and for a one-off look it works well. The difference is repeatability: ChatGPT returns differently-shaped prose each time, while MarketBrain OS returns the same fields every run - a 0-100 score, blockers ranked by severity, and prescriptions ranked by priority - so this month's audit is directly comparable to last month's."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Do I need both MarketBrain OS and ChatGPT?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Most teams use both. ChatGPT is better for open-ended thinking, drafting and research. MarketBrain OS is for the moment you need a structured, scored, saved analysis that a team can act on and compare over time."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What does a token buy?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "One analysis run. Each tool states its token cost on the run button before you click, so the cost of a specific task is known in advance rather than governed by message limits. The Free plan includes 20 tokens per month and Pro includes 100."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How is the score calculated?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Scored tools return a 0-100 value mapped to defined bands, alongside structured findings in an insight, evidence and action format, so two runs of the same tool can be compared directly."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is my data used to train AI models?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "REPLACE THIS ANSWER with your actual policy from /privacy before publishing. Do not ship the placeholder."
+        }
+      }
+    ]
+  }
+}
