@@ -20,7 +20,8 @@ export interface PageSeo { title: string; description: string; path: string; }
 // " | MarketBrain OS" appended by <Seo>.
 export const MARKETING_SEO: Record<string, PageSeo> = {
   home: {
-    title: 'MarketBrain OS | AI Marketing Intelligence & Conversion Optimization Platform',
+    // 51 chars. Was 81, which truncated in SERPs; every other route is 22-43.
+    title: 'MarketBrain OS | AI Marketing Intelligence Platform',
     description: 'MarketBrain OS is an AI marketing intelligence platform. Validate strategy, audit landing pages, simulate ad performance, and generate high-converting angles before you spend.',
     path: '/',
   },

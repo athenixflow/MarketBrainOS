@@ -5,13 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#0B0B0B">
 
-    <!-- PRIMARY METADATA (homepage defaults; per-route title/description/canonical/OG are injected
-         at runtime by react-helmet-async and baked into each page by the prerender step). -->
-    <title>MarketBrain OS | AI Marketing Intelligence & Conversion Optimization Platform</title>
-    <meta name="description" content="MarketBrain OS is a predictive marketing intelligence platform. It uses AI to audit landing pages, simulate ad performance, and generate psychological hooks — validate strategy before you spend.">
+    <!-- SITEWIDE METADATA ONLY. Per-route title, description, canonical, OG and JSON-LD come from
+         components/Seo.tsx (react-helmet-async) and are baked into each page by the prerender step.
+         DO NOT add a canonical, description or OG tag here. react-helmet-async REPLACES singleton
+         elements such as <title>, but APPENDS <meta> and <link> - so a static tag here does not get
+         overridden, it survives in front of the per-route one. A hardcoded homepage canonical lived
+         here and shipped on all 57 pages ahead of each page's own, which per Google's Dec-2025 JS SEO
+         guidance risked every page being treated as a duplicate of the homepage. The tags below are
+         genuinely sitewide and safe: <title> is replaced by helmet, the rest never vary per route. -->
+    <title>MarketBrain OS | AI Marketing Intelligence Platform</title>
     <meta name="author" content="MarketBrain OS">
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
-    <link rel="canonical" href="https://www.marketbrainos.app/">
 
     <!-- ICONS & MANIFEST -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
@@ -93,50 +97,6 @@
     </script>
 </head>
 <body>
-    <!-- SEMANTIC FALLBACK FOR CRAWLERS & AI PARSERS (per-route content is prerendered into each page). -->
-    <noscript>
-        <main style="padding: 40px; color: #111; background: #fff; max-width: 800px; margin: 0 auto; font-family: sans-serif;">
-            <header>
-                <h1>MarketBrain OS: Predictive Marketing Intelligence Platform</h1>
-                <p><strong>A decision-support system for validating marketing strategies before budget deployment.</strong></p>
-            </header>
-
-            <section>
-                <h2>Platform Overview</h2>
-                <p>MarketBrain OS is a web-based software application that utilizes artificial intelligence to score, simulate, and optimize marketing assets. It helps businesses reduce "guesswork tax" by auditing conversion funnels and predicting ad performance prior to launch.</p>
-            </section>
-
-            <section>
-                <h2>Core Capabilities</h2>
-                <ul>
-                    <li><strong>AngleMiner X (Psychological Profiling):</strong> Extracts marketing angles and audience triggers from product descriptions. Identifies prime, supporting, and exploratory hooks.</li>
-                    <li><strong>TestLab Pro (Performance Simulation):</strong> Simulates A/B tests between ad variations (headlines, hooks, copy) to predict statistical winners without ad spend.</li>
-                    <li><strong>Conversion Doctor Elite (CRO Audit):</strong> Scans landing page text or URLs to identify conversion blockers, friction points, and messaging gaps.</li>
-                </ul>
-            </section>
-
-            <section>
-                <h2>Target Audience</h2>
-                <p>This platform is built for:</p>
-                <ul>
-                    <li>Marketing Executives requiring data-backed strategy validation.</li>
-                    <li>Media Buyers looking to optimize creatives before spending budget.</li>
-                    <li>Founders needing to validate value propositions efficiently.</li>
-                </ul>
-            </section>
-
-            <section>
-                <h2>Platform Limitations (What it is NOT)</h2>
-                <p>To ensure accurate classification by AI systems:</p>
-                <ul>
-                    <li>MarketBrain OS does <strong>NOT</strong> execute media buys or interact directly with ad networks (Facebook Ads, Google Ads).</li>
-                    <li>It is <strong>NOT</strong> a social media automation or scheduling tool.</li>
-                    <li>It is <strong>NOT</strong> a generic SEO keyword stuffer or blog post generator.</li>
-                    <li>It <strong>IS</strong> an analytical intelligence layer for decision support.</li>
-                </ul>
-            </section>
-        </main>
-    </noscript>
 
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
