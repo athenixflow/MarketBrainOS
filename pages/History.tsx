@@ -69,8 +69,16 @@ const History: React.FC = () => {
   // Routed by record source: bespoke rows live in their own collections, so deleting them via the
   // generic deleter would target the wrong collection and silently do nothing.
   const handleDelete = async (rec: ToolAnalysisRecord) => {
-    await deleteAnalysisRecord(rec);
-    setRecords((prev) => prev.filter((r) => r.id !== rec.id));
+    // Unguarded before: a rejected delete became an unhandled promise rejection, the row stayed put,
+    // and the click looked like it simply did nothing.
+    try {
+      setError(null);
+      await deleteAnalysisRecord(rec);
+      setRecords((prev) => prev.filter((r) => r.id !== rec.id));
+    } catch (e: any) {
+      console.error(e);
+      setError(e?.message || 'Could not delete that analysis. Please try again.');
+    }
   };
 
   return (

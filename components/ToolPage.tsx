@@ -262,8 +262,18 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
     }
   };
   const handleDelete = async () => {
+    // Only claim it is gone once the delete actually resolved. This previously swallowed the error
+    // and marked the analysis deleted anyway, so a failed delete looked successful while the record
+    // stayed in Firestore and reappeared in History on the next visit.
     if (result?.savedId) {
-      try { await deleteGenericAnalysis(result.savedId); } catch (e) { console.error(e); }
+      try {
+        await deleteGenericAnalysis(result.savedId);
+      } catch (e: any) {
+        console.error(e);
+        setActionMsg(e?.message || 'Could not delete this analysis');
+        setTimeout(() => setActionMsg(''), 3000);
+        return;
+      }
     }
     setDeleted(true);
     setResult(null);
