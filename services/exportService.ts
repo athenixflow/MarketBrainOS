@@ -51,11 +51,11 @@ const escapeCSVField = (value: unknown): string => {
 };
 
 /**
- * HTML text escaping for the print/PDF windows below. Those windows are opened with
- * `window.open('', '_blank')`, which inherits this app's origin, so anything interpolated into them
- * unescaped would execute with access to the user's session. Every value written into print markup
- * must go through this. `& < >` covers it because all three sinks are text contexts (<title>, <h1>,
- * <pre>, <li>) — never an attribute or URL, which would need wider escaping.
+ * HTML text escaping for the print/PDF documents below. They render in a same-origin iframe, so
+ * anything interpolated into them unescaped would execute with access to the user's session. Every
+ * value written into print markup must go through this. `& < >` covers it because all the sinks are
+ * text contexts (<title>, <h1>, <pre>, <li>) — never an attribute or URL, which would need wider
+ * escaping.
  */
 const esc = (s: unknown): string =>
   String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] as string));
@@ -106,11 +106,56 @@ export const paymentsToCSV = (records: PaymentRecord[]): (string | number)[][] =
   return rows;
 };
 
-export const printAsPDF = (title: string, content: string) => {
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) return;
+/**
+ * Renders a complete HTML document off-screen and opens the browser's print dialog for it.
+ *
+ * This replaces `window.open('', '_blank')`, which failed two ways and reported neither:
+ *  - a blocked popup made `window.open` return null, and the caller returned silently, so clicking
+ *    Export PDF simply did nothing. Any popup blocker or blocking extension triggered it.
+ *  - `print()` was followed immediately by `close()`, destroying the document in the same tick the
+ *    dialog was trying to render it, which prints blank or dismisses itself.
+ *
+ * An iframe has no popup to block, and `srcdoc` gives a real load event, so the document is parsed
+ * and laid out before printing. `srcdoc` rather than `document.write` on purpose: writing into an
+ * already-loaded about:blank frame races its own initial load event.
+ *
+ * The frame is positioned off-screen rather than `display:none`, because a display:none frame is not
+ * laid out and prints as an empty page.
+ */
+const printHtmlDocument = (html: string, label: string): void => {
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.setAttribute('tabindex', '-1');
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;opacity:0;border:0;';
 
-  printWindow.document.write(`
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    iframe.remove();
+  };
+
+  iframe.onload = () => {
+    const win = iframe.contentWindow;
+    if (!win) {
+      cleanup();
+      console.error(`Print failed for "${label}": the print frame had no window.`);
+      return;
+    }
+    // afterprint is the correct signal, but it is not fired reliably everywhere, so the timeout
+    // guarantees the node is removed rather than accumulating one frame per export.
+    win.addEventListener('afterprint', cleanup, { once: true });
+    setTimeout(cleanup, 60_000);
+    win.focus();
+    win.print();
+  };
+
+  iframe.srcdoc = html;
+  document.body.appendChild(iframe);
+};
+
+export const printAsPDF = (title: string, content: string) => {
+  printHtmlDocument(`
     <html>
       <head>
         <title>${esc(title)}</title>
@@ -132,18 +177,11 @@ export const printAsPDF = (title: string, content: string) => {
         </div>
       </body>
     </html>
-  `);
-  printWindow.document.close();
-  printWindow.focus();
-  printWindow.print();
-  printWindow.close();
+  `, title);
 };
 
 /** Structured print/PDF for a universal result: summary + each section as a headed list. */
 export const printToolResultPDF = (title: string, result: ToolAnalysisResult) => {
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) return;
-
   const meta: string[] = [];
   if (typeof result.score === 'number') meta.push(`Score: ${result.score}/100`);
   if (result.verdict) meta.push(`Verdict: ${esc(result.verdict)}`);
@@ -155,7 +193,7 @@ export const printToolResultPDF = (title: string, result: ToolAnalysisResult) =>
     </div>
   `).join('');
 
-  printWindow.document.write(`
+  printHtmlDocument(`
     <html>
       <head>
         <title>${esc(title)}</title>
@@ -178,11 +216,7 @@ export const printToolResultPDF = (title: string, result: ToolAnalysisResult) =>
         ${sectionsHtml}
       </body>
     </html>
-  `);
-  printWindow.document.close();
-  printWindow.focus();
-  printWindow.print();
-  printWindow.close();
+  `, title);
 };
 
 export const formatAngleMinerExport = (results: AngleMinerResults): string => {
