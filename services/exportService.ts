@@ -1,20 +1,23 @@
 
 import { AngleMinerResults, TestLabResults, AuditResult, ToolAnalysisResult, ResultItem, PaymentRecord } from '../types';
+import { asText } from './resultItems';
 
 // Result items are either plain strings (legacy) or structured { insight, evidence, action }.
-// These flatten them for each export format.
+// These flatten them for each export format. The headline goes through the shared asText() rather
+// than reading `insight` directly: reading one hardcoded key is what made an unrecognised shape
+// export as an empty bullet, with no error anywhere to say so.
 const itemToText = (item: ResultItem): string => {
   if (typeof item === 'string') return item;
-  const parts = [item.insight || ''];
-  if (item.evidence) parts.push(`Why: ${item.evidence}`);
-  if (item.action) parts.push(`Action: ${item.action}`);
+  const parts = [asText(item)];
+  if (item.evidence) parts.push(`Why: ${asText(item.evidence)}`);
+  if (item.action) parts.push(`Action: ${asText(item.action)}`);
   return parts.filter(Boolean).join(' — ');
 };
 const itemToHtml = (item: ResultItem, esc: (s: string) => string): string => {
   if (typeof item === 'string') return `<li>${esc(item)}</li>`;
-  const why = item.evidence ? `<div style="color:#555;margin-top:4px"><strong>Why it matters:</strong> ${esc(item.evidence)}</div>` : '';
-  const act = item.action ? `<div style="color:#111;margin-top:4px"><strong>Do this:</strong> ${esc(item.action)}</div>` : '';
-  return `<li><strong>${esc(item.insight || '')}</strong>${why}${act}</li>`;
+  const why = item.evidence ? `<div style="color:#555;margin-top:4px"><strong>Why it matters:</strong> ${esc(asText(item.evidence))}</div>` : '';
+  const act = item.action ? `<div style="color:#111;margin-top:4px"><strong>Do this:</strong> ${esc(asText(item.action))}</div>` : '';
+  return `<li><strong>${esc(asText(item))}</strong>${why}${act}</li>`;
 };
 
 /**

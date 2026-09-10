@@ -3,26 +3,12 @@
 // and SharedLibrary so the detailed result layout is consistent everywhere and backward compatible.
 
 import React from 'react';
-import { ResultItem, StructuredResultItem } from '../types';
+import { ResultItem } from '../types';
+// Coercion lives in services/resultItems so the screen and the exports cannot drift apart - they
+// previously had separate implementations that recognised different keys.
+import { asText, isStructuredItem as isStructured } from '../services/resultItems';
 
-const isStructured = (item: ResultItem): item is StructuredResultItem =>
-  typeof item === 'object' && item !== null && typeof (item as any).insight === 'string';
-
-/** Plain-text form of a result item — the insight headline, or the string itself. Use in compact
- *  summary views (Dashboard, admin reports) that render one line per point, so a structured
- *  { insight, evidence, action } object is never passed to React as a child (avoids React #31). */
-export const itemText = (item: ResultItem): string => asText(item);
-
-// Defensively coerce any value to renderable text. Never returns an object, so React can never
-// receive an object as a child (the cause of minified React #31). Handles strings, numbers, and
-// loose AI/legacy shapes by digging out a sensible text field before falling back to "".
-const asText = (v: any): string => {
-  if (v == null) return '';
-  if (typeof v === 'string') return v;
-  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
-  if (typeof v === 'object') return asText(v.insight ?? v.text ?? v.point ?? v.title ?? v.action ?? v.value ?? '');
-  return '';
-};
+export { itemText } from '../services/resultItems';
 
 /** One result point — a rich card (insight → why it matters → recommended action) or a plain bullet. */
 export const ResultItemCard: React.FC<{ item: ResultItem; compact?: boolean }> = ({ item, compact }) => {

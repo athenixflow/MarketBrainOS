@@ -1,4 +1,5 @@
 import { db, isFirebaseInitialized, functions } from './firebase';
+import { angleResult, testlabResult, doctorResult, workflowResult } from './bespokeMappers';
 import { DEFAULT_PRICING_CONFIG, PricingConfig } from '../config/pricingConfig';
 import { httpsCallable } from 'firebase/functions';
 import { 
@@ -554,61 +555,26 @@ export const getBespokeAnalyses = async (userId: string): Promise<ToolAnalysisRe
 
   angle.forEach(d => {
     const v: any = d.data();
-    const res = v.angles_output || {};
-    const angles = res.angles || [];
-    const hooks = res.hooks || [];
     out.push(bespokeRecord(d.id, 'angleminer_results', 'AngleMiner X', v.timestamp,
-      { Industry: v.industry || '', Audience: v.target_audience || '' },
-      {
-        summary: `${angles.length} marketing angle${angles.length === 1 ? '' : 's'}${hooks.length ? ` and ${hooks.length} platform hooks` : ''}.`,
-        sections: [
-          ...(angles.length ? [{ title: 'Angles', items: angles.map((a: any) => `${a.title}: "${a.improved || a.hook}"`) }] : []),
-          ...(hooks.length ? [{ title: 'Hooks', items: hooks.map((h: any) => `[${[h.channel, h.platform].filter(Boolean).join(' · ') || 'General'}] "${h.short}"`) }] : []),
-        ],
-      }));
+      { Industry: v.industry || '', Audience: v.target_audience || '' }, angleResult(v)));
   });
 
   testlab.forEach(d => {
     const v: any = d.data();
-    const res = v.results || {};
-    const variants = res.variants || [];
-    const winner = variants.find((x: any) => x.label === res.winnerLabel);
     out.push(bespokeRecord(d.id, 'testlab_results', 'TestLab Pro', v.timestamp,
-      { Comparison: v.comparison_type || '', Winner: v.winner || '' },
-      {
-        score: winner?.score,
-        verdict: v.winner ? `${v.winner} wins` : undefined,
-        summary: res.explanation || '',
-        sections: variants.length ? [{ title: 'Variation scores', items: variants.map((x: any) => `${x.label} (${x.score}/100): "${x.text}"`) }] : [],
-      }));
+      { Comparison: v.comparison_type || '', Winner: v.winner || '' }, testlabResult(v)));
   });
 
   doctor.forEach(d => {
     const v: any = d.data();
-    const res = v.audit_output || {};
-    const issues = res.issues || [];
-    const fixes = res.fixes || [];
     out.push(bespokeRecord(d.id, 'conversion_doctor_results', 'Conversion Doctor', v.timestamp,
-      {}, {
-        score: v.conversion_score ?? res.score,
-        summary: res.summary || '',
-        sections: [
-          ...(issues.length ? [{ title: 'Conversion blockers', items: issues.map((x: any) => x.blocker || x) }] : []),
-          ...(fixes.length ? [{ title: 'Recommended fixes', items: fixes.map((x: any) => x.fix || x) }] : []),
-        ],
-      }));
+      {}, doctorResult(v)));
   });
 
   workflow.forEach(d => {
     const v: any = d.data();
-    const f = v.final_output || {};
-    const assets = [f.headline && `Headline: "${f.headline}"`, f.cta && `CTA: "${f.cta}"`, f.offer && `Offer: "${f.offer}"`].filter(Boolean);
     out.push(bespokeRecord(d.id, 'workflow_runs', 'Workflow Pipeline', v.timestamp,
-      { 'Selected angle': v.selected_angle || '' },
-      {
-        summary: v.selected_angle ? `Built from the angle: "${v.selected_angle}"` : 'Workflow run.',
-        sections: assets.length ? [{ title: 'Final assets', items: assets }] : [],
-      }));
+      { 'Selected angle': v.selected_angle || '' }, workflowResult(v)));
   });
 
   return out;
