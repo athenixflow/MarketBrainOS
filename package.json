@@ -8,14 +8,15 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/routes.test.mjs && tsx scripts/results.test.ts && tsc && vite build && tsx scripts/prerender.ts",
+    "build": "node scripts/routes.test.mjs && tsx scripts/results.test.ts && tsx scripts/fetchpage.test.ts && tsc && vite build && tsx scripts/prerender.ts",
     "build:novite": "tsx scripts/prerender.ts",
     "preview": "vite preview",
     "media:generate": "tsx scripts/media/generate.ts",
     "media:optimize": "tsx scripts/media/optimize.ts",
     "media:sheet": "tsx scripts/media/contact-sheet.ts",
     "test:routes": "node scripts/routes.test.mjs",
-    "test:results": "tsx scripts/results.test.ts"
+    "test:results": "tsx scripts/results.test.ts",
+    "test:fetchpage": "tsx scripts/fetchpage.test.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",

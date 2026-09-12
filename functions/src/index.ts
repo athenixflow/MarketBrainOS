@@ -6,6 +6,7 @@
 import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 import { GoogleGenerativeAI, SchemaType, Schema } from '@google/generative-ai';
+import { fetchPageText, looksLikeUrl, PageFetchError } from './fetchPage';
 import * as crypto from 'crypto';
 import { sendTemplate } from './email/send';
 
@@ -596,6 +597,9 @@ export const executeAnalysis = functions
       : billedClientId ? db.collection('agency_clients').doc(billedClientId)
       : null;
     const memberRef = billedMemberPath && billedMemberColl ? db.collection(billedMemberColl).doc(billedMemberPath) : null;
+    // Set only when a page was genuinely fetched; the client labels the report with this rather
+    // than with whatever the user typed.
+    let fetchedUrl: string | null = null;
     let tokensDeducted = false;
     let deductedMemberCost = 0;  // amount charged to the member budget, for refund on failure
     let deductedMonthly = 0;    // exact amounts spent per bucket, for a precise refund on failure
@@ -730,9 +734,23 @@ export const executeAnalysis = functions
         responseText = result.response.text();
       }
       else if (module === 'ConversionDoctor_Audit') {
+        // Read the page when given a URL. Until this existed the prompt received the URL *string* as
+        // if it were the page copy, so the model invented an audit and the UI stamped the real URL on
+        // it. fetchPageText throws PageFetchError rather than falling back, because silently auditing
+        // the URL text is exactly the bug being fixed - a failure the user can act on beats a
+        // confident answer about a page nobody read.
+        const rawInput = String(input.input || '');
+        let pageText = rawInput;
+        if (looksLikeUrl(rawInput)) {
+          const withScheme = /^https?:\/\//i.test(rawInput.trim()) ? rawInput.trim() : `https://${rawInput.trim()}`;
+          const page = await fetchPageText(withScheme);
+          pageText = page.text;
+          fetchedUrl = page.finalUrl;
+        }
         const prompt = [
           `As a senior conversion-rate-optimization (CRO) expert, audit this ${input.context}.`,
-          `Page or copy: "${String(input.input || '').slice(0, 16000)}".`,
+          fetchedUrl ? `This is the live text of ${fetchedUrl}, fetched just now.` : '',
+          `Page or copy: "${pageText.slice(0, 16000)}".`,
           input.audience ? `Target audience: ${input.audience}.` : '',
           input.goal ? `Primary conversion goal: ${input.goal}.` : '',
           input.trafficSource ? `Traffic source: ${input.trafficSource}.` : '',
@@ -814,13 +832,33 @@ export const executeAnalysis = functions
         created_at: admin.firestore.FieldValue.serverTimestamp()
       });
 
-      res.status(200).json({ result: finalOutput });
+      res.status(200).json({ result: finalOutput, fetchedUrl });
 
     } catch (error: any) {
       // Surface the real cause in Cloud Logging (`firebase functions:log`).
       // Previously errors were only written to Firestore `action_logs`, so a missing
       // API key / Gemini failure showed up as a bare 500 with no diagnosable reason.
       console.error(`executeAnalysis failed [${module}]:`, error?.message || error);
+      // A page we could not read is an actionable user error, not a server fault, so it gets the real
+      // reason and a 422 rather than the generic 500. Nothing was charged: the fetch runs before the
+      // Gemini call and `tokensDeducted` only turns true in applyBilling(true), which runs after it.
+      // It still counts toward the rate limit - a request that made an outbound fetch and produced no
+      // billable work is exactly what an attacker probing internal addresses would generate.
+      if (error instanceof PageFetchError) {
+        await db.collection('action_logs').add({
+          uid, module, tokens_used: 0, status: 'blocked', error_code: `page_fetch_${error.kind}`,
+          created_at: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        await db.runTransaction(async (t: admin.firestore.Transaction) => {
+          const doc = await t.get(rateLimitRef);
+          if (doc.exists) {
+            const d = doc.data()!;
+            t.update(rateLimitRef, { failed_requests_in_window: (d.failed_requests_in_window || 0) + 1 });
+          }
+        });
+        res.status(422).json({ error: { message: error.message, code: 'page-unreadable' } });
+        return;
+      }
       if (tokensDeducted) {
         await db.runTransaction(async (t: admin.firestore.Transaction) => {
           const userDoc = await t.get(userRef);

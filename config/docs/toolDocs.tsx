@@ -179,6 +179,7 @@ const conversionDoctor: DocArticle = {
       ['Conversion Goal (advanced)', 'The single action the page should drive.'],
       ['Traffic Source (advanced)', 'Where visitors arrive from — sets expectations for intent and awareness.'],
     ] },
+    { type: 'callout', tone: 'tip', title: 'When you give it a URL', text: 'The page is fetched and read before the audit runs, and the report is labelled with the URL that was actually read (after any redirects). If the page cannot be read — it is behind a login, returns an error, or renders its content with JavaScript after load — you get that reason and **no tokens are charged**. Paste the copy directly and run it again.' },
     { type: 'heading', id: 'results', text: 'Reading the results' },
     { type: 'paragraph', text: 'You get an **Intelligence Grade (0–100)**, a verdict, and sections covering the specific blockers and the recommended fixes in priority order. Work top-down: the highest-impact friction is surfaced first.' },
     { type: 'callout', tone: 'tip', title: 'Chain it', text: 'Pair with [Messaging Analyzer](/documentation/tools/messaging-analyzer) to fix the words and [Offer Analyzer](/documentation/tools/offer-analyzer) to strengthen the deal behind the page.' },

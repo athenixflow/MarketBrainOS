@@ -33,3 +33,6 @@ functions/node_modules
 
 # raw AI-generated media candidates (regenerate with `npm run media:generate`)
 media-src/
+
+# Claude Code local-only settings (machine-specific, not part of the project)
+.claude/settings.local.json

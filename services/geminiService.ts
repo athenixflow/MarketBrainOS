@@ -57,7 +57,10 @@ const wait = (ms: number) => new Promise(res => setTimeout(res, ms));
 // gemini-2.5-pro analysis taking ~55s was so close to failing from both ends at once.
 const ANALYSIS_TIMEOUT_MS = 310000;
 
-const executeAsyncJob = async (module: string, input: any, scope?: Scope): Promise<any> => {
+/** The server's full envelope. Only Conversion Doctor needs more than `result` (see auditConversion). */
+interface JobEnvelope { result: any; fetchedUrl: string | null; }
+
+const executeAsyncJobWithMeta = async (module: string, input: any, scope?: Scope): Promise<JobEnvelope> => {
   const user = auth.currentUser;
   if (!user) throw new Error("ERR_AUTH_REQUIRED: User must be logged in.");
 
@@ -98,8 +101,11 @@ const executeAsyncJob = async (module: string, input: any, scope?: Scope): Promi
     throw new Error("Analysis completed but returned no result.");
   }
 
-  return data.result;
+  return { result: data.result, fetchedUrl: typeof data.fetchedUrl === 'string' ? data.fetchedUrl : null };
 };
+
+const executeAsyncJob = async (module: string, input: any, scope?: Scope): Promise<any> =>
+  (await executeAsyncJobWithMeta(module, input, scope)).result;
 
 export const analyzeMarketingAngle = async (params: any, userId?: string) => {
   SystemContracts.AngleMiner.inputValidator(params);
@@ -123,10 +129,14 @@ export const runTestLabComparison = async (type: string, variants: string[], use
 
 export const auditConversion = async (input: string, context: string, userId?: string, extra?: Record<string, string>) => {
   SystemContracts.ConversionDoctor.inputValidator({ input, context });
-  const result = await executeAsyncJob('ConversionDoctor_Audit', { input, context, ...(extra || {}) });
+  const { result, fetchedUrl } = await executeAsyncJobWithMeta('ConversionDoctor_Audit', { input, context, ...(extra || {}) });
   SystemContracts.ConversionDoctor.outputValidator(result);
-  if (userId) await saveConversionDoctorResult(userId, input, result.score, result);
-  return result;
+  // Only the server knows whether a page was actually read, and which URL it ended on after redirects.
+  // The report used to be labelled with whatever the user typed, which stamped a real URL onto an
+  // audit of nothing. `auditedUrl` now means "we fetched this", so it is set here or not at all.
+  const audited = fetchedUrl ? { ...result, auditedUrl: fetchedUrl } : result;
+  if (userId) await saveConversionDoctorResult(userId, input, result.score, audited);
+  return audited;
 };
 
 export const improveWorkflowAssets = async (angle: string, issues: string[], userId?: string, testScore?: number, auditScore?: number) => {

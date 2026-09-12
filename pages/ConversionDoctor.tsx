@@ -168,17 +168,17 @@ const ConversionDoctor: React.FC = () => {
     setResult(null);
     try {
       const data = await auditConversion(trimmedInput, context, user?.uid, { audience, goal, trafficSource });
-      setResult({ ...data, auditedUrl: trimmedInput.startsWith('http') ? trimmedInput : undefined });
+      // `auditedUrl` comes from the server and only when it genuinely fetched the page - see auditConversion.
+      setResult({ ...data });
 
       if (user) await refreshProfile();
 
     } catch (err: any) {
       console.error("Audit failed:", err);
-      let errMsg = err.message || "The audit was interrupted before it finished. No tokens were deducted.";
-      if (errMsg.includes("Extraction Failed") || errMsg.includes("404") || errMsg.includes("unreachable")) {
-        errMsg = "We could not access that URL. Paste the page copy instead and run the audit again.";
-      }
-      setExecutionError(errMsg);
+      // The server now returns a specific, actionable reason for an unreadable page ("That page
+      // returned 404 Not Found", "...resolves to a private address"). Replacing it with generic advice
+      // - as this used to - threw away the only part the user could act on.
+      setExecutionError(err.message || "The audit was interrupted before it finished. No tokens were deducted.");
     } finally {
       setLoading(false);
     }
