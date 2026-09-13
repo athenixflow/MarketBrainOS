@@ -18,6 +18,7 @@ import {
   ExportControls,
   HoneypotField,
   UsageLimitModal,
+  CopyButton,
   TokenStatusBanner,
   AnalysisFailureState,
   SystemBlockState,
@@ -35,6 +36,7 @@ import { SecurityEngine } from '../services/securityEngine';
 import { isFixtureRequested } from '../services/devFixtures';
 import { checkTokenBalance, canExport, TokenVerdict } from '../config/access';
 import { useScope } from '../context/ScopeContext';
+import { useRunGuard, IN_FLIGHT_NOTE } from '../components/useRunGuard';
 
 // Platform keywords used ONLY to rescue results saved before `channel` existed (those records carry a
 // platform like "Meta"/"Email" and no channel). Anything unrecognised lands in "Other" and is still
@@ -67,6 +69,7 @@ const chip = (active: boolean, activeCls = 'bg-[#0B0B0B] text-white') =>
 const AngleMinerX: React.FC = () => {
   const { user, profile, refreshProfile } = useAuth();
   const { memberships } = useScope();
+  const run = useRunGuard();
   const [product, setProduct] = useState('');
   const [industry, setIndustry] = useState('');
   const [target, setTarget] = useState('');
@@ -159,6 +162,7 @@ const AngleMinerX: React.FC = () => {
       return;
     }
 
+    const token = run.start();
     setLoading(true);
     setError(null);
     setExecutionError(null);
@@ -178,6 +182,7 @@ const AngleMinerX: React.FC = () => {
         proofPoints,
         pricePoint
       }, user?.uid);
+      if (!run.isCurrent(token)) return;   // the user stopped waiting; drop the late result
       setResults(data);
       // Open the first angle type that actually has results.
       const firstType = ANGLE_TYPES.find(t => (data.angles || []).some((a: MarketingAngle) => (a.type || 'Emotional') === t)) || ANGLE_TYPES[0];
@@ -187,9 +192,11 @@ const AngleMinerX: React.FC = () => {
 
     } catch (err: any) {
       console.error(err);
+      if (!run.isCurrent(token)) return;
       setExecutionError(err.message || "The analysis was interrupted before it finished. No tokens were deducted.");
     } finally {
-      setLoading(false);
+      run.settle();
+      if (run.isCurrent(token)) setLoading(false);
     }
   };
 
@@ -288,12 +295,7 @@ const AngleMinerX: React.FC = () => {
           >
             {angle.improving ? 'Refining…' : 'Refine angle'}
           </button>
-          <button
-            onClick={() => copyToClipboard(angle.improved || angle.hook)}
-            className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] transition-colors uppercase tracking-widest"
-          >
-            Copy hook
-          </button>
+          <CopyButton text={angle.improved || angle.hook} label="Copy hook" className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] transition-colors uppercase tracking-widest" />
         </div>
       </div>
     </Card>
@@ -435,11 +437,12 @@ const AngleMinerX: React.FC = () => {
                 <div className="flex flex-col gap-6 mt-8">
                   <PrimaryButton
                     type="submit"
-                    disabled={loading || !product || !target || !industry || product.length > MAX_INPUT_CHARS}
+                    disabled={loading || run.inFlight || !product || !target || !industry || product.length > MAX_INPUT_CHARS}
                     className="w-full"
                   >
-                    {loading ? 'Generating angles…' : 'Generate angles'}
+                    {loading ? 'Generating angles…' : run.inFlight ? 'Finishing previous run…' : 'Generate angles'}
                   </PrimaryButton>
+                  {!loading && run.inFlight && <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest leading-relaxed text-center">{IN_FLIGHT_NOTE}</p>}
                   <div className="flex justify-center">
                     <button
                       type="button"
@@ -455,7 +458,7 @@ const AngleMinerX: React.FC = () => {
           </Card>
         </AnimatedSection>
 
-        {loading && <LoadingState message="Analyzing your product and audience…" isTakingLong={isTakingLong} onCancel={() => setLoading(false)} />}
+        {loading && <LoadingState message="Analyzing your product and audience…" isTakingLong={isTakingLong} onCancel={() => { run.stopWaiting(); setLoading(false); }} />}
 
         {executionError && isSystemBlockError(executionError) ? (
            <SystemBlockState message={executionError} />
@@ -490,6 +493,7 @@ const AngleMinerX: React.FC = () => {
                 onExportText={handleExportTxt}
                 onExportPDF={handleExportPDF}
                 isPro={isPro}
+                unsaved={results?.saveError}
               />
             </div>
 
@@ -538,12 +542,7 @@ const AngleMinerX: React.FC = () => {
                                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Expanded</p>
                                 <p className="text-xs text-gray-500 leading-relaxed italic">"{hook.expanded}"</p>
                               </div>
-                              <button
-                                onClick={() => copyToClipboard(hook.short + "\n" + hook.expanded)}
-                                className="text-[10px] font-bold text-[#FF0000] hover:opacity-60 transition-opacity uppercase tracking-widest border-b border-[#FF0000]/10 pb-1"
-                              >
-                                Copy hook
-                              </button>
+                              <CopyButton text={hook.short + "\n" + hook.expanded} label="Copy hook" className="text-[10px] font-bold text-[#FF0000] hover:opacity-60 transition-opacity uppercase tracking-widest border-b border-[#FF0000]/10 pb-1" />
                             </div>
                           </Card>
                         ))}

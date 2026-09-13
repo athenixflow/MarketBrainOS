@@ -3,7 +3,7 @@
 // will gate once an enterprise-scope analysis path exists (today enterprise members act in team/agency).
 // Markup is kept identical to team/TeamMembers and agency/AgencyMembers.
 import React, { useMemo, useState } from 'react';
-import { Card, PrimaryButton, SecondaryButton, Input, Select, Checkbox, Stat, Badge, ErrorMessage, SuccessMessage } from '../UI';
+import { Card, PrimaryButton, SecondaryButton, Input, Select, Checkbox, Stat, Badge, ErrorMessage, SuccessMessage, ConfirmTapButton } from '../UI';
 import { Enterprise, WorkspaceMember, EnterpriseRole } from '../../types';
 import { callCreateEnterpriseMember, callUpdateEnterpriseMember, callManageEnterpriseMember } from '../../services/persistenceService';
 import { can, Membership, ROLE_LABELS } from '../../services/permissionService';
@@ -140,7 +140,7 @@ const EnterpriseMembers: React.FC<{
                 {canManage && !isOwner && m.uid !== selfUid && (
                   <div className="flex items-center gap-3 shrink-0">
                     <button onClick={() => startEdit(m)} className={rowAction}>Edit</button>
-                    <button onClick={() => remove(m.uid)} className={`${rowAction} hover:text-[#FF0000]`}>Remove</button>
+                    <ConfirmTapButton onConfirm={() => remove(m.uid)} label="Remove" confirmLabel="Confirm remove" className={`${rowAction} hover:text-[#FF0000]`} />
                   </div>
                 )}
               </div>

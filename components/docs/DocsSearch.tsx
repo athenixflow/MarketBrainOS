@@ -52,7 +52,7 @@ const DocsSearch: React.FC<{ open: boolean; onClose: () => void }> = ({ open, on
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search the docs — tools, tokens, roles, billing…"
-            className="flex-1 bg-transparent outline-none text-[15px] text-white placeholder:text-gray-600"
+            className="flex-1 bg-transparent outline-none text-base text-white placeholder:text-gray-600"
           />
           <button onClick={onClose} className="text-[9px] font-bold uppercase tracking-widest text-gray-500 border border-gray-700 rounded-lg px-2 py-1 hover:text-white hover:border-gray-500 transition-colors">Esc</button>
         </div>

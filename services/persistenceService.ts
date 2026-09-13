@@ -2,6 +2,7 @@ import { db, isFirebaseInitialized, functions } from './firebase';
 import { angleResult, testlabResult, doctorResult, workflowResult } from './bespokeMappers';
 import { DEFAULT_PRICING_CONFIG, PricingConfig } from '../config/pricingConfig';
 import { isPaidTier } from '../config/access';
+import { toMillis } from './time';
 import { httpsCallable } from 'firebase/functions';
 import { 
   collection, 
@@ -875,18 +876,18 @@ export const createWorkspaceComment = async (
     const data = { ...c, parent_id: c.parent_id ?? null, created_at: new Date().toISOString() };
     const ref = await addDoc(collection(db, 'workspace_comments'), data);
     return { id: ref.id, ...data } as WorkspaceComment;
-  } catch (e) { console.error('Failed to add comment', e); return null; }
+  } catch (e) { console.error('Failed to add comment', e); throw e; }
 };
 
 export const updateWorkspaceComment = async (id: string, content: string): Promise<void> => {
   if (!isFirebaseInitialized) return;
   try { await updateDoc(doc(db, 'workspace_comments', id), { content, updated_at: new Date().toISOString() }); }
-  catch (e) { console.error('Failed to edit comment', e); }
+  catch (e) { console.error('Failed to edit comment', e); throw e; }
 };
 
 export const deleteWorkspaceComment = async (id: string): Promise<void> => {
   if (!isFirebaseInitialized) return;
-  try { await deleteDoc(doc(db, 'workspace_comments', id)); } catch (e) { console.error('Failed to delete comment', e); }
+  try { await deleteDoc(doc(db, 'workspace_comments', id)); } catch (e) { console.error('Failed to delete comment', e); throw e; }
 };
 
 // --- Invitations (the invitee sees pending invites on login and accepts) ---
@@ -1010,18 +1011,18 @@ export const createClientNote = async (
     const data = { ...n, pinned: false, created_at: new Date().toISOString() };
     const ref = await addDoc(collection(db, 'client_notes'), data);
     return { id: ref.id, ...data } as ClientNote;
-  } catch (e) { console.error('Failed to add note', e); return null; }
+  } catch (e) { console.error('Failed to add note', e); throw e; }
 };
 
 export const updateClientNote = async (id: string, patch: Partial<Pick<ClientNote, 'content' | 'pinned' | 'tags'>>): Promise<void> => {
   if (!isFirebaseInitialized) return;
   try { await updateDoc(doc(db, 'client_notes', id), { ...patch, updated_at: new Date().toISOString() }); }
-  catch (e) { console.error('Failed to update note', e); }
+  catch (e) { console.error('Failed to update note', e); throw e; }
 };
 
 export const deleteClientNote = async (id: string): Promise<void> => {
   if (!isFirebaseInitialized) return;
-  try { await deleteDoc(doc(db, 'client_notes', id)); } catch (e) { console.error('Failed to delete note', e); }
+  try { await deleteDoc(doc(db, 'client_notes', id)); } catch (e) { console.error('Failed to delete note', e); throw e; }
 };
 
 // --- Client activity ---
@@ -1430,8 +1431,8 @@ export const adminGetAllPayments = async (): Promise<PaymentRecord[]> => {
     const snap = await getDocs(collection(db, 'payments'));
     const rows = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }) as PaymentRecord);
     return rows.sort((a, b) => {
-      const ta = a.created_at ? (a.created_at.toMillis ? a.created_at.toMillis() : new Date(a.created_at).getTime()) : 0;
-      const tb = b.created_at ? (b.created_at.toMillis ? b.created_at.toMillis() : new Date(b.created_at).getTime()) : 0;
+      const ta = toMillis(a.created_at);
+      const tb = toMillis(b.created_at);
       return tb - ta;
     });
   } catch (e) { console.error('Failed to fetch payments', e); return []; }
@@ -1511,8 +1512,8 @@ export const adminGetActionLogs = async (limitCount: number = 100): Promise<Acti
 
     // Normalize sorting client-side
     return logs.sort((a, b) => {
-      const tA = a.created_at ? a.created_at.toMillis() : new Date(a.timestamp || 0).getTime();
-      const tB = b.created_at ? b.created_at.toMillis() : new Date(b.timestamp || 0).getTime();
+      const tA = toMillis(a.created_at || a.timestamp);
+      const tB = toMillis(b.created_at || b.timestamp);
       return tB - tA;
     });
 
@@ -1602,8 +1603,8 @@ export const getUserActionLogs = async (userId: string, limitCount: number = 50)
     
     // Sort client-side to avoid compound index requirements in this restricted environment
     return logs.sort((a, b) => {
-      const tA = a.created_at ? a.created_at.toMillis() : 0;
-      const tB = b.created_at ? b.created_at.toMillis() : 0;
+      const tA = toMillis(a.created_at);
+      const tB = toMillis(b.created_at);
       return tB - tA;
     });
   } catch (e) {
@@ -1624,8 +1625,8 @@ export const getUserPaymentHistory = async (userId: string): Promise<PaymentReco
     
     // Sort client-side
     return records.sort((a, b) => {
-      const tA = a.created_at ? a.created_at.toMillis() : 0;
-      const tB = b.created_at ? b.created_at.toMillis() : 0;
+      const tA = toMillis(a.created_at);
+      const tB = toMillis(b.created_at);
       return tB - tA;
     });
   } catch (e) {

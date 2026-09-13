@@ -3,7 +3,7 @@
 // allowlist + budget gate the member's team-scope analyses in executeAnalysis.
 // Markup is kept identical to agency/AgencyMembers and enterprise/EnterpriseMembers.
 import React, { useMemo, useState } from 'react';
-import { Card, PrimaryButton, SecondaryButton, Input, Select, Checkbox, Stat, Badge, ErrorMessage, SuccessMessage } from '../UI';
+import { Card, PrimaryButton, SecondaryButton, Input, Select, Checkbox, Stat, Badge, ErrorMessage, SuccessMessage, ConfirmTapButton } from '../UI';
 import { Workspace, WorkspaceMember, WorkspaceRole } from '../../types';
 import { callCreateWorkspaceMember, callUpdateWorkspaceMember, callManageMembership } from '../../services/persistenceService';
 import { can, Membership, ROLE_LABELS } from '../../services/permissionService';
@@ -137,7 +137,7 @@ const TeamMembers: React.FC<{
                 {canManage && !isOwner && m.uid !== selfUid && (
                   <div className="flex items-center gap-3 shrink-0">
                     <button onClick={() => startEdit(m)} className={rowAction}>Edit</button>
-                    <button onClick={() => remove(m.uid)} className={`${rowAction} hover:text-[#FF0000]`}>Remove</button>
+                    <ConfirmTapButton onConfirm={() => remove(m.uid)} label="Remove" confirmLabel="Confirm remove" className={`${rowAction} hover:text-[#FF0000]`} />
                   </div>
                 )}
               </div>

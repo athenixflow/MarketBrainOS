@@ -167,6 +167,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
              </svg>
            </button>
         </div>
+        {/* The header's ScopeSwitcher is hidden under 640px, and Team/client pages auto-enter their scope,
+            so on a phone there was no way back to Personal. It lives in the drawer too. */}
+        <div className="px-6 py-4 sm:hidden border-b border-gray-900/30 flex items-center justify-between gap-4">
+          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Scope</span>
+          <ScopeSwitcher />
+        </div>
 
         <nav className="flex-grow py-6 px-4 lg:py-8 lg:px-6 overflow-y-auto no-scrollbar">
           {/* Core — Dashboard, History, Reports (always visible to a signed-in user) */}

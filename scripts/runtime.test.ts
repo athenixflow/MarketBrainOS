@@ -2,6 +2,8 @@
 // `npm run test:runtime` runs it alone.
 
 import { timeoutSignal, isTimeoutError } from '../services/timeoutSignal';
+import { resolveWinner } from '../services/resultItems';
+import { toMillis, toDate } from '../services/time';
 
 let failures = 0;
 const ok = (cond: boolean, label: string, detail = '') => {
@@ -53,6 +55,36 @@ const main = async () => {
   ok(isTimeoutError({ name: 'AbortError' }), 'AbortError (engines that ignore abort(reason)) is a timeout');
   ok(!isTimeoutError(new TypeError('Failed to fetch')), 'a network failure is not a timeout');
   ok(!isTimeoutError(undefined), 'undefined is not a timeout');
+
+  // ---- resolveWinner ------------------------------------------------------------------------
+  console.log('\nWINNER RESOLUTION:');
+  const variants = [
+    { label: 'Variant A', text: 'a', score: 61 },
+    { label: 'Variant B', text: 'b', score: 84 },
+    { label: 'Variant C', text: 'c', score: 72 },
+  ];
+  ok(resolveWinner(variants, 'Variant B')?.label === 'Variant B', 'exact label match');
+  ok(resolveWinner(variants, 'B')?.label === 'Variant B', 'model returned "B" for "Variant B" (the documented mismatch)');
+  ok(resolveWinner(variants, 'variant b ')?.label === 'Variant B', 'case and whitespace do not matter');
+  ok(resolveWinner(variants, 'Variant Z')?.label === 'Variant B', 'unknown label falls back to the highest score');
+  ok(resolveWinner(variants, '')?.label === 'Variant B', 'empty label falls back to the highest score');
+  ok(resolveWinner(variants, undefined)?.label === 'Variant B', 'missing label falls back to the highest score');
+  ok(resolveWinner([], 'A') === null, 'no variants gives null');
+  ok(resolveWinner(undefined, 'A') === null, 'undefined variants gives null');
+  ok(resolveWinner([{ label: 'Only', text: 'x', score: 0 }], 'nope')?.label === 'Only', 'a single zero-score variant still wins');
+
+  // ---- toMillis ------------------------------------------------------------------------------
+  console.log('\nTIMESTAMP COERCION:');
+  const iso = '2026-09-13T10:00:00.000Z';
+  const ms = Date.parse(iso);
+  ok(toMillis({ toMillis: () => ms }) === ms, 'Firestore Timestamp (toMillis)');
+  ok(toMillis({ seconds: Math.floor(ms / 1000), nanoseconds: 0 }) === ms, 'serialized Timestamp ({seconds, nanoseconds})');
+  ok(toMillis(iso) === ms, 'ISO string');
+  ok(toMillis(ms) === ms, 'number passes through');
+  ok(toMillis(new Date(ms)) === ms, 'Date instance');
+  ok(toMillis(undefined) === 0 && toMillis(null) === 0, 'missing value is epoch, not a crash');
+  ok(toMillis('not a date') === 0, 'garbage string is epoch, not NaN');
+  ok(!Number.isNaN(toDate('garbage').getTime()), 'toDate never yields an Invalid Date');
 
   console.log(failures === 0 ? '\nPASS — runtime guards behave.' : `\nFAILED — ${failures} assertion(s).`);
   process.exit(failures === 0 ? 0 : 1);

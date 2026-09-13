@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { UserTier, ActionLogEntry, PaymentRecord } from '../types';
 import { getUserActionLogs, getUserPaymentHistory } from '../services/persistenceService';
 import { downloadAsCSV, paymentsToCSV } from '../services/exportService';
+import { toDate } from '../services/time';
 import { DEFAULT_PRICING_CONFIG } from '../config/pricingConfig';
 
 // Plan figures are derived from the pricing config so on-screen copy can never contradict what the
@@ -156,7 +157,8 @@ export const Tabs: React.FC<{
 
 // Shared field chrome for Input and Select. Geometry matches components/auth/AuthField.
 const fieldClasses = (tone: Tone, error?: boolean) =>
-  `w-full min-w-0 border px-4 py-3.5 rounded-2xl outline-none transition-all text-[15px] focus:ring-4 focus:ring-[#FF0000]/10 focus:border-[#FF0000] disabled:opacity-50 ${
+  // 16px, not 15: iOS Safari auto-zooms the page on focus of any field under 16px and leaves it zoomed.
+  `w-full min-w-0 border px-4 py-3.5 rounded-2xl outline-none transition-all text-base focus:ring-4 focus:ring-[#FF0000]/10 focus:border-[#FF0000] disabled:opacity-50 ${
     tone === 'dark'
       ? `bg-[#121212] text-white placeholder:text-gray-500 ${error ? 'border-red-500/60' : 'border-gray-800'}`
       : `bg-[#FBFBFB] text-[#0B0B0B] placeholder:text-gray-500 ${error ? 'border-red-300' : 'border-gray-200'}`
@@ -422,12 +424,18 @@ export const LoadingState: React.FC<{
       </p>
     )}
     {onCancel && (
-      <button
-        onClick={onCancel}
-        className="mt-8 text-[10px] font-bold text-gray-400 hover:text-white uppercase tracking-widest transition-colors"
-      >
-        Cancel and retry
-      </button>
+      <>
+        <button
+          onClick={onCancel}
+          className="mt-8 text-[10px] font-bold text-gray-400 hover:text-white uppercase tracking-widest transition-colors"
+        >
+          Stop waiting
+        </button>
+        {/* Was "Cancel and retry", which only hid the spinner: the server keeps running and bills the run. */}
+        <p className="mt-3 text-[10px] font-bold text-gray-600 uppercase tracking-widest text-center max-w-xs">
+          The analysis keeps running on the server and its tokens are spent; the result will be discarded.
+        </p>
+      </>
     )}
   </div>
 );
@@ -637,9 +645,20 @@ export const Modal: React.FC<{
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+    // body { overflow: hidden } is ignored by iOS Safari, so the page scrolled behind every modal.
+    // Fixing the body at its current offset is the lock that works there; restore on close.
+    const body = document.body;
+    const scrollY = window.scrollY;
+    const prev = { position: body.style.position, top: body.style.top, width: body.style.width, overflow: body.style.overflow };
+    body.style.overflow = 'hidden';
+    body.style.position = 'fixed';
+    body.style.top = `-${scrollY}px`;
+    body.style.width = '100%';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      body.style.position = prev.position; body.style.top = prev.top; body.style.width = prev.width; body.style.overflow = prev.overflow;
+      window.scrollTo(0, scrollY);
+    };
   }, [open, onClose]);
   if (!open) return null;
   const width = { sm: 'max-w-md', md: 'max-w-2xl', lg: 'max-w-4xl' }[size];
@@ -877,7 +896,9 @@ export const ExportControls: React.FC<{
   isPro: boolean;
   /** dark = on the page background (AngleMinerX / TestLabPro headers); light = inside a Card. */
   tone?: Tone;
-}> = ({ onCopy, onExportText, onExportCSV, onExportPDF, isPro, tone = 'light' }) => {
+  /** The result's saveError, when the analysis ran but could not be written to History. */
+  unsaved?: string;
+}> = ({ onCopy, onExportText, onExportCSV, onExportPDF, isPro, tone = 'light', unsaved }) => {
   const [copyState, setCopyState] = useState<'idle' | 'ok' | 'fail'>('idle');
   const [pdfState, setPdfState] = useState<'idle' | 'busy' | 'fail'>('idle');
 
@@ -932,7 +953,29 @@ export const ExportControls: React.FC<{
           </button>
         </>
       )}
+      {unsaved && (
+        <span className="basis-full text-[10px] font-bold text-[#FF0000] uppercase tracking-widest" role="alert">
+          Not saved to History ({unsaved}). Export it now if you need to keep it.
+        </span>
+      )}
     </div>
+  );
+};
+
+// 16a. COPY BUTTON. The per-item "Copy hook" / "Copy rewrite" buttons gave no feedback at all, so
+// a blocked clipboard (insecure context, some in-app browsers) looked identical to success.
+export const CopyButton: React.FC<{ text: string; label?: string; className?: string }> = ({ text, label = 'Copy', className = '' }) => {
+  const [state, setState] = useState<'idle' | 'ok' | 'fail'>('idle');
+  const copy = async () => {
+    let done = false;
+    try { await navigator.clipboard.writeText(text); done = true; } catch { done = false; }
+    setState(done ? 'ok' : 'fail');
+    setTimeout(() => setState('idle'), 2000);
+  };
+  return (
+    <button type="button" onClick={copy} className={`${className} ${state === 'fail' ? '!text-[#FF0000]' : ''}`}>
+      {state === 'ok' ? 'Copied' : state === 'fail' ? 'Copy failed' : label}
+    </button>
   );
 };
 
@@ -1089,7 +1132,7 @@ const LedgerModal: React.FC<{ kind: 'tokens' | 'payments'; onClose: () => void }
       ) : isTokens ? (
         <div className="space-y-3">
           {logs.map((log) => {
-            const date = log.created_at ? new Date(log.created_at.toMillis()) : new Date(log.timestamp || 0);
+            const date = toDate(log.created_at || log.timestamp);
             const isTopUp = log.action === 'token_topup';
             const isFailure = log.status === 'failed_refunded';
             return (
@@ -1120,7 +1163,7 @@ const LedgerModal: React.FC<{ kind: 'tokens' | 'payments'; onClose: () => void }
       ) : (
         <div className="space-y-3">
           {payments.map((payment) => {
-            const date = payment.created_at ? new Date(payment.created_at.toMillis()) : new Date(0);
+            const date = toDate(payment.created_at);
             const isFailed = payment.status === 'failed';
             return (
               <LedgerRow

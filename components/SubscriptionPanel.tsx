@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, PrimaryButton, SecondaryButton, Badge, SuccessMessage, ErrorMessage } from './UI';
+import { Card, PrimaryButton, SecondaryButton, Badge, SuccessMessage, ErrorMessage, useConfirmTap } from './UI';
 import { useAuth } from '../context/AuthContext';
 import { isPaidTier } from '../config/access';
 import { callChangeSubscription, createNotification } from '../services/persistenceService';
@@ -26,6 +26,10 @@ const SubscriptionPanel: React.FC = () => {
   const [msg, setMsg] = useState<string>('');
   // Tone of `msg` is tracked here rather than inferred from the text.
   const [msgErr, setMsgErr] = useState(false);
+
+  // Cancelling or downgrading a paid plan fired on a single tap; both now need a second tap.
+  const cancelTap = useConfirmTap(() => run('cancel', 'Subscription cancelled.', 'Your Pro plan has been cancelled.'));
+  const downgradeTap = useConfirmTap(() => run('downgrade', 'Downgraded to Free.', 'Your account moved to the Free plan.'));
 
   if (!profile) return null;
 
@@ -89,10 +93,11 @@ const SubscriptionPanel: React.FC = () => {
               {busy === 'renew' ? 'Processing...' : 'Renew Now'}
             </SecondaryButton>
             <SecondaryButton
-              onClick={() => run('cancel', 'Subscription cancelled.', 'Your Pro plan has been cancelled.')}
+              onClick={cancelTap.tap}
               disabled={!!busy}
+              className={cancelTap.armed ? '!border-[#FF0000] !text-[#FF0000]' : ''}
             >
-              {busy === 'cancel' ? 'Processing...' : 'Cancel Plan'}
+              {busy === 'cancel' ? 'Processing...' : cancelTap.armed ? 'Tap again to cancel plan' : 'Cancel Plan'}
             </SecondaryButton>
           </>
         )}
@@ -102,10 +107,11 @@ const SubscriptionPanel: React.FC = () => {
               {busy === 'renew' ? 'Processing...' : 'Reactivate Pro'}
             </PrimaryButton>
             <SecondaryButton
-              onClick={() => run('downgrade', 'Downgraded to Free.', 'Your account moved to the Free plan.')}
+              onClick={downgradeTap.tap}
               disabled={!!busy}
+              className={downgradeTap.armed ? '!border-[#FF0000] !text-[#FF0000]' : ''}
             >
-              {busy === 'downgrade' ? 'Processing...' : 'Downgrade to Free'}
+              {busy === 'downgrade' ? 'Processing...' : downgradeTap.armed ? 'Tap again to downgrade' : 'Downgrade to Free'}
             </SecondaryButton>
           </>
         )}

@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Card, Stat, PrimaryButton, SecondaryButton, Input, Select, Tabs, Badge, EmptyState, ErrorMessage, PermissionDenied,
+  Card, Stat, PrimaryButton, SecondaryButton, Input, Select, Tabs, Badge, EmptyState, ErrorMessage, PermissionDenied, ConfirmTapButton,
 } from '../UI';
 import {
   Agency, AgencyClient, WorkspaceMember, ClientAssignment, ClientNote, ClientActivity, ClientAssignmentRole, TOKEN_COSTS,
@@ -65,13 +65,25 @@ const ClientWorkspace: React.FC<{
 
   // Notes
   const [noteDraft, setNoteDraft] = useState('');
+  // The draft survives a failed write and the failure is shown; it used to be cleared regardless.
   const addNote = async () => {
     if (!noteDraft.trim()) return;
-    await createClientNote({ client_id: client.id, agency_id: agency.id, author_uid: selfUid, author_name: selfName, content: noteDraft.trim() });
-    setNoteDraft(''); getClientNotes(client.id, agency.id).then(setNotes);
+    setError('');
+    try {
+      await createClientNote({ client_id: client.id, agency_id: agency.id, author_uid: selfUid, author_name: selfName, content: noteDraft.trim() });
+      setNoteDraft(''); getClientNotes(client.id, agency.id).then(setNotes);
+    } catch (e: any) { setError(`Your note was not saved (${e?.message || 'write failed'}). It is still in the box.`); }
   };
-  const togglePin = async (n: ClientNote) => { await updateClientNote(n.id, { pinned: !n.pinned }); getClientNotes(client.id, agency.id).then(setNotes); };
-  const delNote = async (id: string) => { await deleteClientNote(id); getClientNotes(client.id, agency.id).then(setNotes); };
+  const togglePin = async (n: ClientNote) => {
+    setError('');
+    try { await updateClientNote(n.id, { pinned: !n.pinned }); getClientNotes(client.id, agency.id).then(setNotes); }
+    catch (e: any) { setError(e?.message || 'Pin failed'); }
+  };
+  const delNote = async (id: string) => {
+    setError('');
+    try { await deleteClientNote(id); getClientNotes(client.id, agency.id).then(setNotes); }
+    catch (e: any) { setError(e?.message || 'Delete failed'); }
+  };
 
   // Assignments. The role picker is controlled state per member (it used to be read back out of the
   // DOM by id), defaulting to 'analyst' exactly as before.
@@ -204,7 +216,7 @@ const ClientWorkspace: React.FC<{
                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums">{n.author_name || 'Member'} · {n.created_at ? new Date(n.created_at).toLocaleString() : ''}</p>
                       <div className="flex items-center gap-3">
                         <button onClick={() => togglePin(n)} className={rowAction}>{n.pinned ? 'Unpin' : 'Pin'}</button>
-                        {n.author_uid === selfUid && <button onClick={() => delNote(n.id)} className={`${rowAction} hover:text-[#FF0000]`}>Delete</button>}
+                        {n.author_uid === selfUid && <ConfirmTapButton onConfirm={() => delNote(n.id)} className={`${rowAction} hover:text-[#FF0000]`} />}
                       </div>
                     </div>
                     <p className="text-sm text-gray-700 mt-2">{n.content}</p>

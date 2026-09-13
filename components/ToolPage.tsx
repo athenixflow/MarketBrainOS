@@ -15,6 +15,7 @@ import {
   Tabs,
   Select,
   Badge,
+  ConfirmTapButton,
 } from './UI';
 import { runToolAnalysis, MAX_INPUT_CHARS } from '../services/geminiService';
 import { ToolAnalysisResult, TOKEN_COSTS } from '../types';
@@ -28,10 +29,12 @@ import { getScoreBand } from '../services/scoreBands';
 import { ExpectedOutcome, AnalysisPreview, RunProgress, CharCounter, FieldHint, RunStage } from './ToolGuide';
 import { ResultItemList } from './ResultSections';
 import { checkTokenBalance, canExport, TokenVerdict } from '../config/access';
+import { useRunGuard, IN_FLIGHT_NOTE } from './useRunGuard';
 
 const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
   const { user, profile, refreshProfile } = useAuth();
   const { scope, memberships } = useScope();
+  const run = useRunGuard();
 
   const initialValues = useMemo(() => {
     const v: Record<string, string> = {};
@@ -128,6 +131,11 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
     setHoneypotValue('');
     setActiveTab('');
     setSelectedContextId('');
+    // `loading` and the in-flight run were not reset here, so tool A's result landed under tool B.
+    run.stopWaiting();
+    setLoading(false);
+    setRunStage('queued');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config, initialValues]);
 
   // Load prior analyses from related tools to offer as injectable context.
@@ -202,6 +210,7 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
       contextText = `${label} analysis — ${selected.result?.summary || ''}${highlights ? ' Highlights: ' + highlights : ''}`.trim();
     }
 
+    const token = run.start();
     setLoading(true);
     setRunStage('queued');
     setError(null);
@@ -216,15 +225,18 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
       // Stamp the chosen scope: in a team workspace the user can keep a run Private.
       const effectiveScope = inTeamScope && visibilityChoice === 'private' ? { level: 'personal' as const } : scope;
       const data = await runToolAnalysis(config.module, values, user?.uid, contextText, effectiveScope);
+      if (!run.isCurrent(token)) return;   // stopped, or the user switched tools
       setRunStage('completed');
       setResult(data);
       setActiveTab(data.sections[0]?.title || '');
       if (user) await refreshProfile();
     } catch (err: any) {
       console.error(err);
+      if (!run.isCurrent(token)) return;
       setExecutionError(err.message || 'The analysis was interrupted before it finished. No tokens were deducted.');
     } finally {
-      setLoading(false);
+      run.settle();
+      if (run.isCurrent(token)) setLoading(false);
     }
   };
 
@@ -237,8 +249,8 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
 
   // Result actions (Save is automatic on success; Export handled above).
   const handleShare = async () => {
-    await copyToClipboard(exportText());
-    setActionMsg('Result copied to clipboard');
+    const copied = await copyToClipboard(exportText());
+    setActionMsg(copied ? 'Result copied to clipboard' : 'Copy failed - your browser blocked clipboard access');
     setTimeout(() => setActionMsg(''), 2500);
   };
   // saveReport() existed but had no call sites anywhere, so /reports could never populate and its
@@ -364,9 +376,10 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
 
               {error && <div className="mb-8"><ErrorMessage message={error} /></div>}
 
-              <PrimaryButton onClick={handleRun} disabled={loading} className="w-full">
-                {loading ? 'Analyzing…' : `${config.ctaVerb} (${cost} tokens)`}
+              <PrimaryButton onClick={handleRun} disabled={loading || run.inFlight} className="w-full">
+                {loading ? 'Analyzing…' : run.inFlight ? 'Finishing previous run…' : `${config.ctaVerb} (${cost} tokens)`}
               </PrimaryButton>
+              {!loading && run.inFlight && <p className="mt-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-relaxed">{IN_FLIGHT_NOTE}</p>}
             </div>
           </Card>
         </AnimatedSection>
@@ -414,15 +427,21 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
                 )}
                 <div className="flex items-center justify-between gap-4 flex-wrap pt-6 mt-6 border-t border-gray-100">
                   <div className="flex items-center gap-4 flex-wrap">
-                    <span className="inline-flex items-center gap-2 text-[10px] font-bold text-green-600 uppercase tracking-widest">
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-500" /> Saved
-                    </span>
+                    {result.savedId ? (
+                      <span className="inline-flex items-center gap-2 text-[10px] font-bold text-green-600 uppercase tracking-widest">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-500" /> Saved
+                      </span>
+                    ) : result.saveError ? (
+                      <span className="inline-flex items-center gap-2 text-[10px] font-bold text-[#FF0000] uppercase tracking-widest" role="alert">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#FF0000]" /> Not saved to History
+                      </span>
+                    ) : null}
                     <button onClick={handleRun} className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">Rerun</button>
                     <button onClick={handleShare} className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">Share</button>
                     <button onClick={handleSaveReport} disabled={savingReport} className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors disabled:opacity-40">
                       {savingReport ? 'Saving…' : 'Save as report'}
                     </button>
-                    <button onClick={handleDelete} className="text-[10px] font-bold text-gray-400 hover:text-[#FF0000] uppercase tracking-widest transition-colors">Delete</button>
+                    <ConfirmTapButton onConfirm={handleDelete} className="text-[10px] font-bold text-gray-400 hover:text-[#FF0000] uppercase tracking-widest transition-colors" />
                     {actionMsg && <span className="text-[10px] font-bold text-green-600 uppercase tracking-widest">{actionMsg}</span>}
                   </div>
                   <ExportControls
@@ -431,6 +450,7 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
                     onExportCSV={handleExportCSV}
                     onExportPDF={handleExportPDF}
                     isPro={canExport({ profile, memberships })}
+                    unsaved={result.saveError}
                   />
                 </div>
               </Card>

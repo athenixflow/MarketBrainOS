@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import AnimatedSection from '../components/AnimatedSection';
-import { PageHeader, Card, EmptyState, Skeleton, ErrorMessage, Input, Select, Badge } from '../components/UI';
+import { PageHeader, Card, EmptyState, Skeleton, ErrorMessage, Input, Select, Badge, ConfirmTapButton } from '../components/UI';
 import { useAuth } from '../context/AuthContext';
 import { getAnalysesForScope, deleteAnalysisRecord, ToolAnalysisRecord } from '../services/persistenceService';
 import { useScope } from '../context/ScopeContext';
@@ -201,7 +201,7 @@ const History: React.FC = () => {
                         </button>
                       </>
                     )}
-                    <button onClick={() => handleDelete(rec)} className="text-[10px] font-bold text-gray-400 hover:text-[#FF0000] uppercase tracking-widest transition-colors">Delete</button>
+                    <ConfirmTapButton onConfirm={() => handleDelete(rec)} className="text-[10px] font-bold text-gray-400 hover:text-[#FF0000] uppercase tracking-widest transition-colors" />
                   </div>
 
                   {isOpen && (

@@ -1,6 +1,6 @@
 // Enterprise Suite — Structure (Departments + Brands) (Phase 6.3)
 import React, { useState } from 'react';
-import { Card, PrimaryButton, Input, Select, ErrorMessage, EmptyState } from '../UI';
+import { Card, PrimaryButton, Input, Select, ErrorMessage, EmptyState, ConfirmTapButton } from '../UI';
 import { Enterprise, EnterpriseDepartment, EnterpriseBrand } from '../../types';
 import { callManageDepartment, callManageBrand } from '../../services/persistenceService';
 
@@ -50,7 +50,7 @@ const EnterpriseStructure: React.FC<{
               {departments.map(d => (
                 <div key={d.id} className="flex flex-wrap items-center justify-between gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
                   <div className="min-w-0"><p className="text-sm font-bold text-[#0B0B0B] truncate">{d.name}</p><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{d.type || 'General'}</p></div>
-                  {canManage && <button onClick={() => delDept(d.id)} className={rowAction}>Delete</button>}
+                  {canManage && <ConfirmTapButton onConfirm={() => delDept(d.id)} className={`${rowAction} hover:text-[#FF0000]`} />}
                 </div>
               ))}
             </div>
@@ -74,7 +74,7 @@ const EnterpriseStructure: React.FC<{
               {brands.map(b => (
                 <div key={b.id} className="flex flex-wrap items-center justify-between gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
                   <div className="min-w-0"><p className="text-sm font-bold text-[#0B0B0B] truncate">{b.name}</p><p className="text-[10px] font-medium text-gray-400 truncate">{b.description || 'No description'}</p></div>
-                  {canManage && <button onClick={() => delBrand(b.id)} className={rowAction}>Delete</button>}
+                  {canManage && <ConfirmTapButton onConfirm={() => delBrand(b.id)} className={`${rowAction} hover:text-[#FF0000]`} />}
                 </div>
               ))}
             </div>

@@ -1,6 +1,6 @@
 // Team Workspace — comments on a shared analysis (Phase 6.1)
 import React, { useEffect, useState } from 'react';
-import { Input, PrimaryButton, ErrorMessage, Skeleton } from '../UI';
+import { Input, PrimaryButton, ErrorMessage, Skeleton, ConfirmTapButton } from '../UI';
 import { WorkspaceComment } from '../../types';
 import {
   getAnalysisComments, createWorkspaceComment, updateWorkspaceComment, deleteWorkspaceComment,
@@ -27,22 +27,38 @@ const AnalysisComments: React.FC<{
       .finally(() => setLoading(false));
   useEffect(() => { setLoading(true); load(); }, [workspaceId, analysisId]);
 
+  // The draft is cleared only after the write resolves. It used to be cleared unconditionally while
+  // the persistence layer swallowed the error, so a failed post silently discarded what was typed.
   const add = async (content: string, parentId: string | null) => {
     if (!content.trim()) return;
-    await createWorkspaceComment({
-      workspace_id: workspaceId, analysis_id: analysisId, parent_id: parentId,
-      author_uid: selfUid, author_name: selfName, content: content.trim(),
-    });
-    setDraft(''); setReplyDraft(''); setReplyTo(null);
-    await load();
+    setError(null);
+    try {
+      await createWorkspaceComment({
+        workspace_id: workspaceId, analysis_id: analysisId, parent_id: parentId,
+        author_uid: selfUid, author_name: selfName, content: content.trim(),
+      });
+      setDraft(''); setReplyDraft(''); setReplyTo(null);
+      await load();
+    } catch (e: any) {
+      setError(`Your comment was not posted (${e?.message || 'write failed'}). It is still in the box - try again.`);
+    }
   };
 
   const saveEdit = async (id: string) => {
-    await updateWorkspaceComment(id, editDraft.trim());
-    setEditId(null); setEditDraft(''); await load();
+    setError(null);
+    try {
+      await updateWorkspaceComment(id, editDraft.trim());
+      setEditId(null); setEditDraft(''); await load();
+    } catch (e: any) {
+      setError(`Your edit was not saved (${e?.message || 'write failed'}).`);
+    }
   };
 
-  const del = async (id: string) => { await deleteWorkspaceComment(id); await load(); };
+  const del = async (id: string) => {
+    setError(null);
+    try { await deleteWorkspaceComment(id); await load(); }
+    catch (e: any) { setError(`The comment was not deleted (${e?.message || 'write failed'}).`); }
+  };
 
   const roots = comments.filter(c => !c.parent_id);
   const repliesOf = (id: string) => comments.filter(c => c.parent_id === id);
@@ -58,7 +74,7 @@ const AnalysisComments: React.FC<{
         {c.author_uid === selfUid && editId !== c.id && (
           <div className="flex items-center gap-3">
             <button onClick={() => { setEditId(c.id); setEditDraft(c.content); }} className={rowAction}>Edit</button>
-            <button onClick={() => del(c.id)} className={`${rowAction} hover:text-[#FF0000]`}>Delete</button>
+            <ConfirmTapButton onConfirm={() => del(c.id)} className={`${rowAction} hover:text-[#FF0000]`} />
           </div>
         )}
       </div>

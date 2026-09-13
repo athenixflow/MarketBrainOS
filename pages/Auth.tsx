@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { auth, googleProvider } from '../services/firebase';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   getAdditionalUserInfo,
 } from 'firebase/auth';
 import { PrimaryButton } from '../components/UI';
@@ -49,6 +51,20 @@ const AuthPage: React.FC = () => {
 
   const navigate = useNavigate();
   const { refreshProfile } = useAuth();
+
+  // Completes a Google sign-in that went through the redirect fallback below (in-app browsers
+  // block popups, so the page navigated away and came back here).
+  useEffect(() => {
+    let active = true;
+    getRedirectResult(auth).then(async (cred) => {
+      if (!active || !cred) return;
+      if (getAdditionalUserInfo(cred)?.isNewUser) callSendWelcomeEmail();
+      await refreshProfile();
+      navigate('/');
+    }).catch((err) => { if (active) setError(err?.message || 'Google sign-in did not complete. Please try again.'); });
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     let timer: number;
@@ -120,6 +136,9 @@ const AuthPage: React.FC = () => {
       if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
         message = 'The Google window closed before sign-in finished. Please try again.';
       } else if (code === 'auth/popup-blocked') {
+        // In-app browsers (Instagram, Facebook, LinkedIn) block popups and cannot be told to allow
+        // them. Fall back to the redirect flow; getRedirectResult above finishes the sign-in.
+        try { await signInWithRedirect(auth, googleProvider); return; } catch { /* fall through to the message */ }
         message = 'Your browser blocked the Google popup. Allow popups for this site, then retry.';
       } else if (code === 'auth/account-exists-with-different-credential') {
         message = 'An account already exists for this email using a different sign-in method. Use that method instead.';
@@ -221,8 +240,9 @@ const AuthPage: React.FC = () => {
         {mode === 'signup' && (
           <p className="mt-5 text-[12px] text-gray-500 leading-relaxed text-center">
             By creating an account you agree to our{' '}
-            <a href="/terms" className="text-gray-700 font-bold hover:text-[#FF0000] transition-colors">Terms</a> and{' '}
-            <a href="/privacy" className="text-gray-700 font-bold hover:text-[#FF0000] transition-colors">Privacy Policy</a>.
+            {/* Router links in a new tab: a plain <a> reloaded the app and lost the typed form. */}
+            <Link to="/terms" target="_blank" rel="noopener" className="text-gray-700 font-bold hover:text-[#FF0000] transition-colors">Terms</Link> and{' '}
+            <Link to="/privacy" target="_blank" rel="noopener" className="text-gray-700 font-bold hover:text-[#FF0000] transition-colors">Privacy Policy</Link>.
           </p>
         )}
       </form>

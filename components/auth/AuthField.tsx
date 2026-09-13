@@ -7,7 +7,7 @@
 import React, { useId, useState } from 'react';
 
 const FIELD_BASE =
-  'w-full bg-white border rounded-2xl px-4 py-3.5 text-[15px] text-[#0B0B0B] placeholder:text-gray-500 outline-none transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
+  'w-full bg-white border rounded-2xl px-4 py-3.5 text-base text-[#0B0B0B] placeholder:text-gray-500 outline-none transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
 
 export const AuthField: React.FC<{
   label: string;

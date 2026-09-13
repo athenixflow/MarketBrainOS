@@ -34,6 +34,8 @@ import { SecurityEngine } from '../services/securityEngine';
 import { isFixtureRequested } from '../services/devFixtures';
 import { checkTokenBalance, canExport, TokenVerdict } from '../config/access';
 import { useScope } from '../context/ScopeContext';
+import { useRunGuard, IN_FLIGHT_NOTE } from '../components/useRunGuard';
+import { resolveWinner } from '../services/resultItems';
 
 const chip = (active: boolean) =>
   `px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${active ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`;
@@ -41,6 +43,7 @@ const chip = (active: boolean) =>
 const TestLabPro: React.FC = () => {
   const { user, profile, refreshProfile } = useAuth();
   const { memberships } = useScope();
+  const run = useRunGuard();
   const [comparisonType, setComparisonType] = useState('Angles');
   const [variants, setVariants] = useState<string[]>(['', '']);
   const [loading, setLoading] = useState(false);
@@ -161,21 +164,25 @@ const TestLabPro: React.FC = () => {
       }
     }
 
+    const token = run.start();
     setLoading(true);
     setError(null);
     setExecutionError(null);
     setResults(null);
     try {
       const data = await runTestLabComparison(comparisonType, uniqueVariants, user?.uid, { audience, goal, channel, product });
+      if (!run.isCurrent(token)) return;
       setResults(data);
 
       if (user) await refreshProfile();
 
     } catch (err: any) {
       console.error(err);
+      if (!run.isCurrent(token)) return;
       setExecutionError(err.message || "The comparison was interrupted before it finished. No tokens were deducted.");
     } finally {
-      setLoading(false);
+      run.settle();
+      if (run.isCurrent(token)) setLoading(false);
     }
   };
 
@@ -198,24 +205,9 @@ const TestLabPro: React.FC = () => {
     return exportTextPdf("TestLab Pro Performance Report", formatTestLabExport(results));
   };
 
-  // Exact label equality alone was fragile: the model returns e.g. "A" while winnerLabel reads
-  // "Variant A", which produced a card headed " is the Projected Winner" over an empty quote block.
-  // Fall back through looser matches, then to the highest-scoring variant.
+  // Shared with Workflow - see resolveWinner for why exact label equality is not enough.
   const scoredVariants = results?.variants || [];
-  const winningVariant = (() => {
-    if (!results || scoredVariants.length === 0) return null;
-    const target = (results.winnerLabel || '').trim().toLowerCase();
-    if (target) {
-      const exact = scoredVariants.find(v => (v.label || '').trim().toLowerCase() === target);
-      if (exact) return exact;
-      const loose = scoredVariants.find(v => {
-        const label = (v.label || '').trim().toLowerCase();
-        return !!label && (label.includes(target) || target.includes(label));
-      });
-      if (loose) return loose;
-    }
-    return scoredVariants.reduce((best, v) => ((v.score || 0) > (best.score || 0) ? v : best), scoredVariants[0]);
-  })();
+  const winningVariant = results ? resolveWinner(scoredVariants, results.winnerLabel) : null;
 
   const isSuspended = profile?.is_suspended;
   // Every paying plan, plus invited members - see canExport. `tier === 'pro'` locked out Team/Agency/Enterprise.
@@ -321,18 +313,19 @@ const TestLabPro: React.FC = () => {
 
                   <PrimaryButton
                     type="submit"
-                    disabled={loading || variants.filter(v => v.trim() !== '').length < 2 || variants.some(v => v.length > MAX_INPUT_CHARS)}
+                    disabled={loading || run.inFlight || variants.filter(v => v.trim() !== '').length < 2 || variants.some(v => v.length > MAX_INPUT_CHARS)}
                     className="w-full"
                   >
-                    {loading ? 'Comparing variations…' : 'Run test'}
+                    {loading ? 'Comparing variations…' : run.inFlight ? 'Finishing previous run…' : 'Run test'}
                   </PrimaryButton>
+                  {!loading && run.inFlight && <p className="mt-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest leading-relaxed text-center">{IN_FLIGHT_NOTE}</p>}
                 </div>
               </form>
             )}
           </Card>
         </AnimatedSection>
 
-        {loading && <LoadingState message="Scoring your variations…" isTakingLong={isTakingLong} onCancel={() => setLoading(false)} />}
+        {loading && <LoadingState message="Scoring your variations…" isTakingLong={isTakingLong} onCancel={() => { run.stopWaiting(); setLoading(false); }} />}
 
         {executionError && isSystemBlockError(executionError) ? (
            <SystemBlockState message={executionError} />
@@ -367,6 +360,7 @@ const TestLabPro: React.FC = () => {
                 onExportText={handleExportTxt}
                 onExportPDF={handleExportPDF}
                 isPro={isPro}
+                unsaved={results?.saveError}
               />
             </div>
 

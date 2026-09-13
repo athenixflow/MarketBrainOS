@@ -417,6 +417,8 @@ export interface ToolAnalysisResult {
   summary: string;    // executive summary
   sections: AnalysisSection[];
   savedId?: string;   // Firestore id of the persisted record (set after save), for delete
+  /** Set when the analysis succeeded (and was billed) but the History save failed. The result is still shown. */
+  saveError?: string;
 }
 
 export interface SystemSettings {
@@ -622,6 +624,7 @@ export interface AngleHook {
 }
 
 export interface AngleMinerResults {
+  saveError?: string;
   angles: MarketingAngle[];
   hooks?: AngleHook[];
 }
@@ -633,6 +636,7 @@ export interface TestLabVariant {
 }
 
 export interface TestLabResults {
+  saveError?: string;
   variants: TestLabVariant[];
   winnerLabel: string;
   explanation: string;
@@ -667,6 +671,7 @@ export interface AuditResult {
   fixes: AuditFix[];
   rewrites?: AuditRewrite[];
   auditedUrl?: string;
+  saveError?: string;
 }
 
 export interface DiagnosticResult {

@@ -37,10 +37,13 @@ import { copyToClipboard, downloadAsText, exportTextPdf, formatWorkflowExport } 
 import { SecurityEngine } from '../services/securityEngine';
 import { checkTokenBalance, canExport, TokenVerdict } from '../config/access';
 import { useScope } from '../context/ScopeContext';
+import { useRunGuard, IN_FLIGHT_NOTE } from '../components/useRunGuard';
+import { resolveWinner } from '../services/resultItems';
 
 const Workflow: React.FC = () => {
   const { user, profile, refreshProfile } = useAuth();
   const { memberships } = useScope();
+  const run = useRunGuard();
   const [step, setStep] = useState(0); 
   const [loading, setLoading] = useState(false);
   const [isTakingLong, setIsTakingLong] = useState(false);
@@ -120,19 +123,23 @@ const Workflow: React.FC = () => {
     // Step 1 calls AngleMiner_Generate (Cost 3)
     if (!checkTokenAvailability(TOKEN_COSTS.AngleMiner)) return;
 
+    const token = run.start();
     setLoading(true);
     setError(null);
     setExecutionError(null);
     try {
       const data = await analyzeMarketingAngle(minerParams); 
+      if (!run.isCurrent(token)) return;
       setMinerResults(data);
       // We must refresh profile because tokens were deducted on server
       if (user) await refreshProfile(); 
       nextStep();
     } catch (err: any) {
+      if (!run.isCurrent(token)) return;
       setExecutionError(err.message || "Generating angles failed.");
     } finally {
-      setLoading(false);
+      run.settle();
+      if (run.isCurrent(token)) setLoading(false);
     }
   };
 
@@ -146,18 +153,22 @@ const Workflow: React.FC = () => {
     // Step 3 calls TestLab_Simulation (Cost 5)
     if (!checkTokenAvailability(TOKEN_COSTS.TestLab)) return;
 
+    const token = run.start();
     setLoading(true);
     setError(null);
     setExecutionError(null);
     try {
       const data = await runTestLabComparison('Angles', selectedAngleTexts); 
+      if (!run.isCurrent(token)) return;
       setTestResults(data);
       if (user) await refreshProfile();
       nextStep();
     } catch (err: any) {
+      if (!run.isCurrent(token)) return;
       setExecutionError(err.message || "Simulation error.");
     } finally {
-      setLoading(false);
+      run.settle();
+      if (run.isCurrent(token)) setLoading(false);
     }
   };
 
@@ -168,25 +179,29 @@ const Workflow: React.FC = () => {
     // Step 4 calls ConversionDoctor_Audit (Cost 4)
     if (!checkTokenAvailability(TOKEN_COSTS.ConversionDoctor)) return;
 
+    const token = run.start();
     setLoading(true);
     setError(null);
     setExecutionError(null);
     try {
       const data = await auditConversion(auditInput, 'Landing Page');
+      if (!run.isCurrent(token)) return;
       setAuditResult(data);
       if (user) await refreshProfile();
       nextStep();
     } catch (err: any) {
+      if (!run.isCurrent(token)) return;
       setExecutionError(err.message || "Audit engine failed.");
     } finally {
-      setLoading(false);
+      run.settle();
+      if (run.isCurrent(token)) setLoading(false);
     }
   };
 
   const handleRunImprovement = async () => {
     if (await checkHoneypot()) return;
     if (!testResults || !auditResult) return;
-    const winner = (testResults.variants || []).find(v => v.label === testResults.winnerLabel);
+    const winner = resolveWinner(testResults.variants, testResults.winnerLabel);
     if (!winner) {
       setError("Validation Error: No winning variant found in test results.");
       return;
@@ -195,6 +210,7 @@ const Workflow: React.FC = () => {
     // Step 5 calls Workflow_ImproveAssets (Cost 6)
     if (!checkTokenAvailability(TOKEN_COSTS.Workflow)) return;
 
+    const token = run.start();
     setLoading(true);
     setError(null);
     setExecutionError(null);
@@ -208,14 +224,16 @@ const Workflow: React.FC = () => {
         winner.score,
         auditResult.score
       );
-      
+      if (!run.isCurrent(token)) return;
       setFinalImprovements(data);
       if (user) await refreshProfile();
       nextStep();
     } catch (err: any) {
+      if (!run.isCurrent(token)) return;
       setExecutionError(err.message || "Asset refinement failed.");
     } finally {
-      setLoading(false);
+      run.settle();
+      if (run.isCurrent(token)) setLoading(false);
     }
   };
 
@@ -225,8 +243,9 @@ const Workflow: React.FC = () => {
     );
   };
 
-  const winningAngleText = (testResults?.variants || []).find(v => v.label === testResults?.winnerLabel)?.text;
-  const winningAngleScore = (testResults?.variants || []).find(v => v.label === testResults?.winnerLabel)?.score || 0;
+  const winningVariant = resolveWinner(testResults?.variants, testResults?.winnerLabel);
+  const winningAngleText = winningVariant?.text;
+  const winningAngleScore = winningVariant?.score || 0;
 
   const handleCopy = () => {
     if (winningAngleText && auditResult && finalImprovements) {
@@ -389,16 +408,16 @@ const Workflow: React.FC = () => {
               <SecondaryButton onClick={() => setStep(0)}>Cancel</SecondaryButton>
               <PrimaryButton
                 type="submit"
-                disabled={loading || !minerParams.product}
+                disabled={loading || run.inFlight || !minerParams.product}
               >
-                Generate angles
+                {run.inFlight && !loading ? 'Finishing previous run…' : 'Generate angles'}
               </PrimaryButton>
             </div>
           </form>
         </Card>
       )}
 
-      {loading && <LoadingState message="Working on it…" isTakingLong={isTakingLong} onCancel={() => setLoading(false)} />}
+      {loading && <LoadingState message="Working on it…" isTakingLong={isTakingLong} onCancel={() => { run.stopWaiting(); setLoading(false); }} />}
 
       {step === 2 && !loading && minerResults && (
         <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -427,7 +446,7 @@ const Workflow: React.FC = () => {
           </div>
           <div className="flex flex-wrap justify-between gap-4 pt-8">
             <SecondaryButton tone="dark" onClick={prevStep}>Back</SecondaryButton>
-            <PrimaryButton onClick={handleStartTest} disabled={selectedAngleTexts.length < 2}>
+            <PrimaryButton onClick={handleStartTest} disabled={loading || run.inFlight || selectedAngleTexts.length < 2}>
               Continue to simulator ({selectedAngleTexts.length}/3)
             </PrimaryButton>
           </div>
@@ -465,7 +484,7 @@ const Workflow: React.FC = () => {
             />
             <div className="flex flex-wrap justify-between gap-4 pt-8">
               <SecondaryButton onClick={prevStep}>Back</SecondaryButton>
-              <PrimaryButton type="submit" disabled={loading || !auditInput}>
+              <PrimaryButton type="submit" disabled={loading || run.inFlight || !auditInput}>
                 Run conversion audit
               </PrimaryButton>
             </div>
@@ -502,7 +521,7 @@ const Workflow: React.FC = () => {
             </div>
           </div>
           <div className="flex flex-col gap-6">
-            <PrimaryButton onClick={handleRunImprovement} disabled={loading} className="w-full">
+            <PrimaryButton onClick={handleRunImprovement} disabled={loading || run.inFlight} className="w-full">
               Generate final improved assets
             </PrimaryButton>
             <button onClick={nextStep} className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest text-center transition-colors">Skip to summary</button>
@@ -513,15 +532,18 @@ const Workflow: React.FC = () => {
       {step === 6 && !loading && (
         <ResultContainer>
           <div className="max-w-5xl mx-auto space-y-12">
-            <div className="flex justify-center mb-12">
-              <ExportControls
-                tone="dark"
-                onCopy={handleCopy}
-                onExportText={handleExportTxt}
-                onExportPDF={handleExportPDF}
-                isPro={isPro}
-              />
-            </div>
+            {finalImprovements && (
+              <div className="flex justify-center mb-12">
+                <ExportControls
+                  tone="dark"
+                  onCopy={handleCopy}
+                  onExportText={handleExportTxt}
+                  onExportPDF={handleExportPDF}
+                  isPro={isPro}
+                  unsaved={(finalImprovements as any)?.saveError}
+                />
+              </div>
+            )}
             {/* The headline must not claim success when there is nothing to show: "Skip to Summary"
                 reaches this screen without ever generating assets. */}
             <div className="text-center mb-20 animate-in fade-in slide-in-from-top-2 duration-500">

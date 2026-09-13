@@ -1,7 +1,8 @@
 
 import { AngleMinerResults, TestLabResults, AuditResult, ToolAnalysisResult, ResultItem, PaymentRecord } from '../types';
-import { asText } from './resultItems';
+import { asText, resolveWinner } from './resultItems';
 import { buildResultPdf, buildTextPdf } from './pdfReport';
+import { toDate } from './time';
 
 // Result items are either plain strings (legacy) or structured { insight, evidence, action }.
 // This flattens them for the text/CSV formats. The headline goes through the shared asText() rather
@@ -92,7 +93,7 @@ export const toolResultToCSV = (result: ToolAnalysisResult): (string | number)[]
 export const paymentsToCSV = (records: PaymentRecord[]): (string | number)[][] => {
   const rows: (string | number)[][] = [['Date', 'Reference', 'Type', 'Amount (USD)', 'Tokens', 'Provider', 'Status']];
   records.forEach(p => {
-    const date = p.created_at?.toMillis ? new Date(p.created_at.toMillis()).toISOString() : '';
+    const date = p.created_at ? toDate(p.created_at).toISOString() : '';
     rows.push([
       date,
       p.payment_reference || '',
@@ -170,7 +171,7 @@ export const formatAngleMinerExport = (results: AngleMinerResults): string => {
 };
 
 export const formatTestLabExport = (results: TestLabResults): string => {
-  const winner = (results.variants || []).find(v => v.label === results.winnerLabel);
+  const winner = resolveWinner(results.variants, results.winnerLabel);
   let output = "TESTLAB PRO: PERFORMANCE PREDICTION REPORT\n\n";
   
   output += `PROJECTED WINNER: ${results.winnerLabel}\n`;

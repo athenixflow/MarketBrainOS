@@ -61,6 +61,22 @@ const ANALYSIS_TIMEOUT_MS = 310000;
 /** The server's full envelope. Only Conversion Doctor needs more than `result` (see auditConversion). */
 interface JobEnvelope { result: any; fetchedUrl: string | null; }
 
+/**
+ * Runs a History save for a result the server has already produced and billed. A rejected write
+ * used to propagate to the page's catch, which rendered the failure state with "No tokens were
+ * deducted" - false - and dropped the result. The result is now returned regardless, carrying
+ * `saveError` so the page can show it while still showing the analysis.
+ */
+const persistOrFlag = async <T extends { saveError?: string }>(result: T, save: () => Promise<any>): Promise<any> => {
+  try {
+    return await save();
+  } catch (e: any) {
+    console.error('History save failed (result kept):', e);
+    result.saveError = e?.message || 'the record could not be written';
+    return null;
+  }
+};
+
 const executeAsyncJobWithMeta = async (module: string, input: any, scope?: Scope): Promise<JobEnvelope> => {
   const user = auth.currentUser;
   if (!user) throw new Error("ERR_AUTH_REQUIRED: User must be logged in.");
@@ -113,7 +129,7 @@ export const analyzeMarketingAngle = async (params: any, userId?: string) => {
   SystemContracts.AngleMiner.inputValidator(params);
   const result = await executeAsyncJob('AngleMiner_Generate', params);
   SystemContracts.AngleMiner.outputValidator(result);
-  if (userId) await saveAngleMinerResult(userId, params.product, params.industry, params.target, result);
+  if (userId) await persistOrFlag(result, () => saveAngleMinerResult(userId, params.product, params.industry, params.target, result));
   return result;
 };
 
@@ -125,7 +141,7 @@ export const runTestLabComparison = async (type: string, variants: string[], use
   SystemContracts.TestLab.inputValidator({ type, variants });
   const result = await executeAsyncJob('TestLab_Simulation', { type, variants, ...(extra || {}) });
   SystemContracts.TestLab.outputValidator(result);
-  if (userId) await saveTestLabResult(userId, type, variants, result);
+  if (userId) await persistOrFlag(result, () => saveTestLabResult(userId, type, variants, result));
   return result;
 };
 
@@ -137,14 +153,14 @@ export const auditConversion = async (input: string, context: string, userId?: s
   // The report used to be labelled with whatever the user typed, which stamped a real URL onto an
   // audit of nothing. `auditedUrl` now means "we fetched this", so it is set here or not at all.
   const audited = fetchedUrl ? { ...result, auditedUrl: fetchedUrl } : result;
-  if (userId) await saveConversionDoctorResult(userId, input, result.score, audited);
+  if (userId) await persistOrFlag(audited, () => saveConversionDoctorResult(userId, input, result.score, audited));
   return audited;
 };
 
 export const improveWorkflowAssets = async (angle: string, issues: string[], userId?: string, testScore?: number, auditScore?: number) => {
   const result = await executeAsyncJob('Workflow_ImproveAssets', { angle, issues });
   SystemContracts.Workflow.outputValidator(result);
-  if (userId) await saveWorkflowRun(userId, angle, testScore || 0, auditScore || 0, result);
+  if (userId) await persistOrFlag(result, () => saveWorkflowRun(userId, angle, testScore || 0, auditScore || 0, result));
   return result;
 };
 
@@ -199,7 +215,7 @@ export const runToolAnalysis = async (
   }
 
   if (userId) {
-    const saved = await saveGenericAnalysis(userId, module, inputs, result, scope);
+    const saved = await persistOrFlag(result, () => saveGenericAnalysis(userId, module, inputs, result, scope));
     if (saved && (saved as any).id) result.savedId = (saved as any).id;
     // §39 Analysis notification (best-effort).
     createNotification(userId, 'Analysis', 'Analysis complete', `Your ${module.replace(/_.*/, '')} analysis is ready to view.`);

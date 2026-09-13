@@ -2,7 +2,7 @@
 // role, a per-member tool allowlist, and a per-cycle token budget drawn from the agency pool.
 // Markup is kept identical to team/TeamMembers and enterprise/EnterpriseMembers.
 import React, { useMemo, useState } from 'react';
-import { Card, PrimaryButton, SecondaryButton, Input, Select, Checkbox, Stat, Badge, ErrorMessage, SuccessMessage } from '../UI';
+import { Card, PrimaryButton, SecondaryButton, Input, Select, Checkbox, Stat, Badge, ErrorMessage, SuccessMessage, ConfirmTapButton } from '../UI';
 import { Agency, WorkspaceMember, AgencyRole } from '../../types';
 import { callCreateAgencyMember, callUpdateAgencyMember, callManageAgencyMember } from '../../services/persistenceService';
 import { can, Membership, ROLE_LABELS } from '../../services/permissionService';
@@ -136,7 +136,7 @@ const AgencyMembers: React.FC<{
                 {canManage && !isOwner && m.uid !== selfUid && (
                   <div className="flex items-center gap-3 shrink-0">
                     <button onClick={() => startEdit(m)} className={rowAction}>Edit</button>
-                    <button onClick={() => remove(m.uid)} className={`${rowAction} hover:text-[#FF0000]`}>Remove</button>
+                    <ConfirmTapButton onConfirm={() => remove(m.uid)} label="Remove" confirmLabel="Confirm remove" className={`${rowAction} hover:text-[#FF0000]`} />
                   </div>
                 )}
               </div>

@@ -43,3 +43,25 @@ export const asText = (v: any, depth = 0): string => {
 
 /** Plain-text form of a result item — the headline, or the string itself. */
 export const itemText = (item: ResultItem): string => asText(item);
+
+/**
+ * Which variant won a TestLab run. Exact label equality alone is fragile: the model returns e.g.
+ * "A" while winnerLabel reads "Variant A". TestLabPro grew loose/max-score fallbacks for this and
+ * documented the empty " is the Projected Winner" card it caused; Workflow kept the exact match and
+ * dead-ended at step 5 with "No winning variant found" after three billed tools. One resolver now.
+ */
+export const resolveWinner = <V extends { label?: string; score?: number }>(variants: V[] | undefined | null, winnerLabel?: string | null): V | null => {
+  const list = variants || [];
+  if (list.length === 0) return null;
+  const target = (winnerLabel || '').trim().toLowerCase();
+  if (target) {
+    const exact = list.find((v) => (v.label || '').trim().toLowerCase() === target);
+    if (exact) return exact;
+    const loose = list.find((v) => {
+      const label = (v.label || '').trim().toLowerCase();
+      return !!label && (label.includes(target) || target.includes(label));
+    });
+    if (loose) return loose;
+  }
+  return list.reduce((best, v) => ((v.score || 0) > (best.score || 0) ? v : best), list[0]);
+};

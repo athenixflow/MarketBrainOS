@@ -15,6 +15,7 @@ import {
   ExportControls,
   HoneypotField,
   UsageLimitModal,
+  CopyButton,
   TokenStatusBanner,
   AnalysisFailureState,
   SystemBlockState,
@@ -33,6 +34,7 @@ import { getScoreBand } from '../services/scoreBands';
 import { isFixtureRequested } from '../services/devFixtures';
 import { checkTokenBalance, canExport, TokenVerdict } from '../config/access';
 import { useScope } from '../context/ScopeContext';
+import { useRunGuard, IN_FLIGHT_NOTE } from '../components/useRunGuard';
 
 const chip = (active: boolean) =>
   `px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${active ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`;
@@ -48,6 +50,7 @@ const severityTone = (s?: string): BadgeTone => {
 const ConversionDoctor: React.FC = () => {
   const { user, profile, refreshProfile } = useAuth();
   const { memberships } = useScope();
+  const run = useRunGuard();
   const [input, setInput] = useState('');
   const [context, setContext] = useState('Landing Page');
   const [audience, setAudience] = useState('');
@@ -164,12 +167,14 @@ const ConversionDoctor: React.FC = () => {
       return;
     }
 
+    const token = run.start();
     setLoading(true);
     setError(null);
     setExecutionError(null);
     setResult(null);
     try {
       const data = await auditConversion(trimmedInput, context, user?.uid, { audience, goal, trafficSource });
+      if (!run.isCurrent(token)) return;
       // `auditedUrl` comes from the server and only when it genuinely fetched the page - see auditConversion.
       setResult({ ...data });
 
@@ -177,12 +182,14 @@ const ConversionDoctor: React.FC = () => {
 
     } catch (err: any) {
       console.error("Audit failed:", err);
+      if (!run.isCurrent(token)) return;
       // The server now returns a specific, actionable reason for an unreadable page ("That page
       // returned 404 Not Found", "...resolves to a private address"). Replacing it with generic advice
       // - as this used to - threw away the only part the user could act on.
       setExecutionError(err.message || "The audit was interrupted before it finished. No tokens were deducted.");
     } finally {
-      setLoading(false);
+      run.settle();
+      if (run.isCurrent(token)) setLoading(false);
     }
   };
 
@@ -299,11 +306,12 @@ const ConversionDoctor: React.FC = () => {
                 <div className="flex flex-col gap-6">
                   <PrimaryButton
                     type="submit"
-                    disabled={loading || !input.trim() || input.length > MAX_INPUT_CHARS || !validation.isValid}
+                    disabled={loading || run.inFlight || !input.trim() || input.length > MAX_INPUT_CHARS || !validation.isValid}
                     className="w-full"
                   >
-                    {loading ? 'Auditing your page…' : 'Run conversion audit'}
+                    {loading ? 'Auditing your page…' : run.inFlight ? 'Finishing previous run…' : 'Run conversion audit'}
                   </PrimaryButton>
+                  {!loading && run.inFlight && <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest leading-relaxed text-center">{IN_FLIGHT_NOTE}</p>}
                   {result && !loading && (
                     <button
                       type="button"
@@ -319,7 +327,7 @@ const ConversionDoctor: React.FC = () => {
           </Card>
         </AnimatedSection>
 
-        {loading && <LoadingState message="Auditing your page…" isTakingLong={isTakingLong} onCancel={() => setLoading(false)} />}
+        {loading && <LoadingState message="Auditing your page…" isTakingLong={isTakingLong} onCancel={() => { run.stopWaiting(); setLoading(false); }} />}
 
         {executionError && isSystemBlockError(executionError) ? (
            <SystemBlockState message={executionError} />
@@ -348,6 +356,7 @@ const ConversionDoctor: React.FC = () => {
                 onExportText={handleExportTxt}
                 onExportPDF={handleExportPDF}
                 isPro={isPro}
+                unsaved={result?.saveError}
               />
             </div>
 
@@ -444,12 +453,7 @@ const ConversionDoctor: React.FC = () => {
                         <span className="text-[10px] font-bold uppercase tracking-widest text-[#FF0000]">Rewrite</span>
                         <p className="mt-1 text-sm text-[#0B0B0B] font-bold leading-relaxed">"{rw.text}"</p>
                       </div>
-                      <button
-                        onClick={() => copyToClipboard(rw.text)}
-                        className="mt-4 text-[10px] font-bold text-[#FF0000] hover:opacity-60 transition-opacity uppercase tracking-widest border-b border-[#FF0000]/10 pb-1"
-                      >
-                        Copy rewrite
-                      </button>
+                      <CopyButton text={rw.text} label="Copy rewrite" className="mt-4 text-[10px] font-bold text-[#FF0000] hover:opacity-60 transition-opacity uppercase tracking-widest border-b border-[#FF0000]/10 pb-1" />
                     </div>
                   ))}
                 </div>
