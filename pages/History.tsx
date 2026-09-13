@@ -7,7 +7,8 @@ import { getAnalysesForScope, deleteAnalysisRecord, ToolAnalysisRecord } from '.
 import { useScope } from '../context/ScopeContext';
 import { getToolMeta } from '../config/toolConfigs';
 import { getScoreBand } from '../services/scoreBands';
-import { downloadAsCSV, toolResultToCSV, printToolResultPDF } from '../services/exportService';
+import { canExport } from '../config/access';
+import { downloadAsCSV, toolResultToCSV, exportResultPdf } from '../services/exportService';
 import { ResultItemList } from '../components/ResultSections';
 
 // The bespoke tools are not in TOOL_CONFIG_LIST, so getToolMeta cannot resolve their route.
@@ -22,8 +23,10 @@ const LOAD_ERROR = 'We could not load your history. Please try again.';
 const rowAction = 'text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors';
 
 const History: React.FC = () => {
-  const { user } = useAuth();
-  const { scope } = useScope();
+  const { user, profile } = useAuth();
+  const { scope, memberships } = useScope();
+  // Exports are a paid feature everywhere; this page used to show them to Free accounts.
+  const exportsAllowed = canExport({ profile, memberships });
   const [records, setRecords] = useState<ToolAnalysisRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +34,8 @@ const History: React.FC = () => {
   const [search, setSearch] = useState('');
   const [toolFilter, setToolFilter] = useState('all');
   const [expandedId, setExpandedId] = useState<string>('');
+  // Per-row PDF state: the file is built on demand, and a failure must be visible on the row.
+  const [pdfState, setPdfState] = useState<{ id: string; status: 'busy' | 'fail' } | null>(null);
 
   // Unified history: results shown reflect the ACTIVE scope (personal vs a shared container).
   useEffect(() => {
@@ -68,6 +73,17 @@ const History: React.FC = () => {
 
   // Routed by record source: bespoke rows live in their own collections, so deleting them via the
   // generic deleter would target the wrong collection and silently do nothing.
+  const exportPdf = async (id: string, title: string, result: any) => {
+    setPdfState({ id, status: 'busy' });
+    try {
+      await exportResultPdf(title, result);
+      setPdfState(null);
+    } catch {
+      setPdfState({ id, status: 'fail' });
+      setTimeout(() => setPdfState((s) => (s?.id === id ? null : s)), 3000);
+    }
+  };
+
   const handleDelete = async (rec: ToolAnalysisRecord) => {
     // Unguarded before: a rejected delete became an unhandled promise rejection, the row stayed put,
     // and the click looked like it simply did nothing.
@@ -171,13 +187,17 @@ const History: React.FC = () => {
                       {isOpen ? 'Hide' : 'View'}
                     </button>
                     {slug && <Link to={`/${slug}`} className={rowAction}>Reopen tool</Link>}
-                    {rec.result && (
+                    {rec.result && exportsAllowed && (
                       <>
                         <button onClick={() => downloadAsCSV(`${label.replace(/\s+/g, '_')}_Report`, toolResultToCSV(rec.result))} className={rowAction}>
                           Export CSV
                         </button>
-                        <button onClick={() => printToolResultPDF(`${label} Report`, rec.result)} className={rowAction}>
-                          Export PDF
+                        <button
+                          onClick={() => exportPdf(rec.id, `${label} Report`, rec.result)}
+                          disabled={pdfState?.id === rec.id && pdfState.status === 'busy'}
+                          className={`${rowAction} ${pdfState?.id === rec.id && pdfState.status === 'fail' ? '!text-[#FF0000]' : ''} disabled:opacity-60`}
+                        >
+                          {pdfState?.id === rec.id ? (pdfState.status === 'busy' ? 'Preparing PDF…' : 'PDF failed') : 'Export PDF'}
                         </button>
                       </>
                     )}

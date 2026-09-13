@@ -1,23 +1,19 @@
 
 import { AngleMinerResults, TestLabResults, AuditResult, ToolAnalysisResult, ResultItem, PaymentRecord } from '../types';
 import { asText } from './resultItems';
+import { buildResultPdf, buildTextPdf } from './pdfReport';
 
 // Result items are either plain strings (legacy) or structured { insight, evidence, action }.
-// These flatten them for each export format. The headline goes through the shared asText() rather
+// This flattens them for the text/CSV formats. The headline goes through the shared asText() rather
 // than reading `insight` directly: reading one hardcoded key is what made an unrecognised shape
-// export as an empty bullet, with no error anywhere to say so.
+// export as an empty bullet, with no error anywhere to say so. (The PDF layout does its own
+// flattening in services/pdfReport.ts, from the same asText.)
 const itemToText = (item: ResultItem): string => {
   if (typeof item === 'string') return item;
   const parts = [asText(item)];
   if (item.evidence) parts.push(`Why: ${asText(item.evidence)}`);
   if (item.action) parts.push(`Action: ${asText(item.action)}`);
   return parts.filter(Boolean).join(' — ');
-};
-const itemToHtml = (item: ResultItem, esc: (s: string) => string): string => {
-  if (typeof item === 'string') return `<li>${esc(item)}</li>`;
-  const why = item.evidence ? `<div style="color:#555;margin-top:4px"><strong>Why it matters:</strong> ${esc(asText(item.evidence))}</div>` : '';
-  const act = item.action ? `<div style="color:#111;margin-top:4px"><strong>Do this:</strong> ${esc(asText(item.action))}</div>` : '';
-  return `<li><strong>${esc(asText(item))}</strong>${why}${act}</li>`;
 };
 
 /**
@@ -35,15 +31,33 @@ export const copyToClipboard = async (text: string) => {
   }
 };
 
-export const downloadAsText = (filename: string, text: string) => {
-  const element = document.createElement('a');
-  const file = new Blob([text], { type: 'text/plain' });
-  element.href = URL.createObjectURL(file);
-  element.download = `${filename}.txt`;
-  document.body.appendChild(element);
-  element.click();
-  document.body.removeChild(element);
+/**
+ * Hands a file to the browser. One implementation for txt/csv/pdf so they cannot drift.
+ *
+ * The object URL is revoked on a delay rather than synchronously: iOS Safari starts the download
+ * after the click returns, and revoking first hands it a dead URL. The `window.open` branch is for
+ * WebViews without anchor-download support (in-app browsers), where showing the file inline with
+ * the OS share sheet is the best available outcome.
+ */
+export const downloadBlob = (filename: string, blob: Blob): void => {
+  const url = URL.createObjectURL(blob);
+  const supportsDownload = typeof HTMLAnchorElement !== 'undefined' && 'download' in HTMLAnchorElement.prototype;
+  if (supportsDownload) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } else {
+    window.open(url, '_blank');
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 };
+
+export const downloadAsText = (filename: string, text: string) =>
+  downloadBlob(`${filename}.txt`, new Blob([text], { type: 'text/plain;charset=utf-8' }));
 
 // --- CSV EXPORT (§50) ---
 
@@ -53,31 +67,14 @@ const escapeCSVField = (value: unknown): string => {
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
-/**
- * HTML text escaping for the print/PDF documents below. They render in a same-origin iframe, so
- * anything interpolated into them unescaped would execute with access to the user's session. Every
- * value written into print markup must go through this. `& < >` covers it because all the sinks are
- * text contexts (<title>, <h1>, <pre>, <li>) — never an attribute or URL, which would need wider
- * escaping.
- */
-const esc = (s: unknown): string =>
-  String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] as string));
-
 /** Serialize a 2D array of cells to a CSV string (one row per inner array). */
 export const rowsToCSV = (rows: (string | number)[][]): string =>
   rows.map(row => row.map(escapeCSVField).join(',')).join('\r\n');
 
 /** Trigger a .csv download from a 2D array of cells. */
-export const downloadAsCSV = (filename: string, rows: (string | number)[][]) => {
+export const downloadAsCSV = (filename: string, rows: (string | number)[][]) =>
   // Prepend BOM so Excel reads UTF-8 correctly.
-  const blob = new Blob(['﻿' + rowsToCSV(rows)], { type: 'text/csv;charset=utf-8;' });
-  const element = document.createElement('a');
-  element.href = URL.createObjectURL(blob);
-  element.download = `${filename}.csv`;
-  document.body.appendChild(element);
-  element.click();
-  document.body.removeChild(element);
-};
+  downloadBlob(`${filename}.csv`, new Blob(['﻿' + rowsToCSV(rows)], { type: 'text/csv;charset=utf-8;' }));
 
 /** Flatten a universal ToolAnalysisResult into CSV rows (Section,Item). */
 export const toolResultToCSV = (result: ToolAnalysisResult): (string | number)[][] => {
@@ -110,117 +107,35 @@ export const paymentsToCSV = (records: PaymentRecord[]): (string | number)[][] =
 };
 
 /**
- * Renders a complete HTML document off-screen and opens the browser's print dialog for it.
+ * "Export PDF" builds real PDF bytes (services/pdfReport.ts) and downloads them.
  *
- * This replaces `window.open('', '_blank')`, which failed two ways and reported neither:
- *  - a blocked popup made `window.open` return null, and the caller returned silently, so clicking
- *    Export PDF simply did nothing. Any popup blocker or blocking extension triggered it.
- *  - `print()` was followed immediately by `close()`, destroying the document in the same tick the
- *    dialog was trying to render it, which prints blank or dismisses itself.
+ * This replaces a hidden-iframe `contentWindow.print()` that depended on the OS print dialog. On
+ * WebKit - every browser on iOS - print() invoked on a child frame prints the PARENT page, so phones
+ * produced a PDF of the app shell instead of the report. Generating the file removes the print
+ * dialog from the path entirely, which is what makes the result the same on every device, and lets
+ * scripts/pdf.test.ts assert on the bytes. Do not reintroduce a print()-based path here.
  *
- * An iframe has no popup to block, and `srcdoc` gives a real load event, so the document is parsed
- * and laid out before printing. `srcdoc` rather than `document.write` on purpose: writing into an
- * already-loaded about:blank frame races its own initial load event.
- *
- * The frame is positioned off-screen rather than `display:none`, because a display:none frame is not
- * laid out and prints as an empty page.
+ * Async because jsPDF is fetched on first use. Failures are logged with the report title and
+ * rethrown so the calling button can show them instead of doing nothing.
  */
-const printHtmlDocument = (html: string, label: string): void => {
-  const iframe = document.createElement('iframe');
-  iframe.setAttribute('aria-hidden', 'true');
-  iframe.setAttribute('tabindex', '-1');
-  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;opacity:0;border:0;';
-
-  let cleaned = false;
-  const cleanup = () => {
-    if (cleaned) return;
-    cleaned = true;
-    iframe.remove();
-  };
-
-  iframe.onload = () => {
-    const win = iframe.contentWindow;
-    if (!win) {
-      cleanup();
-      console.error(`Print failed for "${label}": the print frame had no window.`);
-      return;
-    }
-    // afterprint is the correct signal, but it is not fired reliably everywhere, so the timeout
-    // guarantees the node is removed rather than accumulating one frame per export.
-    win.addEventListener('afterprint', cleanup, { once: true });
-    setTimeout(cleanup, 60_000);
-    win.focus();
-    win.print();
-  };
-
-  iframe.srcdoc = html;
-  document.body.appendChild(iframe);
+const exportPdf = async (title: string, build: () => Promise<ArrayBuffer>): Promise<void> => {
+  try {
+    const bytes = await build();
+    const slug = title.replace(/\s+/g, '_').replace(/[^\w\-]/g, '');
+    downloadBlob(`${slug}.pdf`, new Blob([bytes], { type: 'application/pdf' }));
+  } catch (e) {
+    console.error(`PDF export failed for "${title}":`, e);
+    throw e;
+  }
 };
 
-export const printAsPDF = (title: string, content: string) => {
-  printHtmlDocument(`
-    <html>
-      <head>
-        <title>${esc(title)}</title>
-        <style>
-          body { font-family: sans-serif; line-height: 1.6; color: #333; padding: 40px; max-width: 800px; margin: auto; }
-          h1 { border-bottom: 2px solid #333; padding-bottom: 10px; font-size: 24px; text-transform: uppercase; letter-spacing: 1px; }
-          h2 { font-size: 18px; margin-top: 30px; border-bottom: 1px solid #eee; padding-bottom: 5px; text-transform: uppercase; color: #666; }
-          p { margin-bottom: 15px; }
-          .section { margin-bottom: 40px; }
-          .meta { font-size: 12px; color: #999; margin-bottom: 40px; }
-          pre { white-space: pre-wrap; font-family: sans-serif; font-size: 14px; }
-        </style>
-      </head>
-      <body>
-        <h1>${esc(title)}</h1>
-        <div class="meta">MarketBrainOS Intelligence Report | Generated: ${new Date().toLocaleDateString()}</div>
-        <div class="section">
-          <pre>${esc(content)}</pre>
-        </div>
-      </body>
-    </html>
-  `, title);
-};
+/** Structured PDF for a universal result: summary + each section as a headed list. */
+export const exportResultPdf = (title: string, result: ToolAnalysisResult): Promise<void> =>
+  exportPdf(title, () => buildResultPdf(title, result));
 
-/** Structured print/PDF for a universal result: summary + each section as a headed list. */
-export const printToolResultPDF = (title: string, result: ToolAnalysisResult) => {
-  const meta: string[] = [];
-  if (typeof result.score === 'number') meta.push(`Score: ${result.score}/100`);
-  if (result.verdict) meta.push(`Verdict: ${esc(result.verdict)}`);
-
-  const sectionsHtml = (result.sections || []).map(section => `
-    <div class="section">
-      <h2>${esc(section.title)}</h2>
-      <ul>${(section.items || []).map(item => itemToHtml(item, esc)).join('')}</ul>
-    </div>
-  `).join('');
-
-  printHtmlDocument(`
-    <html>
-      <head>
-        <title>${esc(title)}</title>
-        <style>
-          body { font-family: sans-serif; line-height: 1.6; color: #333; padding: 40px; max-width: 800px; margin: auto; }
-          h1 { border-bottom: 2px solid #333; padding-bottom: 10px; font-size: 24px; text-transform: uppercase; letter-spacing: 1px; }
-          h2 { font-size: 16px; margin-top: 28px; border-bottom: 1px solid #eee; padding-bottom: 5px; text-transform: uppercase; color: #666; }
-          ul { margin: 10px 0 0; padding-left: 20px; }
-          li { margin-bottom: 8px; font-size: 14px; }
-          .meta { font-size: 12px; color: #999; margin-bottom: 24px; }
-          .badges { font-size: 13px; font-weight: bold; color: #111; margin-bottom: 20px; }
-          .summary { font-size: 14px; margin-bottom: 10px; }
-        </style>
-      </head>
-      <body>
-        <h1>${esc(title)}</h1>
-        <div class="meta">MarketBrainOS Intelligence Report | Generated: ${new Date().toLocaleDateString()}</div>
-        ${meta.length ? `<div class="badges">${meta.join(' &nbsp;•&nbsp; ')}</div>` : ''}
-        ${result.summary ? `<div class="section"><h2>Executive Summary</h2><p class="summary">${esc(result.summary)}</p></div>` : ''}
-        ${sectionsHtml}
-      </body>
-    </html>
-  `, title);
-};
+/** PDF from an already-formatted plain-text report (the bespoke pages' formatters below). */
+export const exportTextPdf = (title: string, text: string): Promise<void> =>
+  exportPdf(title, () => buildTextPdf(title, text));
 
 export const formatAngleMinerExport = (results: AngleMinerResults): string => {
   let output = "ANGLEMINER X: STRATEGIC MARKETING ANGLES\n\n";
@@ -255,7 +170,7 @@ export const formatAngleMinerExport = (results: AngleMinerResults): string => {
 };
 
 export const formatTestLabExport = (results: TestLabResults): string => {
-  const winner = results.variants.find(v => v.label === results.winnerLabel);
+  const winner = (results.variants || []).find(v => v.label === results.winnerLabel);
   let output = "TESTLAB PRO: PERFORMANCE PREDICTION REPORT\n\n";
   
   output += `PROJECTED WINNER: ${results.winnerLabel}\n`;
@@ -315,9 +230,9 @@ export const formatToolResult = (title: string, result: ToolAnalysisResult): str
     output += result.summary + "\n\n";
   }
 
-  result.sections.forEach(section => {
+  (result.sections || []).forEach(section => {
     output += `${section.title.toUpperCase()}\n`;
-    section.items.forEach(item => { output += `- ${itemToText(item)}\n`; });
+    (section.items || []).forEach(item => { output += `- ${itemToText(item)}\n`; });
     output += "\n";
   });
 

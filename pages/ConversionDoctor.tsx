@@ -27,11 +27,12 @@ import {
 import { auditConversion, MAX_INPUT_CHARS } from '../services/geminiService';
 import { AuditResult, TOKEN_COSTS } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { copyToClipboard, downloadAsText, printAsPDF, formatConversionDoctorExport } from '../services/exportService';
+import { copyToClipboard, downloadAsText, exportTextPdf, formatConversionDoctorExport } from '../services/exportService';
 import { SecurityEngine } from '../services/securityEngine';
 import { getScoreBand } from '../services/scoreBands';
 import { isFixtureRequested } from '../services/devFixtures';
-import { checkTokenBalance } from '../config/access';
+import { checkTokenBalance, canExport } from '../config/access';
+import { useScope } from '../context/ScopeContext';
 
 const chip = (active: boolean) =>
   `px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${active ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`;
@@ -46,6 +47,7 @@ const severityTone = (s?: string): BadgeTone => {
 
 const ConversionDoctor: React.FC = () => {
   const { user, profile, refreshProfile } = useAuth();
+  const { memberships } = useScope();
   const [input, setInput] = useState('');
   const [context, setContext] = useState('Landing Page');
   const [audience, setAudience] = useState('');
@@ -207,14 +209,13 @@ const ConversionDoctor: React.FC = () => {
   };
 
   const handleExportPDF = () => {
-    if (result) {
-      const text = formatConversionDoctorExport(result);
-      printAsPDF("Conversion Doctor Elite Diagnostic Report", text);
-    }
+    if (!result) return;
+    return exportTextPdf("Conversion Doctor Elite Diagnostic Report", formatConversionDoctorExport(result));
   };
 
   const isSuspended = profile?.is_suspended;
-  const isPro = profile?.tier === 'pro';
+  // Every paying plan, plus invited members - see canExport. `tier === 'pro'` locked out Team/Agency/Enterprise.
+  const isPro = canExport({ profile, memberships });
 
   return (
     <div className="space-y-12">

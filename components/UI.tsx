@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useId } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { isPaidTier } from '../config/access';
 import { SecurityEngine } from '../services/securityEngine';
 import { useAuth } from '../context/AuthContext';
 import { UserTier, ActionLogEntry, PaymentRecord } from '../types';
@@ -773,8 +774,8 @@ export const TokenStatusBanner: React.FC<{
     );
   }
 
-  // Pro Logic: Show only if low
-  if (tier === 'pro' && tokens <= 50 && tokens > 0) {
+  // Paid plans: show only when low. (Was `tier === 'pro'`, which skipped Team/Agency/Enterprise.)
+  if (isPaidTier(tier) && tokens <= 50 && tokens > 0) {
     return (
       <div className="w-full bg-[#1A1A1A] border border-[#FF0000]/30 rounded-2xl py-3 px-6 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 text-center">
         <div className="flex items-center gap-2">
@@ -849,19 +850,35 @@ export const ExportControls: React.FC<{
   onCopy: () => unknown;
   onExportText?: () => void;
   onExportCSV?: () => void;
-  onExportPDF?: () => void;
+  /** May return a promise: the PDF is built on demand and its library fetched on first use. */
+  onExportPDF?: () => unknown;
   isPro: boolean;
   /** dark = on the page background (AngleMinerX / TestLabPro headers); light = inside a Card. */
   tone?: Tone;
 }> = ({ onCopy, onExportText, onExportCSV, onExportPDF, isPro, tone = 'light' }) => {
   const [copyState, setCopyState] = useState<'idle' | 'ok' | 'fail'>('idle');
+  const [pdfState, setPdfState] = useState<'idle' | 'busy' | 'fail'>('idle');
 
   // This used to set "copied" unconditionally the instant the click fired, so a rejected clipboard
   // write - denied permission, a non-secure context - still told the user their text was copied.
+  // Only an explicit `true` counts as success: a handler that copies nothing returns undefined.
   const handleCopy = async () => {
     const result = await onCopy();
-    setCopyState(result === false ? 'fail' : 'ok');
+    setCopyState(result === true ? 'ok' : 'fail');
     setTimeout(() => setCopyState('idle'), 2000);
+  };
+
+  // The old print-based export failed silently on phones. A PDF that fails to build now says so.
+  const handlePdf = async () => {
+    if (!onExportPDF || pdfState === 'busy') return;
+    setPdfState('busy');
+    try {
+      await onExportPDF();
+      setPdfState('idle');
+    } catch {
+      setPdfState('fail');
+      setTimeout(() => setPdfState('idle'), 3000);
+    }
   };
 
   const btn = tone === 'dark'
@@ -888,7 +905,9 @@ export const ExportControls: React.FC<{
             </>
           )}
           <div className={divider} />
-          <button onClick={onExportPDF} className={btn}>Export PDF</button>
+          <button onClick={handlePdf} disabled={pdfState === 'busy'} className={`${btn} ${pdfState === 'fail' ? '!text-[#FF0000]' : ''} disabled:opacity-60`}>
+            {pdfState === 'busy' ? 'Preparing PDF…' : pdfState === 'fail' ? 'PDF failed' : 'Export PDF'}
+          </button>
         </>
       )}
     </div>

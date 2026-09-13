@@ -20,18 +20,18 @@ import { runToolAnalysis, MAX_INPUT_CHARS } from '../services/geminiService';
 import { ToolAnalysisResult, TOKEN_COSTS } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useScope } from '../context/ScopeContext';
-import { copyToClipboard, downloadAsText, printToolResultPDF, formatToolResult, downloadAsCSV, toolResultToCSV } from '../services/exportService';
+import { copyToClipboard, downloadAsText, exportResultPdf, formatToolResult, downloadAsCSV, toolResultToCSV } from '../services/exportService';
 import { SecurityEngine } from '../services/securityEngine';
 import { ToolConfig, getToolMeta, getToolGuide } from '../config/toolConfigs';
 import { getUserToolAnalyses, ToolAnalysisRecord, deleteGenericAnalysis, saveReport } from '../services/persistenceService';
 import { getScoreBand } from '../services/scoreBands';
 import { ExpectedOutcome, AnalysisPreview, RunProgress, CharCounter, FieldHint, RunStage } from './ToolGuide';
 import { ResultItemList } from './ResultSections';
-import { checkTokenBalance } from '../config/access';
+import { checkTokenBalance, canExport } from '../config/access';
 
 const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
   const { user, profile, refreshProfile } = useAuth();
-  const { scope } = useScope();
+  const { scope, memberships } = useScope();
 
   const initialValues = useMemo(() => {
     const v: Record<string, string> = {};
@@ -233,7 +233,7 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
   const handleCopy = () => copyToClipboard(exportText());
   const handleExportTxt = () => downloadAsText(fileBase, exportText());
   const handleExportCSV = () => { if (result) downloadAsCSV(fileBase, toolResultToCSV(result)); };
-  const handleExportPDF = () => { if (result) printToolResultPDF(`${config.title} Report`, result); };
+  const handleExportPDF = () => (result ? exportResultPdf(`${config.title} Report`, result) : undefined);
 
   // Result actions (Save is automatic on success; Export handled above).
   const handleShare = async () => {
@@ -430,7 +430,7 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
                     onExportText={handleExportTxt}
                     onExportCSV={handleExportCSV}
                     onExportPDF={handleExportPDF}
-                    isPro={profile?.tier === 'pro'}
+                    isPro={canExport({ profile, memberships })}
                   />
                 </div>
               </Card>

@@ -18,7 +18,7 @@ import {
 } from '../services/persistenceService';
 import { Report, ActionLogEntry } from '../types';
 import { NAV_SUITES, TOOL_CONFIG_LIST, getToolMeta } from '../config/toolConfigs';
-import { canSeeFeature, tierAtLeast } from '../config/access';
+import { canSeeFeature, tierAtLeast, isPaidTier } from '../config/access';
 
 // Resolve a server module key to a friendly tool label (covers generic + bespoke modules).
 const moduleLabel = (m: string): string =>
@@ -82,7 +82,7 @@ const Dashboard: React.FC = () => {
   };
 
   const handleTopUp = async () => {
-    if (profile?.tier !== 'pro') return;
+    if (!isPaidTier(profile?.tier)) return;
     setTopUpStatus('processing');
     setFeedbackMsg('');
     try {
@@ -158,7 +158,7 @@ const Dashboard: React.FC = () => {
     { label: 'Run new analysis', onClick: scrollToTools, primary: true },
     { label: 'View history', to: '/history' },
     { label: 'Open reports', to: '/reports' },
-    ...(tier === 'pro' ? [{ label: 'Buy tokens', onClick: handleTopUp }] : []),
+    ...(isPaidTier(tier) ? [{ label: 'Buy tokens', onClick: handleTopUp }] : []),
     ...(!tierAtLeast(tier, 'team') ? [{ label: 'Upgrade plan', to: '/pricing' }] : []),
   ];
 
@@ -239,7 +239,7 @@ const Dashboard: React.FC = () => {
           )}
           <div className="mt-4 flex flex-wrap gap-x-6 gap-y-3">
             <button onClick={() => setShowHistory(true)} className={quietAction}>View usage history</button>
-            {tier === 'pro' && <button onClick={() => setShowReceipts(true)} className={quietAction}>View receipts</button>}
+            {isPaidTier(tier) && <button onClick={() => setShowReceipts(true)} className={quietAction}>View receipts</button>}
             <button onClick={handleReplayTour} className={quietAction}>Replay tour</button>
           </div>
         </AnimatedSection>

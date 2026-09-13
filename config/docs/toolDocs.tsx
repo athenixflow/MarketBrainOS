@@ -290,7 +290,7 @@ const resultsArticle: DocArticle = {
       ['Copy', 'Copies the full formatted result.'],
       ['TXT', 'Downloads a plain-text report.'],
       ['CSV', 'Downloads a structured CSV (tool, summary, section, item, score, verdict).'],
-      ['PDF', 'Downloads a print-ready PDF — **Pro plan and above.**'],
+      ['PDF', 'Downloads a PDF file of the report, on any device — **paid plans, and members of a team, agency or enterprise.**'],
     ] },
     { type: 'callout', tone: 'warning', title: 'Minimum input', text: 'The main input must be at least 20 characters, or the run is blocked with "Add more detail to the main input for a high-quality analysis." Very long inputs are also rejected — consolidate if you hit the limit.' },
   ],

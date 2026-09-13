@@ -33,12 +33,14 @@ import {
 } from '../services/geminiService';
 import { AngleMinerResults, TestLabResults, AuditResult, TOKEN_COSTS } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { copyToClipboard, downloadAsText, printAsPDF, formatWorkflowExport } from '../services/exportService';
+import { copyToClipboard, downloadAsText, exportTextPdf, formatWorkflowExport } from '../services/exportService';
 import { SecurityEngine } from '../services/securityEngine';
-import { checkTokenBalance } from '../config/access';
+import { checkTokenBalance, canExport } from '../config/access';
+import { useScope } from '../context/ScopeContext';
 
 const Workflow: React.FC = () => {
   const { user, profile, refreshProfile } = useAuth();
+  const { memberships } = useScope();
   const [step, setStep] = useState(0); 
   const [loading, setLoading] = useState(false);
   const [isTakingLong, setIsTakingLong] = useState(false);
@@ -251,18 +253,18 @@ const Workflow: React.FC = () => {
   };
 
   const handleExportPDF = () => {
-    if (winningAngleText && auditResult && finalImprovements) {
-      const text = formatWorkflowExport({
-        angle: winningAngleText,
-        testScore: winningAngleScore,
-        conversionScore: auditResult.score,
-        finalAssets: finalImprovements
-      });
-      printAsPDF("MarketBrainOS Workflow Summary", text);
-    }
+    if (!(winningAngleText && auditResult && finalImprovements)) return;
+    const text = formatWorkflowExport({
+      angle: winningAngleText,
+      testScore: winningAngleScore,
+      conversionScore: auditResult.score,
+      finalAssets: finalImprovements
+    });
+    return exportTextPdf("MarketBrainOS Workflow Summary", text);
   };
 
-  const isPro = profile?.tier === 'pro';
+  // Every paying plan, plus invited members - see canExport. `tier === 'pro'` locked out Team/Agency/Enterprise.
+  const isPro = canExport({ profile, memberships });
 
   return (
     <div className="space-y-12">

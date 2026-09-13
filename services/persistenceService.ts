@@ -1,6 +1,7 @@
 import { db, isFirebaseInitialized, functions } from './firebase';
 import { angleResult, testlabResult, doctorResult, workflowResult } from './bespokeMappers';
 import { DEFAULT_PRICING_CONFIG, PricingConfig } from '../config/pricingConfig';
+import { isPaidTier } from '../config/access';
 import { httpsCallable } from 'firebase/functions';
 import { 
   collection, 
@@ -299,7 +300,7 @@ export const getUserProfile = async (userId: string): Promise<UserProfile | null
       is_verified_admin: data.is_verified_admin,
       last_verification: data.last_verification,
       onboarded: data.onboarded ?? false,
-      subscription_status: data.subscription_status || (data.tier === 'pro' ? 'active' : 'free'),
+      subscription_status: data.subscription_status || (isPaidTier(data.tier) ? 'active' : 'free'),
       plan_renews_at: data.plan_renews_at,
       subscription_started_at: data.subscription_started_at,
       // Profile / account fields (client-editable via Settings)
@@ -1404,7 +1405,7 @@ export const adminGetAllUsers = async (): Promise<UserProfile[]> => {
       risk_score: data.risk_score,
       // Extra fields for the admin directory + growth charts (all optional).
       created_at: (data as any).created_at,
-      subscription_status: data.subscription_status || (data.tier === 'pro' ? 'active' : 'free'),
+      subscription_status: data.subscription_status || (isPaidTier(data.tier) ? 'active' : 'free'),
       first_name: data.first_name,
       last_name: data.last_name,
       company_name: data.company_name,

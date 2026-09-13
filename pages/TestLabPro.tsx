@@ -29,16 +29,18 @@ import {
 import { runTestLabComparison, MAX_INPUT_CHARS } from '../services/geminiService';
 import { TestLabResults, TOKEN_COSTS } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { copyToClipboard, downloadAsText, printAsPDF, formatTestLabExport } from '../services/exportService';
+import { copyToClipboard, downloadAsText, exportTextPdf, formatTestLabExport } from '../services/exportService';
 import { SecurityEngine } from '../services/securityEngine';
 import { isFixtureRequested } from '../services/devFixtures';
-import { checkTokenBalance } from '../config/access';
+import { checkTokenBalance, canExport } from '../config/access';
+import { useScope } from '../context/ScopeContext';
 
 const chip = (active: boolean) =>
   `px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${active ? 'bg-[#0B0B0B] text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`;
 
 const TestLabPro: React.FC = () => {
   const { user, profile, refreshProfile } = useAuth();
+  const { memberships } = useScope();
   const [comparisonType, setComparisonType] = useState('Angles');
   const [variants, setVariants] = useState<string[]>(['', '']);
   const [loading, setLoading] = useState(false);
@@ -192,10 +194,8 @@ const TestLabPro: React.FC = () => {
   };
 
   const handleExportPDF = () => {
-    if (results) {
-      const text = formatTestLabExport(results);
-      printAsPDF("TestLab Pro Performance Report", text);
-    }
+    if (!results) return;
+    return exportTextPdf("TestLab Pro Performance Report", formatTestLabExport(results));
   };
 
   // Exact label equality alone was fragile: the model returns e.g. "A" while winnerLabel reads
@@ -218,7 +218,8 @@ const TestLabPro: React.FC = () => {
   })();
 
   const isSuspended = profile?.is_suspended;
-  const isPro = profile?.tier === 'pro';
+  // Every paying plan, plus invited members - see canExport. `tier === 'pro'` locked out Team/Agency/Enterprise.
+  const isPro = canExport({ profile, memberships });
 
   return (
     <div className="space-y-12">

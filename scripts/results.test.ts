@@ -28,7 +28,8 @@ const exportText = (item: any): string => {
 };
 
 const cases: Array<{ tool: string; result: any; expectSections: number }> = [
-  { tool: 'Conversion Doctor', expectSections: 2,
+  // 3 = blockers, fixes, rewrites. Rewrites were missing from History until Sep 2026.
+  { tool: 'Conversion Doctor', expectSections: 3,
     result: doctorResult({ audit_output: CONVERSION_DOCTOR_FIXTURE, conversion_score: CONVERSION_DOCTOR_FIXTURE.score }) },
   { tool: 'AngleMiner X', expectSections: 2,
     result: angleResult({ angles_output: ANGLE_MINER_FIXTURE }) },

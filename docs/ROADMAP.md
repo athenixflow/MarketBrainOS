@@ -128,11 +128,14 @@ each is largely a new prompt + input form + result mapping, not new infrastructu
 Productionize per the PRD's infra/security/automation sections. Built the three code-verifiable slices;
 documented seams (no fake "done") for the two pure-infra items. **Build green after each slice.**
 
-- ✅ **Reporting exports (§50)** — structured **CSV** + headed **print-PDF** on every analysis result
+- ✅ **Reporting exports (§50)** — structured **CSV** + **PDF** on every analysis result
   ([components/ToolPage.tsx](../components/ToolPage.tsx), [pages/History.tsx](../pages/History.tsx)) and on
   billing history (`PaymentHistoryModal`). Helpers `downloadAsCSV`/`toolResultToCSV`/`paymentsToCSV`/
-  `printToolResultPDF` in [services/exportService.ts](../services/exportService.ts). **No new deps** (CSV +
-  print chosen; `.xlsx`/styled-PDF deferred).
+  `exportResultPdf`/`exportTextPdf` in [services/exportService.ts](../services/exportService.ts), bytes built
+  by [services/pdfReport.ts](../services/pdfReport.ts) with `jspdf` (lazy-loaded, its own chunk).
+  *History note (Sep 2026):* the first version chose "no new deps" and printed a hidden iframe; on WebKit
+  (every iOS browser) that prints the parent page, so phones got a PDF of the app shell. A generated file is
+  the only device-independent option, and `scripts/pdf.test.ts` now asserts on the bytes.
 - ✅ **Scheduled automation (§64/§68)** — `monthlyTokenRefresh` Pub/Sub cron (`0 0 1 * *` UTC) in
   [functions/src/index.ts](../functions/src/index.ts) (resets Pro→200, bumps renewal, emits log +
   notification); admin **System Monitoring** tab ([pages/AdminDashboard.tsx](../pages/AdminDashboard.tsx))

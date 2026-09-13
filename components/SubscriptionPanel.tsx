@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Card, PrimaryButton, SecondaryButton, Badge, SuccessMessage, ErrorMessage } from './UI';
 import { useAuth } from '../context/AuthContext';
+import { isPaidTier } from '../config/access';
 import { callChangeSubscription, createNotification } from '../services/persistenceService';
 import { SubscriptionStatus } from '../types';
 import { DEFAULT_PRICING_CONFIG } from '../config/pricingConfig';
@@ -28,8 +29,8 @@ const SubscriptionPanel: React.FC = () => {
 
   if (!profile) return null;
 
-  const status: SubscriptionStatus = profile.subscription_status || (profile.tier === 'pro' ? 'active' : 'free');
-  const isPro = profile.tier === 'pro';
+  const status: SubscriptionStatus = profile.subscription_status || (isPaidTier(profile.tier) ? 'active' : 'free');
+  const isPro = isPaidTier(profile.tier);
   const badge = STATUS_BADGE[status] || STATUS_BADGE.free;
 
   const run = async (action: 'upgrade' | 'cancel' | 'downgrade' | 'renew', successMsg: string, notif: string) => {

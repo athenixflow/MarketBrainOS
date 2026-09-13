@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { PageHeader, Card, PrimaryButton, Input, LoadingState, ErrorMessage, Tabs, Badge } from '../components/UI';
 import AnimatedSection from '../components/AnimatedSection';
 import { useAuth } from '../context/AuthContext';
+import { tierAtLeast } from '../config/access';
 import { useScope } from '../context/ScopeContext';
 import { Membership, ROLE_LABELS } from '../services/permissionService';
 import {
@@ -149,7 +150,7 @@ const TeamWorkspace: React.FC = () => {
             <Card title="Create a Team Workspace">
               <p className="text-sm text-gray-500 font-medium mb-6 leading-relaxed">
                 Spin up a shared workspace to invite teammates, share analyses, and build collective intelligence.
-                {profile?.tier === 'free' || profile?.tier === 'pro'
+                {!tierAtLeast(profile?.tier, 'team')
                   ? ' Creating one upgrades you to the Team plan.'
                   : ''}
               </p>

@@ -30,10 +30,11 @@ import {
 import { analyzeMarketingAngle, improveAngle, MAX_INPUT_CHARS } from '../services/geminiService';
 import { MarketingAngle, AngleMinerResults, AngleType, ANGLE_TYPES, TOKEN_COSTS, AngleHook, HookChannel, HOOK_CHANNELS } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { copyToClipboard, downloadAsText, printAsPDF, formatAngleMinerExport } from '../services/exportService';
+import { copyToClipboard, downloadAsText, exportTextPdf, formatAngleMinerExport } from '../services/exportService';
 import { SecurityEngine } from '../services/securityEngine';
 import { isFixtureRequested } from '../services/devFixtures';
-import { checkTokenBalance } from '../config/access';
+import { checkTokenBalance, canExport } from '../config/access';
+import { useScope } from '../context/ScopeContext';
 
 // Platform keywords used ONLY to rescue results saved before `channel` existed (those records carry a
 // platform like "Meta"/"Email" and no channel). Anything unrecognised lands in "Other" and is still
@@ -65,6 +66,7 @@ const chip = (active: boolean, activeCls = 'bg-[#0B0B0B] text-white') =>
 
 const AngleMinerX: React.FC = () => {
   const { user, profile, refreshProfile } = useAuth();
+  const { memberships } = useScope();
   const [product, setProduct] = useState('');
   const [industry, setIndustry] = useState('');
   const [target, setTarget] = useState('');
@@ -248,10 +250,8 @@ const AngleMinerX: React.FC = () => {
   };
 
   const handleExportPDF = () => {
-    if (results) {
-      const text = formatAngleMinerExport(results);
-      printAsPDF("AngleMiner X Strategic Report", text);
-    }
+    if (!results) return;
+    return exportTextPdf("AngleMiner X Strategic Report", formatAngleMinerExport(results));
   };
 
   const renderAngleCard = (angle: MarketingAngle) => (
@@ -300,7 +300,8 @@ const AngleMinerX: React.FC = () => {
   );
 
   const isSuspended = profile?.is_suspended;
-  const isPro = profile?.tier === 'pro';
+  // Every paying plan, plus invited members - see canExport. `tier === 'pro'` locked out Team/Agency/Enterprise.
+  const isPro = canExport({ profile, memberships });
 
   return (
     <div className="space-y-12">

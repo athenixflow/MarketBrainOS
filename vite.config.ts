@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import { fileURLToPath } from 'node:url';
 
 // TypeScript declarations for import.meta.env
 interface ImportMetaEnv {
@@ -36,6 +37,15 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    resolve: {
+      alias: {
+        // jsPDF's optional renderers. Never called by services/pdfReport.ts; without this they are
+        // emitted as ~350KB of chunks nobody fetches. See scripts/stubs/empty.ts.
+        html2canvas: fileURLToPath(new URL('./scripts/stubs/empty.ts', import.meta.url)),
+        canvg: fileURLToPath(new URL('./scripts/stubs/empty.ts', import.meta.url)),
+        dompurify: fileURLToPath(new URL('./scripts/stubs/empty.ts', import.meta.url)),
+      },
+    },
     build: {
       rollupOptions: {
         output: {

@@ -30,6 +30,22 @@ export interface AccessContext {
   memberships?: UserMembership[];
 }
 
+/**
+ * True for every paying plan. The tool pages used to write this as `profile?.tier === 'pro'`,
+ * which is false for Team, Agency and Enterprise - so the highest-paying customers had no export
+ * buttons at all. `tier === 'pro'` must never be used as a "paid user" test again; the build
+ * greps for it (scripts/access.test.ts).
+ */
+export const isPaidTier = (tier: UserTier | undefined | null): boolean => tierAtLeast(tier, 'pro');
+
+/**
+ * Can this user export (TXT/CSV/PDF)? Paid tier, or membership in any paid container - the same
+ * tier-OR-membership rule canSeeFeature uses, so a workspace member on a personal Free plan is not
+ * locked out of exporting the team's work.
+ */
+export const canExport = (ctx: AccessContext): boolean =>
+  isPaidTier(ctx.profile?.tier) || (ctx.memberships ?? []).length > 0;
+
 // Can the current user SEE this feature? Org features unlock by tier OR by membership in a
 // container of that family (a user invited to a workspace can access it regardless of tier).
 // Mirrors the spec's plan-visibility matrix: Team→teamWorkspace, Agency→+agencyHub,

@@ -16,6 +16,10 @@ export const doctorResult = (v: any): any => {
   const res = v?.audit_output || {};
   const issues = res.issues || [];
   const fixes = res.fixes || [];
+  // Rewrites are the ready-to-paste copy the audit produces (see AuditRewrite in types.ts). They
+  // were left out of this mapper, so History - and every export made from History - silently
+  // dropped the part of the result users most often want to take away.
+  const rewrites = (res.rewrites || []).filter((r: any) => r && (r.text || typeof r === 'string'));
   return {
     score: v?.conversion_score ?? res.score,
     summary: res.summary || '',
@@ -34,6 +38,13 @@ export const doctorResult = (v: any): any => {
           evidence: [x.expectedResult, x.priority && `Priority: ${x.priority}`].filter(Boolean).join(' '),
           action: x.how,
         })),
+      }] : []),
+      ...(rewrites.length ? [{
+        title: 'Rewrites',
+        // Plain strings on purpose: the structured item labels ("Why it matters", "Do this") do not
+        // fit a piece of copy and its predecessor.
+        items: rewrites.map((r: any) => (typeof r === 'string' ? r
+          : `${r.label || 'Copy'}: "${r.text}"${r.original ? ` (was: "${r.original}")` : ''}`)),
       }] : []),
     ],
   };

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PDF export harness</title>
+  <!-- Chromium requests /favicon.ico for any page without one; a 404 would trip the console-error check. -->
+  <link rel="icon" href="data:,">
+</head>
+<body>
+  <!--
+    Served by the Vite dev server from scripts/browser-harness.ts. Imports the REAL export module the
+    app uses - not a copy - and wires it to a button so Puppeteer can click it and capture the file.
+  -->
+  <button id="export-result">Export structured PDF</button>
+  <button id="export-text">Export text PDF</button>
+  <script type="module">
+    import { exportResultPdf, exportTextPdf, formatConversionDoctorExport } from '/services/exportService.ts';
+    import { doctorResult } from '/services/bespokeMappers.ts';
+    import { CONVERSION_DOCTOR_FIXTURE } from '/services/devFixtures.ts';
+
+    // The exact History path: Firestore-shaped record -> mapper -> structured PDF.
+    const record = { audit_output: CONVERSION_DOCTOR_FIXTURE, conversion_score: 58 };
+    window.__lastError = null;
+    const run = (fn) => fn().catch((e) => { window.__lastError = String(e && e.message || e); throw e; });
+
+    document.getElementById('export-result').addEventListener('click', () =>
+      run(() => exportResultPdf('Harness Conversion Doctor Report', doctorResult(record))));
+    document.getElementById('export-text').addEventListener('click', () =>
+      run(() => exportTextPdf('Harness Text Report', formatConversionDoctorExport(CONVERSION_DOCTOR_FIXTURE))));
+
+    window.__harnessReady = true;
+  </script>
+</body>
+</html>
