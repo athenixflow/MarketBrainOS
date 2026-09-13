@@ -64,7 +64,7 @@
         },
         {
           "key": "Content-Security-Policy-Report-Only",
-          "value": "default-src 'self'; frame-ancestors 'self'; base-uri 'self'; object-src 'none'"
+          "value": "default-src 'self'; script-src 'self' https://www.googletagmanager.com https://apis.google.com https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.googleusercontent.com https://www.google-analytics.com https://www.googletagmanager.com; font-src 'self' data:; connect-src 'self' https://*.googleapis.com wss://*.googleapis.com https://us-central1-marketbrainosweb.cloudfunctions.net https://marketbrainosweb.firebaseapp.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com; frame-src https://marketbrainosweb.firebaseapp.com https://accounts.google.com https://www.google.com; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests"
         }
       ]
     }

@@ -291,7 +291,7 @@ export const getUserProfile = async (userId: string): Promise<UserProfile | null
       email: data.email,
       tokens: data.tokens,
       tier: data.tier,
-      role: data.email === 'admin@marketbrainos.app' ? 'super_admin' : (data.role || 'user'),
+      role: data.role || 'user',
       session_started: data.session_started || new Date().toISOString(),
       last_active: data.last_active,
       risk_score: data.risk_score,
@@ -368,7 +368,8 @@ export const ensureUserProfile = async (userId: string, email: string) => {
       monthly_tokens: FREE_MONTHLY_TOKENS,
       purchased_tokens: 0,
       tier: 'free',
-      role: email === 'admin@marketbrainos.app' ? 'super_admin' : 'user',
+      // Always 'user'. Admins are promoted in the console; the rules reject anything else on create.
+      role: 'user',
       onboarded: false,
       subscription_status: 'free',
       // Inert while the account is free (monthlyTokenRefresh skips free tiers); it only starts
@@ -1408,7 +1409,7 @@ export const adminGetAllUsers = async (): Promise<UserProfile[]> => {
       email: data.email,
       tokens: data.tokens,
       tier: data.tier,
-      role: data.email === 'admin@marketbrainos.app' ? 'super_admin' : (data.role || 'user'),
+      role: data.role || 'user',
       last_active: data.last_active,
       is_suspended: data.is_suspended,
       risk_score: data.risk_score,

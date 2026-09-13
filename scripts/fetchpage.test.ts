@@ -65,6 +65,44 @@ await mustReject('http://[::1]/', 'rejects IPv6 loopback literal');
 await mustReject('http://evil.test/', 'rejects a PUBLIC hostname resolving to a private IP');
 await mustReject('not a url', 'rejects unparseable input');
 
+// Security audit, Sep 2026: 8 of these 18 literals were ACCEPTED by the first version of the guard.
+// WHATWG URL re-serialises IPv6 hosts (`[::ffff:169.254.169.254]` becomes `[::ffff:a9fe:a9fe]`), so a
+// dotted-quad regex never saw the mapped form, and the NAT64 / 6to4 / IPv4-compatible transition
+// forms were not handled at all. Every one of these routes to a private or special destination.
+console.log('\nIPV6 AND ODD-LITERAL BYPASSES (all must be rejected):');
+for (const [u, why] of [
+  ['http://[::1]/', 'IPv6 loopback'],
+  ['http://[0:0:0:0:0:0:0:1]/', 'loopback, uncompressed'],
+  ['http://[0000:0000:0000:0000:0000:0000:0000:0001]/', 'loopback, zero-padded'],
+  ['http://[::ffff:127.0.0.1]/', 'IPv4-mapped loopback, dotted'],
+  ['http://[::ffff:7f00:1]/', 'IPv4-mapped loopback, hex (what URL serialises the dotted form to)'],
+  ['http://[::7f00:1]/', 'IPv4-compatible loopback'],
+  ['http://[::127.0.0.1]/', 'IPv4-compatible loopback, dotted'],
+  ['http://[::ffff:0:7f00:1]/', 'SIIT loopback'],
+  ['http://[64:ff9b::7f00:1]/', 'NAT64 loopback'],
+  ['http://[2002:7f00:1::]/', '6to4 loopback'],
+  ['http://[::ffff:a9fe:a9fe]/', 'IPv4-mapped cloud metadata, hex'],
+  ['http://[::ffff:169.254.169.254]/', 'IPv4-mapped cloud metadata, dotted'],
+  ['http://[64:ff9b::a9fe:a9fe]/', 'NAT64 cloud metadata'],
+  ['http://[2002:a9fe:a9fe::]/', '6to4 cloud metadata'],
+  ['http://[::ffff:0a00:1]/', 'IPv4-mapped 10.0.0.1'],
+  ['http://[fe80::1]/', 'link-local'],
+  ['http://[fd00::1]/', 'unique local'],
+  ['http://[ff02::1]/', 'multicast'],
+  ['http://[::]/', 'unspecified'],
+  ['http://[fe80::1%25eth0]/', 'link-local with zone id'],
+  ['http://0x7f000001/', 'hex IPv4 (URL normalises to 127.0.0.1)'],
+  ['http://0177.0.0.1/', 'octal IPv4'],
+  ['http://2130706433/', 'decimal IPv4'],
+  ['http://127.1/', 'short IPv4'],
+] as const) {
+  await mustReject(u, `rejects ${why} — ${u}`);
+}
+for (const u of ['http://[2606:4700:4700::1111]/', 'http://[2a00:1450:4009:81f::200e]/']) {
+  try { await assertSafeUrl(u, publicDns); ok(true, `accepts a global-unicast IPv6 literal — ${u}`); }
+  catch (e: any) { ok(false, `accepts a global-unicast IPv6 literal — ${u}`, e.message); }
+}
+
 try { await assertSafeUrl('https://example.com/pricing', publicDns); ok(true, 'accepts an ordinary public URL'); }
 catch (e: any) { ok(false, 'accepts an ordinary public URL', e.message); }
 

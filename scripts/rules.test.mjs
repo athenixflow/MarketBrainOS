@@ -12,7 +12,7 @@
 //   3. Reads are unchanged.
 
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { readFileSync } from 'node:fs';
 
 process.env.FIRESTORE_EMULATOR_HOST ||= '127.0.0.1:8080';
@@ -175,6 +175,76 @@ await check('user writes an action_log with NO uid/user_id field at all', () =>
 await check('user writes a security event for themselves', () =>
   assertSucceeds(setDoc(doc(outsiderDb, 'security_audit_logs', 'own3'),
     { user_id: OUTSIDER, event_type: 'RATE_LIMIT_EXCEEDED', severity: 'low', timestamp: new Date().toISOString() })));
+
+// ---- Security audit, Sep 2026 -------------------------------------------------------------------
+// Each attack below succeeded against the rules as they were (run with RULES_FILE=<old> to see it).
+
+console.log('\nRE-STAMPING VIA UPDATE (these must all be DENIED):');
+
+await testEnv.withSecurityRulesDisabled(async (ctx) => {
+  const db = ctx.firestore();
+  await setDoc(doc(db, 'tool_analysis_results', 'priv_outsider'), stamp(OUTSIDER, 'private'));
+  await setDoc(doc(db, 'reports', 'rep_outsider'), { creator_user_id: OUTSIDER, title: 'mine', report_type: 'analysis', content: {}, visibility_type: 'private', workspace_id: null, agency_id: null, client_id: null, enterprise_id: null, created_at: new Date().toISOString() });
+  await setDoc(doc(db, 'tool_analysis_results', 'priv_owner'), stamp(OWNER, 'private'));
+});
+
+await check('outsider cannot UPDATE their private analysis into another tenant workspace', () =>
+  assertFails(updateDoc(doc(outsiderDb, 'tool_analysis_results', 'priv_outsider'), { visibility_type: 'team', workspace_id: WS })));
+
+await check('outsider cannot UPDATE their private report into another tenant workspace', () =>
+  assertFails(updateDoc(doc(outsiderDb, 'reports', 'rep_outsider'), { visibility_type: 'team', workspace_id: WS })));
+
+await check('member CAN update their private analysis into a workspace they belong to', () =>
+  assertSucceeds(updateDoc(doc(ownerDb, 'tool_analysis_results', 'priv_owner'), { visibility_type: 'team', workspace_id: WS })));
+
+await check('creator can still edit a private analysis without touching the stamp', () =>
+  assertSucceeds(updateDoc(doc(outsiderDb, 'tool_analysis_results', 'priv_outsider'), { result: { summary: 'edited' } })));
+
+console.log('\nSUPER-ADMIN BY EMAIL (must be DENIED):');
+
+const squatterDb = testEnv.authenticatedContext('squatter', { email: 'admin@marketbrainos.app', email_verified: false }).firestore();
+const freshProfile = (role) => ({
+  id: 'x', email: 'admin@marketbrainos.app', tokens: 20, monthly_tokens: 20, purchased_tokens: 0, tier: 'free', role,
+  onboarded: false, subscription_status: 'free', plan_renews_at: new Date().toISOString(), created_at: new Date().toISOString(), last_active: new Date().toISOString(),
+});
+await check('registering admin@marketbrainos.app cannot create a super_admin profile', () =>
+  assertFails(setDoc(doc(squatterDb, 'users', 'squatter'), freshProfile('super_admin'))));
+await check('the same sign-up can still create a normal user profile', () =>
+  assertSucceeds(setDoc(doc(squatterDb, 'users', 'squatter'), freshProfile('user'))));
+
+console.log('\nINVITATION READS NEED A VERIFIED EMAIL:');
+
+await testEnv.withSecurityRulesDisabled(async (ctx) => {
+  const db = ctx.firestore();
+  await setDoc(doc(db, 'workspace_invitations', 'inv1'), { workspace_id: WS, email: 'newhire@client.com', role: 'analyst', status: 'pending', invited_by: OWNER });
+  await setDoc(doc(db, 'agency_invitations', 'inv2'), { agency_id: AGENCY, email: 'newhire@client.com', role: 'analyst', status: 'pending', invited_by: OWNER });
+  await setDoc(doc(db, 'enterprise_invitations', 'inv3'), { enterprise_id: ENTERPRISE, email: 'newhire@client.com', role: 'analyst', status: 'pending', invited_by: OWNER });
+});
+const unverifiedDb = testEnv.authenticatedContext('impostor', { email: 'newhire@client.com', email_verified: false }).firestore();
+const verifiedDb = testEnv.authenticatedContext('realhire', { email: 'newhire@client.com', email_verified: true }).firestore();
+for (const [col, id] of [['workspace_invitations', 'inv1'], ['agency_invitations', 'inv2'], ['enterprise_invitations', 'inv3']]) {
+  await check(`unverified sign-up with the invitee address cannot read ${col}`, () => assertFails(getDoc(doc(unverifiedDb, col, id))));
+  await check(`verified invitee can read ${col}`, () => assertSucceeds(getDoc(doc(verifiedDb, col, id))));
+}
+
+console.log('\nBESPOKE RESULT OWNERSHIP (must be DENIED):');
+
+await check('user cannot create a Conversion Doctor record in someone else History', () =>
+  assertFails(setDoc(doc(outsiderDb, 'conversion_doctor_results', 'plant1'), { user_id: OWNER, conversion_score: 1, audit_output: {}, timestamp: new Date().toISOString() })));
+await check('user cannot create an AngleMiner record in someone else History', () =>
+  assertFails(setDoc(doc(outsiderDb, 'angleminer_results', 'plant2'), { user_id: OWNER, angles_output: {}, timestamp: new Date().toISOString() })));
+await check('user can still create their own Conversion Doctor record', () =>
+  assertSucceeds(setDoc(doc(outsiderDb, 'conversion_doctor_results', 'own1'), { user_id: OUTSIDER, conversion_score: 1, audit_output: {}, timestamp: new Date().toISOString() })));
+
+console.log('\nCOMMENTS / NOTES CANNOT BE MOVED BETWEEN TENANTS:');
+
+await testEnv.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), 'workspace_comments', 'c1'), { workspace_id: WS_B, analysis_id: 'a1', author_uid: OUTSIDER, content: 'hi', created_at: new Date().toISOString() });
+});
+await check('author cannot move their comment into another workspace', () =>
+  assertFails(updateDoc(doc(outsiderDb, 'workspace_comments', 'c1'), { workspace_id: WS })));
+await check('author can still edit the comment text', () =>
+  assertSucceeds(updateDoc(doc(outsiderDb, 'workspace_comments', 'c1'), { content: 'edited', updated_at: new Date().toISOString() })));
 
 await testEnv.cleanup();
 

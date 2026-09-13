@@ -96,8 +96,10 @@ service cloud.firestore {
         && request.resource.data.tokens <= 20
         && request.resource.data.get('monthly_tokens', 0) <= 20
         && request.resource.data.get('purchased_tokens', 0) == 0
-        && (request.resource.data.role == 'user'
-            || request.auth.token.email == 'admin@marketbrainos.app');
+        // Client-created profiles are always plain users. An email-based super_admin clause used to
+        // live here; Firebase sign-up does not verify addresses, so registering that address would
+        // have minted an admin. Admins are promoted in the console / Admin SDK only.
+        && request.resource.data.role == 'user';
 
       // Client updates may change ONLY profile/preference fields (strict allowlist). Economy
       // and authority fields (tokens, tier, role, is_suspended, subscription_status,
@@ -122,7 +124,13 @@ service cloud.firestore {
       // is limited to creator-owned + scope-visible records.
       allow read:   if isSignedIn() && (canSeeStamped(resource.data) || isPlatformAdmin());
       // Mutations limited to the creator (role-based shared deletes go through functions).
-      allow update, delete: if isSignedIn()
+      // Update re-checks the stamp: create earned it, but an update could previously move a private
+      // record into any tenant's shared library - the same planting attack, one write later.
+      allow update: if isSignedIn()
+        && (resource.data.creator_user_id == request.auth.uid
+            || resource.data.user_id == request.auth.uid)
+        && canStampAs(request.resource.data);
+      allow delete: if isSignedIn()
         && (resource.data.creator_user_id == request.auth.uid
             || resource.data.user_id == request.auth.uid);
     }
@@ -134,7 +142,10 @@ service cloud.firestore {
         && canStampAs(request.resource.data);
       // Platform admins may read all reports (admin Report Management).
       allow read:   if isSignedIn() && (canSeeStamped(resource.data) || isPlatformAdmin());
-      allow update, delete: if isSignedIn()
+      allow update: if isSignedIn()
+        && resource.data.creator_user_id == request.auth.uid
+        && canStampAs(request.resource.data);
+      allow delete: if isSignedIn()
         && resource.data.creator_user_id == request.auth.uid;
     }
 
@@ -238,14 +249,18 @@ service cloud.firestore {
     // through the manageMembership callable (invite / accept / revoke).
     match /workspace_invitations/{id} {
       allow read:  if isSignedIn()
-        && (resource.data.email == request.auth.token.email || isPlatformAdmin());
+        && ((resource.data.email == request.auth.token.email && request.auth.token.email_verified == true)
+            || isPlatformAdmin());
       allow write: if false;
     }
     match /workspace_comments/{id} {
       allow read:   if isWorkspaceMember(resource.data.workspace_id) || isPlatformAdmin();
       allow create: if isWorkspaceMember(request.resource.data.workspace_id)
                     && request.resource.data.author_uid == request.auth.uid;
-      allow update, delete: if isSignedIn() && resource.data.author_uid == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.author_uid == request.auth.uid
+                    && request.resource.data.workspace_id == resource.data.workspace_id
+                    && request.resource.data.author_uid == resource.data.author_uid;
+      allow delete: if isSignedIn() && resource.data.author_uid == request.auth.uid;
     }
 
     match /agencies/{aid}        { allow read: if isAgencyMember(aid) || isPlatformAdmin(); allow write: if false; }
@@ -272,14 +287,20 @@ service cloud.firestore {
     }
     match /client_reports/{id}   { allow read: if isAgencyMember(resource.data.agency_id) || isPlatformAdmin(); allow write: if false; }
     match /agency_invitations/{id} {
-      allow read:  if isSignedIn() && (resource.data.email == request.auth.token.email || isPlatformAdmin());
+      allow read:  if isSignedIn()
+        && ((resource.data.email == request.auth.token.email && request.auth.token.email_verified == true)
+            || isPlatformAdmin());
       allow write: if false;
     }
     match /client_notes/{id} {
       allow read:   if isAgencyMember(resource.data.agency_id) || isPlatformAdmin();
       allow create: if canAccessClient(request.resource.data.agency_id, request.resource.data.client_id)
                     && request.resource.data.author_uid == request.auth.uid;
-      allow update, delete: if isSignedIn() && resource.data.author_uid == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.author_uid == request.auth.uid
+                    && request.resource.data.agency_id == resource.data.agency_id
+                    && request.resource.data.client_id == resource.data.client_id
+                    && request.resource.data.author_uid == resource.data.author_uid;
+      allow delete: if isSignedIn() && resource.data.author_uid == request.auth.uid;
     }
 
     match /enterprises/{eid}            { allow read: if isEnterpriseMember(eid) || isPlatformAdmin(); allow write: if false; }
@@ -292,15 +313,21 @@ service cloud.firestore {
     match /enterprise_analytics/{id}    { allow read: if isEnterpriseMember(resource.data.enterprise_id) || isPlatformAdmin(); allow write: if false; }
     match /enterprise_health_scores/{id}{ allow read: if isEnterpriseMember(resource.data.enterprise_id) || isPlatformAdmin(); allow write: if false; }
     match /enterprise_invitations/{id} {
-      allow read:  if isSignedIn() && (resource.data.email == request.auth.token.email || isPlatformAdmin());
+      allow read:  if isSignedIn()
+        && ((resource.data.email == request.auth.token.email && request.auth.token.email_verified == true)
+            || isPlatformAdmin());
       allow write: if false;
     }
 
     // ---------- V1 bespoke-tool result collections (creator-owned) ----------
-    match /angleminer_results/{id}        { allow read, write: if isSignedIn() && (resource == null || resource.data.user_id == request.auth.uid); }
-    match /testlab_results/{id}           { allow read, write: if isSignedIn() && (resource == null || resource.data.user_id == request.auth.uid); }
-    match /conversion_doctor_results/{id} { allow read, write: if isSignedIn() && (resource == null || resource.data.user_id == request.auth.uid); }
-    match /workflow_runs/{id}             { allow read, write: if isSignedIn() && (resource == null || resource.data.user_id == request.auth.uid); }
+    // `resource == null` on a create used to be the only check, so any user could write a record
+    // carrying someone else's user_id straight into that person's History.
+    function ownsBespoke() { return isSignedIn() && resource.data.user_id == request.auth.uid; }
+    function createsOwnBespoke() { return isSignedIn() && request.resource.data.user_id == request.auth.uid; }
+    match /angleminer_results/{id}        { allow read, update, delete: if ownsBespoke(); allow create: if createsOwnBespoke(); }
+    match /testlab_results/{id}           { allow read, update, delete: if ownsBespoke(); allow create: if createsOwnBespoke(); }
+    match /conversion_doctor_results/{id} { allow read, update, delete: if ownsBespoke(); allow create: if createsOwnBespoke(); }
+    match /workflow_runs/{id}             { allow read, update, delete: if ownsBespoke(); allow create: if createsOwnBespoke(); }
 
     // Default deny.
     match /{document=**} { allow read, write: if false; }

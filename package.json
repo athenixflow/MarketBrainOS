@@ -20,13 +20,13 @@
     "test:access": "tsx scripts/access.test.ts",
     "test:pdf": "tsx scripts/pdf.test.ts",
     "test:browser": "tsx scripts/browser-harness.ts",
-    "test:runtime": "tsx scripts/runtime.test.ts"
+    "test:runtime": "tsx scripts/runtime.test.ts",
+    "test:csp": "tsx scripts/csp.check.ts",
+    "test:rules": "firebase emulators:exec --only firestore --project rules-test-local \"node scripts/rules.test.mjs\""
   },
   "dependencies": {
-    "@google/generative-ai": "^0.21.0",
     "dotenv": "^17.2.4",
     "firebase": "^10.12.0",
-    "firebase-admin": "^12.1.0",
     "framer-motion": "^12.40.0",
     "jspdf": "^4.2.1",
     "react": "^18.3.1",

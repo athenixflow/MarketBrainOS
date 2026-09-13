@@ -62,22 +62,77 @@ const V4_BLOCKS: Array<[string, number, string]> = [
 ];
 
 /**
+ * Expands any IPv6 text form (RFC 4291 s2.2, including `::` compression, an embedded dotted IPv4
+ * tail and a zone id) to eight hextets. Returns null for anything that is not a valid literal.
+ *
+ * A parser rather than string matching, because WHATWG URL re-serialises IPv6 hosts before this
+ * code sees them: `http://[::ffff:169.254.169.254]/` arrives as `[::ffff:a9fe:a9fe]`, which the
+ * previous dotted-quad regex could not recognise as the cloud metadata address. That was a bypass.
+ */
+const parseIpv6 = (addr: string): number[] | null => {
+  let text = addr.toLowerCase().replace(/%.*$/, '');
+  const v4 = text.match(/^(.*:)(\d+\.\d+\.\d+\.\d+)$/);
+  if (v4) {
+    const n = ipv4ToInt(v4[2]);
+    if (n === null) return null;
+    text = `${v4[1]}${(n >>> 16).toString(16)}:${(n & 0xffff).toString(16)}`;
+  }
+  const halves = text.split('::');
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(':') : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(':') : [];
+  const fill = halves.length === 2 ? 8 - head.length - tail.length : 0;
+  if (fill < 0 || (halves.length === 1 && head.length !== 8)) return null;
+  const hextets = [...head, ...Array(Math.max(fill, 0)).fill('0'), ...tail];
+  if (hextets.length !== 8) return null;
+  const out: number[] = [];
+  for (const h of hextets) {
+    if (!/^[0-9a-f]{1,4}$/.test(h)) return null;
+    out.push(parseInt(h, 16));
+  }
+  return out;
+};
+
+const dotted = (hi: number, lo: number): string => `${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`;
+
+/**
+ * The IPv4 address an IPv6 literal really points at, for the transition forms that route to IPv4:
+ * IPv4-mapped (::ffff:a.b.c.d), IPv4-compatible (::a.b.c.d), SIIT (::ffff:0:a.b.c.d), NAT64
+ * (64:ff9b::a.b.c.d) and 6to4 (2002:AABB:CCDD::). Null when the address is native IPv6.
+ */
+const embeddedIpv4 = (h: number[]): string | null => {
+  const zeroThrough = (n: number) => h.slice(0, n).every((x) => x === 0);
+  if (zeroThrough(5) && h[5] === 0xffff) return dotted(h[6], h[7]);                 // ::ffff:a.b.c.d
+  if (zeroThrough(4) && h[4] === 0xffff && h[5] === 0) return dotted(h[6], h[7]);   // ::ffff:0:a.b.c.d
+  if (zeroThrough(6) && (h[6] !== 0 || h[7] !== 0)) return dotted(h[6], h[7]);      // ::a.b.c.d (not :: / ::1)
+  if (h[0] === 0x64 && h[1] === 0xff9b && h.slice(2, 6).every((x) => x === 0)) return dotted(h[6], h[7]); // 64:ff9b::/96 (NAT64)
+  if (h[0] === 0x2002) return dotted(h[1], h[2]);                                    // 2002::/16
+  return null;
+};
+
+/**
  * True when an IP literal points somewhere we must never fetch. 169.254.169.254 (the cloud metadata
  * endpoint) is the one that matters most: reaching it from a server would expose instance credentials.
  */
 export const isBlockedIp = (ip: string): { blocked: boolean; reason?: string } => {
   const addr = ip.trim().replace(/^\[|\]$/g, '');
 
-  // IPv4-mapped IPv6 (::ffff:127.0.0.1) must be judged on the embedded IPv4 address.
-  const mapped = addr.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
-  if (mapped) return isBlockedIp(mapped[1]);
-
   if (addr.includes(':')) {
-    const lower = addr.toLowerCase();
-    if (lower === '::' || lower === '::1') return { blocked: true, reason: 'loopback' };
-    const head = parseInt(lower.split(':')[0] || '0', 16);
-    if ((head & 0xfe00) === 0xfc00) return { blocked: true, reason: 'unique local' };   // fc00::/7
-    if ((head & 0xffc0) === 0xfe80) return { blocked: true, reason: 'link-local' };     // fe80::/10
+    const h = parseIpv6(addr);
+    if (!h) return { blocked: true, reason: 'unparseable address' };
+    if (h.every((x) => x === 0)) return { blocked: true, reason: 'unspecified' };
+    if (h.slice(0, 7).every((x) => x === 0) && h[7] === 1) return { blocked: true, reason: 'loopback' };
+    // Anything that is really an IPv4 destination is judged as that IPv4 address.
+    const v4 = embeddedIpv4(h);
+    if (v4) {
+      const inner = isBlockedIp(v4);
+      return inner.blocked ? { blocked: true, reason: `${inner.reason} (embedded IPv4 ${v4})` } : { blocked: false };
+    }
+    if ((h[0] & 0xfe00) === 0xfc00) return { blocked: true, reason: 'unique local' };   // fc00::/7
+    if ((h[0] & 0xffc0) === 0xfe80) return { blocked: true, reason: 'link-local' };     // fe80::/10
+    if ((h[0] & 0xff00) === 0xff00) return { blocked: true, reason: 'multicast' };      // ff00::/8
+    // Default deny outside global unicast (2000::/3): every other block is reserved or special.
+    if ((h[0] & 0xe000) !== 0x2000) return { blocked: true, reason: 'reserved' };
     return { blocked: false };
   }
 
@@ -247,7 +302,9 @@ export const fetchPageText = async (raw: string): Promise<FetchedPage> => {
     const declared = Number(res.headers.get('content-length') || 0);
     if (declared > MAX_BYTES) throw new PageFetchError('That page is too large to audit (over 2MB).', 'unusable');
 
-    const raw_html = (await res.text()).slice(0, MAX_BYTES);
+    // Read at most MAX_BYTES off the wire. `res.text()` buffered the whole body first - a chunked
+    // response with no content-length could have filled the function's memory before the slice.
+    const raw_html = await readCapped(res, MAX_BYTES);
     const text = htmlToText(raw_html);
 
     if (text.replace(/\s/g, '').length < MIN_USEFUL_CHARS) {
@@ -261,6 +318,22 @@ export const fetchPageText = async (raw: string): Promise<FetchedPage> => {
   }
 
   throw new PageFetchError('That page redirected too many times.', 'unreachable');
+};
+
+/** Reads the body up to `max` bytes and stops pulling from the socket after that. */
+const readCapped = async (res: Response, max: number): Promise<string> => {
+  const reader = res.body?.getReader();
+  if (!reader) return (await res.text()).slice(0, max);
+  const chunks: Buffer[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(Buffer.from(value));
+    total += value.byteLength;
+    if (total >= max) { await reader.cancel().catch(() => undefined); break; }
+  }
+  return Buffer.concat(chunks).subarray(0, max).toString('utf8');
 };
 
 /** Mirrors detectMode in pages/ConversionDoctor.tsx - a single token containing a dot is a URL. */
