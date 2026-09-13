@@ -678,11 +678,33 @@ export const Modal: React.FC<{
 export const UsageLimitModal: React.FC<{
   isOpen: boolean;
   tier: UserTier;
-  reason: 'exhausted' | 'insufficient';
+  reason: 'exhausted' | 'insufficient' | 'unavailable';
   onClose: () => void;
 }> = ({ isOpen, tier, reason, onClose }) => {
   const navigate = useNavigate();
+  const { refreshProfile } = useAuth();
+  const [retrying, setRetrying] = useState(false);
   if (!isOpen) return null;
+
+  // The profile could not be read, so the balance is unknown. Retry the read rather than sell an
+  // upgrade to someone who may have plenty of tokens.
+  if (reason === 'unavailable') {
+    const retry = async () => {
+      setRetrying(true);
+      try { await refreshProfile(); } finally { setRetrying(false); onClose(); }
+    };
+    return (
+      <Modal onClose={onClose} size="sm">
+        <div className="w-2 h-2 rounded-full bg-[#FF0000] mb-8" />
+        <h3 className="text-2xl font-bold mb-4 tracking-tight">We couldn't load your account</h3>
+        <p className="text-gray-500 font-medium mb-8 leading-relaxed">Your token balance could not be read, so this run was not started. Check your connection and try again.</p>
+        <div className="flex flex-col gap-4">
+          <PrimaryButton onClick={retry} disabled={retrying} className="w-full">{retrying ? 'Retrying…' : 'Retry'}</PrimaryButton>
+          <button onClick={onClose} className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest py-3 transition-colors">Close</button>
+        </div>
+      </Modal>
+    );
+  }
 
   const isFree = tier === 'free';
 
@@ -911,6 +933,47 @@ export const ExportControls: React.FC<{
         </>
       )}
     </div>
+  );
+};
+
+// 16b. TWO-TAP CONFIRM
+// Destructive actions used to fire on a single tap with no confirmation and no undo - easy to hit
+// by accident on a phone. First tap arms the button ("Confirm delete"), a second tap within
+// `timeoutMs` fires, and doing nothing disarms it. No modal, so it works with a thumb.
+export const useConfirmTap = (action: () => unknown, timeoutMs = 3000) => {
+  const [armed, setArmed] = useState(false);
+  const timer = React.useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const tap = () => {
+    if (armed) {
+      window.clearTimeout(timer.current);
+      setArmed(false);
+      return action();
+    }
+    setArmed(true);
+    timer.current = window.setTimeout(() => setArmed(false), timeoutMs);
+  };
+  return { armed, tap };
+};
+
+export const ConfirmTapButton: React.FC<{
+  onConfirm: () => unknown;
+  label?: string;
+  confirmLabel?: string;
+  disabled?: boolean;
+  className?: string;
+}> = ({ onConfirm, label = 'Delete', confirmLabel = 'Confirm delete', disabled, className = '' }) => {
+  const { armed, tap } = useConfirmTap(onConfirm);
+  return (
+    <button
+      type="button"
+      onClick={tap}
+      disabled={disabled}
+      aria-pressed={armed}
+      className={`${className} ${armed ? '!text-[#FF0000]' : ''}`}
+    >
+      {armed ? confirmLabel : label}
+    </button>
   );
 };
 

@@ -307,7 +307,10 @@ const AdminGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 const AppRoutes: React.FC = () => {
   const { user, loading } = useAuth();
 
-  if (loading) return null;
+  // Was `return null`: on a phone, a deep link showed the marketing shell, then a blank screen for
+  // as long as Firebase took to restore the session. A visible state is not a fix for slowness,
+  // but a blank page reads as broken.
+  if (loading) return <LoadingState message="Loading your workspace" />;
 
   return (
     <Suspense fallback={<LoadingState message="Loading..." />}>

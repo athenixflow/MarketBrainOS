@@ -66,7 +66,7 @@ const Flash: React.FC<{ msg: string; error: boolean }> = ({ msg, error }) =>
   msg ? (error ? <ErrorMessage message={msg} className="mt-6" /> : <SuccessMessage message={msg} className="mt-6" />) : null;
 
 const Settings: React.FC = () => {
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile, profileError } = useAuth();
   const { memberships } = useScope();
   const accessCtx = { profile, memberships };
 
@@ -173,7 +173,18 @@ const Settings: React.FC = () => {
       .finally(() => setLoadingPayments(false));
   }, [user, activeTab]);
 
-  if (!profile) return <LoadingState message="Loading your settings" />;
+  if (!profile) {
+    // Spun forever when the read failed; now it says so and offers a retry.
+    if (profileError) {
+      return (
+        <div className="max-w-md">
+          <ErrorMessage message={`We couldn't load your account: ${profileError}`} />
+          <SecondaryButton onClick={() => refreshProfile()} className="mt-6" tone="dark">Retry</SecondaryButton>
+        </div>
+      );
+    }
+    return <LoadingState message="Loading your settings" />;
+  }
   const initials = (profile.first_name?.[0] || profile.email?.[0] || 'U').toUpperCase();
   const isFree = profile.tier === 'free';
 

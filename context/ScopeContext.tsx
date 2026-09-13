@@ -5,7 +5,7 @@
 // container ids stamp onto new analyses, what the history/reports/dashboards show, and which
 // nav appears. 'personal' is the V1 default and is always available.
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { Scope, UserMembership } from '../types';
 import { Membership } from '../services/permissionService';
 import { getUserMemberships } from '../services/persistenceService';
@@ -47,12 +47,15 @@ export const ScopeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     load();
   }, [user, load]);
 
-  const setScope = (s: Scope) => setScopeState(s);
-  const resetToPersonal = () => setScopeState(PERSONAL);
+  // Stable identities. These were recreated on every render, and ClientWorkspace has an effect
+  // that depends on `setScope` and calls it with a new object: set state -> provider re-renders ->
+  // new setScope -> effect runs again, forever. Opening a client in Agency Hub froze the page.
+  const setScope = useCallback((s: Scope) => setScopeState(s), []);
+  const resetToPersonal = useCallback(() => setScopeState(PERSONAL), []);
 
   // Resolve the membership that applies to the active scope, for the permission engine.
   // (Client scopes resolve against the parent agency membership.)
-  const activeMembership: Membership | null = (() => {
+  const activeMembership: Membership | null = useMemo(() => {
     if (scope.level === 'personal') return null;
     if (scope.level === 'team' && scope.workspaceId) {
       const m = memberships.find(x => x.family === 'workspace' && x.containerId === scope.workspaceId);
@@ -67,13 +70,15 @@ export const ScopeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return m ? { family: 'enterprise', role: m.role as any } : null;
     }
     return null;
-  })();
+  }, [scope, memberships]);
+
+  const value = useMemo<ScopeContextType>(() => ({
+    scope, memberships, activeMembership, loadingMemberships,
+    setScope, resetToPersonal, refreshMemberships: load,
+  }), [scope, memberships, activeMembership, loadingMemberships, setScope, resetToPersonal, load]);
 
   return (
-    <ScopeContext.Provider value={{
-      scope, memberships, activeMembership, loadingMemberships,
-      setScope, resetToPersonal, refreshMemberships: load,
-    }}>
+    <ScopeContext.Provider value={value}>
       {children}
     </ScopeContext.Provider>
   );

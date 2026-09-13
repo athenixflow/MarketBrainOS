@@ -54,11 +54,26 @@ const reachable = (route) => {
   return rewrites.some((re) => re.test(probe));
 };
 
-// --- 3. Report -----------------------------------------------------------------------------------
+// --- 3. The shell the rewrites land on ----------------------------------------------------------
+// Rewrites must target app.html (the clean Vite shell that prerender.ts emits), never index.html.
+// index.html is the prerendered HOMEPAGE: routing app pages to it painted the marketing landing
+// page, then blank, then the app on every deep link. This runs before `vite build`, so it checks
+// the producer rather than the artifact.
+const badDestinations = (vercel.rewrites || []).filter((r) => r.destination !== '/app.html');
+const emitsShell = /writeFileSync\(path\.join\(DIST, 'app\.html'\)/.test(prerender);
+
+// --- 4. Report -----------------------------------------------------------------------------------
 const missing = declared.filter((r) => !reachable(r));
 
 console.log(`Checked ${declared.length} declared routes against ${rewrites.length} vercel.json rewrites`);
 console.log(`  ${marketing.length + docsRoutes.length} prerendered routes are served from the filesystem`);
+
+if (badDestinations.length || !emitsShell) {
+  console.error(`\nFAIL — app routes must rewrite to /app.html, the clean shell prerender.ts emits.`);
+  for (const r of badDestinations) console.error(`    ${r.source} -> ${r.destination}`);
+  if (!emitsShell) console.error(`    scripts/prerender.ts no longer writes dist/app.html`);
+  process.exit(1);
+}
 
 if (missing.length) {
   console.error(`\nFAIL — these routes are declared in the app but would 404 in production:\n`);

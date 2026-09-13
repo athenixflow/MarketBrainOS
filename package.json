@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/routes.test.mjs && tsx scripts/results.test.ts && tsx scripts/fetchpage.test.ts && tsx scripts/access.test.ts && tsx scripts/pdf.test.ts && tsc && vite build && tsx scripts/prerender.ts",
+    "build": "node scripts/routes.test.mjs && tsx scripts/results.test.ts && tsx scripts/fetchpage.test.ts && tsx scripts/access.test.ts && tsx scripts/runtime.test.ts && tsx scripts/pdf.test.ts && tsc && vite build && tsx scripts/prerender.ts",
     "build:novite": "tsx scripts/prerender.ts",
     "preview": "vite preview",
     "media:generate": "tsx scripts/media/generate.ts",
@@ -19,7 +19,8 @@
     "test:fetchpage": "tsx scripts/fetchpage.test.ts",
     "test:access": "tsx scripts/access.test.ts",
     "test:pdf": "tsx scripts/pdf.test.ts",
-    "test:browser": "tsx scripts/browser-harness.ts"
+    "test:browser": "tsx scripts/browser-harness.ts",
+    "test:runtime": "tsx scripts/runtime.test.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",

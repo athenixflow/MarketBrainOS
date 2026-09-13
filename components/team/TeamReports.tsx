@@ -1,10 +1,17 @@
 // Team Workspace — Reports Center (Phase 6.1)
 import React, { useEffect, useState } from 'react';
-import { Card, EmptyState, ErrorMessage, Skeleton, Badge } from '../UI';
+import { EmptyState, ErrorMessage, Skeleton } from '../UI';
 import { Workspace, Report } from '../../types';
 import { getReportsForScope } from '../../services/persistenceService';
+import { ReportCard } from '../ReportCard';
+import { useAuth } from '../../context/AuthContext';
+import { useScope } from '../../context/ScopeContext';
+import { canExport } from '../../config/access';
 
 const TeamReports: React.FC<{ workspace: Workspace }> = ({ workspace }) => {
+  const { user, profile } = useAuth();
+  const { memberships } = useScope();
+  const exportsAllowed = canExport({ profile, memberships });
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,19 +39,18 @@ const TeamReports: React.FC<{ workspace: Workspace }> = ({ workspace }) => {
   if (reports.length === 0) return <EmptyState card message="No team reports yet" submessage="Reports saved to this workspace will be listed here." />;
 
   return (
-    <Card title={`Reports (${reports.length})`}>
-      <div className="space-y-3">
-        {reports.map(r => (
-          <div key={r.id} className="flex flex-wrap items-center justify-between gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
-            <div className="min-w-0">
-              <p className="text-sm font-bold text-[#0B0B0B] truncate">{r.title}</p>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums mt-1">{r.created_at ? new Date(r.created_at).toLocaleDateString() : ''}</p>
-            </div>
-            <Badge tone="neutral">{r.report_type}</Badge>
-          </div>
-        ))}
-      </div>
-    </Card>
+    <div className="space-y-6">
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Reports ({reports.length})</p>
+      {reports.map((r) => (
+        <ReportCard
+          key={r.id}
+          report={r}
+          canExport={exportsAllowed}
+          canDelete={!!user && r.creator_user_id === user.uid}
+          onDeleted={(id) => setReports((rows) => rows.filter((x) => x.id !== id))}
+        />
+      ))}
+    </div>
   );
 };
 

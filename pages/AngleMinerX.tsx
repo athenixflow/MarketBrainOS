@@ -33,7 +33,7 @@ import { useAuth } from '../context/AuthContext';
 import { copyToClipboard, downloadAsText, exportTextPdf, formatAngleMinerExport } from '../services/exportService';
 import { SecurityEngine } from '../services/securityEngine';
 import { isFixtureRequested } from '../services/devFixtures';
-import { checkTokenBalance, canExport } from '../config/access';
+import { checkTokenBalance, canExport, TokenVerdict } from '../config/access';
 import { useScope } from '../context/ScopeContext';
 
 // Platform keywords used ONLY to rescue results saved before `channel` existed (those records carry a
@@ -91,7 +91,7 @@ const AngleMinerX: React.FC = () => {
 
   // Usage Modal State
   const [showUsageModal, setShowUsageModal] = useState(false);
-  const [usageReason, setUsageReason] = useState<'exhausted' | 'insufficient'>('exhausted');
+  const [usageReason, setUsageReason] = useState<Exclude<TokenVerdict, 'ok'>>('exhausted');
 
   const tones = ['Direct', 'Emotional', 'Authority', 'Urgent', 'Educational'];
   const goals = ['Paid Ads', 'Organic Content', 'Sales Funnel', 'All'];

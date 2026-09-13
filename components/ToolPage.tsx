@@ -27,7 +27,7 @@ import { getUserToolAnalyses, ToolAnalysisRecord, deleteGenericAnalysis, saveRep
 import { getScoreBand } from '../services/scoreBands';
 import { ExpectedOutcome, AnalysisPreview, RunProgress, CharCounter, FieldHint, RunStage } from './ToolGuide';
 import { ResultItemList } from './ResultSections';
-import { checkTokenBalance, canExport } from '../config/access';
+import { checkTokenBalance, canExport, TokenVerdict } from '../config/access';
 
 const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
   const { user, profile, refreshProfile } = useAuth();
@@ -52,7 +52,7 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
   const [activeTab, setActiveTab] = useState<string>('');
 
   const [showUsageModal, setShowUsageModal] = useState(false);
-  const [usageReason, setUsageReason] = useState<'exhausted' | 'insufficient'>('exhausted');
+  const [usageReason, setUsageReason] = useState<Exclude<TokenVerdict, 'ok'>>('exhausted');
 
   // Connected-ecosystem context: prior analyses from related tools (config.worksWith).
   const [priorAnalyses, setPriorAnalyses] = useState<ToolAnalysisRecord[]>([]);

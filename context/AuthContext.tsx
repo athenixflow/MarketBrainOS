@@ -12,6 +12,8 @@ interface AuthContextType {
   isSystemLocked: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  /** Set when the profile could not be read (offline, rules, outage). Retry with refreshProfile. */
+  profileError: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -21,24 +23,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSystemLocked, setIsSystemLocked] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
+  // Never throws. A rejected read used to escape the auth callback below, so setLoading(false)
+  // never ran and AppRoutes rendered nothing until a manual reload - the app opened to a blank
+  // screen on any phone with a flaky connection.
   const fetchProfile = async (uid: string, email: string | null) => {
-    // Ensure the database record exists for this user (Firebase Auth <-> Firestore Sync)
-    if (email) await ensureUserProfile(uid, email);
-    
-    const p = await getUserProfile(uid);
-    setProfile(p);
+    try {
+      // Ensure the database record exists for this user (Firebase Auth <-> Firestore Sync)
+      if (email) await ensureUserProfile(uid, email);
+      setProfile(await getUserProfile(uid));
+      setProfileError(null);
+    } catch (e: any) {
+      console.error('Profile load failed:', e);
+      setProfileError(e?.message || 'Could not load your account.');
+    }
   };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
-      if (currentUser) {
-        await fetchProfile(currentUser.uid, currentUser.email);
-      } else {
-        setProfile(null);
+      try {
+        if (currentUser) {
+          await fetchProfile(currentUser.uid, currentUser.email);
+        } else {
+          setProfile(null);
+          setProfileError(null);
+        }
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => unsubscribe();
@@ -64,7 +78,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, isSystemLocked, signOut: handleSignOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, isSystemLocked, signOut: handleSignOut, refreshProfile, profileError }}>
       {children}
     </AuthContext.Provider>
   );

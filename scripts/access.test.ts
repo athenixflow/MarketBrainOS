@@ -11,7 +11,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { tierAtLeast, isPaidTier, canExport, TIER_ORDER } from '../config/access';
+import { tierAtLeast, isPaidTier, canExport, checkTokenBalance, TIER_ORDER } from '../config/access';
 import type { UserTier, UserMembership } from '../types';
 
 let failures = 0;
@@ -45,6 +45,14 @@ ok(canExport({ profile: profileOf('free'), memberships: [membership('agency')] }
 ok(canExport({ profile: profileOf('free'), memberships: [] }) === false, 'canExport: Free user with an empty membership list may not');
 ok(canExport({ profile: undefined }) === false, 'canExport: no profile (still loading) may not');
 ok(canExport({ profile: null, memberships: [membership('enterprise')] }) === true, 'canExport: membership alone is enough even with a null profile');
+
+console.log('\nTOKEN VERDICT:');
+ok(checkTokenBalance(null, 5) === 'unavailable', "no profile (read failed) is 'unavailable', not 'exhausted'");
+ok(checkTokenBalance(undefined, 5) === 'unavailable', "undefined profile is 'unavailable'");
+ok(checkTokenBalance({ tier: 'pro', tokens: undefined } as any, 5) === 'exhausted', "a profile with no token figure is 'exhausted'");
+ok(checkTokenBalance({ tier: 'pro', tokens: 0 } as any, 5) === 'exhausted', "zero tokens is 'exhausted'");
+ok(checkTokenBalance({ tier: 'agency', tokens: 3 } as any, 5) === 'insufficient', "3 tokens for a 5-token run is 'insufficient' on any tier");
+ok(checkTokenBalance({ tier: 'free', tokens: 5 } as any, 5) === 'ok', "exactly the cost is 'ok'");
 
 // ---- Source guard ---------------------------------------------------------------------------------
 // Fails when a profile tier is compared to 'pro' for equality anywhere a capability is decided.

@@ -1,5 +1,6 @@
 
 import { auth, functionsBaseUrl } from "./firebase";
+import { timeoutSignal, isTimeoutError } from './timeoutSignal';
 import {
   saveAngleMinerResult,
   saveTestLabResult,
@@ -76,10 +77,11 @@ const executeAsyncJobWithMeta = async (module: string, input: any, scope?: Scope
       },
       // `scope` lets the server bill the workspace owner's pooled wallet for team analyses.
       body: JSON.stringify({ module, input, scope: scope || null }),
-      signal: AbortSignal.timeout(ANALYSIS_TIMEOUT_MS)
+      // Guarded: AbortSignal.timeout is missing on Safari < 16 and threw before the request.
+      signal: timeoutSignal(ANALYSIS_TIMEOUT_MS)
     });
   } catch (e: any) {
-    if (e.name === 'AbortError') {
+    if (isTimeoutError(e)) {
       throw new Error("Network timeout: the analysis took too long to respond. Please check your connection and try again.");
     }
     throw new Error(`Network error: failed to reach the analysis engine. ${e.message || ''}`.trim());

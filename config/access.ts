@@ -137,7 +137,7 @@ export const visibleLinks = (group: NavGroup, ctx: AccessContext): NavLink[] =>
 // ---------------------------------------------------------------------------------------------
 
 /** 'ok' to run; otherwise the reason, matching the usage modal's existing reasons. */
-export type TokenVerdict = 'ok' | 'exhausted' | 'insufficient';
+export type TokenVerdict = 'ok' | 'exhausted' | 'insufficient' | 'unavailable';
 
 /**
  * Can this profile afford a run costing `cost`? One implementation for all five tool pages, which
@@ -154,7 +154,9 @@ export type TokenVerdict = 'ok' | 'exhausted' | 'insufficient';
  * reads the same number the backend will.
  */
 export const checkTokenBalance = (profile: UserProfile | null | undefined, cost: number): TokenVerdict => {
-  if (!profile) return 'exhausted';
+  // No profile means the read failed (AuthContext creates the document on sign-in), so the honest
+  // answer is "we don't know", with a retry - not "you've used your free tokens".
+  if (!profile) return 'unavailable';
   const balance = Number(profile.tokens);
   // Covers undefined, null, NaN and a still-loading profile: never assume the user can pay.
   if (!Number.isFinite(balance) || balance <= 0) return 'exhausted';

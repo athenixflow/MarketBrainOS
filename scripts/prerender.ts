@@ -72,6 +72,17 @@ async function main() {
     throw new Error('dist/index.html not found — run `vite build` before prerendering.');
   }
 
+  // app.html: the plain Vite shell, for the signed-in app routes. Every app route used to rewrite to
+  // index.html, which is the prerendered HOMEPAGE - so opening /history on a phone painted the
+  // marketing landing page, then blank while React replaced it, then the app. The rewrites in
+  // vercel.json now target this file instead. Written before the loop below overwrites index.html
+  // with the "/" snapshot. noindex in the raw HTML on purpose: nothing served through this shell
+  // is a public page, and Google may honour a raw-HTML noindex even if JS later changes it.
+  const shell = fs.readFileSync(path.join(DIST, 'index.html'), 'utf8');
+  if (/<h1|<main/i.test(shell)) throw new Error('dist/index.html already contains rendered content; app.html must come from the clean Vite shell.');
+  const appShell = shell.replace(/<meta name="robots"[^>]*>/i, '').replace('</head>', '  <meta name="robots" content="noindex, nofollow">\n</head>');
+  fs.writeFileSync(path.join(DIST, 'app.html'), appShell, 'utf8');
+
   const serve = sirv(DIST, { single: true, dev: false });
   const server = http.createServer((req, res) => serve(req, res, () => { res.statusCode = 404; res.end('not found'); }));
   await new Promise<void>((resolve) => server.listen(PORT, resolve));

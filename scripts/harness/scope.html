@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Scope context harness</title>
+  <link rel="icon" href="data:,">
+</head>
+<body>
+  <!--
+    Mounts the REAL ScopeProvider with a consumer that has the exact effect from
+    components/agency/ClientWorkspace.tsx:56. Before the provider memoised setScope, that effect
+    re-ran on every render and the page froze; React reports it as "Maximum update depth exceeded".
+  -->
+  <div id="root"></div>
+  <script type="module">
+    import React, { useEffect } from 'react';
+    import { createRoot } from 'react-dom/client';
+    import { ScopeProvider, useScope } from '/context/ScopeContext.tsx';
+
+    let renders = 0;
+    const client = { id: 'client-1' };
+    const agency = { id: 'agency-1' };
+
+    const Consumer = () => {
+      const { setScope, scope } = useScope();
+      renders += 1;
+      // Verbatim from ClientWorkspace.tsx: "Acting inside a client => client scope".
+      useEffect(() => { setScope({ level: 'client', clientId: client.id, agencyId: agency.id }); }, [client.id, agency.id, setScope]);
+      return React.createElement('div', { id: 'scope' }, `${scope.level}:${scope.clientId || ''}`);
+    };
+
+    // In the app the provider mounts at start-up and ClientWorkspace mounts much later, when the
+    // user opens a client. Mounting both in one commit would let the provider's own mount effect
+    // (reset to personal) run after the child's, which is not the path being tested.
+    const Host = () => {
+      const [open, setOpen] = React.useState(false);
+      useEffect(() => { const t = setTimeout(() => setOpen(true), 100); return () => clearTimeout(t); }, []);
+      return React.createElement(ScopeProvider, null, open ? React.createElement(Consumer) : null);
+    };
+
+    window.__renders = () => renders;
+    createRoot(document.getElementById('root')).render(React.createElement(Host));
+    window.__harnessReady = true;
+  </script>
+</body>
+</html>

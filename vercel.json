@@ -5,19 +5,19 @@
   "rewrites": [
     {
       "source": "/(about|agency|billing|enterprise|faq|features|history|pricing|privacy|reports|settings|store|support|team|terms|angle-miner|conversion-doctor|test-lab|workflow|audience-intelligence|campaign-analyzer|competitor-analyzer|content-strategy|growth-analyzer|market-intelligence|messaging-analyzer|offer-analyzer|strategy-lab|workflow-analyzer)",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/admin(/.*)?",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/documentation(/.*)?",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/auth(/.*)?",
-      "destination": "/index.html"
+      "destination": "/app.html"
     }
   ],
   "headers": [

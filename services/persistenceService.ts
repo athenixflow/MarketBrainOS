@@ -315,7 +315,13 @@ export const getUserProfile = async (userId: string): Promise<UserProfile | null
       avatar_url: data.avatar_url,
       notification_prefs: data.notification_prefs,
     };
-  } catch { return null; }
+  } catch (e) {
+    // Was `return null`, which made a failed read indistinguishable from a missing document. The
+    // app then treated the user as having no tokens ("You've used your free tokens") and Settings
+    // spun forever. Let the caller (AuthContext) show a retryable error instead.
+    console.error('getUserProfile failed:', e);
+    throw e;
+  }
 };
 
 // Update the caller's own profile fields. Writes ONLY the allowlisted profile/preference fields
@@ -371,7 +377,9 @@ export const ensureUserProfile = async (userId: string, email: string) => {
       last_active: new Date().toISOString()
     });
   } else {
-    await updateDoc(docRef, { last_active: new Date().toISOString() });
+    // Fire-and-forget: a presence stamp must not gate start-up. Offline, Firestore queues this
+    // write and the await never resolved, which held the whole app on a blank screen.
+    updateDoc(docRef, { last_active: new Date().toISOString() }).catch((e) => console.warn('last_active update skipped:', e?.message));
   }
 };
 

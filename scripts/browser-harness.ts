@@ -64,7 +64,20 @@ const main = async () => {
   const puppeteer: any = (await import('puppeteer')).default;
   const { KnownDevices } = await import('puppeteer');
 
-  const server = await createServer({ root: ROOT, configFile: path.join(ROOT, 'vite.config.ts'), logLevel: 'silent', server: { port: PORT, strictPort: true } });
+  const stub = (name: string) => path.join(ROOT, 'scripts', 'stubs', name);
+  const server = await createServer({
+    root: ROOT,
+    configFile: path.join(ROOT, 'vite.config.ts'),
+    logLevel: 'silent',
+    server: { port: PORT, strictPort: true },
+    resolve: {
+      alias: [
+        // Only for this harness server: lets context/ScopeContext mount without initialising Firebase.
+        { find: /^\.\.\/services\/persistenceService$/, replacement: stub('persistenceService.ts') },
+        { find: /^\.\/AuthContext$/, replacement: stub('AuthContext.ts') },
+      ],
+    },
+  });
   await server.listen();
   const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu'] });
 
@@ -117,6 +130,31 @@ const main = async () => {
       ok(pageErrors.length === 0, 'no uncaught page errors', pageErrors.join(' | '));
       ok(consoleErrors.length === 0, 'no console errors', consoleErrors.join(' | '));
       await page.close();
+    }
+
+    // ---- Scope context: opening a client must not loop -----------------------------------------
+    console.log('\nSCOPE CONTEXT (ClientWorkspace effect):');
+    {
+      const page = await browser.newPage();
+      const pageErrors: string[] = [];
+      page.on('pageerror', (e: Error) => pageErrors.push(e.message));
+      // domcontentloaded, not networkidle: a looping page never goes idle, and the point is to
+      // report that as a labelled failure rather than a navigation timeout.
+      let renders = -1;
+      let text: string | null | undefined = null;
+      try {
+        await page.goto(`http://localhost:${PORT}/scripts/harness/scope.html`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+        await page.waitForFunction(() => (window as any).__harnessReady === true, { timeout: 15_000 });
+        await new Promise((r) => setTimeout(r, 1500));   // long enough for a loop to run away
+        renders = await page.evaluate(() => (window as any).__renders());
+        text = await page.evaluate(() => document.getElementById('scope')?.textContent);
+      } catch (e: any) {
+        pageErrors.push(`harness page unresponsive: ${e.message}`);
+      }
+      ok(text === 'client:client-1', `consumer entered client scope (${text})`);
+      ok(renders >= 0 && renders <= 10, `consumer rendered a bounded number of times (${renders})`);
+      ok(!pageErrors.some((m) => /Maximum update depth|unresponsive/i.test(m)), 'no "Maximum update depth exceeded" and page stayed responsive', pageErrors.join(' | ').slice(0, 300));
+      await page.close().catch(() => undefined);
     }
   } finally {
     await browser.close();

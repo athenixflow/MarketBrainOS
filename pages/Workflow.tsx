@@ -35,7 +35,7 @@ import { AngleMinerResults, TestLabResults, AuditResult, TOKEN_COSTS } from '../
 import { useAuth } from '../context/AuthContext';
 import { copyToClipboard, downloadAsText, exportTextPdf, formatWorkflowExport } from '../services/exportService';
 import { SecurityEngine } from '../services/securityEngine';
-import { checkTokenBalance, canExport } from '../config/access';
+import { checkTokenBalance, canExport, TokenVerdict } from '../config/access';
 import { useScope } from '../context/ScopeContext';
 
 const Workflow: React.FC = () => {
@@ -50,7 +50,7 @@ const Workflow: React.FC = () => {
 
   // Usage Modal State
   const [showUsageModal, setShowUsageModal] = useState(false);
-  const [usageReason, setUsageReason] = useState<'exhausted' | 'insufficient'>('exhausted');
+  const [usageReason, setUsageReason] = useState<Exclude<TokenVerdict, 'ok'>>('exhausted');
 
   // Step 1: AngleMiner X
   const [minerParams, setMinerParams] = useState({ product: '', industry: '', target: '', goal: 'All', tones: [] as string[], competitors: '', objections: '', brandVoice: '' });

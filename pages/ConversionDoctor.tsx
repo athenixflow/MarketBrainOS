@@ -31,7 +31,7 @@ import { copyToClipboard, downloadAsText, exportTextPdf, formatConversionDoctorE
 import { SecurityEngine } from '../services/securityEngine';
 import { getScoreBand } from '../services/scoreBands';
 import { isFixtureRequested } from '../services/devFixtures';
-import { checkTokenBalance, canExport } from '../config/access';
+import { checkTokenBalance, canExport, TokenVerdict } from '../config/access';
 import { useScope } from '../context/ScopeContext';
 
 const chip = (active: boolean) =>
@@ -63,7 +63,7 @@ const ConversionDoctor: React.FC = () => {
 
   // Usage Modal State
   const [showUsageModal, setShowUsageModal] = useState(false);
-  const [usageReason, setUsageReason] = useState<'exhausted' | 'insufficient'>('exhausted');
+  const [usageReason, setUsageReason] = useState<Exclude<TokenVerdict, 'ok'>>('exhausted');
 
   const contexts = ['Landing Page', 'Homepage', 'Sales Page', 'Funnel Step'];
 
