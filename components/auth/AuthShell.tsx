@@ -14,7 +14,7 @@ import { motion, useReducedMotion } from 'framer-motion';
 // Honest product claims, drawn from the real feature set and free-plan behaviour.
 const VALUE_POINTS = [
   {
-    title: 'Thirteen analysis tools',
+    title: 'Fourteen analysis tools',
     body: 'Audience, market, messaging, campaign, offer, and conversion intelligence in one place.',
   },
   {
@@ -32,11 +32,11 @@ export const BrandMark: React.FC<{ className?: string; showWordmark?: boolean }>
   showWordmark = true,
 }) => (
   <Link to="/" className={`inline-flex items-center gap-3 group ${className}`}>
-    <div className="w-9 h-9 bg-[#FF0000] rounded-2xl flex items-center justify-center font-black text-white text-sm transform -rotate-6 transition-transform duration-500 group-hover:rotate-0">
+    <div className="w-9 h-9 bg-[#FF0000] rounded-[10px] flex items-center justify-center font-bold text-white text-xs transform -rotate-6 transition-transform duration-500 group-hover:rotate-0">
       M
     </div>
     {showWordmark && (
-      <span className="text-sm font-bold tracking-[0.2em] uppercase">MarketBrain OS</span>
+      <span className="text-sm font-bold tracking-[0.2em] uppercase">MarketBrainOS</span>
     )}
   </Link>
 );
@@ -62,7 +62,7 @@ const AuthShell: React.FC<{
   });
 
   return (
-    <div className="min-h-[100dvh] w-full bg-[#0B0B0B] lg:grid lg:grid-cols-[1.05fr_1fr]">
+    <div className="min-h-[calc(100dvh-var(--mbos-consent-h,0px))] w-full bg-[#0B0B0B] lg:grid lg:grid-cols-[1.05fr_1fr]">
       {/* ---------- Brand panel (desktop only; collapses into the form header on mobile) ---------- */}
       <aside className="relative hidden lg:flex flex-col justify-between p-12 xl:p-16 overflow-hidden">
         {/* Brand-red ambient wash. Low opacity, single hue, no competing gradient. */}
@@ -105,7 +105,7 @@ const AuthShell: React.FC<{
       </aside>
 
       {/* ---------- Form panel (a section, not a main: AppContainer already renders the page main) ---------- */}
-      <section className="relative bg-white flex flex-col min-h-[100dvh] lg:min-h-0">
+      <section className="relative bg-white flex flex-col min-h-[calc(100dvh-var(--mbos-consent-h,0px))] lg:min-h-0">
         <div className="flex-1 flex flex-col justify-center px-6 py-12 sm:px-10 lg:px-14 xl:px-20">
           <motion.div {...rise(0)} className="w-full max-w-[420px] mx-auto">
             {/* Mobile-only brand mark, since the brand panel is hidden below lg. */}

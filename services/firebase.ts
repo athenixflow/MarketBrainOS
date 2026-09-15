@@ -2,7 +2,7 @@ import * as firebaseApp from 'firebase/app';
 import { getAuth, GoogleAuthProvider, Auth, User } from 'firebase/auth';
 import { getFirestore, initializeFirestore, Firestore } from 'firebase/firestore';
 import { getFunctions, Functions } from 'firebase/functions';
-import { getAnalytics, Analytics } from 'firebase/analytics';
+import { getAnalytics, setAnalyticsCollectionEnabled, Analytics } from 'firebase/analytics';
 
 const initializeApp = (firebaseApp as any).initializeApp;
 const getApps = (firebaseApp as any).getApps;
@@ -56,12 +56,10 @@ try {
   }
 
   functions = getFunctions(app);
-  
-  // Conditional analytics initialization
-  if (typeof window !== 'undefined') {
-    // @ts-ignore
-    analytics = getAnalytics(app);
-  }
+
+  // Analytics is NOT started here. getAnalytics() loads gtag and fires a page_view on the spot, which
+  // is a non-essential cookie set before anyone agreed to it. It starts only via enableAnalytics()
+  // below — on load when a stored consent says yes, otherwise from the consent banner.
   isFirebaseInitialized = true;
 
 } catch (error) {
@@ -90,6 +88,39 @@ try {
   // Mock Functions
   functions = {} as unknown as Functions;
 }
+
+// --- Analytics consent gate ---------------------------------------------------------------------
+// The stored choice is the enforcement point: nothing analytics-related runs unless it says yes.
+// Key/value are read by scripts/browser-harness.ts too — change both together.
+export const CONSENT_STORAGE_KEY = 'mbos_consent';
+export const CONSENT_ANALYTICS_YES = 'analytics:yes';
+export const CONSENT_ANALYTICS_NO = 'analytics:no';
+
+/** The persisted consent choice, or null when the visitor has not decided (or storage is blocked). */
+export const readStoredConsent = (): string | null => {
+  try { return localStorage.getItem(CONSENT_STORAGE_KEY); } catch { return null; }
+};
+
+/** Start Firebase Analytics (once) and turn collection on. Safe to call repeatedly. */
+export const enableAnalytics = (): void => {
+  if (!isFirebaseInitialized || typeof window === 'undefined') return;
+  try {
+    if (!analytics) analytics = getAnalytics(app);
+    setAnalyticsCollectionEnabled(analytics, true);
+  } catch (error) {
+    // Analytics is optional; an ad-blocker or unsupported environment must never break the app.
+    console.warn('Analytics could not be enabled:', error);
+  }
+};
+
+/** Stop collection. A no-op when analytics was never started (nothing was ever sent). */
+export const disableAnalytics = (): void => {
+  if (!analytics) return;
+  try { setAnalyticsCollectionEnabled(analytics, false); } catch { /* already off */ }
+};
+
+// Honour a previous choice on every load; anything other than an explicit yes means stay off.
+if (readStoredConsent() === CONSENT_ANALYTICS_YES) enableAnalytics();
 
 export { auth, googleProvider, db, functions, analytics, isFirebaseInitialized };
 // functionsBaseUrl is exported at its declaration above.

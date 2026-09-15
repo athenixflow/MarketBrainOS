@@ -7,13 +7,13 @@ const settings: DocArticle = {
   categoryId: 'account',
   title: 'Account & Settings',
   summary: 'Everything under /settings — profile, account, security, notifications, subscription, billing, integrations.',
-  keywords: ['settings', 'profile', 'account', 'security', 'password', 'notifications', 'preferences'],
+  keywords: ['settings', 'profile', 'account', 'security', 'password', 'notifications', 'preferences', 'delete account', 'close account', 'privacy', 'gdpr'],
   blocks: [
     { type: 'heading', id: 'tabs', text: 'The Settings tabs' },
     { type: 'paragraph', text: 'Open [Settings](/settings) to manage your account. It is organized into tabs:' },
     { type: 'table', headers: ['Tab', 'What you can change'], rows: [
       ['Profile', 'First/last name, company, job title, bio.'],
-      ['Account', 'Username, timezone, language (email change coming soon).'],
+      ['Account', 'Username, timezone, language (email change coming soon); delete your account (see below).'],
       ['Security', 'Change password (email sign-in) or send a reset link (Google sign-in).'],
       ['Notifications', 'Toggle: analysis complete, token alerts, product updates, workspace notifications, and the email channel.'],
       ['Subscription', 'View your current plan and jump to upgrade.'],
@@ -22,6 +22,20 @@ const settings: DocArticle = {
       ['Workspace', 'A shortcut to manage your Team Workspace (Team plan and above).'],
     ] },
     { type: 'callout', tone: 'tip', title: 'Notifications', text: 'Turn on token alerts so you are warned before you run out mid-analysis.' },
+    { type: 'heading', id: 'delete-account', text: 'Delete your account' },
+    { type: 'paragraph', text: 'Open [Settings → Account](/settings) and use **Delete account** in the danger zone at the bottom. This is the self-service route for the deletion right in [Privacy Policy §8](/privacy#s8).' },
+    { type: 'steps', items: [
+      { title: 'Check', text: 'We look at your account first. If you still own an active workspace, agency or enterprise, deletion is refused and each one is listed: archive it from its Settings tab, or make another member the owner (Members → Make owner), then come back. Archived teams do not block.' },
+      { title: 'Verify it is you', text: 'Email sign-in: enter your password. Google sign-in: click Continue with Google. The server also requires that you signed in within the last five minutes, so you may be asked to sign in again.' },
+      { title: 'Confirm', text: 'Type DELETE (upper case) and click Delete my account permanently. You are signed out and land on the sign-in page with a confirmation; a final email confirms the deletion.' },
+    ] },
+    { type: 'table', headers: ['Deleted immediately', 'Kept, anonymised'], rows: [
+      ['Your profile and sign-in', 'Payment records (amount, reference, tokens, date)'],
+      ['Every analysis and report you created — including ones shared with a team, client or enterprise', 'Security and activity logs required for fraud prevention'],
+      ['History, notifications, workspace seats and open invitations', 'Your name and email are removed from these; only an internal reference remains ([Privacy Policy §6](/privacy#s6))'],
+      ['Unused tokens (forfeited, not refunded)', ''],
+    ] },
+    { type: 'callout', tone: 'warning', title: 'Cannot be undone', text: 'Nothing is restored if you sign up again with the same email — you get a brand-new Free account. Spend or export what you need before you delete.' },
   ],
 };
 

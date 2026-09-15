@@ -38,6 +38,10 @@ const SECONDARY_SIZE: Record<ButtonSize, string> = {
 };
 
 // 1. PRIMARY ACTION BUTTON
+// Disabled is a real greyed recipe (gray-100 fill, gray-500 text, inset gray-200 ring so the box does not
+// grow by 1px), not `opacity-30`: a faded red still read as "red, dimmer" and, because a disabled button
+// still matches :hover, it turned darker red under the pointer. Hover/active are gated on `enabled:`.
+// `danger` swaps the accent for the destructive red (#B91C1C) used by ErrorMessage, for irreversible actions.
 export const PrimaryButton: React.FC<{
   onClick?: () => void;
   children: React.ReactNode;
@@ -46,19 +50,26 @@ export const PrimaryButton: React.FC<{
   type?: 'button' | 'submit' | 'reset';
   /** sm for in-card actions, md (default) for page actions, lg for a single hero CTA. */
   size?: ButtonSize;
-}> = ({ onClick, children, disabled, className = '', type = 'button', size = 'md' }) => (
+  /** Destructive tone for irreversible actions (delete account, archive). */
+  danger?: boolean;
+}> = ({ onClick, children, disabled, className = '', type = 'button', size = 'md', danger }) => (
   <button
     type={type}
     onClick={onClick}
     disabled={disabled}
-    className={`bg-[#FF0000] text-white ${PRIMARY_SIZE[size]} font-bold rounded-2xl shadow-sm hover:bg-[#D40000] hover:shadow-xl hover:shadow-[#FF0000]/10 active:scale-[0.99] transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed tracking-widest uppercase ${className}`}
+    className={`${
+      danger
+        ? 'bg-[#B91C1C] enabled:hover:bg-[#991B1B] enabled:hover:shadow-[#B91C1C]/10'
+        : 'bg-[#FF0000] enabled:hover:bg-[#D40000] enabled:hover:shadow-[#FF0000]/10'
+    } text-white ${PRIMARY_SIZE[size]} font-bold rounded-2xl shadow-sm tracking-widest uppercase transition-all duration-300 enabled:hover:shadow-xl enabled:active:scale-[0.99] disabled:bg-gray-100 disabled:text-gray-500 disabled:shadow-none disabled:ring-1 disabled:ring-inset disabled:ring-gray-200 disabled:cursor-not-allowed ${className}`}
   >
     {children}
   </button>
 );
 
 // 2. SECONDARY BUTTON. `tone="dark"` is the variant for the page background (white text, grey border);
-// the default light tone is for use inside white Cards.
+// the default light tone is for use inside white Cards; `tone="danger"` is the paper variant for a
+// destructive action that must not read as a primary CTA (red text, red hairline).
 export const SecondaryButton: React.FC<{
   onClick?: () => void;
   children: React.ReactNode;
@@ -66,7 +77,7 @@ export const SecondaryButton: React.FC<{
   className?: string;
   type?: 'button' | 'submit' | 'reset';
   size?: ButtonSize;
-  tone?: Tone;
+  tone?: Tone | 'danger';
 }> = ({ onClick, children, disabled, className = '', type = 'button', size = 'md', tone = 'light' }) => (
   <button
     type={type}
@@ -75,7 +86,9 @@ export const SecondaryButton: React.FC<{
     className={`bg-transparent border ${SECONDARY_SIZE[size]} font-bold rounded-2xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed tracking-widest uppercase active:scale-[0.99] ${
       tone === 'dark'
         ? 'text-white border-gray-700 hover:border-white hover:bg-white/5'
-        : 'text-[#0B0B0B] border-gray-200 hover:bg-gray-50 hover:border-gray-300'
+        : tone === 'danger'
+          ? 'text-[#B91C1C] border-red-200 hover:bg-red-50 hover:border-red-300'
+          : 'text-[#0B0B0B] border-gray-200 hover:bg-gray-50 hover:border-gray-300'
     } ${className}`}
   >
     {children}
@@ -1028,16 +1041,19 @@ export const Honeypot: React.FC = () => {
     SecurityEngine.handleHoneypotTrigger(profile);
   };
 
+  // Decoy path and non-word label on purpose: the old "/admin/debug/…" href advertised the real admin
+  // route convention to anyone reading the DOM. The path 404s (no rewrite in vercel.json).
   return (
     <a
-      href="/admin/debug/logs/raw"
+      href="/.internal/log-export"
       onClick={triggerHoneypot}
       style={{ display: 'none' }}
       aria-hidden="true"
       tabIndex={-1}
+      rel="nofollow"
       className="mbos-honeypot"
     >
-      Internal Logs
+      {'\u200b'}
     </a>
   );
 };

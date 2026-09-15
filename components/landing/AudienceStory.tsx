@@ -21,7 +21,7 @@ interface AudienceStoryProps {
   index?: number;
 }
 
-const HEADING = 'Who Uses MarketBrainOS?';
+const HEADING = 'Who Uses MarketBrain OS?';
 const pad = (n: number) => String(n).padStart(2, '0');
 
 // Prerender-safe media query: the prerender runs in a real browser, so `window` exists there too.
@@ -40,10 +40,15 @@ const useMediaQuery = (query: string): boolean => {
 // Critically damped: the copy settles without overshoot. Nothing in this brand bounces.
 const SWAP = { duration: 0.45, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] };
 
+// The build-time prerender (scripts/prerender.ts) sets this flag. The pinned story keeps three of the
+// four slides at opacity:0 by design, which the prerender rejects as hidden content; the plain list
+// puts all four audiences in the static HTML instead.
+const isPrerender = () => typeof window !== 'undefined' && (window as any).__MBOS_PRERENDER === true;
+
 const AudienceStory: React.FC<AudienceStoryProps> = ({ audiences, index = 0 }) => {
   const reduce = useReducedMotion();
   const isDesktop = useMediaQuery('(min-width: 1024px)');
-  if (reduce || !isDesktop) return <AudienceList audiences={audiences} index={index} />;
+  if (reduce || !isDesktop || isPrerender()) return <AudienceList audiences={audiences} index={index} />;
   return <PinnedStory audiences={audiences} />;
 };
 

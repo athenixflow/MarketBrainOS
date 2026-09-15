@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/routes.test.mjs && tsx scripts/results.test.ts && tsx scripts/fetchpage.test.ts && tsx scripts/access.test.ts && tsx scripts/runtime.test.ts && tsx scripts/pdf.test.ts && tsc && vite build && tsx scripts/prerender.ts",
+    "build": "node scripts/routes.test.mjs && tsx scripts/results.test.ts && tsx scripts/fetchpage.test.ts && tsx scripts/access.test.ts && tsx scripts/runtime.test.ts && tsx scripts/copy.test.ts && tsx scripts/pdf.test.ts && tsc && vite build && tsx scripts/prerender.ts",
     "build:novite": "tsx scripts/prerender.ts",
     "preview": "vite preview",
     "media:generate": "tsx scripts/media/generate.ts",
@@ -22,7 +22,8 @@
     "test:browser": "tsx scripts/browser-harness.ts",
     "test:runtime": "tsx scripts/runtime.test.ts",
     "test:csp": "tsx scripts/csp.check.ts",
-    "test:rules": "firebase emulators:exec --only firestore --project rules-test-local \"node scripts/rules.test.mjs\""
+    "test:rules": "firebase emulators:exec --only firestore --project rules-test-local \"node scripts/rules.test.mjs\"",
+    "test:copy": "tsx scripts/copy.test.ts"
   },
   "dependencies": {
     "dotenv": "^17.2.4",

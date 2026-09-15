@@ -13,7 +13,7 @@ import { referenceArticles } from './reference';
 
 export const DOC_CATEGORIES: DocCategory[] = [
   { id: 'getting-started', title: 'Getting Started', icon: 'rocket', summary: 'Orientation, core concepts, and your first analysis.' },
-  { id: 'tools', title: 'Analysis Tools', icon: 'sparkles', summary: 'Exhaustive guides for all 13 tools across five suites.' },
+  { id: 'tools', title: 'Analysis Tools', icon: 'sparkles', summary: 'Exhaustive guides for all 14 tools across five suites.' },
   { id: 'billing', title: 'Tokens, Plans & Billing', icon: 'coin', summary: 'How tokens work, plan tiers, the store, and billing.' },
   { id: 'organizations', title: 'Collaboration & Organizations', icon: 'users', summary: 'Scopes, Team, Agency, Enterprise, and roles.' },
   { id: 'account', title: 'Account & Settings', icon: 'gear', summary: 'Profile, settings, history, and reports.' },

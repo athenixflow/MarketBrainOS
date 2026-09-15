@@ -9,7 +9,7 @@ const PublicFooter: React.FC = () => {
         <div className="max-w-xs">
           <div className="w-8 h-8 bg-[#FF0000] rounded-lg flex items-center justify-center font-bold text-white text-xs mb-6">M</div>
           <p className="text-gray-500 text-sm leading-relaxed">
-            MarketBrainOS is the operating system for business decision-making — turning ideas, campaigns,
+            MarketBrain OS is the operating system for business decision-making — turning ideas, campaigns,
             and funnels into actionable strategic intelligence.
           </p>
         </div>
@@ -40,7 +40,7 @@ const PublicFooter: React.FC = () => {
         </div>
       </div>
       <div className="max-w-7xl mx-auto mt-16 pt-8 border-t border-gray-900/50 text-xs text-gray-700 flex flex-col sm:flex-row justify-between gap-3">
-        <p>© {year} MarketBrainOS Intelligence.</p>
+        <p>© {year} MarketBrain OS Intelligence.</p>
         <p>System Status: Operational</p>
       </div>
     </footer>

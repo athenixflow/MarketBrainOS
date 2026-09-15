@@ -429,6 +429,32 @@ const accountReinstated = (): RenderedEmail => ({
   }),
 });
 
+// Sent by deleteAccount to the address on the token, just before the Auth user is removed (after that
+// there is no address left to send to). No sign-in CTA: the account no longer exists.
+const accountDeleted = (d: { firstName?: string }): RenderedEmail => ({
+  subject: 'Your MarketBrain OS account has been deleted',
+  html: renderEmail({
+    preheader: 'Your account and its data have been deleted, as you requested.',
+    tag: 'Account',
+    heading: `Your account has been deleted${d.firstName ? `, ${esc(d.firstName)}` : ''}.`,
+    heroSubtext: 'As you requested, your MarketBrain OS account has been closed and the data it held has been removed.',
+    body:
+      sectionHeading('What was deleted') +
+      checklist([
+        'Your profile and sign-in — you can no longer sign in with this account.',
+        'Every analysis and report you created, including ones shared with a team, client or enterprise library.',
+        'Your history, notifications, workspace seats and open invitations.',
+        'Unused tokens, which are forfeited and not refunded.',
+      ]) +
+      sectionHeading('What was kept, and why') +
+      paragraph('Payment records and security logs are retained for as long as the law and our accountants require (Privacy Policy §6). Your name and email address have been removed from them; only an internal reference remains.') +
+      callout(`If you did not do this, contact <a href="mailto:support@marketbrainos.app" style="color:${RED};font-weight:700;">support@marketbrainos.app</a> immediately.`, 'Didn’t request this?') +
+      paragraph('<span style="font-size:13px;color:#8a8a8a;">You are welcome back any time — signing up again creates a brand-new account; nothing from this one is restored.</span>'),
+    footerLinks: [{ label: 'Privacy Policy', href: `${SITE_URL}/privacy` }, { label: 'Support', href: 'mailto:support@marketbrainos.app' }],
+    footerNote: 'This is the last email you will receive from MarketBrain OS about this account.',
+  }),
+});
+
 // ---- Dispatch table ---------------------------------------------------------------------------
 
 export const EMAIL_TEMPLATES = {
@@ -437,6 +463,7 @@ export const EMAIL_TEMPLATES = {
   lowBalance, outOfTokens, renewalReminder, subscriptionRenewed, paymentFailed,
   subscriptionCancelled, expansionPurchased, refundIssued, newSignIn,
   memberBudgetExhausted, ownershipTransferred, briefingReady, accountSuspended, accountReinstated,
+  accountDeleted,
 } as const;
 
 export type EmailTemplateKey = keyof typeof EMAIL_TEMPLATES;

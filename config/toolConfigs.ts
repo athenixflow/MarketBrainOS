@@ -82,7 +82,7 @@ export const getToolGuide = (c: ToolConfig): {
   };
 };
 
-// The nine generic analysis tools. Every one emits the universal result contract;
+// The ten generic analysis tools. Every one emits the universal result contract;
 // `worksWith` encodes the connected-ecosystem relationships from the V1 doc.
 export const TOOL_CONFIGS: Record<string, ToolConfig> = {
   audienceIntelligence: {

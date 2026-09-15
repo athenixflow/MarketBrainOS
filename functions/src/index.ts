@@ -740,7 +740,14 @@ export const executeAnalysis = functions
         responseText = result.response.text();
       }
       else if (module === 'TestLab_Simulation') {
-        const prompt = `As a senior performance-marketing analyst, predict how these ${input.type} variants would perform and explain why. Variants: ${input.variants?.join(' | ')}.${input.audience ? ` Audience: ${input.audience}.` : ''}${input.goal ? ` Desired action: ${input.goal}.` : ''}${input.channel ? ` Channel/placement: ${input.channel}.` : ''}${input.product ? ` Product/offer: ${input.product}.` : ''} For each variant give { label, text (the variant, lightly cleaned), score (0-100 predicted performance) }. Pick 'winnerLabel'. Write a detailed 'explanation' (3-5 sentences): why the winner wins, the key clarity/psychology differences between variants, and one concrete way to make the winner even stronger. Return strict JSON: { variants: [{label, text, score}], winnerLabel, explanation }`;
+        // The inputs are lettered ("Variant A", "Variant B", …) so the labels the model returns match the
+        // fields the user filled in. A pipe-joined list let it invent its own names ("Option 1", "V2"),
+        // which the results page then could not tie back to the inputs.
+        const variantList: string[] = Array.isArray(input.variants) ? input.variants : [];
+        const letter = (i: number) => `Variant ${String.fromCharCode(65 + i)}`;
+        const labelled = variantList.map((v: string, i: number) => `${letter(i)}: ${v}`).join('\n');
+        const labelSet = variantList.map((_: string, i: number) => `'${letter(i)}'`).join(', ');
+        const prompt = `As a senior performance-marketing analyst, predict how these ${input.type} variants would perform and explain why.\n\n${labelled}\n\n${input.audience ? `Audience: ${input.audience}. ` : ''}${input.goal ? `Desired action: ${input.goal}. ` : ''}${input.channel ? `Channel/placement: ${input.channel}. ` : ''}${input.product ? `Product/offer: ${input.product}. ` : ''}For each variant give { label, text, score (0-100 predicted performance) }. 'label' must be exactly the label shown above (one of ${labelSet}) and 'text' must be that variant's text exactly as given, in the same order. Pick 'winnerLabel' (one of the same labels). Write a detailed 'explanation' (3-5 sentences): why the winner wins, the key clarity/psychology differences between variants, and one concrete way to make the winner even stronger; refer to variants by their labels. Return strict JSON: { variants: [{label, text, score}], winnerLabel, explanation }`;
         const result = await model.generateContent({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: { responseMimeType: 'application/json' }
@@ -1586,14 +1593,19 @@ export const changeSubscription = functions.https.onCall(async (data: any, conte
 
       if (action === 'upgrade' || action === 'renew') {
         // SEAM: verify payment with provider here before granting (simulated as success).
-        // Upgrade/renew sets the monthly Pro allocation; purchased tokens are preserved.
+        // A Team/Agency/Enterprise account renewing keeps ITS tier and allowance. This used to write
+        // `tier: 'pro'` unconditionally, so "Renew" on a Team account silently downgraded it to Pro -
+        // invisible while the panel mislabelled every paid plan as "Pro", exposed once it stopped.
+        const keptTier = (['team', 'agency', 'enterprise'] as const).includes(userData.tier) ? userData.tier as Tier : 'pro';
+        const keptTokens = planMonthlyDefault(keptTier);
+        const keptPrice = (DEFAULT_PRICING_CONFIG.plans as any)[keptTier]?.price ?? DEFAULT_PRICING_CONFIG.plans.pro.price;
         const { purchased } = readBalances(userData);
         t.update(userRef, {
-          tier: 'pro',
+          tier: keptTier,
           subscription_status: 'active',
           plan_renews_at: renewsAt,
           subscription_started_at: userData.subscription_started_at || now.toISOString(),
-          ...balanceFields(PRO_MONTHLY_TOKENS, purchased),
+          ...balanceFields(keptTokens, purchased),
         });
 
         // Payment record (immutable) — subscription type.
@@ -1601,8 +1613,8 @@ export const changeSubscription = functions.https.onCall(async (data: any, conte
         t.set(payRef, {
           uid,
           payment_reference: `sub_${action}_${now.getTime()}`,
-          amount_paid: 7,
-          tokens_credited: PRO_MONTHLY_TOKENS,
+          amount_paid: keptPrice,
+          tokens_credited: keptTokens,
           type: 'subscription',
           provider: 'stripe_simulated',
           status: 'completed',
@@ -1610,8 +1622,8 @@ export const changeSubscription = functions.https.onCall(async (data: any, conte
         });
 
         const logRef = db.collection('action_logs').doc();
-        t.set(logRef, { uid, action: `subscription_${action}`, amount_paid: 7, created_at: admin.firestore.FieldValue.serverTimestamp() });
-        result = { status: 'active', plan_renews_at: renewsAt };
+        t.set(logRef, { uid, action: `subscription_${action}`, tier: keptTier, amount_paid: keptPrice, created_at: admin.firestore.FieldValue.serverTimestamp() });
+        result = { status: 'active', plan_renews_at: renewsAt, tier: keptTier, monthlyTokens: keptTokens };
       } else if (action === 'cancel') {
         // Cancelled but retains access/tokens until period end (status reflects intent).
         t.update(userRef, { subscription_status: 'cancelled' });
@@ -1631,11 +1643,13 @@ export const changeSubscription = functions.https.onCall(async (data: any, conte
 
     const subEmail = context.auth.token.email;
     if (subEmail) {
-      const proPrice = DEFAULT_PRICING_CONFIG.plans.pro.price;
+      const tierName = (result as any).tier ? String((result as any).tier).charAt(0).toUpperCase() + String((result as any).tier).slice(1) : 'Pro';
+      const tokens = (result as any).monthlyTokens ?? PRO_MONTHLY_TOKENS;
+      const price = (DEFAULT_PRICING_CONFIG.plans as any)[(result as any).tier || 'pro']?.price ?? DEFAULT_PRICING_CONFIG.plans.pro.price;
       const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-      if (action === 'upgrade') await sendTemplate(subEmail, 'subscriptionUpgraded', { planName: 'Pro', monthlyTokens: PRO_MONTHLY_TOKENS, price: proPrice });
-      else if (action === 'renew') await sendTemplate(subEmail, 'subscriptionRenewed', { planName: 'Pro', monthlyTokens: PRO_MONTHLY_TOKENS, amount: proPrice, date: today });
-      else if (action === 'cancel' || action === 'downgrade') await sendTemplate(subEmail, 'subscriptionCancelled', { planName: 'Pro' });
+      if (action === 'upgrade') await sendTemplate(subEmail, 'subscriptionUpgraded', { planName: tierName, monthlyTokens: tokens, price });
+      else if (action === 'renew') await sendTemplate(subEmail, 'subscriptionRenewed', { planName: tierName, monthlyTokens: tokens, amount: price, date: today });
+      else if (action === 'cancel' || action === 'downgrade') await sendTemplate(subEmail, 'subscriptionCancelled', { planName: tierName });
     }
     return { success: true, ...result };
   } catch (error: any) {
@@ -3100,3 +3114,294 @@ export const requestPasswordReset = functions.https.onCall(async (data: any, con
   }
   return { success: true };
 });
+
+// ============================================================
+// ACCOUNT DELETION (Privacy §8, within §6) — self-service, server-authoritative
+// One callable does all destructive work on the Admin SDK; firestore.rules deny every relevant
+// client delete. Contract and UX: docs/qa-fix-deletion-flow.md. Idempotent: a retry after a partial
+// failure finds nothing left to delete for the parts that succeeded and finishes the rest.
+// ============================================================
+
+const DELETE_BATCH = 400;               // Firestore allows 500 ops per commit; headroom for counter updates
+const DELETED_USER = 'deleted-user';    // replaces every naming field on retained rows
+const REAUTH_WINDOW_S = 5 * 60;         // auth_time must be this fresh (the client re-authenticates first)
+
+// The data map this callable enforces. Every collection holding a person's data is in exactly one of
+// these tables; anything absent is container-level (agencies, clients, enterprises, aggregates).
+const OWNED_ROWS: { collection: string; fields: string[] }[] = [
+  { collection: 'angleminer_results', fields: ['user_id'] },
+  { collection: 'testlab_results', fields: ['user_id'] },
+  { collection: 'conversion_doctor_results', fields: ['user_id'] },
+  { collection: 'workflow_runs', fields: ['user_id'] },
+  // creator_user_id is the scope-era stamp, user_id the legacy one; most docs carry both.
+  { collection: 'tool_analysis_results', fields: ['creator_user_id', 'user_id'] },
+  { collection: 'reports', fields: ['creator_user_id', 'user_id'] },
+  { collection: 'notifications', fields: ['uid'] },
+  { collection: 'client_assignments', fields: ['uid'] },
+];
+const MEMBERSHIP_ROWS: { collection: string; container: string }[] = [
+  { collection: 'workspace_members', container: 'workspaces' },
+  { collection: 'agency_members', container: 'agencies' },
+  { collection: 'enterprise_members', container: 'enterprises' },
+];
+const INVITATION_COLLECTIONS = ['workspace_invitations', 'agency_invitations', 'enterprise_invitations'];
+// Kept for legal, accounting and fraud-prevention reasons (Privacy §6). The uid stays: it links the
+// rows to each other and to the payment reference, and resolves to nobody once the Auth user is gone.
+// Every field that could name the person is overwritten; `text` fields get the email cut out.
+const RETAINED_ROWS: { collection: string; fields: string[]; scrub: string[]; text?: string[] }[] = [
+  { collection: 'payments', fields: ['uid'], scrub: ['email', 'name'] },
+  { collection: 'action_logs', fields: ['uid', 'user_id'], scrub: ['email', 'name', 'author_name'] },
+  { collection: 'security_audit_logs', fields: ['user_id'], scrub: ['email', 'name', 'author_name'] },
+  // Other people's threads: the row stays, the author's name/email does not.
+  { collection: 'workspace_activity', fields: ['actor_uid'], scrub: ['actor_name'], text: ['summary'] },
+  { collection: 'client_activity', fields: ['actor_uid'], scrub: ['actor_name'], text: ['summary'] },
+  { collection: 'workspace_comments', fields: ['author_uid'], scrub: ['author_name'] },
+  { collection: 'client_notes', fields: ['author_uid'], scrub: ['author_name'] },
+];
+const OWNABLE_CONTAINERS: { kind: 'workspace' | 'agency' | 'enterprise'; collection: string }[] = [
+  { kind: 'workspace', collection: 'workspaces' },
+  { kind: 'agency', collection: 'agencies' },
+  { kind: 'enterprise', collection: 'enterprises' },
+];
+
+type DeletionCounts = Record<string, number>;
+const bump = (counts: DeletionCounts, key: string, n: number) => { counts[key] = (counts[key] || 0) + n; };
+const PAGE_GUARD = 2500; // 1M rows per query — a runaway loop must still terminate
+
+/** Ids of docs where any of `fields` == uid (deduplicated, since scope-era docs carry two stamps). */
+const idsOwnedBy = async (collection: string, fields: string[], uid: string): Promise<Set<string>> => {
+  const ids = new Set<string>();
+  for (const f of fields) {
+    const snap = await db.collection(collection).where(f, '==', uid).select().get();
+    snap.docs.forEach((d) => ids.add(d.id));
+  }
+  return ids;
+};
+
+/** Delete every doc where `field == value`, DELETE_BATCH per commit. Re-querying advances because each page is gone. */
+const deleteWhere = async (collection: string, field: string, value: string): Promise<number> => {
+  let removed = 0;
+  for (let guard = 0; guard < PAGE_GUARD; guard++) {
+    const snap = await db.collection(collection).where(field, '==', value).limit(DELETE_BATCH).get();
+    if (snap.empty) break;
+    const batch = db.batch();
+    snap.docs.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+    removed += snap.size;
+    if (snap.size < DELETE_BATCH) break;
+  }
+  return removed;
+};
+
+/**
+ * Overwrite `scrub` fields with DELETED_USER (and cut `email` out of `text` fields) on every doc where
+ * `field == value`. Only rows that actually carry one of those fields are written, so hash-chained
+ * log rows without PII keep their hash intact. Cursor-paginated: the rows stay, so re-querying would
+ * not advance.
+ */
+const scrubWhere = async (
+  collection: string, field: string, value: string, scrub: string[], text: string[], email: string,
+): Promise<number> => {
+  let touched = 0;
+  let last: admin.firestore.QueryDocumentSnapshot | null = null;
+  const emailRe = email ? new RegExp(email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi') : null;
+  for (let guard = 0; guard < PAGE_GUARD; guard++) {
+    let q = db.collection(collection).where(field, '==', value)
+      .orderBy(admin.firestore.FieldPath.documentId()).limit(DELETE_BATCH).select(...scrub, ...text);
+    if (last) q = q.startAfter(last);
+    const snap = await q.get();
+    if (snap.empty) break;
+    const batch = db.batch();
+    let inBatch = 0;
+    snap.docs.forEach((d) => {
+      const updates: Record<string, string> = {};
+      for (const f of scrub) if (d.get(f) !== undefined) updates[f] = DELETED_USER;
+      for (const f of text) {
+        const v = d.get(f);
+        if (emailRe && typeof v === 'string' && v.toLowerCase().includes(email)) updates[f] = v.replace(emailRe, DELETED_USER);
+      }
+      if (Object.keys(updates).length) { batch.update(d.ref, updates); inBatch++; }
+    });
+    if (inBatch) await batch.commit();
+    touched += inBatch;
+    last = snap.docs[snap.docs.length - 1];
+    if (snap.size < DELETE_BATCH) break;
+  }
+  return touched;
+};
+
+/** Containers whose owner_id is the caller, split by whether they still block deletion. */
+const containersOwnedBy = async (uid: string) => {
+  const active: { kind: string; type: string; id: string; name: string }[] = [];
+  const archived: admin.firestore.DocumentReference[] = [];
+  for (const c of OWNABLE_CONTAINERS) {
+    const snap = await db.collection(c.collection).where('owner_id', '==', uid).get();
+    snap.docs.forEach((d) => {
+      // Archived containers do not block (manageWorkspace 'delete' / manageAgency|Enterprise 'archive' set this).
+      if (d.data().status === 'archived') archived.push(d.ref);
+      else active.push({ kind: c.kind, type: c.kind, id: d.id, name: (d.data().name || '').toString() || c.kind });
+    });
+  }
+  return { active, archived };
+};
+
+export const deleteAccount = functions
+  .runWith({ timeoutSeconds: 300, memory: '512MB' })
+  .https.onCall(async (data: any, context: any) => {
+    if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
+    const uid: string = context.auth.uid;
+    const email = (context.auth.token.email || '').toString().toLowerCase();
+    const dryRun = data?.dryRun === true;
+
+    // The literal is required in both modes so a stray call can never delete; intent is proven by
+    // the re-auth below, not by this string.
+    if (data?.confirm !== 'DELETE') throw new functions.https.HttpsError('invalid-argument', 'Type DELETE to confirm.');
+
+    const userSnap = await db.collection('users').doc(uid).get();
+    const user: admin.firestore.DocumentData = userSnap.exists ? userSnap.data()! : {};
+    if (user.role === 'super_admin' || user.role === 'ops_admin') {
+      throw new functions.https.HttpsError('permission-denied', 'Admin accounts are deleted from the admin console.');
+    }
+
+    // --- Refusals (checked in both modes; the real run re-checks so a mid-flow transfer is caught) ---
+    const owned = await containersOwnedBy(uid);
+    const refusal = user.is_suspended
+      ? { reason: 'suspended' as const, containers: [] as typeof owned.active }
+      : owned.active.length ? { reason: 'owns_containers' as const, containers: owned.active } : null;
+
+    const retained = RETAINED_ROWS.map((r) => r.collection);
+
+    if (dryRun) {
+      // Manifest only: what a real run would remove. Nothing is written. ~30 reads per call, so cap it.
+      if (!(await underLimit('delete_dryrun', uid, 10, 60 * 60 * 1000))) {
+        throw new functions.https.HttpsError('resource-exhausted', 'Too many checks. Try again in an hour.');
+      }
+      const deleted: DeletionCounts = { users: userSnap.exists ? 1 : 0 };
+      for (const r of OWNED_ROWS) bump(deleted, r.collection, (await idsOwnedBy(r.collection, r.fields, uid)).size);
+      for (const m of MEMBERSHIP_ROWS) bump(deleted, m.collection, (await idsOwnedBy(m.collection, ['uid'], uid)).size);
+      for (const c of INVITATION_COLLECTIONS) {
+        if (email) bump(deleted, c, (await db.collection(c).where('email', '==', email).count().get()).data().count);
+        bump(deleted, `${c}_sent`, (await db.collection(c).where('invited_by', '==', uid).where('status', '==', 'pending').count().get()).data().count);
+      }
+      bump(deleted, 'rate_limits', (await db.collection('rate_limits').doc(uid).get()).exists ? 1 : 0);
+      return refusal ? { ok: false, deleted, retained, refusal } : { ok: true, deleted, retained };
+    }
+
+    if (refusal) {
+      const names = refusal.containers.map((c) => `${c.name} (${c.kind})`).join(', ');
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        refusal.reason === 'suspended'
+          ? 'This account is suspended. Contact support to close it.'
+          : `You still own ${names}. Archive it or transfer ownership first.`,
+        refusal,
+      );
+    }
+
+    // Both proofs are required: a fresh credential on the client and a fresh auth_time here.
+    const authTime = Number(context.auth.token.auth_time || 0);
+    if (!authTime || Date.now() / 1000 - authTime > REAUTH_WINDOW_S) {
+      throw new functions.https.HttpsError('failed-precondition', 'Please sign in again to confirm', { reason: 'reauth-required' });
+    }
+
+    // --- Purge. deletion_jobs/{uid} is the audit record and the resume point after a partial failure. ---
+    const jobRef = db.collection('deletion_jobs').doc(uid);
+    const startedAt = new Date().toISOString();
+    await jobRef.set({ status: 'running', started_at: startedAt, updated_at: startedAt }, { merge: true });
+    const deleted: DeletionCounts = {};
+    const anonymised: DeletionCounts = {};
+
+    try {
+      // 1. Retained rows first: if anything later fails, no PII is left on records we will keep.
+      for (const r of RETAINED_ROWS) {
+        for (const f of r.fields) bump(anonymised, r.collection, await scrubWhere(r.collection, f, uid, r.scrub, r.text || [], email));
+      }
+      // Archived containers the caller still owns are kept for an admin to reassign (adminManageOrg 'transfer').
+      for (const ref of owned.archived) await ref.update({ owner_deleted_at: startedAt, updated_at: startedAt });
+
+      // 2. Everything the person created.
+      for (const r of OWNED_ROWS) {
+        for (const f of r.fields) bump(deleted, r.collection, await deleteWhere(r.collection, f, uid));
+      }
+
+      // 3. Seats: the membership row goes, the container's counter follows (only if the container exists).
+      for (const m of MEMBERSHIP_ROWS) {
+        for (let guard = 0; guard < PAGE_GUARD; guard++) {
+          const snap = await db.collection(m.collection).where('uid', '==', uid).limit(DELETE_BATCH / 2).get();
+          if (snap.empty) break;
+          const batch = db.batch();
+          for (const d of snap.docs) {
+            batch.delete(d.ref);
+            const cid = (d.data().container_id || '').toString();
+            if (cid && d.data().status !== 'removed') {
+              const cRef = db.collection(m.container).doc(cid);
+              if ((await cRef.get()).exists) batch.update(cRef, { member_count: admin.firestore.FieldValue.increment(-1) });
+            }
+          }
+          await batch.commit();
+          bump(deleted, m.collection, snap.size);
+          if (snap.size < DELETE_BATCH / 2) break;
+        }
+      }
+
+      // 4. Invitations: ones addressed to this email are removed (they name the person); pending ones
+      //    the person sent are withdrawn so nobody can join on the word of an account that no longer exists.
+      for (const c of INVITATION_COLLECTIONS) {
+        if (email) bump(deleted, c, await deleteWhere(c, 'email', email));
+        for (let guard = 0; guard < PAGE_GUARD; guard++) {
+          const snap = await db.collection(c).where('invited_by', '==', uid).where('status', '==', 'pending').limit(DELETE_BATCH).get();
+          if (snap.empty) break;
+          const batch = db.batch();
+          snap.docs.forEach((d) => batch.update(d.ref, { status: 'revoked' }));
+          await batch.commit();
+          bump(deleted, `${c}_sent`, snap.size);
+          if (snap.size < DELETE_BATCH) break;
+        }
+      }
+
+      // 5. Per-user singletons, profile last so a retry still passes the role/suspension checks above.
+      const rlRef = db.collection('rate_limits').doc(uid);
+      if ((await rlRef.get()).exists) { await rlRef.delete(); bump(deleted, 'rate_limits', 1); }
+      if (email) await db.collection('provisioning_markers').doc(email).delete().catch(() => undefined);
+      if (userSnap.exists) { await userSnap.ref.delete(); bump(deleted, 'users', 1); }
+
+      // Server audit entry. No email or name here — action_logs are retained and were just scrubbed.
+      await db.collection('action_logs').add({
+        uid, module: 'Account', action: 'account_deleted', deleted, anonymised,
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      await jobRef.set({ status: 'completed', deleted, anonymised, retained, completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { merge: true });
+    } catch (e: any) {
+      console.error(`[deleteAccount] partial failure for ${uid}:`, e?.message || e);
+      await jobRef.set({ status: 'failed', error: (e?.message || 'unknown').toString().slice(0, 500), deleted, anonymised, updated_at: new Date().toISOString() }, { merge: true }).catch(() => undefined);
+      throw new functions.https.HttpsError('internal', 'Deletion did not finish. Sign in again and retry; nothing that was removed comes back.');
+    }
+
+    // 6. The Auth user, with retries: a transient failure here after the purge would leave a
+    //    sign-in that recreates a fresh Free profile on next load (ensureUserProfile). Three attempts.
+    let authDeleted = false;
+    let lastErr: any = null;
+    for (let attempt = 1; attempt <= 3 && !authDeleted; attempt++) {
+      try {
+        await admin.auth().deleteUser(uid);
+        authDeleted = true;
+      } catch (e: any) {
+        if (e?.code === 'auth/user-not-found') { authDeleted = true; break; }
+        lastErr = e;
+        await new Promise((r) => setTimeout(r, 400 * attempt));
+      }
+    }
+    if (!authDeleted) {
+      await jobRef.set({ status: 'failed', error: `auth: ${lastErr?.message || lastErr}`, updated_at: new Date().toISOString() }, { merge: true }).catch(() => undefined);
+      throw new functions.https.HttpsError('internal', 'Your data was removed but the sign-in could not be deleted. Retry, or contact support.');
+    }
+    bump(deleted, 'auth_user', 1);
+
+    // 7. Email last, from the address captured at the start - only once the account is truly gone,
+    //    so nobody holds a "your account has been deleted" email for an account that still signs in.
+    //    sendTemplate never throws.
+    const firstName = ((user.first_name as string) || (context.auth.token.name as string) || '').trim().split(/\s+/)[0] || undefined;
+    if (email) await sendTemplate(email, 'accountDeleted', { firstName });
+
+    return { ok: true, deleted, retained };
+  });

@@ -35,7 +35,7 @@ const team: DocArticle = {
     { type: 'heading', id: 'tabs', text: 'The tabs' },
     { type: 'table', headers: ['Tab', 'What you do there'], rows: [
       ['Overview', 'Workspace stats and a snapshot of activity.'],
-      ['Members', 'Invite members, assign roles, and manage seats.'],
+      ['Members', 'Invite members by email or create accounts for them, assign roles, tools and budgets, and manage seats.'],
       ['Library', 'Browse analyses shared with the workspace.'],
       ['Reports', 'Workspace-scoped reports.'],
       ['Analytics', 'Usage: analyses, reports, members, trends.'],
@@ -43,7 +43,7 @@ const team: DocArticle = {
       ['Settings', 'Rename or archive the workspace (owner).'],
     ] },
     { type: 'heading', id: 'members', text: 'Members & seats' },
-    { type: 'paragraph', text: 'Invite members by email; they accept to join. Roles range from owner to viewer (see [Roles & permissions](/documentation/organizations/roles-permissions)). The base plan includes 10 seats — buy more at $4/mo each when you need them.' },
+    { type: 'paragraph', text: 'Owners and admins add members in one of two ways. **Invite by email** sends an invitation link; the person signs in with their own account (email verified) and accepts, then you set their tools and budget from **Edit**. **Create account for them** provisions the member immediately with a role, a tool allowlist, a token budget, and a temporary password you pass on yourself (they can change it after first sign-in). Roles range from owner to viewer (see [Roles & permissions](/documentation/organizations/roles-permissions)). The base plan includes 10 seats — buy more at $4/mo each when you need them.' },
   ],
 };
 
@@ -68,7 +68,7 @@ const agency: DocArticle = {
     { type: 'heading', id: 'budgets', text: 'Budgets & allocation' },
     { type: 'paragraph', text: 'The agency owner controls a shared token pool and can cap spend two ways: a **per-client budget** (each client gets a per-cycle allocation) and a **per-member budget** (each member gets an allowance from the pool). Either blocks independently when exhausted, with a clear message.' },
     { type: 'heading', id: 'members', text: 'Members & tool allowlists' },
-    { type: 'paragraph', text: 'When you add a member you can assign a **role**, a **set of tools they may use** (a per-member allowlist), and a **token budget**. Members log in and only see and run the tools you enabled. Base capacity is up to 50 members and 5 client workspaces; both are expandable ($4/mo per seat, $25/mo per workspace).' },
+    { type: 'paragraph', text: 'Add members by **inviting them by email** (they accept from their own account) or by **creating the account for them** with a temporary password. Either way each member has a **role**, a **set of tools they may use** (a per-member allowlist), and a **token budget** — set at creation, or from **Edit** once an invited member has joined. Members log in and only see and run the tools you enabled. Base capacity is up to 50 members and 5 client workspaces; both are expandable ($4/mo per seat, $25/mo per workspace).' },
     { type: 'callout', tone: 'info', title: 'Assignment gates access', text: 'Non-owner members only see clients they are assigned to, keeping each client\'s data isolated.' },
   ],
 };
@@ -106,9 +106,9 @@ const roles: DocArticle = {
   blocks: [
     { type: 'heading', id: 'workspace', text: 'Team Workspace roles' },
     { type: 'table', headers: ['Role', 'Can do'], rows: [
-      ['Owner', 'Everything: invite, manage roles, transfer, archive.'],
-      ['Admin', 'Manage members and settings; run analyses.'],
-      ['Manager', 'Create and manage shared analyses; limited invites.'],
+      ['Owner', 'Everything: invite or create members, manage roles, transfer, archive.'],
+      ['Admin', 'Invite or create members, manage roles and settings; run analyses.'],
+      ['Manager', 'Create and manage shared analyses and reports; cannot add members.'],
       ['Analyst', 'Run analyses and view shared results.'],
       ['Viewer', 'Read-only access to analyses and reports.'],
     ] },

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { auth, googleProvider } from '../services/firebase';
 import {
   createUserWithEmailAndPassword,
@@ -40,6 +41,13 @@ const COPY: Record<Mode, { title: string; subtitle: string; cta: string; busy: s
   },
 };
 
+// Tab titles by mode. The page has no <Seo> (it must not be indexed), so it sets its own <head>.
+const TAB_TITLE: Record<Mode, string> = {
+  signin: 'Sign in | MarketBrain OS',
+  signup: 'Create account | MarketBrain OS',
+  forgot: 'Reset password | MarketBrain OS',
+};
+
 const AuthPage: React.FC = () => {
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
@@ -51,6 +59,9 @@ const AuthPage: React.FC = () => {
 
   const navigate = useNavigate();
   const { refreshProfile } = useAuth();
+  // Settings -> delete account signs the user out and lands here with ?deleted=1.
+  const [params, setParams] = useSearchParams();
+  const deleted = params.get('deleted') === '1';
 
   // Completes a Google sign-in that went through the redirect fallback below (in-app browsers
   // block popups, so the page navigated away and came back here).
@@ -82,6 +93,7 @@ const AuthPage: React.FC = () => {
     setError(null);
     setSuccessMsg(null);
     if (next === 'forgot') setPassword('');
+    if (deleted) setParams({}, { replace: true }); // the deletion notice is for the landing only
   };
 
   const handleEmailAuth = async (e: React.FormEvent) => {
@@ -154,7 +166,11 @@ const AuthPage: React.FC = () => {
     }
   };
 
-  const copy = COPY[mode];
+  // Post-deletion landing: neutral heading, nothing "succeeded" from the person's point of view.
+  const showDeleted = deleted && mode === 'signin';
+  const copy = showDeleted
+    ? { ...COPY.signin, title: 'Account deleted', subtitle: 'Everything tied to your account has been removed. You are welcome back any time.' }
+    : COPY[mode];
   const throttled = waitTimer !== null && waitTimer > 0;
   const canSubmit =
     !loading && !throttled && email.trim().length > 0 && (mode === 'forgot' || password.length > 0);
@@ -185,6 +201,19 @@ const AuthPage: React.FC = () => {
 
   return (
     <AuthShell title={copy.title} subtitle={copy.subtitle} footer={footer}>
+      <Helmet>
+        <title>{TAB_TITLE[mode]}</title>
+        <meta name="robots" content="noindex, nofollow" />
+      </Helmet>
+
+      {showDeleted && (
+        <div role="status" className="mb-5 rounded-2xl px-4 py-3.5 border bg-gray-50 border-gray-200 text-[13px] font-medium leading-relaxed text-gray-700">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">Deletion complete</p>
+          Your profile, analyses, history, reports and workspace seats are gone and cannot be restored. Payment receipts and audit records are kept in anonymised form, as described in{' '}
+          <Link to="/privacy#s6" className="font-bold text-[#0B0B0B] hover:text-[#FF0000] transition-colors">Privacy policy §6</Link>.
+        </div>
+      )}
+
       {/* Provider sign-in leads on the two account modes; it is the fastest path for most people. */}
       {mode !== 'forgot' && (
         <>

@@ -27,7 +27,7 @@ export const MARKETING_SEO: Record<string, PageSeo> = {
   },
   features: {
     title: 'Features',
-    description: "Explore MarketBrain OS's 13 AI marketing tools across five suites — audience, market, competitor, messaging, campaign, offer, growth, conversion, and workflow intelligence.",
+    description: "Explore MarketBrain OS's 14 AI marketing tools across five suites — audience, market, competitor, messaging, campaign, offer, growth, conversion, and workflow intelligence.",
     path: '/features',
   },
   pricing: {

@@ -5,13 +5,20 @@ import { PrimaryButton, SecondaryButton } from '../components/UI';
 import AnimatedSection from '../components/AnimatedSection';
 import PublicLayout from '../components/PublicLayout';
 import FaqAccordion from '../components/FaqAccordion';
-import { FAQ_ITEMS, TESTIMONIALS } from '../config/marketingContent';
+import { FAQ_ITEMS } from '../config/marketingContent';
 import Seo from '../components/Seo';
 import { MARKETING_SEO } from '../config/seo';
+import { DEFAULT_PRICING_CONFIG } from '../config/pricingConfig';
 import Picture from '../components/media/Picture';
 import HeroVideo from '../components/media/HeroVideo';
 import AudienceStory from '../components/landing/AudienceStory';
 import * as media from '../assets/media';
+
+// Plan figures come from the pricing config so the homepage can never advertise numbers the
+// account does not receive (the QA audit caught "4 / 200 credits" against a 20 / 100 token config).
+const FREE_TOKENS = DEFAULT_PRICING_CONFIG.plans.free.monthlyTokens;
+const PRO_TOKENS = DEFAULT_PRICING_CONFIG.plans.pro.monthlyTokens;
+const PRO_PRICE = DEFAULT_PRICING_CONFIG.plans.pro.price;
 
 const AUDIENCE = [
   { title: 'Founders', desc: 'Save capital by validating your core value proposition before hiring agencies or spending on ads.', asset: media.audienceFounders },
@@ -47,10 +54,10 @@ const LandingPage: React.FC = () => {
               The Operating System for <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-500">High-Stakes Marketing Decisions.</span>
             </h1>
             <p className="text-xl md:text-2xl text-gray-400 font-medium leading-relaxed max-w-2xl mb-12">
-              MarketBrainOS is a predictive marketing intelligence platform. Validate strategies, audit funnels, and simulate performance before you spend a single dollar on ads.
+              MarketBrain OS is a predictive marketing intelligence platform. Validate strategies, audit funnels, and simulate performance before you spend a single dollar on ads.
             </p>
             <div className="flex flex-col sm:flex-row gap-6">
-              <Link to="/auth" aria-label="Sign up for MarketBrainOS">
+              <Link to="/auth" aria-label="Sign up for MarketBrain OS">
                 <PrimaryButton className="!text-sm !px-12 !py-5">Initialize Free Account</PrimaryButton>
               </Link>
               <Link to="/documentation" aria-label="Read platform documentation">
@@ -104,12 +111,12 @@ const LandingPage: React.FC = () => {
       <AnimatedSection as="section" index={2} className="py-24 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" aria-labelledby="about-heading">
         <div className="max-w-3xl">
           <span className="text-sm font-bold text-gray-500 uppercase tracking-[0.2em] mb-6 block">Platform Definition</span>
-          <h2 id="about-heading" className="text-4xl font-bold text-white mb-8">What is MarketBrainOS?</h2>
+          <h2 id="about-heading" className="text-4xl font-bold text-white mb-8">What is MarketBrain OS?</h2>
           <p className="text-xl text-gray-400 leading-relaxed mb-8">
-            MarketBrainOS is a <strong>decision-support system</strong> for growth marketing. It is an AI marketing platform designed to act as a pre-flight checklist for your campaigns. 
+            MarketBrain OS is a <strong>decision-support system</strong> for growth marketing. It is an AI marketing platform designed to act as a pre-flight checklist for your campaigns. 
           </p>
           <p className="text-lg text-gray-500 leading-relaxed">
-            Unlike generative writing tools that simply produce text, MarketBrainOS is built to <strong>audit, score, and refine</strong>. It uses Google's Gemini AI models to simulate how a human audience interacts with your marketing assets, allowing you to optimize conversion rates (CRO) before a campaign goes live.
+            Unlike generative writing tools that simply produce text, MarketBrain OS is built to <strong>audit, score, and refine</strong>. It uses Google's Gemini AI models to simulate how a human audience interacts with your marketing assets, allowing you to optimize conversion rates (CRO) before a campaign goes live.
           </p>
         </div>
       </AnimatedSection>
@@ -137,7 +144,7 @@ const LandingPage: React.FC = () => {
       <AnimatedSection as="section" index={4} className="py-32 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" aria-labelledby="features-heading">
         <h2 id="features-heading" className="text-3xl font-bold text-white mb-4 text-center">Core Capabilities</h2>
         <p className="text-center text-gray-500 font-medium mb-20 max-w-2xl mx-auto">
-          A few highlights from a suite of <Link to="/features" className="text-white underline decoration-[#FF0000]/40 underline-offset-4 hover:decoration-[#FF0000]">13 specialized analyzers</Link> spanning marketing, sales, strategy, and operations.
+          A few highlights from a suite of <Link to="/features" className="text-white underline decoration-[#FF0000]/40 underline-offset-4 hover:decoration-[#FF0000]">14 tools across five suites</Link> spanning marketing, sales, strategy, and operations.
         </p>
         
         <div className="space-y-32">
@@ -254,7 +261,7 @@ const LandingPage: React.FC = () => {
           <p className="text-gray-400 mb-8 font-medium">To maintain professional integrity, we are transparent about platform limitations.</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
             <div>
-              <span className="text-[#FF0000] text-xs font-bold uppercase tracking-widest mb-2 block">MarketBrainOS is NOT</span>
+              <span className="text-[#FF0000] text-xs font-bold uppercase tracking-widest mb-2 block">MarketBrain OS is NOT</span>
               <ul className="text-gray-500 space-y-2 text-sm font-medium">
                 <li>• An automated ad buying tool</li>
                 <li>• A social media scheduler</li>
@@ -262,7 +269,7 @@ const LandingPage: React.FC = () => {
               </ul>
             </div>
             <div>
-              <span className="text-green-500 text-xs font-bold uppercase tracking-widest mb-2 block">MarketBrainOS IS</span>
+              <span className="text-green-500 text-xs font-bold uppercase tracking-widest mb-2 block">MarketBrain OS IS</span>
               <ul className="text-gray-500 space-y-2 text-sm font-medium">
                 <li>• A strategic analysis engine</li>
                 <li>• A pre-launch validation tool</li>
@@ -283,9 +290,10 @@ const LandingPage: React.FC = () => {
           <div className="p-6 sm:p-10 border border-gray-800 rounded-2xl bg-[#0B0B0B] flex flex-col">
             <h3 className="text-2xl font-bold text-white mb-2">Free Tier</h3>
             <p className="text-gray-500 text-sm mb-8">For exploration and light testing.</p>
-            <div className="text-4xl font-black text-white mb-8">$0<span className="text-lg font-medium text-gray-600">/mo</span></div>
+            <div className="text-4xl font-black text-white mb-8">$0<span className="text-lg font-medium text-gray-600"> / mo</span></div>
             <ul className="space-y-4 mb-12 flex-grow">
-              <li className="flex items-center gap-3 text-sm text-gray-400"><div className="w-1.5 h-1.5 bg-gray-600 rounded-full" />4 Analysis Credits / Mo</li>
+              {/* The free allowance is a one-time grant, not a monthly reset (see FAQ "How do tokens work?"). */}
+              <li className="flex items-center gap-3 text-sm text-gray-400"><div className="w-1.5 h-1.5 bg-gray-600 rounded-full" />{FREE_TOKENS} tokens, one-time</li>
               <li className="flex items-center gap-3 text-sm text-gray-400"><div className="w-1.5 h-1.5 bg-gray-600 rounded-full" />Basic Angle Mining</li>
               <li className="flex items-center gap-3 text-sm text-gray-400"><div className="w-1.5 h-1.5 bg-gray-600 rounded-full" />Limited Simulation</li>
             </ul>
@@ -300,9 +308,9 @@ const LandingPage: React.FC = () => {
             </div>
             <h3 className="text-2xl font-bold text-white mb-2">Pro Access</h3>
             <p className="text-gray-500 text-sm mb-8">For serious deployment validation.</p>
-            <div className="text-4xl font-black text-white mb-8">$7<span className="text-lg font-medium text-gray-600">/mo</span></div>
+            <div className="text-4xl font-black text-white mb-8">${PRO_PRICE}<span className="text-lg font-medium text-gray-600"> / mo</span></div>
             <ul className="space-y-4 mb-12 flex-grow">
-              <li className="flex items-center gap-3 text-sm text-white"><div className="w-1.5 h-1.5 bg-[#FF0000] rounded-full" />200 Analysis Credits / Mo</li>
+              <li className="flex items-center gap-3 text-sm text-white"><div className="w-1.5 h-1.5 bg-[#FF0000] rounded-full" />{PRO_TOKENS} tokens / mo</li>
               <li className="flex items-center gap-3 text-sm text-white"><div className="w-1.5 h-1.5 bg-[#FF0000] rounded-full" />Full TestLab Pro Access</li>
               <li className="flex items-center gap-3 text-sm text-white"><div className="w-1.5 h-1.5 bg-[#FF0000] rounded-full" />Conversion Doctor Elite</li>
               <li className="flex items-center gap-3 text-sm text-white"><div className="w-1.5 h-1.5 bg-[#FF0000] rounded-full" />PDF Report Exports</li>
@@ -314,25 +322,7 @@ const LandingPage: React.FC = () => {
         </div>
       </AnimatedSection>
 
-      {/* 8b. TESTIMONIALS (illustrative samples) */}
-      <AnimatedSection as="section" index={8} className="py-24 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" aria-labelledby="testimonials-heading">
-        <h2 id="testimonials-heading" className="text-center text-3xl font-bold text-white mb-4">What operators say</h2>
-        <p className="text-center text-[10px] text-gray-600 uppercase tracking-widest mb-16">Illustrative samples — replace with real customer quotes before launch</p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {TESTIMONIALS.map((t, i) => (
-            <div key={i} className="p-8 border border-gray-800 rounded-2xl bg-[#0F0F0F] flex flex-col">
-              <div className="text-[#FF0000] text-4xl font-black leading-none mb-6">“</div>
-              <p className="text-gray-300 leading-relaxed font-medium mb-8 flex-grow">{t.quote}</p>
-              <div>
-                <p className="text-white font-bold text-sm">{t.name}</p>
-                <p className="text-gray-500 text-xs">{t.role}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </AnimatedSection>
-
-      {/* 8c. FAQ (top items; full list at /faq) */}
+      {/* 8b. FAQ (top items; full list at /faq) */}
       <AnimatedSection as="section" index={9} className="py-24 px-6 md:px-12 max-w-3xl mx-auto border-b border-gray-900/50" aria-labelledby="faq-heading">
         <h2 id="faq-heading" className="text-center text-3xl font-bold text-white mb-16">Frequently asked questions</h2>
         <FaqAccordion items={FAQ_ITEMS.slice(0, 4)} />
@@ -345,7 +335,7 @@ const LandingPage: React.FC = () => {
       <AnimatedSection as="section" index={10} className="py-32 px-6 md:px-12 text-center">
         <h2 className="text-4xl md:text-5xl font-black text-white tracking-tight mb-8">Stop guessing. Start validating.</h2>
         <p className="text-xl text-gray-500 mb-12 max-w-2xl mx-auto">
-          The most expensive decision in marketing is launching without intelligence. Calibrate your strategy with MarketBrainOS.
+          The most expensive decision in marketing is launching without intelligence. Calibrate your strategy with MarketBrain OS.
         </p>
         <Link to="/auth">
           <PrimaryButton className="!px-16 !py-6 !text-base shadow-2xl shadow-red-900/20">Launch Intelligence Engine</PrimaryButton>

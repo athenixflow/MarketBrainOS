@@ -26,7 +26,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   },
   {
     q: 'What tools are included?',
-    a: 'Thirteen specialized analyzers across Marketing Intelligence, Sales Intelligence, Business Strategy, and Operations Intelligence — including Angle Miner, Audience Intelligence, Messaging Analyzer, Offer Analyzer, Conversion Doctor, Strategy Lab, Growth Analyzer, and more. See the Features page for the full list.',
+    a: 'Fourteen tools across five suites — Marketing Intelligence, Sales Intelligence, Business Strategy, Operations Intelligence, and Extras — including Angle Miner, Audience Intelligence, Messaging Analyzer, Offer Analyzer, Conversion Doctor, Strategy Lab, Growth Analyzer, and more. See the Features page for the full list.',
   },
   {
     q: 'Do I need a credit card to start?',
@@ -35,26 +35,5 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     q: 'How is my data handled?',
     a: 'Your analyses are saved privately to your account so you can revisit them from your history. You can delete any saved analysis at any time.',
-  },
-];
-
-export interface Testimonial { quote: string; name: string; role: string; }
-
-// NOTE: illustrative sample testimonials — replace with real customer quotes before launch.
-export const TESTIMONIALS: Testimonial[] = [
-  {
-    quote: 'We stopped guessing on launch copy. Running the angle and conversion analyses before spend changed how our whole team works.',
-    name: 'Sample Persona — Founder',
-    role: 'Early-stage SaaS',
-  },
-  {
-    quote: 'The structured results make it easy to hand strategy to clients with confidence. It is like a second analyst on the team.',
-    name: 'Sample Persona — Agency Lead',
-    role: 'Growth Marketing Agency',
-  },
-  {
-    quote: 'Strategy Lab and Growth Analyzer help us pressure-test initiatives in minutes instead of week-long debates.',
-    name: 'Sample Persona — Head of Growth',
-    role: 'DTC E-commerce',
   },
 ];

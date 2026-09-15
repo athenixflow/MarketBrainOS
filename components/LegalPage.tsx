@@ -1,14 +1,16 @@
 // Shared chrome for legal/policy pages (Privacy, Terms). Reuses the public marketing layout + SEO so
 // these pages match the rest of the site and get prerendered head tags.
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import PublicLayout from './PublicLayout';
 import AnimatedSection from './AnimatedSection';
 import Seo from './Seo';
 import { PageSeo } from '../config/seo';
 
 // A titled block of policy prose. Keep body copy inside <p>/LegalList for consistent spacing.
-export const LegalSection: React.FC<{ heading: string; children: React.ReactNode }> = ({ heading, children }) => (
-  <section className="max-w-4xl mx-auto px-6 md:px-12 py-8 border-t border-gray-900/50">
+// `id` makes the section a link target (e.g. /privacy#s11 from the consent banner).
+export const LegalSection: React.FC<{ heading: string; id?: string; children: React.ReactNode }> = ({ heading, id, children }) => (
+  <section id={id} className="max-w-4xl mx-auto px-6 md:px-12 py-8 border-t border-gray-900/50 scroll-mt-24">
     <h2 className="text-xl md:text-2xl font-bold text-white mb-5 tracking-tight">{heading}</h2>
     <div className="space-y-4 text-[15px] text-gray-400 leading-relaxed">{children}</div>
   </section>
@@ -33,7 +35,17 @@ const LegalPage: React.FC<{
   lastUpdated: string;
   intro: React.ReactNode;
   children: React.ReactNode;
-}> = ({ seo, eyebrow, title, lastUpdated, intro, children }) => (
+}> = ({ seo, eyebrow, title, lastUpdated, intro, children }) => {
+  // BrowserRouter does not scroll to #hash on client-side navigation; the browser only does it on a
+  // full load. Do it here so in-app links like /privacy#s11 land on the section.
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (!hash) return;
+    const el = document.getElementById(hash.slice(1));
+    el?.scrollIntoView({ block: 'start' });
+  }, [hash]);
+
+  return (
   <PublicLayout>
     <Seo {...seo} />
     <AnimatedSection as="section" index={0} className="pt-24 pb-10 px-6 md:px-12 max-w-4xl mx-auto">
@@ -44,6 +56,7 @@ const LegalPage: React.FC<{
     </AnimatedSection>
     <div className="pb-16">{children}</div>
   </PublicLayout>
-);
+  );
+};
 
 export default LegalPage;

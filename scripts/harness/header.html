@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Header layout harness</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/index.css">
+</head>
+<body class="bg-[#0B0B0B]">
+  <!--
+    Mounts the REAL signed-in app header (components/AppHeader.tsx) and the REAL public nav
+    (components/PublicNav.tsx) with stubbed auth/data, so scripts/browser-harness.ts can resize the
+    viewport and assert that no two visible header elements overlap. The QA report found the logo
+    running into "FEATURES" and "SIGN IN" wrapping at 768px.
+  -->
+  <div id="app-header"></div>
+  <div id="public-nav" style="position:relative; top:120px"></div>
+  <script type="module">
+    import React from 'react';
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter } from 'react-router-dom';
+    import AppHeader from '/components/AppHeader.tsx';
+    import PublicNav from '/components/PublicNav.tsx';
+    import { ScopeProvider } from '/context/ScopeContext.tsx';
+
+    createRoot(document.getElementById('app-header')).render(
+      React.createElement(MemoryRouter, { initialEntries: ['/'] },
+        React.createElement(ScopeProvider, null, React.createElement(AppHeader, { onToggleSidebar: () => {} }))));
+    createRoot(document.getElementById('public-nav')).render(
+      React.createElement(MemoryRouter, { initialEntries: ['/pricing'] }, React.createElement(PublicNav)));
+
+    // Pairwise overlap of visible "leaf" elements (text-bearing, or the logo box) inside a header.
+    window.__overlaps = (rootSel) => {
+      const root = document.querySelector(rootSel);
+      if (!root) return [{ a: rootSel, b: 'missing' }];
+      const els = [...root.querySelectorAll('*')].filter((el) => {
+        const cs = getComputedStyle(el);
+        if (cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') return false;
+        const r = el.getBoundingClientRect();
+        if (r.width < 4 || r.height < 4) return false;
+        const hasOwnText = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
+        const isBox = el.tagName === 'DIV' && !el.children.length;   // the logo square / status dot
+        return hasOwnText || isBox;
+      });
+      const rects = els.map((el) => ({ el, r: el.getBoundingClientRect(), text: (el.textContent || '').trim().slice(0, 24) || el.className.slice(0, 24) }));
+      const out = [];
+      for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) {
+        const a = rects[i], b = rects[j];
+        if (a.el.contains(b.el) || b.el.contains(a.el)) continue;
+        const x = Math.min(a.r.right, b.r.right) - Math.max(a.r.left, b.r.left);
+        const y = Math.min(a.r.bottom, b.r.bottom) - Math.max(a.r.top, b.r.top);
+        if (x > 2 && y > 2) out.push({ a: a.text, b: b.text, x: Math.round(x), y: Math.round(y) });
+        // Touching or nearly touching on the same row reads as a collision to a human ("MARKETBRAINOSFEATURES").
+        const sameRow = Math.abs(a.r.top - b.r.top) < 12;
+        const gap = Math.max(a.r.left, b.r.left) - Math.min(a.r.right, b.r.right);
+        if (sameRow && x <= 2 && gap >= 0 && gap < 6) out.push({ a: a.text, b: b.text, gap: Math.round(gap) });
+      }
+      // A header link that wraps onto two lines is a failure even if the sticky header grew to fit it.
+      for (const { el, text } of rects) {
+        // Count the text's own line boxes, so padding and fixed-size boxes (the logo square) do not count.
+        const tops = new Set();
+        for (const n of el.childNodes) {
+          if (n.nodeType !== 3 || !n.textContent.trim()) continue;
+          const range = document.createRange(); range.selectNodeContents(n);
+          for (const rr of range.getClientRects()) if (rr.width > 1) tops.add(Math.round(rr.top));
+        }
+        if (tops.size > 1) out.push({ a: text, b: 'wraps onto two lines', lines: tops.size });
+      }
+      return out;
+    };
+    window.__harnessReady = true;
+  </script>
+</body>
+</html>

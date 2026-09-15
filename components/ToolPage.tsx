@@ -26,7 +26,7 @@ import { SecurityEngine } from '../services/securityEngine';
 import { ToolConfig, getToolMeta, getToolGuide } from '../config/toolConfigs';
 import { getUserToolAnalyses, ToolAnalysisRecord, deleteGenericAnalysis, saveReport } from '../services/persistenceService';
 import { getScoreBand } from '../services/scoreBands';
-import { ExpectedOutcome, AnalysisPreview, RunProgress, CharCounter, FieldHint, RunStage } from './ToolGuide';
+import { ExpectedOutcome, AnalysisPreview, RunProgress, CharCounter, FieldHint, RunStage, TAKING_LONG_MS } from './ToolGuide';
 import { ResultItemList } from './ResultSections';
 import { checkTokenBalance, canExport, TokenVerdict } from '../config/access';
 import { useRunGuard, IN_FLIGHT_NOTE } from './useRunGuard';
@@ -153,7 +153,7 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
   useEffect(() => {
     let timer: number;
     if (loading) {
-      timer = window.setTimeout(() => setIsTakingLong(true), 8000);
+      timer = window.setTimeout(() => setIsTakingLong(true), TAKING_LONG_MS);
     } else {
       setIsTakingLong(false);
     }

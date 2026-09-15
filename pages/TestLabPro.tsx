@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import AnimatedSection from '../components/AnimatedSection';
-import { ExpectedOutcome, FieldHint, CharCounter } from '../components/ToolGuide';
+import { ExpectedOutcome, FieldHint, CharCounter, TAKING_LONG_MS } from '../components/ToolGuide';
 import {
   PageHeader,
   Card,
@@ -27,7 +27,7 @@ import {
   isNetworkError
 } from '../components/UI';
 import { runTestLabComparison, MAX_INPUT_CHARS } from '../services/geminiService';
-import { TestLabResults, TOKEN_COSTS } from '../types';
+import { TestLabResults, TestLabVariant, TOKEN_COSTS } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { copyToClipboard, downloadAsText, exportTextPdf, formatTestLabExport } from '../services/exportService';
 import { SecurityEngine } from '../services/securityEngine';
@@ -67,7 +67,7 @@ const TestLabPro: React.FC = () => {
   useEffect(() => {
     let timer: number;
     if (loading) {
-      timer = window.setTimeout(() => setIsTakingLong(true), 8000);
+      timer = window.setTimeout(() => setIsTakingLong(true), TAKING_LONG_MS);
     } else {
       setIsTakingLong(false);
     }
@@ -208,6 +208,11 @@ const TestLabPro: React.FC = () => {
   // Shared with Workflow - see resolveWinner for why exact label equality is not enough.
   const scoredVariants = results?.variants || [];
   const winningVariant = results ? resolveWinner(scoredVariants, results.winnerLabel) : null;
+  // Fallback label when the model omits one: the same letter the input field carried ("Variant A"),
+  // keyed on the variant's position in the response (which the prompt requires to match input order),
+  // never on its position in the score-sorted list below.
+  const variantLabel = (v: TestLabVariant) =>
+    v.label || `Variant ${String.fromCharCode(65 + Math.max(0, scoredVariants.indexOf(v)))}`;
 
   const isSuspended = profile?.is_suspended;
   // Every paying plan, plus invited members - see canExport. `tier === 'pro'` locked out Team/Agency/Enterprise.
@@ -373,7 +378,7 @@ const TestLabPro: React.FC = () => {
                   <div className="flex flex-wrap justify-between items-start gap-6 mb-8">
                     <div className="min-w-0">
                       <h3 className="text-2xl sm:text-3xl font-bold text-[#0B0B0B] tracking-tight mb-2">
-                        {winningVariant.label || 'Top variant'} is the projected winner
+                        {variantLabel(winningVariant)} is the projected winner
                       </h3>
                       <div className="flex items-center gap-3">
                         <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000]" />
@@ -408,7 +413,7 @@ const TestLabPro: React.FC = () => {
                       <Card key={i} className={isWinner ? '!border-[#FF0000]/20' : ''}>
                         <div className="flex flex-wrap items-start justify-between gap-4 mb-3">
                           <div className="flex items-center gap-3 min-w-0">
-                            <p className="text-sm font-bold text-[#0B0B0B]">{v.label || `Variant ${i + 1}`}</p>
+                            <p className="text-sm font-bold text-[#0B0B0B]">{variantLabel(v)}</p>
                             {isWinner && <Badge tone="red">Winner</Badge>}
                           </div>
                           <span className="text-sm font-black text-[#0B0B0B] tabular-nums">{v.score ?? '–'}<span className="text-gray-400 font-bold">/100</span></span>

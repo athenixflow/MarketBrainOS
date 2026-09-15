@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import AnimatedSection from '../components/AnimatedSection';
-import { ExpectedOutcome, FieldHint, CharCounter } from '../components/ToolGuide';
+import { ExpectedOutcome, FieldHint, CharCounter, TAKING_LONG_MS } from '../components/ToolGuide';
 import {
   PageHeader,
   Card,
@@ -102,7 +102,7 @@ const AngleMinerX: React.FC = () => {
   useEffect(() => {
     let timer: number;
     if (loading) {
-      timer = window.setTimeout(() => setIsTakingLong(true), 8000);
+      timer = window.setTimeout(() => setIsTakingLong(true), TAKING_LONG_MS);
     } else {
       setIsTakingLong(false);
     }

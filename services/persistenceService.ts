@@ -1173,6 +1173,25 @@ export const callRequestPasswordReset = async (email: string) => {
   catch (error: any) { throw new Error(error.message || 'Could not send reset email.'); }
 };
 
+// Account deletion (Privacy §8) — contract in docs/qa-fix-deletion-flow.md. `dryRun` returns the
+// manifest (and any refusal) without writing. Unlike the other wrappers this rethrows the original
+// callable error: the UI needs `code` (reauth-required vs refusal) and `details.containers`.
+export interface DeleteAccountRefusal {
+  reason: 'owns_containers' | 'suspended';
+  containers: { kind: 'workspace' | 'agency' | 'enterprise'; type?: string; id: string; name: string }[];
+}
+export interface DeleteAccountResult {
+  ok: boolean;
+  deleted: Record<string, number>;
+  retained: string[];
+  refusal?: DeleteAccountRefusal;
+}
+export const callDeleteAccount = async (payload: { confirm: 'DELETE'; dryRun?: boolean }): Promise<DeleteAccountResult> => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  const fn = httpsCallable(functions, 'deleteAccount');
+  return (await fn(payload)).data as DeleteAccountResult;
+};
+
 // Fire-and-forget welcome email after a self-signup (idempotent server-side). Never blocks the UI.
 export const callSendWelcomeEmail = async (): Promise<void> => {
   if (!isFirebaseInitialized) return;

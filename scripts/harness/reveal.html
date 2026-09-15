@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AnimatedSection harness</title>
+  <link rel="icon" href="data:,">
+</head>
+<body style="margin:0;background:#0B0B0B;color:#fff">
+  <!--
+    Two cases the QA report hit. (1) A section far taller than a phone viewport: with the old
+    `viewport: { amount: 0.2 }` it never reached 20% visibility, so it stayed at opacity 0 - "fade-ins
+    took 5-20 seconds". (2) A section mounted later, after a click (the Workflow step-1 form): it must
+    reveal immediately, not wait for a scroll.
+  -->
+  <div id="root"></div>
+  <script type="module">
+    import React, { useState } from 'react';
+    import { createRoot } from 'react-dom/client';
+    import AnimatedSection from '/components/AnimatedSection.tsx';
+
+    // Step change, like Workflow step 0 -> step 1: the new section replaces the old one at the top of
+    // the page, so it mounts already in view and must reveal without any scrolling.
+    const Steps = () => {
+      const [step, setStep] = useState(0);
+      window.__mountLate = () => setStep(1);
+      return step === 0
+        ? React.createElement(AnimatedSection, { index: 1, 'data-case': 'tall', style: { height: 4200, padding: 24 } }, 'Tall section')
+        : React.createElement(AnimatedSection, { index: 2, 'data-case': 'late', style: { height: 1200, padding: 24 } }, 'Mounted later');
+    };
+    createRoot(document.getElementById('root')).render(React.createElement(Steps));
+    window.__opacity = (c) => { const el = document.querySelector(`[data-case="${c}"]`); return el ? Number(getComputedStyle(el).opacity) : -1; };
+    window.__harnessReady = true;
+  </script>
+</body>
+</html>

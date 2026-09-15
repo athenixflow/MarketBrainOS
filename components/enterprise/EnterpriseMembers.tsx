@@ -1,9 +1,12 @@
-// Enterprise Suite — Members panel. Owner/executive-admin provisions members directly (active
-// immediately) with a role, tool allowlist, and token budget. The allowlist/budget are STORED now and
-// will gate once an enterprise-scope analysis path exists (today enterprise members act in team/agency).
+// Enterprise Suite — Members panel. Two ways to add someone: invite by email (manageEnterpriseMember
+// 'invite'; they accept from their own account, so tools/budget are set afterwards via Edit) or create
+// the account for them (active immediately) with a role, tool allowlist, and token budget. The
+// allowlist/budget are STORED now and will gate once an enterprise-scope analysis path exists (today
+// enterprise members act in team/agency).
 // Markup is kept identical to team/TeamMembers and agency/AgencyMembers.
 import React, { useMemo, useState } from 'react';
 import { Card, PrimaryButton, SecondaryButton, Input, Select, Checkbox, Stat, Badge, ErrorMessage, SuccessMessage, ConfirmTapButton } from '../UI';
+import { SegmentedControl } from '../SegmentedControl';
 import { Enterprise, WorkspaceMember, EnterpriseRole } from '../../types';
 import { callCreateEnterpriseMember, callUpdateEnterpriseMember, callManageEnterpriseMember } from '../../services/persistenceService';
 import { can, Membership, ROLE_LABELS } from '../../services/permissionService';
@@ -16,6 +19,20 @@ const OWNER_ROLE = 'enterprise_owner';
 const POOL_LABEL = 'Enterprise pool';
 const BUDGET_HINT = '0 = unlimited within the pool.';
 const EMAIL_PLACEHOLDER = 'exec@company.com';
+
+// Shared by the three members panels. The server's invite branch stores only email + role on the
+// invitation (tools/budget are not applied at accept), so invite mode hides those fields rather than
+// pretending they were saved.
+type AddMode = 'invite' | 'create';
+const MODE_OPTIONS: Array<{ value: AddMode; label: React.ReactNode }> = [
+  { value: 'invite', label: 'Invite by email' },
+  { value: 'create', label: <><span className="sm:hidden">Create account</span><span className="hidden sm:inline">Create account for them</span></> },
+];
+const MODE_HINT: Record<AddMode, string> = {
+  invite: 'They receive an email with a link, sign in with their own password, and appear here once they accept. Set their tools and budget from Edit after they join.',
+  create: 'You set a temporary password and pass it on yourself. They are active immediately and can change it after first sign-in.',
+};
+const PASSWORD_HINT = 'Required if they do not have a MarketBrain OS account yet (min 6 characters).';
 
 const roleTone = (role: string): 'red' | 'blue' | 'neutral' => {
   if (role === 'owner' || role === 'agency_owner' || role === 'enterprise_owner') return 'red';
@@ -33,6 +50,7 @@ const EnterpriseMembers: React.FC<{
   const remaining = Math.max(0, pool - allocated);
 
   const [editingUid, setEditingUid] = useState<string | null>(null); // null = add mode
+  const [mode, setMode] = useState<AddMode>('invite'); // add mode only; reset() leaves it alone
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<EnterpriseRole>('executive_viewer');
@@ -42,6 +60,7 @@ const EnterpriseMembers: React.FC<{
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(''), 3000); };
+  const inviting = !editingUid && mode === 'invite';
 
   const reset = () => { setEditingUid(null); setEmail(''); setPassword(''); setRole('executive_viewer'); setTools(new Set()); setBudget(DEFAULT_BUDGET); };
   const toggleTool = (moduleKey: string) => setTools((prev) => { const n = new Set(prev); n.has(moduleKey) ? n.delete(moduleKey) : n.add(moduleKey); return n; });
@@ -57,6 +76,10 @@ const EnterpriseMembers: React.FC<{
       if (editingUid) {
         await callUpdateEnterpriseMember({ enterpriseId: enterprise.id, targetUid: editingUid, role, allowed_tools, token_budget: budget });
         flash('Member updated.');
+      } else if (mode === 'invite') {
+        // Wrapper posts { action, payload }; the server reads payload.enterpriseId/email/role only.
+        await callManageEnterpriseMember('invite', { enterpriseId: enterprise.id, email, role });
+        flash(`Invitation sent to ${email}.`);
       } else {
         await callCreateEnterpriseMember({ enterpriseId: enterprise.id, email, password, role, allowed_tools, token_budget: budget });
         flash(`${email} added.`);
@@ -80,36 +103,52 @@ const EnterpriseMembers: React.FC<{
             <Stat label="Unallocated" value={remaining.toLocaleString()} />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-3 items-end">
-            <Input compact label="Email" placeholder={EMAIL_PLACEHOLDER} value={email} onChange={(e) => setEmail(e.target.value)} disabled={!!editingUid} />
-            <Select compact label="Role" value={role} onChange={(v) => setRole(v as EnterpriseRole)} options={ASSIGNABLE.map(r => ({ value: r, label: ROLE_LABELS[r] || r }))} className="md:w-52" />
-            <Input compact label="Monthly token budget" type="number" placeholder="0" value={String(budget)} onChange={(e) => setBudget(Math.max(0, parseInt(e.target.value, 10) || 0))} className="md:w-44" />
-          </div>
-          <p className="mt-2 text-xs text-gray-500">{BUDGET_HINT}</p>
           {!editingUid && (
-            <div className="mt-6">
-              <Input compact label="Temporary password" type="password" autoComplete="new-password" placeholder="They can change it after first login" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <div className="mb-8">
+              <SegmentedControl label="How to add this member" value={mode} onChange={setMode} options={MODE_OPTIONS} />
+              <p className="mt-3 text-xs text-gray-500 leading-relaxed">{MODE_HINT[mode]}</p>
             </div>
           )}
 
-          <div className="mt-8">
-            <p className="text-[11px] font-bold text-gray-500 tracking-widest uppercase mb-2">Tools this member can use</p>
-            <p className="text-xs text-gray-500 mb-3">Leave all unchecked to allow every tool.</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {TOOL_CONFIG_LIST.map((t) => (
-                <div key={t.slug} className="p-3 rounded-2xl bg-gray-50 border border-gray-100">
-                  <Checkbox label={t.navLabel} checked={tools.has(t.module)} onChange={() => toggleTool(t.module)} className="w-full" />
-                </div>
-              ))}
-            </div>
+          <div className={`grid grid-cols-1 gap-3 items-end ${inviting ? 'md:grid-cols-[1fr_auto]' : 'md:grid-cols-[1fr_auto_auto]'}`}>
+            <Input compact label="Email" placeholder={EMAIL_PLACEHOLDER} value={email} onChange={(e) => setEmail(e.target.value)} disabled={!!editingUid} />
+            <Select compact label="Role" value={role} onChange={(v) => setRole(v as EnterpriseRole)} options={ASSIGNABLE.map(r => ({ value: r, label: ROLE_LABELS[r] || r }))} className="md:w-52" />
+            {!inviting && (
+              <Input compact label="Monthly token budget" type="number" placeholder="0" value={String(budget)} onChange={(e) => setBudget(Math.max(0, parseInt(e.target.value, 10) || 0))} className="md:w-44" />
+            )}
           </div>
+          {!inviting && <p className="mt-2 text-xs text-gray-500">{BUDGET_HINT}</p>}
+          {!editingUid && mode === 'create' && (
+            <div className="mt-6">
+              <Input compact label="Temporary password" type="password" autoComplete="new-password" placeholder="They can change it after first login" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <p className="mt-2 text-xs text-gray-500">{PASSWORD_HINT}</p>
+            </div>
+          )}
 
-          <p className="mt-6 text-xs text-gray-500 leading-relaxed bg-gray-50 border border-gray-100 rounded-2xl p-4">
-            Tool and budget limits are saved with the member and apply once enterprise-level analyses are available. Today, members run analyses within their team or agency, where those limits apply.
-          </p>
+          {!inviting && (
+            <>
+              <div className="mt-8">
+                <p className="text-[11px] font-bold text-gray-500 tracking-widest uppercase mb-2">Tools this member can use</p>
+                <p className="text-xs text-gray-500 mb-3">Leave all unchecked to allow every tool.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {TOOL_CONFIG_LIST.map((t) => (
+                    <div key={t.slug} className="p-3 rounded-2xl bg-gray-50 border border-gray-100">
+                      <Checkbox label={t.navLabel} checked={tools.has(t.module)} onChange={() => toggleTool(t.module)} className="w-full" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <p className="mt-6 text-xs text-gray-500 leading-relaxed bg-gray-50 border border-gray-100 rounded-2xl p-4">
+                Tool and budget limits are saved with the member and apply once enterprise-level analyses are available. Today, members run analyses within their team or agency, where those limits apply.
+              </p>
+            </>
+          )}
 
           <div className="flex flex-wrap items-center gap-3 mt-8">
-            <PrimaryButton size="sm" onClick={submit} disabled={busy || (!editingUid && !email)}>{busy ? 'Saving…' : (editingUid ? 'Save changes' : 'Add member')}</PrimaryButton>
+            <PrimaryButton size="sm" onClick={submit} disabled={busy || (!editingUid && !email)}>
+              {busy ? (inviting ? 'Sending…' : 'Saving…') : editingUid ? 'Save changes' : inviting ? 'Send invitation' : 'Create account'}
+            </PrimaryButton>
             {editingUid && <SecondaryButton size="sm" onClick={reset}>Cancel</SecondaryButton>}
           </div>
           {msg && <SuccessMessage message={msg} className="mt-4" />}

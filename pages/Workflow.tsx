@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import AnimatedSection from '../components/AnimatedSection';
-import { ExpectedOutcome } from '../components/ToolGuide';
+import { ExpectedOutcome, TAKING_LONG_MS } from '../components/ToolGuide';
 import {
   PageHeader,
   Card,
@@ -76,7 +76,8 @@ const Workflow: React.FC = () => {
   useEffect(() => {
     let timer: number;
     if (loading) {
-      timer = window.setTimeout(() => setIsTakingLong(true), 9000);
+      // `loading` flips per step, so this is 45 s per step, not per workflow.
+      timer = window.setTimeout(() => setIsTakingLong(true), TAKING_LONG_MS);
     } else {
       setIsTakingLong(false);
     }
@@ -357,7 +358,9 @@ const Workflow: React.FC = () => {
               outcomes={['Marketing Angles (AngleMiner)', 'Hook Selection', 'Performance Simulation (TestLab)', 'Conversion Audit (Conversion Doctor)']}
             />
           </div>
-          <PrimaryButton size="lg" onClick={() => setStep(1)}>Start workflow</PrimaryButton>
+          {/* Same guard step 1 runs on submit, applied up front: at 0 tokens the usage modal opens here
+              instead of after the user has filled in the step-1 form. */}
+          <PrimaryButton size="lg" onClick={() => { if (checkTokenAvailability(TOKEN_COSTS.AngleMiner)) setStep(1); }}>Start workflow</PrimaryButton>
         </AnimatedSection>
       )}
 

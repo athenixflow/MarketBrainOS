@@ -11,7 +11,7 @@ const whatIsIt: DocArticle = {
   blocks: [
     { type: 'heading', id: 'definition', text: 'Definition' },
     { type: 'paragraph', text: 'MarketBrain OS is a **predictive analytics and validation engine** for digital marketing assets. You feed it marketing hypotheses — angles, copy, offers, landing pages, campaigns, strategies — and it returns probabilistic performance scores, diagnostics, and concrete optimization data. Think of it as an always-on strategic consultant that pressure-tests ideas before you spend money on them.' },
-    { type: 'paragraph', text: 'It is a **connected intelligence suite**: 13 tools across five suites that share one result format and can feed into each other, so intelligence compounds instead of living in silos.' },
+    { type: 'paragraph', text: 'It is a **connected intelligence suite**: 14 tools across five suites that share one result format and can feed into each other, so intelligence compounds instead of living in silos.' },
     { type: 'heading', id: 'not', text: 'What it is NOT' },
     { type: 'list', items: [
       'It is **not** a generative content writer for blog posts or articles.',

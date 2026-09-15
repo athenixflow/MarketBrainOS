@@ -24,7 +24,7 @@ const Features: React.FC = () => (
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-16 items-center">
         <div className="lg:col-span-7">
           <span className="text-sm font-bold text-[#FF0000] uppercase tracking-[0.2em] mb-6 block">The Intelligence Suite</span>
-          <h1 className="text-5xl md:text-6xl font-black text-white tracking-tight mb-8 leading-[1.1]">Thirteen analyzers. One connected system.</h1>
+          <h1 className="text-5xl md:text-6xl font-black text-white tracking-tight mb-8 leading-[1.1]">Fourteen tools. One connected system.</h1>
           <p className="text-xl text-gray-400 font-medium leading-relaxed max-w-2xl">
             Every tool follows the same rigorous, structured format — so results are easy to compare, act on,
             and feed into one another.

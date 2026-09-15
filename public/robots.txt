@@ -2,5 +2,8 @@
 # (GPTBot, OAI-SearchBot, ClaudeBot, PerplexityBot, Google-Extended, Bingbot, etc.).
 User-agent: *
 Allow: /
+# The admin console and the signed-in app shell are never public pages.
+Disallow: /admin
+Disallow: /app.html
 
 Sitemap: https://www.marketbrainos.app/sitemap.xml

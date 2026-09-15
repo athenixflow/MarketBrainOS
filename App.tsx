@@ -34,7 +34,8 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ScopeProvider, useScope } from './context/ScopeContext';
 import { Honeypot, LoadingState } from './components/UI';
 import OnboardingOverlay from './components/OnboardingOverlay';
-import NotificationCenter from './components/NotificationCenter';
+import ConsentBanner from './components/ConsentBanner';
+import AppHeader from './components/AppHeader';
 import ScopeSwitcher from './components/ScopeSwitcher';
 import { TOOL_CONFIG_LIST, NAV_SUITES } from './config/toolConfigs';
 import { NAV_CORE, NAV_COLLABORATION, NAV_ACCOUNT, visibleLinks, NavLink } from './config/access';
@@ -157,7 +158,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   return (
     <>
       <MobileOverlay />
-      <aside className={sidebarClasses}>
+      <aside id="app-sidebar" className={sidebarClasses}>
         {/* Mobile Header inside Drawer */}
         <div className="flex items-center justify-between p-6 lg:hidden border-b border-gray-900/30">
            <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Navigation</span>
@@ -169,7 +170,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         </div>
         {/* The header's ScopeSwitcher is hidden under 640px, and Team/client pages auto-enter their scope,
             so on a phone there was no way back to Personal. It lives in the drawer too. */}
-        <div className="px-6 py-4 sm:hidden border-b border-gray-900/30 flex items-center justify-between gap-4">
+        <div className="px-6 py-4 md:hidden border-b border-gray-900/30 flex items-center justify-between gap-4">
           <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Scope</span>
           <ScopeSwitcher />
         </div>
@@ -233,58 +234,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         </div>
       </aside>
     </>
-  );
-};
-
-const Header: React.FC<{ onToggleSidebar?: () => void }> = ({ onToggleSidebar }) => {
-  // isSystemLocked comes from one auth-gated subscription in AuthContext. This used to be a local
-  // 10s poller here and an identical one in AppContainer.
-  const { user, profile, signOut, isSystemLocked: isEmergency } = useAuth();
-  const location = useLocation();
-  // Ensure title reflects Admin only if user is authorized
-  const isAdminRole = profile?.role === 'super_admin' || profile?.role === 'ops_admin';
-  const isAdminPath = location.pathname.startsWith('/admin') && isAdminRole;
-
-  return (
-    <header className="h-16 bg-[#0B0B0B] flex items-center px-4 sm:px-6 lg:px-12 fixed top-0 left-0 right-0 border-b border-gray-900/30 z-20 backdrop-blur-2xl bg-opacity-95">
-      <div className="flex items-center gap-3 sm:gap-6 min-w-0">
-        {user && (
-          <button onClick={onToggleSidebar} className="lg:hidden text-gray-400 hover:text-white p-1">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-            </svg>
-          </button>
-        )}
-        <Link to="/" className="flex items-center gap-3 min-w-0">
-          <div className="w-9 h-9 bg-[#FF0000] rounded-[10px] flex items-center justify-center font-bold text-white text-xs shadow-2xl shadow-[#FF0000]/20 transform -rotate-6 transition-transform hover:rotate-0">M</div>
-          <h1 className="text-sm font-bold tracking-[0.2em] text-white uppercase hidden md:block">
-            {isAdminPath ? 'MarketBrainOS Admin' : 'MarketBrainOS'}
-          </h1>
-          {/* Shorter title for mobile if needed, or hide text entirely on very small screens */}
-          <h1 className="text-sm font-bold tracking-[0.2em] text-white uppercase md:hidden">
-            MBOS
-          </h1>
-        </Link>
-      </div>
-      <div className="ml-auto flex items-center gap-3 sm:gap-6 lg:gap-10 min-w-0">
-        <div className="flex gap-3 sm:gap-6 lg:gap-8 text-[11px] font-bold tracking-widest text-gray-500 uppercase">
-          {!isAdminPath && profile?.tier === 'free' && (
-            <Link to="/pricing" className="text-[#FF0000] animate-pulse cursor-pointer hidden sm:block">Upgrade to Pro</Link>
-          )}
-          <Link to="/documentation" className="hover:text-white cursor-pointer transition-colors hidden sm:block">Docs</Link>
-          <Link to="/documentation" className="hover:text-white cursor-pointer transition-colors sm:hidden">?</Link>
-          
-          {user ? (
-            <button type="button" onClick={signOut} className="hover:text-white cursor-pointer transition-colors uppercase tracking-widest font-bold">Sign Out</button>
-          ) : (
-            <Link to="/auth" className="hover:text-white cursor-pointer transition-colors">Sign In</Link>
-          )}
-        </div>
-        {user && !isAdminPath && <div className="hidden sm:block"><ScopeSwitcher /></div>}
-        {user && !isAdminPath && <NotificationCenter />}
-        <div className={`w-1.5 h-1.5 rounded-full animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.3)] ${isEmergency ? 'bg-red-500' : 'bg-green-500/80'}`} />
-      </div>
-    </header>
   );
 };
 
@@ -408,7 +357,7 @@ const AppContainer: React.FC = () => {
       )}
       
       {/* Only show Fixed Header if logged in, otherwise LandingPage has its own header */}
-      {showSidebar && <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />}
+      {showSidebar && <AppHeader isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />}
       {showSidebar && <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />}
       
       {/* Content container: max-w-5xl + p-20 previously left only 576px of content at a 1024px laptop,
@@ -429,6 +378,10 @@ const AppContainer: React.FC = () => {
 
       {/* First-login onboarding (§5) — shown until the user finishes or skips */}
       {user && profile && !profile.onboarded && <OnboardingOverlay />}
+
+      {/* Analytics consent — last in tab order, on marketing and app routes alike; yields to the
+          onboarding overlay so a new user is not asked two things at once. */}
+      {!(user && profile && !profile.onboarded) && <ConsentBanner />}
     </div>
   );
 };

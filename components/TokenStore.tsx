@@ -3,6 +3,7 @@
 // Store page, the Settings billing tab and the Billing Center.
 
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, Badge, PrimaryButton, SuccessMessage, ErrorMessage } from './UI';
 import { useAuth } from '../context/AuthContext';
 import { DEFAULT_PRICING_CONFIG } from '../config/pricingConfig';
@@ -54,14 +55,32 @@ export const TokenStore: React.FC<{ onPurchased?: () => void; compact?: boolean 
             <p className="mt-2 text-[11px] font-bold text-gray-500 uppercase tracking-widest">tokens</p>
             <p className="mt-4 text-lg font-black tabular-nums text-[#0B0B0B]">${p.price}</p>
             <div className="mt-3 mb-6"><Badge tone="green">Never expires</Badge></div>
-            <PrimaryButton
-              size="sm"
-              onClick={() => buy(p.id, p.tokens)}
-              disabled={busy !== null || isFree}
-              className="mt-auto w-full"
-            >
-              {busy === p.id ? 'Processing…' : 'Buy'}
-            </PrimaryButton>
+            {/* Free tier: the button is greyed (PrimaryButton's disabled recipe) with a lock glyph, and the
+                reason sits right under it so the card explains itself without scrolling to the note below. */}
+            <div className="mt-auto">
+              <PrimaryButton
+                size="sm"
+                onClick={() => buy(p.id, p.tokens)}
+                disabled={busy !== null || isFree}
+                className="w-full"
+              >
+                {busy === p.id ? 'Processing…' : isFree ? (
+                  <span className="inline-flex items-center justify-center gap-2">
+                    <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                    </svg>
+                    Buy
+                  </span>
+                ) : 'Buy'}
+              </PrimaryButton>
+              {isFree && (
+                <p className="mt-3 text-[10px] font-bold uppercase tracking-widest leading-relaxed">
+                  <Link to="/pricing" className="text-[#FF0000] hover:text-[#D40000] underline-offset-4 hover:underline transition-colors">
+                    Upgrade to Pro to buy tokens →
+                  </Link>
+                </p>
+              )}
+            </div>
           </Card>
         ))}
       </div>

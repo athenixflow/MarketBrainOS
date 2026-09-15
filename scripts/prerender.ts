@@ -106,6 +106,9 @@ async function main() {
   for (const route of ROUTES) {
     const page = await browser.newPage();
     try {
+      // Components can read this flag to skip prerender-only chrome (the consent banner does), so a
+      // snapshot never bakes in UI that only makes sense for a live visitor.
+      await page.evaluateOnNewDocument(() => { (window as any).__MBOS_PRERENDER = true; });
       await page.goto(`${ORIGIN}${route}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
       // Wait until the app mounted and react-helmet-async applied per-route head tags.
       await page.waitForFunction(
@@ -115,7 +118,21 @@ async function main() {
         },
         { timeout: 20000 },
       ).catch(() => { /* fall through and capture whatever rendered */ });
-      await new Promise((r) => setTimeout(r, 500)); // settle helmet + lazy chunks
+      // A tall viewport puts whole AnimatedSections "in view" at once, so the snapshot carries none of
+      // framer-motion's opacity:0 start state (the write loop below fails the build if any remains).
+      // The homepage is longer than 4000px, so sweep to the bottom as well: every section intersects
+      // the viewport once, and `viewport.once` keeps it revealed after scrolling back to the top.
+      await page.setViewport({ width: 1280, height: 4000 });
+      await page.evaluate(async () => {
+        for (let y = 0; y <= document.documentElement.scrollHeight; y += window.innerHeight) {
+          window.scrollTo(0, y);
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        window.scrollTo(0, 0);
+      });
+      // 1200ms, not 600: the last sections to enter view sit in their stagger delay (up to 0.32s) before the
+      // 0.5s fade, and the guard below fails the build on any element still at exactly opacity:0.
+      await new Promise((r) => setTimeout(r, 1200));
       rendered[route] = await page.content();
       console.log('prerendered', route);
     } catch (e) {
@@ -129,8 +146,13 @@ async function main() {
   await browser.close();
   server.close();
 
-  // Write per-route HTML files.
+  // Write per-route HTML files. A snapshot that still carries framer-motion's `opacity:0` start state
+  // means a section had not revealed when the page was captured - crawlers and no-JS readers would
+  // get invisible content, and the QA audit saw exactly that on phones. Fail the build instead.
   for (const route of ROUTES) {
+    // `(?<![a-z-])` keeps SVG `stop-opacity:0` / `fill-opacity:0` from tripping the guard.
+    const hidden = (rendered[route].match(/(?<![a-z-])opacity:\s*0[;"]/g) || []).length;
+    if (hidden > 0) throw new Error(`${route}: ${hidden} element(s) captured at opacity:0 - the prerender viewport must reveal every section before the snapshot.`);
     const file = routeToFile(route);
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, rendered[route], 'utf8');
@@ -164,7 +186,7 @@ async function main() {
     '',
     '## Core pages',
     `- [Home](${SITE_URL}/): What MarketBrain OS is and who it is for.`,
-    `- [Features](${SITE_URL}/features): The 13 AI analysis tools across five suites.`,
+    `- [Features](${SITE_URL}/features): The 14 AI analysis tools across five suites.`,
     `- [Pricing](${SITE_URL}/pricing): Free, Pro, Team, Agency, Enterprise plans and token packs.`,
     `- [FAQ](${SITE_URL}/faq): Common questions on tokens, pricing, and data.`,
     `- [About](${SITE_URL}/about): Mission and story.`,

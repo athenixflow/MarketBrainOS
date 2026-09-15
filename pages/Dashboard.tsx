@@ -13,12 +13,13 @@ import { useAuth } from '../context/AuthContext';
 import { useScope } from '../context/ScopeContext';
 import {
   callConfirmTopUp, replayOnboarding, createNotification,
-  getUserToolAnalyses, getReportsForScope, getUserActionLogs,
+  getAnalysesForScope, getReportsForScope, getUserActionLogs,
   ToolAnalysisRecord,
 } from '../services/persistenceService';
 import { Report, ActionLogEntry } from '../types';
 import { NAV_SUITES, TOOL_CONFIG_LIST, getToolMeta } from '../config/toolConfigs';
 import { canSeeFeature, tierAtLeast, isPaidTier } from '../config/access';
+import { PLAN_META } from '../config/pricingConfig';
 
 // Resolve a server module key to a friendly tool label (covers generic + bespoke modules).
 const moduleLabel = (m: string): string =>
@@ -33,7 +34,7 @@ const quietAction = 'text-[10px] font-bold text-gray-500 hover:text-white upperc
 
 const Dashboard: React.FC = () => {
   const { user, profile, refreshProfile } = useAuth();
-  const { memberships } = useScope();
+  const { scope, memberships } = useScope();
   const navigate = useNavigate();
   const accessCtx = { profile, memberships };
 
@@ -42,7 +43,10 @@ const Dashboard: React.FC = () => {
   const [showHistory, setShowHistory] = useState(false);
   const [showReceipts, setShowReceipts] = useState(false);
 
-  // Intelligence data (personal scope: the account's own profile).
+  // Intelligence data for the ACTIVE scope (same readers as History/Reports, so the dashboard agrees
+  // with them). In personal scope the analyses reader also folds in the bespoke tools (Angle Miner,
+  // Conversion Doctor, TestLab), which write to their own collections and were missing from
+  // "Recent activity" while this page read tool_analysis_results directly.
   const [analyses, setAnalyses] = useState<ToolAnalysisRecord[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   const [logs, setLogs] = useState<ActionLogEntry[]>([]);
@@ -57,8 +61,8 @@ const Dashboard: React.FC = () => {
     setLoadingData(true);
     setLoadError(null);
     Promise.all([
-      getUserToolAnalyses(user.uid),
-      getReportsForScope(user.uid, { level: 'personal' }),
+      getAnalysesForScope(user.uid, scope),
+      getReportsForScope(user.uid, scope),
       getUserActionLogs(user.uid),
     ])
       .then(([a, r, l]) => {
@@ -71,7 +75,7 @@ const Dashboard: React.FC = () => {
       })
       .finally(() => { if (active) setLoadingData(false); });
     return () => { active = false; };
-  }, [user, reloadTick]);
+  }, [user, scope, reloadTick]);
 
   const retryLoad = () => setReloadTick((t) => t + 1);
 
@@ -140,9 +144,23 @@ const Dashboard: React.FC = () => {
 
   const displayName = profile?.email ? profile.email.split('@')[0] : 'there';
   const tier = profile?.tier || 'free';
-  const tierLabel = tier.charAt(0).toUpperCase() + tier.slice(1);
+  const tierLabel = PLAN_META[tier]?.name || tier;
   const tokens = profile?.tokens ?? 0;
   const hasData = analyses.length > 0 || reports.length > 0;
+
+  // The plan belongs to the ACCOUNT, not to the scope being viewed: a Free member browsing a Team
+  // workspace still sees "Free" here. Naming the active scope next to it keeps the two from being
+  // confused. Same derivation as ScopeSwitcher; memberships carry no client names, so a client scope
+  // is labelled by its parent agency.
+  const scopeName = (() => {
+    if (scope.level === 'personal') return null;
+    const m = memberships.find((x) =>
+      (scope.level === 'team' && x.family === 'workspace' && x.containerId === scope.workspaceId) ||
+      (scope.level === 'enterprise' && x.family === 'enterprise' && x.containerId === scope.enterpriseId) ||
+      (scope.level === 'client' && x.family === 'agency' && x.containerId === scope.agencyId));
+    const name = m?.name || 'Workspace';
+    return scope.level === 'client' ? `${name} (client)` : name;
+  })();
 
   // Next collaboration tier the account has NOT unlocked yet, shown as an upsell card.
   const lockedFeature =
@@ -192,13 +210,14 @@ const Dashboard: React.FC = () => {
             <div className="flex flex-wrap items-center gap-x-12 gap-y-6">
               <Stat
                 tone="dark"
-                label="Plan"
+                label="Account plan"
                 value={
                   <span className="inline-flex items-center gap-3">
                     {tierLabel}
                     {tier !== 'free' && <Badge tone="red">Active</Badge>}
                   </span>
                 }
+                sub={scopeName ? <span className="block max-w-[220px] truncate" title={scopeName}>Viewing {scopeName}</span> : undefined}
               />
               <Stat
                 tone="dark"

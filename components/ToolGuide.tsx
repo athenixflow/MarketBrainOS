@@ -6,6 +6,11 @@ import React from 'react';
 import { Badge } from './UI';
 import { getScoreBand } from '../services/scoreBands';
 
+// How long a run may take before RunProgress shows the "taking longer than usual" notice. The pages
+// advertise "30–60 s" (Workflow: per step), so the notice must not fire before that estimate has
+// elapsed; the previous 8–10 s timers flagged perfectly normal runs as slow.
+export const TAKING_LONG_MS = 45_000;
+
 // Dark panel summarizing what the analysis produces + how long it takes. Sits on the dark page,
 // above the white input/result cards.
 export const ExpectedOutcome: React.FC<{

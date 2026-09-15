@@ -248,11 +248,11 @@ export const toolsOverviewArticle: DocArticle = {
   id: 'overview',
   categoryId: CATEGORY,
   title: 'Analysis tools — overview',
-  summary: 'How the 13 tools, the five suites, scores, and the universal result contract fit together.',
+  summary: 'How the 14 tools, the five suites, scores, and the universal result contract fit together.',
   keywords: ['tools', 'suites', 'universal sections', 'score', 'verdict', 'ecosystem'],
   blocks: [
-    { type: 'heading', id: 'suites', text: 'Five suites, thirteen tools' },
-    { type: 'paragraph', text: 'Every analysis tool lives in one of five suites in the sidebar. Four tools are **bespoke** (custom experiences): Angle Miner, Conversion Doctor, TestLab Pro, and Workflow Pipeline. The other nine are **generic** analysis tools that share one consistent interface.' },
+    { type: 'heading', id: 'suites', text: 'Five suites, fourteen tools' },
+    { type: 'paragraph', text: 'Every analysis tool lives in one of five suites in the sidebar. Four tools are **bespoke** (custom experiences): Angle Miner, Conversion Doctor, TestLab Pro, and Workflow Pipeline. The other ten are **generic** analysis tools that share one consistent interface.' },
     { type: 'table', headers: ['Suite', 'Tools'], rows: [
       ['Marketing Intelligence', 'Angle Miner, Audience Intelligence, Market Intelligence, Competitor Analyzer, Messaging Analyzer, Content Strategy, Campaign Analyzer'],
       ['Sales Intelligence', 'Conversion Doctor, Offer Analyzer'],
