@@ -28,6 +28,8 @@ import { getUserToolAnalyses, ToolAnalysisRecord, deleteGenericAnalysis, saveRep
 import { getScoreBand } from '../services/scoreBands';
 import { ExpectedOutcome, AnalysisPreview, RunProgress, CharCounter, FieldHint, RunStage, TAKING_LONG_MS } from './ToolGuide';
 import { ResultItemList } from './ResultSections';
+import { track } from '../services/analytics';
+import { callCreateShareLink } from '../services/persistenceService';
 import { checkTokenBalance, canExport, TokenVerdict } from '../config/access';
 import { useRunGuard, IN_FLIGHT_NOTE } from './useRunGuard';
 
@@ -162,11 +164,30 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
 
   const setField = (key: string, val: string) => setValues(prev => ({ ...prev, [key]: val }));
 
+  /*
+   * GTM E01 — the top of the activation funnel (part 03 §7.1).
+   *
+   * Keyed on the module rather than the mount, because the tool pages share this component:
+   * switching tools is a new tool_viewed, and a re-render is not.
+   */
+  useEffect(() => {
+    track('tool_viewed', { tool_slug: config.module });
+  }, [config.module]);
+
   const checkTokenAvailability = (): boolean => {
     // Shared guard - see checkTokenBalance in config/access.ts for why the old inline version
     // let an unhydrated profile and low-balance paid accounts through to the paid endpoint.
     const verdict = checkTokenBalance(profile, cost);
     if (verdict === "ok") return true;
+    /*
+     * THE MOMENT SOMEBODY WANTED SOMETHING AND COULD NOT HAVE IT — the highest-intent
+     * event in the product and, until now, one nothing recorded. `reason` distinguishes a
+     * spent balance from an unavailable one (an unhydrated profile), which are different
+     * problems: one is a paywall working, the other is a bug wearing its costume.
+     */
+    track('token_wall_viewed', {
+      tool_slug: config.module, reason: verdict, needed: cost, balance: profile?.tokens ?? 0,
+    });
     setUsageReason(verdict);
     setShowUsageModal(true);
     return false;
@@ -210,6 +231,15 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
       contextText = `${label} analysis — ${selected.result?.summary || ''}${highlights ? ' Highlights: ' + highlights : ''}`.trim();
     }
 
+    const startedAt = Date.now();
+    track('analysis_started', {
+      tool_slug: config.module,
+      input_chars: primaryValue.length,
+      input_type: /^https?:\/\//i.test(primaryValue.trim()) ? 'url' : 'text',
+      context_from: selected ? selected.module : undefined,
+      scope_level: scope.level,
+    });
+
     const token = run.start();
     setLoading(true);
     setRunStage('queued');
@@ -226,6 +256,21 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
       const effectiveScope = inTeamScope && visibilityChoice === 'private' ? { level: 'personal' as const } : scope;
       const data = await runToolAnalysis(config.module, values, user?.uid, contextText, effectiveScope);
       if (!run.isCurrent(token)) return;   // stopped, or the user switched tools
+      /*
+       * THE EVENT ACTIVATION IS COUNTED ON. Part 03 §6.2 defines activation as two
+       * successful runs within seven days — the "Second Decision" — so this must fire on
+       * success ONLY, and never on the stopped or switched-away paths above: a run the
+       * user abandoned is not a decision they made. The server counts the same thing from
+       * `action_logs` (§7.5), which is what an ad-blocker cannot eat; this is the copy
+       * that carries the attribution GA4 needs to answer "from which channel".
+       */
+      track('analysis_completed', {
+        tool_slug: config.module,
+        tokens_used: cost,
+        score: data.score,
+        duration_ms: Date.now() - startedAt,
+        saved: data.saveError == null,
+      });
       setRunStage('completed');
       setResult(data);
       setActiveTab(data.sections[0]?.title || '');
@@ -233,6 +278,18 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
     } catch (err: any) {
       console.error(err);
       if (!run.isCurrent(token)) return;
+      /*
+       * A failure is a funnel step, not an absence of one. `rate_limited` separates "the
+       * product said no" from "the product broke", which are the two different problems a
+       * flat completion rate hides.
+       */
+      const code = String(err?.code || err?.message || 'unknown');
+      track('analysis_failed', {
+        tool_slug: config.module,
+        error_code: code.slice(0, 60),
+        rate_limited: /429|rate.?limit|INSUFFICIENT_TOKENS/i.test(code),
+        duration_ms: Date.now() - startedAt,
+      });
       setExecutionError(err.message || 'The analysis was interrupted before it finished. No tokens were deducted.');
     } finally {
       run.settle();
@@ -243,15 +300,48 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
   const exportText = () => (result ? formatToolResult(config.title, result) : '');
   const fileBase = `${config.title.replace(/\s+/g, '_')}_Report`;
   const handleCopy = () => copyToClipboard(exportText());
-  const handleExportTxt = () => downloadAsText(fileBase, exportText());
-  const handleExportCSV = () => { if (result) downloadAsCSV(fileBase, toolResultToCSV(result)); };
-  const handleExportPDF = () => (result ? exportResultPdf(`${config.title} Report`, result) : undefined);
+  /* Export is the paid gate's visible edge; every format reports through one place. */
+  const trackExport = (format: 'txt' | 'csv' | 'pdf') =>
+    track('export_clicked', { format, tool_slug: config.module, plan_tier: profile?.tier });
+  const handleExportTxt = () => { trackExport('txt'); downloadAsText(fileBase, exportText()); };
+  const handleExportCSV = () => { if (result) { trackExport('csv'); downloadAsCSV(fileBase, toolResultToCSV(result)); } };
+  const handleExportPDF = () => {
+    if (!result) return undefined;
+    trackExport('pdf');
+    return exportResultPdf(`${config.title} Report`, result);
+  };
 
-  // Result actions (Save is automatic on success; Export handled above).
+  /*
+   * SHARE IS A LINK NOW, NOT A CLIPBOARD DUMP (GTM part 03 §5).
+   *
+   * Copying the text to the clipboard was a dead end: the recipient got a wall of prose
+   * with no idea what produced it and no way to run one, so the most natural moment of
+   * advocacy in the product created nothing. The link opens a server-rendered page with
+   * the score, the findings and one invitation to run the same audit.
+   *
+   * IT FALLS BACK TO THE CLIPBOARD, deliberately. A result that was never saved has no id
+   * to share, and so does a run made while the network was failing — and "Share" quietly
+   * doing nothing would be worse than the old behaviour it replaces.
+   */
   const handleShare = async () => {
-    const copied = await copyToClipboard(exportText());
-    setActionMsg(copied ? 'Result copied to clipboard' : 'Copy failed - your browser blocked clipboard access');
-    setTimeout(() => setActionMsg(''), 2500);
+    if (!user || !result?.savedId) {
+      const copied = await copyToClipboard(exportText());
+      setActionMsg(copied ? 'Result copied to clipboard' : 'Copy failed - your browser blocked clipboard access');
+      setTimeout(() => setActionMsg(''), 2500);
+      return;
+    }
+    setActionMsg('Creating link…');
+    try {
+      const { id, url } = await callCreateShareLink(result.savedId);
+      track('share_link_created', { tool_slug: config.module, share_id: id });
+      const copied = await copyToClipboard(url);
+      setActionMsg(copied ? `Link copied — ${url}` : url);
+    } catch (e: any) {
+      /* Named, not swallowed: the daily cap and a missing record are different problems
+         and the person can act on only one of them. */
+      setActionMsg(e?.message || 'Could not create a link. Your result is safe.');
+    }
+    setTimeout(() => setActionMsg(''), 6000);
   };
   // saveReport() existed but had no call sites anywhere, so /reports could never populate and its
   // empty state told users to "save it as a report" - an action that did not exist in the UI.

@@ -284,6 +284,26 @@ const ConversionDoctor: React.FC = () => {
                   </div>
                 </div>
 
+                {/*
+                  REQUIRED, AND SAID OUT LOUD. A page cannot be audited well without
+                  knowing who it is for and what it should make them do: the same
+                  headline is strong for a warm list and weak for cold traffic, and a
+                  grader that does not ask is grading against a generic idea of "good".
+                  Independent testing found one of eleven AI auditors asks. Both fields
+                  existed here already — collapsed inside "Advanced (optional)", which
+                  almost nobody opens, so the product's sharpest difference was hidden
+                  behind a disclosure triangle.
+                */}
+                <div className="mb-10">
+                  <p className="mb-6 text-[11px] font-bold text-[#0B0B0B] uppercase tracking-widest">
+                    Required — this is what makes the audit yours
+                  </p>
+                  <Input label="Target audience" placeholder="Who is this page for?" value={audience} onChange={(e) => setAudience(e.target.value)}
+                    hint={<FieldHint example="First-time visitors from cold Meta ads.">Who you’re trying to convert. The same page is strong for a warm list and weak for cold traffic — most auditors never ask.</FieldHint>} />
+                  <Input label="Conversion goal" placeholder="The one action you want" value={goal} onChange={(e) => setGoal(e.target.value)}
+                    hint={<FieldHint example="Start a free trial.">The single action this page should drive. Every blocker is weighed against it.</FieldHint>} />
+                </div>
+
                 <div className="mb-10">
                   <button type="button" onClick={() => setShowAdvanced(v => !v)} aria-expanded={showAdvanced}
                     className="flex items-center gap-2 text-[10px] font-bold text-gray-600 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">
@@ -293,10 +313,6 @@ const ConversionDoctor: React.FC = () => {
                   <p className="mt-2 mb-6 text-[11px] font-medium text-gray-500 leading-relaxed pl-6">Add context for a sharper, more tailored audit. All optional.</p>
                   {showAdvanced && (
                     <div>
-                      <Input label="Target audience" placeholder="Who is this page for?" value={audience} onChange={(e) => setAudience(e.target.value)}
-                        hint={<FieldHint example="First-time visitors from cold Meta ads.">Who you’re trying to convert. The audit weighs friction differently per audience.</FieldHint>} />
-                      <Input label="Conversion goal" placeholder="The one action you want" value={goal} onChange={(e) => setGoal(e.target.value)}
-                        hint={<FieldHint example="Start a free trial.">The single action this page should drive.</FieldHint>} />
                       <Input label="Traffic source" placeholder="Where visitors come from" value={trafficSource} onChange={(e) => setTrafficSource(e.target.value)}
                         hint={<FieldHint example="Google search, cold ads, email list.">How people arrive. Intent differs by source.</FieldHint>} />
                     </div>
@@ -306,12 +322,27 @@ const ConversionDoctor: React.FC = () => {
                 <div className="flex flex-col gap-6">
                   <PrimaryButton
                     type="submit"
-                    disabled={loading || run.inFlight || !input.trim() || input.length > MAX_INPUT_CHARS || !validation.isValid}
+                    disabled={loading || run.inFlight || !input.trim() || input.length > MAX_INPUT_CHARS || !validation.isValid || !audience.trim() || !goal.trim()}
                     className="w-full"
                   >
                     {loading ? 'Auditing your page…' : run.inFlight ? 'Finishing previous run…' : 'Run conversion audit'}
                   </PrimaryButton>
                   {!loading && run.inFlight && <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest leading-relaxed text-center">{IN_FLIGHT_NOTE}</p>}
+                  {/*
+                    A DISABLED CONTROL MUST SAY WHY. The QA audit found the token store
+                    greyed out with no reason given, and a person who cannot tell whether
+                    a button is broken or waiting for them assumes broken. Names the
+                    missing field rather than "complete the form".
+                  */}
+                  {!loading && !run.inFlight && input.trim() && validation.isValid && (!audience.trim() || !goal.trim()) && (
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest leading-relaxed text-center">
+                      {!audience.trim() && !goal.trim()
+                        ? 'Add the audience and the conversion goal to run the audit'
+                        : !audience.trim()
+                          ? 'Add the target audience to run the audit'
+                          : 'Add the conversion goal to run the audit'}
+                    </p>
+                  )}
                   {result && !loading && (
                     <button
                       type="button"

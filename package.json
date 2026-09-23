@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/routes.test.mjs && tsx scripts/results.test.ts && tsx scripts/fetchpage.test.ts && tsx scripts/access.test.ts && tsx scripts/runtime.test.ts && tsx scripts/copy.test.ts && tsx scripts/pdf.test.ts && tsc && vite build && tsx scripts/prerender.ts",
+    "build": "node scripts/routes.test.mjs && tsx scripts/results.test.ts && tsx scripts/fetchpage.test.ts && tsx scripts/access.test.ts && tsx scripts/runtime.test.ts && tsx scripts/copy.test.ts && tsx scripts/analytics.test.ts && tsx scripts/pricing.test.ts && tsx scripts/share.test.ts && tsx scripts/paystack.test.ts && tsx scripts/compare.test.ts && tsx scripts/pdf.test.ts && tsc && vite build && tsx scripts/prerender.ts",
     "build:novite": "tsx scripts/prerender.ts",
     "preview": "vite preview",
     "media:generate": "tsx scripts/media/generate.ts",
@@ -23,7 +23,12 @@
     "test:runtime": "tsx scripts/runtime.test.ts",
     "test:csp": "tsx scripts/csp.check.ts",
     "test:rules": "firebase emulators:exec --only firestore --project rules-test-local \"node scripts/rules.test.mjs\"",
-    "test:copy": "tsx scripts/copy.test.ts"
+    "test:copy": "tsx scripts/copy.test.ts",
+    "test:analytics": "tsx scripts/analytics.test.ts",
+    "test:pricing": "tsx scripts/pricing.test.ts",
+    "test:share": "tsx scripts/share.test.ts",
+    "test:paystack": "tsx scripts/paystack.test.ts",
+    "test:compare": "tsx scripts/compare.test.ts"
   },
   "dependencies": {
     "dotenv": "^17.2.4",

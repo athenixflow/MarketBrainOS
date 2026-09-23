@@ -35,11 +35,15 @@ import { ScopeProvider, useScope } from './context/ScopeContext';
 import { Honeypot, LoadingState } from './components/UI';
 import OnboardingOverlay from './components/OnboardingOverlay';
 import ConsentBanner from './components/ConsentBanner';
+import AnalyticsBridge from './components/AnalyticsBridge';
 import AppHeader from './components/AppHeader';
 import ScopeSwitcher from './components/ScopeSwitcher';
 import { TOOL_CONFIG_LIST, NAV_SUITES } from './config/toolConfigs';
 import { NAV_CORE, NAV_COLLABORATION, NAV_ACCOUNT, visibleLinks, NavLink } from './config/access';
 import { visibleAdminSections, adminPath } from './config/adminAccess';
+import LandingPageScore from './pages/LandingPageScore';
+import Compare from './pages/Compare';
+import CompareHub from './pages/CompareHub';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -310,6 +314,14 @@ const AppRoutes: React.FC = () => {
       <Route path="/pricing" element={<Pricing />} />
       <Route path="/about" element={<About />} />
       <Route path="/faq" element={<FAQ />} />
+      {/* GTM part 10 — the free scorer. A marketing route: prerendered, public, no auth. */}
+      <Route path="/tools/landing-page-score" element={<LandingPageScore />} />
+      {/* GTM part 10 §4.2 — `/compare/<slug>` only. A second `/vs/` pattern for the
+          same intent would be self-inflicted duplicate content. */}
+      {/* The hub the comparison breadcrumbs point at. Declared BEFORE the slug route
+          so `/compare` resolves to the hub rather than a comparison named nothing. */}
+      <Route path="/compare" element={<CompareHub />} />
+      <Route path="/compare/:slug" element={<Compare />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/terms" element={<Terms />} />
       <Route path="/auth" element={user ? <Navigate to="/" /> : <AuthPage />} />
@@ -382,6 +394,10 @@ const AppContainer: React.FC = () => {
       {/* Analytics consent — last in tab order, on marketing and app routes alike; yields to the
           onboarding overlay so a new user is not asked two things at once. */}
       {!(user && profile && !profile.onboarded) && <ConsentBanner />}
+
+      {/* Renders nothing: sets the params every event carries, and fires landing_view on
+          marketing routes (GTM E01). Inside the providers it reads. */}
+      <AnalyticsBridge />
     </div>
   );
 };

@@ -14,7 +14,7 @@ const PACK = CFG.tokenPacks[0];
 export const FAQ_ITEMS: FaqItem[] = [
   {
     q: 'What is MarketBrain OS?',
-    a: 'MarketBrain OS is an AI-powered business intelligence platform — an operating system for marketing and business decisions. It analyzes ideas, offers, audiences, campaigns, funnels, and growth initiatives and returns structured, actionable strategic intelligence.',
+    a: 'MarketBrain OS is the pre-spend review for marketing decisions. Give it a landing page URL, a set of ad variants, an offer or a campaign plan, and it returns a scored report with ranked, specific fixes — so the work is reviewed before the budget is spent. It reviews and explains; it does not predict results, buy media or write your content for you.',
   },
   {
     q: 'How do tokens work?',

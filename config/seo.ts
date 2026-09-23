@@ -22,7 +22,7 @@ export const MARKETING_SEO: Record<string, PageSeo> = {
   home: {
     // 51 chars. Was 81, which truncated in SERPs; every other route is 22-43.
     title: 'MarketBrain OS | AI Marketing Intelligence Platform',
-    description: 'MarketBrain OS is an AI marketing intelligence platform. Validate strategy, audit landing pages, simulate ad performance, and generate high-converting angles before you spend.',
+    description: 'MarketBrain OS is the pre-spend review for marketing decisions. Audit a landing page from its URL, compare ad variants, and pressure-test a plan — a scored report with ranked fixes, before the budget is spent.',
     path: '/',
   },
   features: {

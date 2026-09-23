@@ -8,6 +8,7 @@ import { Card, Badge, PrimaryButton, SuccessMessage, ErrorMessage } from './UI';
 import { useAuth } from '../context/AuthContext';
 import { DEFAULT_PRICING_CONFIG } from '../config/pricingConfig';
 import { callConfirmTopUp, createNotification } from '../services/persistenceService';
+import { track } from '../services/analytics';
 
 const genRef = () => `tx_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 
@@ -26,6 +27,8 @@ export const TokenStore: React.FC<{ onPurchased?: () => void; compact?: boolean 
   const isFree = !profile || profile.tier === 'free';
 
   const buy = async (packId: string, tokens: number) => {
+    /* The other half of `token_wall_viewed` — of everyone who hit the wall, who acted. */
+    track('token_wall_action', { action: 'store', pack_id: packId, tokens });
     if (!user) return;
     if (isFree) { setMsgErr(true); setMsg('Upgrade to a paid plan to buy token packs.'); return; }
     setBusy(packId); setMsgErr(false); setMsg('Processing…');

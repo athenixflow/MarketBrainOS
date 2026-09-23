@@ -29,14 +29,42 @@ const walk = (dir: string, out: string[] = []): string[] => {
 const sources = [
   ...walk(path.join(root, 'pages')), ...walk(path.join(root, 'components')), ...walk(path.join(root, 'config')),
   path.join(root, 'App.tsx'), path.join(root, 'index.html'), path.join(root, 'scripts', 'prerender.ts'),
+  /* EMAIL IS COPY TOO, and the most durable kind: it sits in an inbox, gets forwarded,
+     and cannot be corrected by a deploy once sent. The guard did not scan it, and the
+     welcome email was still promising to "predict which angle or ad wins" long after
+     that claim was removed from every screen. */
+  ...walk(path.join(root, 'functions', 'src', 'email')),
 ].filter((f) => fs.existsSync(f));
 
-const grep = (re: RegExp): string[] => {
+/**
+ * A file's COMMENTS are not its copy.
+ *
+ * Trailing `//` was already stripped; block comments were not, so the note in
+ * `pricingConfig.ts` explaining that billing is simulated read as a claim that the
+ * PRODUCT simulates performance, and the build failed on an explanation of why the
+ * build should fail. Blanked rather than removed, so reported line numbers still point
+ * where the reader expects. TS/TSX only: `/*` inside an HTML or text source is content.
+ */
+const blankBlockComments = (text: string, file: string): string =>
+  (/\.tsx?$/.test(file)
+    ? text.replace(/\/\*[\s\S]*?\*\//g, (c) => c.replace(/[^\n]/g, ' '))
+    : text);
+
+const grep = (re: RegExp, exempt?: RegExp): string[] => {
   const hits: string[] = [];
   for (const f of sources) {
-    fs.readFileSync(f, 'utf8').split(/\r?\n/).forEach((line, i) => {
+    blankBlockComments(fs.readFileSync(f, 'utf8'), f).split(/\r?\n/).forEach((line, i) => {
       // Strip trailing comments only - a `//` inside a URL is not a comment.
-      if (re.test(line.replace(/(^|\s)\/\/.*$/, ''))) hits.push(`${path.relative(root, f)}:${i + 1}: ${line.trim().slice(0, 100)}`);
+      const code = line.replace(/(^|\s)\/\/.*$/, '');
+      if (!re.test(code)) return;
+      /* Tested against the WHOLE line, never the truncated hit below: the first cut
+         filtered the 100-character preview, so a permission scope named at the end of a
+         long line escaped its own exemption and an internal identifier was reported as
+         marketing copy. */
+      if (exempt && exempt.test(code)) return;
+      /* Print the real source line, not the blanked one, or the report is unreadable. */
+      const shown = (fs.readFileSync(f, 'utf8').split(/\r?\n/)[i] ?? line).trim();
+      hits.push(`${path.relative(root, f)}:${i + 1}: ${shown.slice(0, 100)}`);
     });
   }
   return hits;
@@ -57,6 +85,83 @@ const landing = fs.readFileSync(path.join(root, 'pages', 'LandingPage.tsx'), 'ut
 ok(/from ['"]\.\.\/config\/pricingConfig['"]/.test(landing), 'LandingPage imports the pricing config');
 ok(/\{FREE_TOKENS\}|\{PRO_TOKENS\}|\{PRO_PRICE\}/.test(landing), 'LandingPage renders its figures from the config, not literals');
 ok(!/TESTIMONIALS/.test(landing), 'LandingPage no longer renders the TESTIMONIALS section');
+
+/*
+ * THE CLAIMS NOBODY CAN SUBSTANTIATE (GTM DO-NOW #2, part 19 §1).
+ *
+ * The product makes one model call per run. It reviews, scores and explains; it does not
+ * forecast results. "Predicts the winner", "simulates performance", "win probability" and
+ * the unsourced "80% of campaigns fail" are claims about the future, or about evidence
+ * that does not exist — the class the FTC's Operation AI Comply targets, and the first
+ * thing a reporter asks for a source on. They were removed once; this is what stops them
+ * drifting back one adjective at a time.
+ *
+ * THE MODULE IDS ARE NOT COPY. `TestLab_Simulation` and `simulation:execute` are internal
+ * identifiers nobody reads, and renaming them would break stored records and routing. The
+ * "simulated payments" disclosures are TRUE and must stay. So the exemptions below are
+ * narrow and named, rather than the check being weakened.
+ */
+console.log('\nSUBSTANTIATION:');
+const DENIAL = /(?:does not|do not|doesn't|never|not a|nor)\s+(?:\w+\s+){0,3}(?:predict|forecast|simulat)/i;
+const IDENTIFIER = /TestLab_Simulation|simulation:execute/;
+
+const predicts = grep(/\bpredict(s|ed|ive|ion)?\b/i, new RegExp(`${DENIAL.source}|${IDENTIFIER.source}`, 'i'));
+ok(predicts.length === 0, 'no copy claims the product predicts results', predicts.join('\n        '));
+
+const simulates = grep(
+  /\bsimulat(e|es|ed|ing|ion|or)\b/i,
+  new RegExp(`${DENIAL.source}|${IDENTIFIER.source}|simulated payment|\\(simulated\\)`, 'i'),
+);
+ok(simulates.length === 0, 'no copy claims the product simulates performance', simulates.join('\n        '));
+
+const winProb = grep(/win probability/i);
+ok(winProb.length === 0, 'no "Win Probability" — the score is a judgement, not a likelihood', winProb.join('\n        '));
+
+const unsourced = grep(/\b\d{2}%\s+of\s+(marketing\s+)?campaigns\b/i);
+ok(unsourced.length === 0, 'no unsourced failure statistic in the hook', unsourced.join('\n        '));
+
+const fakeCorpus = grep(/database of high-performing|high-performance benchmarks/i);
+ok(fakeCorpus.length === 0, 'no claim of a benchmark database the code does not have', fakeCorpus.join('\n        '));
+
+/*
+ * AND THE SERVER ASKS FOR WHAT THE SCREEN PROMISES. Renaming the label while the prompt
+ * still said "predict how these variants would perform" would change the word and keep
+ * the claim: the screen and the thing generating its content have to agree.
+ */
+const server = fs.readFileSync(path.join(root, 'functions', 'src', 'index.ts'), 'utf8');
+/*
+ * ANCHORED ON WHAT IS UNIQUE. The first cut located the prompt by its opening words —
+ * "As a senior conversion copywriter" — which TWO prompts in that file share, so
+ * `indexOf` found the other one and the check passed while the claim was back in place.
+ * Its own negative control caught it. These two assertions name the claim itself rather
+ * than a position in the file, so nothing about prompt ordering can fool them.
+ */
+ok(!/predict how these [^`]{0,40}variants would perform/i.test(server),
+  'no prompt asks the model to forecast how variants will perform');
+ok(/0-100 persuasive strength[\s\S]{0,400}NOT a forecast/i.test(server),
+  'the variant score is defined as a judgement about the copy, not a forecast');
+
+/*
+ * ONE NAME, AND NEVER THE AMBIGUOUS HALF OF IT (GTM part 11 §7).
+ *
+ * "MarketBrain" alone resolves to MarketBrain LLC, a Dallas marketing agency, and the AI
+ * search audit found that a query for the product returns them, `marketbrain.me` and
+ * Wikipedia's Marketo before it returns this. An engine cannot disambiguate an entity
+ * that refers to itself by the colliding name, so the product is "MarketBrain OS"
+ * everywhere in prose. `MarketBrainOS` (no space) is the registered alternateName and is
+ * correct in wordmarks and identifiers.
+ */
+console.log('\nENTITY:');
+/* `&nbsp;` IS A SPACE. Three correct uses of the full name — the email layout's wordmark
+   and the docs header — were reported as the Dallas agency because an HTML entity is not
+   `\s`. A guard that flags the correct spelling is one somebody switches off. */
+const bareName = grep(
+  /\bMarketBrain\b(?!(?:\s|&nbsp;|&#160;)*OS\b)(?!OS)/,
+  /MarketBrain_|marketbrainos|MarketBrainOS/i,
+);
+ok(bareName.length === 0,
+  'the product is never called "MarketBrain" alone — that is a Dallas agency',
+  bareName.join('\n        '));
 
 console.log('\nROBOTS:');
 const robots = fs.readFileSync(path.join(root, 'public', 'robots.txt'), 'utf8');

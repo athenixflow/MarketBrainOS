@@ -20,14 +20,14 @@ const welcome = (d: { firstName?: string; verifyUrl?: string; monthlyTokens?: nu
     heading: `Welcome aboard${d.firstName ? `, ${esc(d.firstName)}` : ''}.`,
     heroSubtext: "You just added an always-on strategic intelligence layer to your marketing. Let's turn your first idea into a scored, validated decision.",
     body:
-      paragraph(`MarketBrain OS pressure-tests your marketing <em>before</em> you spend — scoring angles, auditing funnels, and simulating campaigns against high-conversion benchmarks. Your account starts with <strong>${d.monthlyTokens ?? 20} free tokens</strong> to try every tool. Upgrade or top up when you need more.`) +
+      paragraph(`MarketBrain OS reviews your marketing <em>before</em> you spend — scoring angles, auditing funnels from a live URL, and comparing your variants against conversion-copywriting principles. Your account starts with <strong>${d.monthlyTokens ?? 20} free tokens</strong> to try every tool. Upgrade or top up when you need more.`) +
       (d.verifyUrl ? callout(`Please confirm your email to secure your account. <a href="${d.verifyUrl}" style="color:${RED};font-weight:700;">Verify your email &rarr;</a>`, 'One quick thing') : '') +
       button('Run your first analysis →', `${SITE_URL}/strategy-lab`, 'Takes ~60 seconds · costs 3–6 tokens per run') +
       sectionHeading('What you can do today') +
       featureRows([
         { icon: '🎯', title: 'Validate strategy', desc: 'Pressure-test any idea, offer, or expansion and get a 0–100 verdict before you commit.' },
         { icon: '🩺', title: 'Audit funnels', desc: 'Diagnose a landing page or funnel for the exact friction costing you conversions.' },
-        { icon: '⚡', title: 'Simulate campaigns', desc: 'Predict which angle or ad wins before a dollar of spend hits the platform.' },
+        { icon: '⚡', title: 'Compare variants', desc: 'Put 2–5 headlines or ads side by side and see which is strongest, and why, before a dollar of spend.' },
       ]) +
       sectionHeading('Get started in 3 steps') +
       steps([
@@ -106,7 +106,7 @@ const memberInvite = (d: { inviterEmail: string; containerName: string; containe
         'Access shared reports and the intelligence library',
         'Draw from your allocated token budget — no personal billing required',
       ]) +
-      callout(`<b>New to MarketBrain OS?</b> It's a predictive marketing-intelligence platform that scores and validates ideas, copy, funnels, and campaigns before you spend. <a href="${SITE_URL}/documentation" style="color:${RED};">Take the quick tour</a>.`, 'First time here?') +
+      callout(`<b>New to MarketBrain OS?</b> It's the pre-spend review for marketing decisions: it scores ideas, copy, funnels and campaigns and returns ranked fixes, before you spend. <a href="${SITE_URL}/documentation" style="color:${RED};">Take the quick tour</a>.`, 'First time here?') +
       divider() +
       paragraph("<span style='font-size:13px;color:#8a8a8a;'>If you weren't expecting this, you can safely ignore it — no account is created until you accept.</span>"),
     footerNote: `If the button doesn't work, paste this link: ${esc(d.acceptUrl)}`,
@@ -457,6 +457,80 @@ const accountDeleted = (d: { firstName?: string }): RenderedEmail => ({
 
 // ---- Dispatch table ---------------------------------------------------------------------------
 
+
+/**
+ * ONB-D3 — "Why not just ask ChatGPT?" (GTM part 12).
+ *
+ * THE OBJECTION EVERY BUYER HAS, ANSWERED HONESTLY. The product runs on the same class of
+ * model somebody can use for free in a chat window, and pretending otherwise fails the
+ * moment they try it. So the email concedes the point in its first line and argues the
+ * real difference — structure, a live page fetch, history, and the same format for
+ * everybody on a team — which are things a chat window genuinely does not do.
+ *
+ * The playbook's draft of this email listed "multi-variant prediction" as a
+ * differentiator. It is not one, because the product does not predict; the line here
+ * claims the comparison it actually performs.
+ */
+const onboardingWhyNotChatgpt = (d: { firstName?: string }): RenderedEmail => ({
+  subject: 'Honest answer to "why not just use ChatGPT?"',
+  html: renderEmail({
+    preheader: 'Same model family. Different output: scored, sectioned, saved, comparable.',
+    tag: 'Getting started',
+    heading: 'Why not just ask ChatGPT?',
+    heroSubtext: "Fair question, and worth answering straight rather than dodging.",
+    body:
+      paragraph(`Hi${d.firstName ? ` ${esc(d.firstName)}` : ''} — MarketBrain OS runs on the same class of model you can use directly. We are not smarter than it.`) +
+      paragraph('What differs is everything around the model:') +
+      featureRows([
+        { icon: '📐', title: 'Structure', desc: 'Every run returns the same sections — score, findings, why it matters, do this. Tuesday and Thursday are comparable.' },
+        { icon: '🔗', title: 'Live page audits', desc: 'Conversion Doctor fetches the actual URL and reads what is there. No pasting, no guessing.' },
+        { icon: '🗂️', title: 'Memory', desc: 'History keeps every result and Reports group them. Nothing is lost in a scrolling chat.' },
+        { icon: '👥', title: 'One format for a team', desc: 'Everybody asking the same question gets the same shape of answer.' },
+      ]) +
+      button('Compare two headlines →', `${SITE_URL}/test-lab`, 'One run, 5 tokens') +
+      paragraph('If two headlines are being argued about right now, that is the fastest way to feel the difference.'),
+  }),
+});
+
+/**
+ * ONB-D7 — one week in (GTM part 12).
+ *
+ * CARRIES THEIR ACTUAL NUMBERS. A week-one email that says "here is what you could do"
+ * to somebody who has run nothing is noise; one that names their balance and what they
+ * have saved is about them. The dispatcher supplies both, and the copy branches on
+ * whether anything was actually run.
+ */
+const onboardingWeekOne = (d: {
+  firstName?: string; balance?: number; analysisCount?: number;
+}): RenderedEmail => {
+  const ran = (d.analysisCount ?? 0) > 0;
+  return {
+    subject: ran
+      ? `${d.balance ?? 0} tokens left — the chain that uses them best`
+      : 'One week in — the 60-second version',
+    html: renderEmail({
+      preheader: ran
+        ? 'Chain a saved result into the next tool, and save what you want to keep.'
+        : 'Pick one page you already have. That is the whole first run.',
+      tag: 'Getting started',
+      heading: ran ? 'A week in' : 'Still worth two minutes',
+      heroSubtext: ran
+        ? `You have ${d.balance ?? 0} tokens and ${d.analysisCount} saved result${d.analysisCount === 1 ? '' : 's'}.`
+        : 'Nothing run yet — which usually means the first step looked bigger than it is.',
+      body: ran
+        ? paragraph('Two things most people find in week two:') +
+          sectionHeading('Chaining') +
+          paragraph('Feed a saved Audience Intelligence result into Messaging Analyzer and the copy scoring is grounded in the personas you already generated — rather than in a generic reader.') +
+          sectionHeading('Reports') +
+          paragraph('Open any result in History and save it as a report to group related runs. On paid plans a report exports as a PDF for a client or a manager.') +
+          button('Open your history →', `${SITE_URL}/history`)
+        : paragraph(`Hi${d.firstName ? ` ${esc(d.firstName)}` : ''} — the quickest first run is a page you already have: paste the URL into Conversion Doctor, say who it is for and what you want them to do, and read the three things it finds.`) +
+          paragraph('It costs 4 tokens and takes about a minute.') +
+          button('Audit a page →', `${SITE_URL}/conversion-doctor`, 'Roughly 60 seconds'),
+    }),
+  };
+};
+
 export const EMAIL_TEMPLATES = {
   welcome, verifyEmail, passwordReset, passwordChanged, memberInvite, memberAdded,
   tokenReceipt, subscriptionUpgraded, paymentReceipt,
@@ -464,6 +538,7 @@ export const EMAIL_TEMPLATES = {
   subscriptionCancelled, expansionPurchased, refundIssued, newSignIn,
   memberBudgetExhausted, ownershipTransferred, briefingReady, accountSuspended, accountReinstated,
   accountDeleted,
+  onboardingWhyNotChatgpt, onboardingWeekOne,
 } as const;
 
 export type EmailTemplateKey = keyof typeof EMAIL_TEMPLATES;

@@ -115,6 +115,25 @@ service cloud.firestore {
       allow delete: if false; // never from the client
     }
 
+    // ---------- shared results (GTM part 03 §5) ----------
+    // The one PUBLIC collection in the system, and it is public on purpose: a share link
+    // is opened by somebody with no account, and the page is rendered by a Cloud Function
+    // through the Admin SDK. No client may read or write it directly — the owner creates
+    // and revokes through callables that check ownership against the analysis row, and a
+    // client that could write here could publish somebody else's client work.
+    match /shared_results/{id} {
+      allow read, write: if false;
+    }
+
+    // ---------- growth rollup (GTM part 03 §7) ----------
+    // One document per day, written ONLY by the scheduled function through the Admin SDK
+    // (which bypasses these rules). No client may write it: a dashboard a user can edit is
+    // not a measurement. Admins read it; nobody else has any business seeing the funnel.
+    match /growth_daily/{day} {
+      allow read: if isPlatformAdmin();
+      allow write: if false;
+    }
+
     // ---------- analyses (unified history) ----------
     match /tool_analysis_results/{id} {
       allow create: if isSignedIn()

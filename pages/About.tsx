@@ -47,8 +47,8 @@ const About: React.FC = () => (
       </p>
       <h2 className="text-2xl font-bold text-white mb-6">The story</h2>
       <p className="text-lg text-gray-500 leading-relaxed">
-        Most teams launch on instinct and pay an ad network to tell them what an AI simulation could have
-        told them for free. MarketBrain OS was built to close that gap — combining specialized analysis
+        Most teams launch on instinct and pay an ad network to tell them what a careful review would
+        have told them first. MarketBrain OS was built to close that gap — combining specialized analysis
         tools with a rigorous, repeatable result framework so insight is consistent, comparable, and
         immediately actionable.
       </p>

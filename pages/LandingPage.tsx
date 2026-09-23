@@ -24,7 +24,7 @@ const AUDIENCE = [
   { title: 'Founders', desc: 'Save capital by validating your core value proposition before hiring agencies or spending on ads.', asset: media.audienceFounders },
   // Reuses the Founders image until an `audience-smb` slot is generated in scripts/media/manifest.ts.
   { title: 'Small Business Owners', desc: 'Get the judgement of a marketing team without the payroll. Check an offer, a landing page or an ad before you spend money on it.', asset: media.audienceFounders },
-  { title: 'Marketing Agencies', desc: 'Audit client assets instantly to find low-hanging fruit and justify your strategy with data-backed simulations.', asset: media.audienceAgencies },
+  { title: 'Marketing Agencies', desc: 'Audit client assets in minutes, find the low-hanging fruit, and take a scored report into the room to justify the strategy.', asset: media.audienceAgencies },
   { title: 'Growth Teams', desc: 'Systematize your creative testing workflow. Reduce the time between ideation and validated launch.', asset: media.audienceGrowth },
 ];
 
@@ -54,7 +54,7 @@ const LandingPage: React.FC = () => {
               The Operating System for <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-500">High-Stakes Marketing Decisions.</span>
             </h1>
             <p className="text-xl md:text-2xl text-gray-400 font-medium leading-relaxed max-w-2xl mb-12">
-              MarketBrain OS is a predictive marketing intelligence platform. Validate strategies, audit funnels, and simulate performance before you spend a single dollar on ads.
+              MarketBrain OS is the pre-spend review for marketing decisions. Audit a funnel, compare your ad variants and pressure-test the plan — and get a scored report with ranked fixes before you spend a dollar on ads.
             </p>
             <div className="flex flex-col sm:flex-row gap-6">
               <Link to="/auth" aria-label="Sign up for MarketBrain OS">
@@ -75,12 +75,12 @@ const LandingPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-12 gap-12 lg:gap-16">
           <div className="md:col-span-7">
             <span className="text-sm font-bold text-[#FF0000] uppercase tracking-[0.2em] mb-6 block">The Deployment Problem</span>
-            <h2 id="problem-heading" className="text-3xl md:text-4xl font-bold text-white mb-6">Why do 80% of marketing campaigns fail in the first 48 hours?</h2>
+            <h2 id="problem-heading" className="text-3xl md:text-4xl font-bold text-white mb-6">You find out the copy was wrong after you have paid for the clicks.</h2>
             <p className="text-lg text-gray-500 leading-relaxed mb-6">
               Most founders and marketing teams launch ads based on guesswork. They write copy, build a landing page, and "hope it works." This approach incurs a heavy "Guesswork Tax"—thousands of dollars wasted on traffic sent to unproven messaging and unoptimized funnels.
             </p>
             <p className="text-lg text-gray-500 leading-relaxed">
-              Without pre-launch validation, you are paying ad networks to tell you what an AI simulation could have told you for free: <strong>Your conversion argument is weak.</strong>
+              Without a review first, you are paying an ad network to tell you something a careful read of the page would have: <strong>your conversion argument is weak.</strong>
             </p>
             <ul className="mt-10 space-y-4">
               <li className="flex items-center gap-4 text-gray-500">
@@ -93,7 +93,7 @@ const LandingPage: React.FC = () => {
               </li>
               <li className="flex items-center gap-4 text-white">
                 <span aria-hidden="true" className="w-6 h-6 shrink-0 rounded-full bg-[#FF0000] flex items-center justify-center text-black font-bold text-sm">✓</span>
-                <span className="font-bold">Simulating performance outcomes before spend</span>
+                <span className="font-bold">Reviewing the work before the spend</span>
               </li>
             </ul>
           </div>
@@ -116,7 +116,7 @@ const LandingPage: React.FC = () => {
             MarketBrain OS is a <strong>decision-support system</strong> for growth marketing. It is an AI marketing platform designed to act as a pre-flight checklist for your campaigns. 
           </p>
           <p className="text-lg text-gray-500 leading-relaxed">
-            Unlike generative writing tools that simply produce text, MarketBrain OS is built to <strong>audit, score, and refine</strong>. It uses Google's Gemini AI models to simulate how a human audience interacts with your marketing assets, allowing you to optimize conversion rates (CRO) before a campaign goes live.
+            Unlike generative writing tools that simply produce text, MarketBrain OS is built to <strong>audit, score, and refine</strong>. It uses Google's Gemini models to read your assets the way a demanding reviewer would and return ranked, specific fixes, so you can improve conversion rates (CRO) before a campaign goes live.
           </p>
         </div>
       </AnimatedSection>
@@ -127,7 +127,7 @@ const LandingPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {[
             { step: "01", title: "Ideate", desc: "Input your product details to generate psychological hooks and marketing angles." },
-            { step: "02", title: "Simulate", desc: "Run variations through TestLab Pro to predict the highest-performing message." },
+            { step: "02", title: "Compare", desc: "Run your variations through TestLab Pro to see which message is strongest, and why." },
             { step: "03", title: "Audit", desc: "Use Conversion Doctor to scan your landing page for friction points." },
             { step: "04", title: "Refine", desc: "Synthesize the data to produce a validated, high-confidence campaign asset." }
           ].map((item) => (
@@ -192,7 +192,7 @@ const LandingPage: React.FC = () => {
                    <div className="p-6 rounded-2xl bg-red-900/10 border border-red-900/30">
                       <p className="text-xs text-red-500 font-bold uppercase mb-4">Variant A</p>
                       <div className="text-2xl font-black text-red-500">42/100</div>
-                      <p className="text-[10px] text-red-400 mt-2">Predicted Low Performance</p>
+                      <p className="text-[10px] text-red-400 mt-2">Weakest of the three</p>
                    </div>
                    <div className="p-6 rounded-2xl bg-green-900/10 border border-green-900/30">
                       <p className="text-xs text-green-500 font-bold uppercase mb-4">Variant B</p>
@@ -203,15 +203,15 @@ const LandingPage: React.FC = () => {
               </div>
             )}
             <div className="lg:col-span-5 order-1 lg:order-2">
-              <span className="text-[#FF0000] font-bold text-xs uppercase tracking-[0.3em] mb-4 block">Performance Simulation</span>
+              <span className="text-[#FF0000] font-bold text-xs uppercase tracking-[0.3em] mb-4 block">Comparative Review</span>
               <h3 className="text-4xl font-bold text-white mb-6">TestLab Pro</h3>
               <p className="text-lg text-gray-400 mb-8 leading-relaxed">
-                Why pay for A/B testing when you can simulate it? TestLab Pro compares headlines, hooks, and ad copy against a database of high-performing assets. It provides a comparative analysis and predicts which variant is statistically more likely to convert.
+                An A/B test tells you which headline won after the budget is spent. TestLab Pro reviews two to five variants side by side before it is, scores each against conversion-copywriting principles, names the strongest and explains why. A reasoned second opinion on your copy — not a forecast of your results.
               </p>
               <ul className="space-y-3 text-sm font-bold text-gray-500 uppercase tracking-widest">
-                <li className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#FF0000]" />Pre-Live A/B Simulation</li>
+                <li className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#FF0000]" />Side-by-side comparison</li>
                 <li className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#FF0000]" />Headline Scoring</li>
-                <li className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#FF0000]" />Comparative Intelligence</li>
+                <li className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#FF0000]" />Reasoning you can argue with</li>
               </ul>
             </div>
           </div>
@@ -295,7 +295,7 @@ const LandingPage: React.FC = () => {
               {/* The free allowance is a one-time grant, not a monthly reset (see FAQ "How do tokens work?"). */}
               <li className="flex items-center gap-3 text-sm text-gray-400"><div className="w-1.5 h-1.5 bg-gray-600 rounded-full" />{FREE_TOKENS} tokens, one-time</li>
               <li className="flex items-center gap-3 text-sm text-gray-400"><div className="w-1.5 h-1.5 bg-gray-600 rounded-full" />Basic Angle Mining</li>
-              <li className="flex items-center gap-3 text-sm text-gray-400"><div className="w-1.5 h-1.5 bg-gray-600 rounded-full" />Limited Simulation</li>
+              <li className="flex items-center gap-3 text-sm text-gray-400"><div className="w-1.5 h-1.5 bg-gray-600 rounded-full" />Limited comparisons</li>
             </ul>
             <Link to="/auth" className="w-full">
                <SecondaryButton tone="dark" className="w-full">Start Free</SecondaryButton>

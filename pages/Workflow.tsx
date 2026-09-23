@@ -166,7 +166,7 @@ const Workflow: React.FC = () => {
       nextStep();
     } catch (err: any) {
       if (!run.isCurrent(token)) return;
-      setExecutionError(err.message || "Simulation error.");
+      setExecutionError(err.message || "The comparison did not finish.");
     } finally {
       run.settle();
       if (run.isCurrent(token)) setLoading(false);
@@ -354,8 +354,8 @@ const Workflow: React.FC = () => {
           <div className="mb-12 text-left">
             <ExpectedOutcome
               estimatedTime="2–3 minutes"
-              analyzes="Chains four tools into one guided pipeline: ideation, selection, simulation, audit."
-              outcomes={['Marketing Angles (AngleMiner)', 'Hook Selection', 'Performance Simulation (TestLab)', 'Conversion Audit (Conversion Doctor)']}
+              analyzes="Chains four tools into one guided pipeline: ideation, selection, comparison, audit."
+              outcomes={['Marketing Angles (AngleMiner)', 'Hook Selection', 'Comparative Review (TestLab)', 'Conversion Audit (Conversion Doctor)']}
             />
           </div>
           {/* Same guard step 1 runs on submit, applied up front: at 0 tokens the usage modal opens here
@@ -424,7 +424,7 @@ const Workflow: React.FC = () => {
 
       {step === 2 && !loading && minerResults && (
         <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <SectionHeader onDark title="Step 2: Selection" subtitle="Choose two or three angles to send into the performance simulator." />
+          <SectionHeader onDark title="Step 2: Selection" subtitle="Choose two or three angles to compare side by side." />
           <div className="grid grid-cols-1 gap-4">
             {[...(minerResults.angles || [])].sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 6).map((angle, i) => {
               const selected = selectedAngleTexts.includes(angle.hook);
@@ -450,7 +450,7 @@ const Workflow: React.FC = () => {
           <div className="flex flex-wrap justify-between gap-4 pt-8">
             <SecondaryButton tone="dark" onClick={prevStep}>Back</SecondaryButton>
             <PrimaryButton onClick={handleStartTest} disabled={loading || run.inFlight || selectedAngleTexts.length < 2}>
-              Continue to simulator ({selectedAngleTexts.length}/3)
+              Continue to comparison ({selectedAngleTexts.length}/3)
             </PrimaryButton>
           </div>
         </div>
@@ -458,9 +458,9 @@ const Workflow: React.FC = () => {
 
       {step === 3 && !loading && testResults && (
         <Card className="max-w-4xl mx-auto shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <SectionHeader title="Step 3: TestLab Pro" subtitle="Performance prediction results." />
+          <SectionHeader title="Step 3: TestLab Pro" subtitle="How the angles compare." />
           <div className="mb-10">
-            <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-6 text-center">Predicted winner</p>
+            <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-6 text-center">Strongest variation</p>
             <div className="p-6 sm:p-8 bg-gray-50 rounded-2xl text-center border border-gray-100 shadow-inner">
               <p className="text-2xl font-bold text-[#0B0B0B] mb-8 leading-relaxed">"{winningAngleText}"</p>
               <IntelligenceIndicator score={winningAngleScore} />

@@ -6,11 +6,11 @@ const whatIsIt: DocArticle = {
   id: 'what-is-marketbrain',
   categoryId: 'getting-started',
   title: 'What is MarketBrain OS?',
-  summary: 'The predictive intelligence layer for marketing decisions — and what it deliberately is not.',
+  summary: 'The review step for marketing decisions — and what it deliberately is not.',
   keywords: ['overview', 'definition', 'platform', 'intelligence', 'boundaries'],
   blocks: [
     { type: 'heading', id: 'definition', text: 'Definition' },
-    { type: 'paragraph', text: 'MarketBrain OS is a **predictive analytics and validation engine** for digital marketing assets. You feed it marketing hypotheses — angles, copy, offers, landing pages, campaigns, strategies — and it returns probabilistic performance scores, diagnostics, and concrete optimization data. Think of it as an always-on strategic consultant that pressure-tests ideas before you spend money on them.' },
+    { type: 'paragraph', text: 'MarketBrain OS is a **review step for marketing decisions**. You feed it the work — angles, copy, offers, landing pages, campaigns, strategies — and it returns a score, a diagnosis of what is weak, and concrete fixes ranked by impact. Think of it as a demanding reviewer who reads everything carefully and always has time: it tells you what is wrong with the work before you spend money on it, not what the campaign will earn.' },
     { type: 'paragraph', text: 'It is a **connected intelligence suite**: 14 tools across five suites that share one result format and can feed into each other, so intelligence compounds instead of living in silos.' },
     { type: 'heading', id: 'not', text: 'What it is NOT' },
     { type: 'list', items: [

@@ -10,6 +10,7 @@ import http from 'node:http';
 import sirv from 'sirv';
 import { DOC_CATEGORIES, DOC_ARTICLES } from '../config/docs/registry';
 import { SITE_URL } from '../config/seo';
+import { COMPETITORS, isPublishable } from '../config/pseo/competitors';
 
 // Launch headless Chrome. On Vercel/CI the build sandbox (Amazon Linux) has no usable Chromium, so
 // use @sparticuz/chromium (a self-contained Linux binary) via puppeteer-core. Locally, use full
@@ -35,7 +36,23 @@ const PORT = 4178;
 const ORIGIN = `http://localhost:${PORT}`;
 
 // ---- Route list (single source of truth: marketing pages + the docs registry) -------------------
-const MARKETING = ['/', '/features', '/pricing', '/about', '/faq', '/privacy', '/terms'];
+/*
+ * The prerendered marketing set.
+ *
+ * `/tools/landing-page-score` is a landing page in its own right — the page every channel
+ * points at (part 10). `/compare` is prerendered whatever its state, because the
+ * comparison breadcrumbs point at it and it has to exist as HTML; it sets its own
+ * noindex while nothing beneath it is verified. Individual comparisons appear only while
+ * their figures are verified inside the window (part 10 §4.2), because a stale price in a
+ * search result is a false claim with a date on it.
+ *
+ * COMMENTS STAY OUT OF THE ARRAY BELOW. scripts/routes.test.mjs reads this literal to know
+ * what is served from the filesystem, and a comment inside it broke that parse — which
+ * then reported the prerendered hub as a route that would 404 in production.
+ */
+const MARKETING = ['/', '/features', '/pricing', '/about', '/faq', '/privacy', '/terms',
+  '/tools/landing-page-score', '/compare',
+  ...COMPETITORS.filter((c) => isPublishable(c)).map((c) => `/compare/${c.slug}`)];
 const DOCS = [
   '/documentation',
   ...DOC_CATEGORIES.map((c) => `/documentation/${c.id}`),
@@ -56,7 +73,7 @@ const OG_HTML = `<!doctype html><html><body style="margin:0">
       <div style="color:#fff;font-size:26px;font-weight:800;letter-spacing:5px">MARKETBRAIN OS</div>
     </div>
     <div style="color:#fff;font-size:62px;font-weight:800;line-height:1.08;max-width:960px">AI Marketing Intelligence &amp; Conversion Optimization</div>
-    <div style="color:#9ca3af;font-size:29px;margin-top:30px;max-width:900px">Validate strategy, audit funnels, and simulate performance before you spend.</div>
+    <div style="color:#9ca3af;font-size:29px;margin-top:30px;max-width:900px">Review the work before you spend: audit funnels, compare variants, pressure-test the plan.</div>
   </div>
 </body></html>`;
 
@@ -170,7 +187,16 @@ async function main() {
 
   // sitemap.xml (clean canonical URLs + real lastmod; no changefreq/priority — ignored by Google).
   const today = new Date().toISOString().slice(0, 10);
-  const urls = [...MARKETING, ...DOCS.filter((r) => r !== '/')];
+  /*
+   * A NOINDEX PAGE DOES NOT BELONG IN THE SITEMAP. `/compare` is prerendered whatever its
+   * state — the comparison breadcrumbs point at it, so the URL has to resolve — but while
+   * nothing beneath it is verified the page sets its own noindex, and listing it here
+   * would ask an engine to crawl a page that then tells it to go away. Contradictory
+   * signals are worse than either signal alone.
+   */
+  const hubIsEmpty = COMPETITORS.every((c) => !isPublishable(c));
+  const urls = [...MARKETING.filter((r) => !(r === '/compare' && hubIsEmpty)),
+    ...DOCS.filter((r) => r !== '/')];
   const sitemap =
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
@@ -182,13 +208,19 @@ async function main() {
   const lines: string[] = [
     '# MarketBrain OS',
     '',
-    '> AI marketing intelligence platform: validate strategy, audit landing pages, simulate ad performance, and generate high-converting angles before you spend. Not an ad manager, scheduler, or content writer — a decision-support intelligence layer.',
+    // The first sentence is what an engine quotes back. It names the JOB (a review before
+    // spending) rather than a category phrase enterprise CDP vendors already own, and claims
+    // no prediction: the tools score and explain, they do not forecast results.
+    '> MarketBrain OS is a pre-spend review tool for marketers: it audits a landing page from its live URL, compares two to five ad or headline variants and says which is strongest and why, builds audience and competitor analyses, and pressure-tests a campaign plan — each returning a scored report with ranked fixes. It reviews work before the budget is spent; it does not predict results, buy media, schedule posts or write your content.',
     '',
     '## Core pages',
     `- [Home](${SITE_URL}/): What MarketBrain OS is and who it is for.`,
     `- [Features](${SITE_URL}/features): The 14 AI analysis tools across five suites.`,
     `- [Pricing](${SITE_URL}/pricing): Free, Pro, Team, Agency, Enterprise plans and token packs.`,
     `- [FAQ](${SITE_URL}/faq): Common questions on tokens, pricing, and data.`,
+    /* The free scorer is the page an engine should send somebody to: it is the only
+       surface that answers "can it actually do this" without an account. */
+    `- [Free landing page score](${SITE_URL}/tools/landing-page-score): Paste a URL, get a 0-100 conversion score and the three biggest blockers. No account needed.`,
     `- [About](${SITE_URL}/about): Mission and story.`,
     '',
     '## Documentation',

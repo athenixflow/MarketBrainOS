@@ -66,6 +66,7 @@ import {
   EDITABLE_PROFILE_FIELDS
 } from '../types';
 import { SecurityEngine } from './securityEngine';
+import { cohortWeek, readAttribution } from './analytics';
 
 // TOKEN_COSTS REMOVED: Pricing is now strictly enforced server-side.
 
@@ -375,6 +376,19 @@ export const ensureUserProfile = async (userId: string, email: string) => {
       // Inert while the account is free (monthlyTokenRefresh skips free tiers); it only starts
       // driving renewals if the user upgrades, which rewrites this date.
       plan_renews_at: new Date(Date.now() + 30 * 86400000).toISOString(),
+      /*
+       * WHERE THIS ACCOUNT CAME FROM (GTM part 03 §7.3 table B) — stamped once, at birth.
+       *
+       * CLIENT-ASSERTED, AND THAT IS CORRECT HERE. The referrer and the UTM parameters of
+       * the visit are knowledge only the browser has; the server cannot observe them, and
+       * nothing is granted by them — a forged `signup_source` costs its author a wrong row
+       * in a marketing report and nothing else. Contrast the economy fields above, which
+       * the rules pin precisely because a client asserting those WOULD be granting itself
+       * something. Kept out of the update allowlist so first-touch cannot be rewritten
+       * later: the channel that produced the signup is a fact about a moment.
+       */
+      ...readAttribution(),
+      cohort_week: cohortWeek(),
       created_at: new Date().toISOString(),
       last_active: new Date().toISOString()
     });
@@ -1193,6 +1207,23 @@ export const callDeleteAccount = async (payload: { confirm: 'DELETE'; dryRun?: b
 };
 
 // Fire-and-forget welcome email after a self-signup (idempotent server-side). Never blocks the UI.
+/**
+  * GTM part 03 §5 — turn a result into a link somebody can open.
+  *
+  * The server decides the id and checks ownership; this only asks. Returns the full URL so
+  * no screen has to know how share URLs are shaped.
+  */
+export const callCreateShareLink = async (analysisId: string): Promise<{ id: string; url: string }> => {
+  const fn = httpsCallable(functions, 'createShareLink');
+  const res = await fn({ analysisId });
+  return res.data as { id: string; url: string };
+};
+
+export const callRevokeShareLink = async (id: string): Promise<void> => {
+  const fn = httpsCallable(functions, 'revokeShareLink');
+  await fn({ id });
+};
+
 export const callSendWelcomeEmail = async (): Promise<void> => {
   if (!isFirebaseInitialized) return;
   try { await httpsCallable(functions, 'sendWelcomeEmail')({}); } catch { /* best-effort */ }

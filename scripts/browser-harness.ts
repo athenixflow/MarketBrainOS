@@ -211,7 +211,17 @@ const main = async () => {
       const page = await browser2.newPage();
       await page.setViewport({ width: 1280, height: 800 });
       const analyticsHits: string[] = [];
-      page.on('request', (req: any) => { const u = req.url(); if (/google-analytics\.com|googletagmanager\.com|\/gtag\/|analytics\.google\.com/.test(u)) analyticsHits.push(u); });
+      /*
+       * URL *AND* BODY. GA4 sends a single event as a GET with `en=` in the query, but
+       * BATCHES several into one POST whose event names live only in the body — so a
+       * check reading the URL alone sees the first page_view and concludes the rest of
+       * the instrumentation is dead. Both are captured; the assertion below reads both.
+       */
+      page.on('request', (req: any) => {
+        const u = req.url();
+        if (!/google-analytics\.com|googletagmanager\.com|\/gtag\/|analytics\.google\.com/.test(u)) return;
+        analyticsHits.push(u + (req.postData() ? `\n${req.postData()}` : ''));
+      });
       await page.goto(`http://localhost:${PORT + 1}/`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
       await new Promise((r) => setTimeout(r, 4000));
       const before = analyticsHits.length;
@@ -224,11 +234,44 @@ const main = async () => {
         ok(analyticsHits.length > before, `analytics loads after Accept (${analyticsHits.length - before} requests)`);
         const persisted = await page.evaluate(() => { try { return localStorage.getItem('mbos_consent'); } catch { return null; } });
         ok(!!persisted, `consent choice is persisted (${persisted})`);
+
+        /*
+         * AND THE EVENTS ACTUALLY GO OUT (GTM E01).
+         *
+         * Everything up to here proves gtag LOADED. A wrapper that silently dropped every
+         * call would pass all of it, and every static check in analytics.test.ts too —
+         * and the go-to-market plan's gates would read zero forever with nothing looking
+         * broken. GA4 names the event in the `en` parameter of its collect request, so
+         * this reads the actual traffic rather than the code's intentions.
+         */
+        /*
+         * AND THE EVENTS ACTUALLY GO OUT (GTM E01).
+         *
+         * Everything above proves gtag LOADED. A wrapper that silently dropped every call
+         * would pass all of it, and every static check in analytics.test.ts too, while the
+         * plan's gates read zero forever and nothing looked broken.
+         *
+         * THE EIGHT SECONDS ARE MEASURED, NOT GUESSED. GA4 sends the first page_view at
+         * once and BATCHES everything after it — timed at ~6s from arrival in this flow —
+         * and the event names then live only in the POST BODY, never the query string. A
+         * check that waited three seconds and read request URLs called working
+         * instrumentation dead twice before this was tracked down.
+         *
+         * Expect each event TWICE in dev: React StrictMode double-invokes effects. It
+         * does not in a production build, so this is not double counting.
+         */
+        await page.goto(`http://localhost:${PORT + 1}/pricing`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+        await new Promise((r) => setTimeout(r, 8000));
+        const named = analyticsHits
+          .flatMap((u) => [...u.matchAll(/(?:[?&]|^)en=([a-z_]+)/gm)].map((m) => m[1]!));
+        ok(named.includes('pricing_viewed') && named.includes('landing_view'),
+          `real events reach GA4 after consent (saw: ${[...new Set(named)].join(', ') || 'none'})`);
       }
       await page.goto(`http://localhost:${PORT + 1}/auth`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
       await new Promise((r) => setTimeout(r, 2500));
       const title = await page.title();
       ok(/sign in/i.test(title), `sign-in page sets its own tab title ("${title}")`);
+
       await page.close();
     } finally {
       await browser2.close();

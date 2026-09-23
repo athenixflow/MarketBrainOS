@@ -190,26 +190,26 @@ const testLab: DocArticle = {
   id: 'test-lab',
   categoryId: CATEGORY,
   title: 'TestLab Pro',
-  summary: 'Simulate ad performance and predict winning variations before you launch.',
-  keywords: ['test', 'simulate', 'ad', 'variant', 'win probability', 'ab test', 'headline', 'hook'],
+  summary: 'Compare ad variations and see which is strongest, before you launch.',
+  keywords: ['test', 'compare', 'ad', 'variant', 'ab test', 'headline', 'hook'],
   blocks: [
     { type: 'keyValue', pairs: [
       { label: 'Suite', value: 'Extras' },
-      { label: 'Token cost', value: '5 tokens per simulation' },
+      { label: 'Token cost', value: '5 tokens per comparison' },
       { label: 'Typical time', value: '30–60 seconds' },
-      { label: 'Analysis type', value: 'Comparative simulation' },
+      { label: 'Analysis type', value: 'Comparative review' },
     ] },
     { type: 'heading', id: 'overview', text: 'Overview' },
-    { type: 'paragraph', text: 'TestLab Pro simulates how ad copy, headlines, or hooks would perform against high-performance benchmarks and returns a predictive **Win Probability** for each variant — so you can pick the strongest before spending a cent on media.' },
+    { type: 'paragraph', text: 'TestLab Pro reads two to five variants of the same asset side by side, scores each on **persuasive strength** against conversion-copywriting principles, and names the strongest with its reasoning — so you can choose before spending a cent on media. The score is a judgement about the copy, not a forecast of what it will earn.' },
     { type: 'heading', id: 'inputs', text: 'What to provide' },
     { type: 'list', items: [
       'The **variants** you want to compare — two or more headlines, hooks, or short ad copies.',
       'The **context**: audience, platform/placement, and the goal of the ad.',
-      'Any **constraints** (character limits, offer, angle) so the simulation is realistic.',
+      'Any **constraints** (character limits, offer, angle) so the review is grounded.',
     ] },
     { type: 'heading', id: 'results', text: 'Reading the results' },
-    { type: 'paragraph', text: 'Each variant gets a Win Probability and a short rationale. Ship the top variant, and feed the winning angle back into [Angle Miner](/documentation/tools/angle-miner) or forward into [Campaign Analyzer](/documentation/tools/campaign-analyzer).' },
-    { type: 'callout', tone: 'tip', title: 'Test more than two', text: 'Give the simulator several distinct angles rather than minor word tweaks — it discriminates best between genuinely different approaches.' },
+    { type: 'paragraph', text: 'Each variant gets a strength score and a short rationale. Ship the top variant, and feed the winning angle back into [Angle Miner](/documentation/tools/angle-miner) or forward into [Campaign Analyzer](/documentation/tools/campaign-analyzer).' },
+    { type: 'callout', tone: 'tip', title: 'Test more than two', text: 'Give it several distinct angles rather than minor word tweaks — the comparison is sharpest between genuinely different approaches.' },
   ],
 };
 
@@ -232,7 +232,7 @@ const workflowPipeline: DocArticle = {
     { type: 'steps', items: [
       { title: 'Ideate', text: 'Capture the product, audience, and goal.' },
       { title: 'Test angles', text: 'Generate and shortlist the strongest psychological angles.' },
-      { title: 'Test copies', text: 'Simulate variant performance and pick winners.' },
+      { title: 'Test copies', text: 'Compare variants and pick the strongest.' },
       { title: 'Audit the landing page', text: 'Diagnose the destination for conversion friction.' },
       { title: 'Refine', text: 'Apply the fixes and tighten the messaging.' },
       { title: 'Export assets', text: 'Take the launch-ready output into your channels.' },

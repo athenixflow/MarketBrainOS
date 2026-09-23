@@ -5,6 +5,8 @@ import { isPaidTier } from '../config/access';
 import { callChangeSubscription, createNotification } from '../services/persistenceService';
 import { SubscriptionStatus } from '../types';
 import { DEFAULT_PRICING_CONFIG, PLAN_META } from '../config/pricingConfig';
+import { track } from '../services/analytics';
+import { fetchBillingStatus } from '../services/billing';
 
 // Derived, never hardcoded: plan copy must track the pricing config or it drifts (it previously
 // advertised 200 tokens while the config granted 100).
@@ -39,6 +41,21 @@ const SubscriptionPanel: React.FC = () => {
   const cancelTap = useConfirmTap(() => run('cancel', 'Subscription cancelled.', `Your ${planName} plan has been cancelled.`));
   const downgradeTap = useConfirmTap(() => run('downgrade', 'Downgraded to Free.', 'Your account moved to the Free plan.'));
 
+  /*
+   * NO PAY BUTTON UNTIL THERE IS A WAY TO PAY (GTM part 19 §5 step 3).
+   *
+   * Until Paystack is wired, "Upgrade to Pro, $19/mo" takes no money AND grants the plan.
+   * That is a promise of a charge that never arrives sitting on top of a paid tier given
+   * away — and the first person to notice the second half tells everybody. The control
+   * says what is actually true instead, and the server keeps deciding tiers.
+   */
+  const [billingLive, setBillingLive] = React.useState<boolean | null>(null);
+  React.useEffect(() => {
+    let alive = true;
+    void fetchBillingStatus().then((s) => { if (alive) setBillingLive(s.billing_live); });
+    return () => { alive = false; };
+  }, []);
+
   if (!profile) return null;
 
   const status: SubscriptionStatus = profile.subscription_status || (isPaidTier(profile.tier) ? 'active' : 'free');
@@ -47,6 +64,19 @@ const SubscriptionPanel: React.FC = () => {
 
   const run = async (action: 'upgrade' | 'cancel' | 'downgrade' | 'renew', successMsg: string, notif: string) => {
     if (!user) return;
+    /* See the note above: upgrading grants a paid tier and charges nothing until Paystack
+       is wired. Cancelling and downgrading stay available — those take nothing away that
+       was paid for, and blocking them would trap somebody in a plan. */
+    if ((action === 'upgrade' || action === 'renew') && billingLive === false) {
+      setMsgErr(true);
+      setMsg('Card payments are not live yet. Email support and we will set your plan up by hand.');
+      return;
+    }
+    /* The same intent event from inside the product, so the two surfaces are comparable
+       and a change of plan is never confused with a cancellation in the funnel. */
+    if (action === 'upgrade' || action === 'renew') {
+      track('upgrade_clicked', { plan: action === 'renew' ? profile?.tier : 'pro', surface: 'subscription_panel', signed_in: true });
+    }
     setBusy(action);
     setMsg('');
     setMsgErr(false);

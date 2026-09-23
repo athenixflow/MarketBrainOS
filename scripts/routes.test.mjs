@@ -33,8 +33,12 @@ const toolRoutes = [...tools.matchAll(/slug:\s*'([a-z0-9-]+)'/g)].map((m) => `/$
 // so they are reachable whether or not a rewrite covers them.
 const prerender = read('scripts/prerender.ts');
 const docsRoutes = [...prerender.matchAll(/'(\/documentation[^']*)'/g)].map((m) => m[1]);
-const marketing = (prerender.match(/const MARKETING = \[([^\]]+)\]/) || [, ''])[1]
-  .split(',').map((s) => s.trim().replace(/'/g, '')).filter(Boolean);
+// Quoted literals, not a comma split. A comment placed inside that array put its own
+// prose into the list and dropped a real route out of it, so a page that IS prerendered
+// was reported as a production 404 — a failure that sends somebody hunting in vercel.json
+// for a rewrite that was never the problem.
+const marketingBlock = (prerender.match(/const MARKETING = \[([^\]]+)\]/) || [, ''])[1];
+const marketing = [...marketingBlock.matchAll(/'(\/[^']*)'/g)].map((m) => m[1]);
 
 const declared = [...new Set([...staticRoutes, ...toolRoutes])];
 
@@ -59,7 +63,24 @@ const reachable = (route) => {
 // index.html is the prerendered HOMEPAGE: routing app pages to it painted the marketing landing
 // page, then blank, then the app on every deep link. This runs before `vite build`, so it checks
 // the producer rather than the artifact.
-const badDestinations = (vercel.rewrites || []).filter((r) => r.destination !== '/app.html');
+/*
+ * A LOCAL rewrite must land on app.html. An ABSOLUTE one is a proxy and is a different
+ * thing: `/s/:id` is served by the `sharePage` Cloud Function, because a link pasted into
+ * WhatsApp is fetched by a crawler that runs no JavaScript and the SPA shell would give it
+ * a blank page with the site's generic preview. The original rule — "every rewrite goes to
+ * app.html" — would have blocked that; narrowing it by DESTINATION KIND keeps the bug it
+ * was written for (an app route sent to index.html, which painted the marketing page then
+ * blanked on every deep link) exactly as catchable.
+ */
+const isProxy = (r) => /^https:\/\//.test(String(r.destination));
+const badDestinations = (vercel.rewrites || [])
+  .filter((r) => !isProxy(r) && r.destination !== '/app.html');
+
+/* A proxy may only point at our own functions: a rewrite is invisible to the visitor, so
+   one aimed anywhere else would serve a third party's content from our domain and our
+   cookies' origin. */
+const foreignProxies = (vercel.rewrites || []).filter((r) => isProxy(r)
+  && !/^https:\/\/[a-z0-9-]+-marketbrainosweb\.cloudfunctions\.net\//.test(String(r.destination)));
 const emitsShell = /writeFileSync\(path\.join\(DIST, 'app\.html'\)/.test(prerender);
 
 // --- 4. Report -----------------------------------------------------------------------------------
@@ -68,9 +89,10 @@ const missing = declared.filter((r) => !reachable(r));
 console.log(`Checked ${declared.length} declared routes against ${rewrites.length} vercel.json rewrites`);
 console.log(`  ${marketing.length + docsRoutes.length} prerendered routes are served from the filesystem`);
 
-if (badDestinations.length || !emitsShell) {
+if (badDestinations.length || foreignProxies.length || !emitsShell) {
   console.error(`\nFAIL — app routes must rewrite to /app.html, the clean shell prerender.ts emits.`);
   for (const r of badDestinations) console.error(`    ${r.source} -> ${r.destination}`);
+  for (const r of foreignProxies) console.error(`    ${r.source} proxies off-domain -> ${r.destination}`);
   if (!emitsShell) console.error(`    scripts/prerender.ts no longer writes dist/app.html`);
   process.exit(1);
 }

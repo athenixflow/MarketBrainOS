@@ -457,6 +457,27 @@ export interface UserProfile {
   is_verified_admin?: boolean;
   // Account / onboarding
   onboarded?: boolean;
+  /*
+   * GROWTH MEASUREMENT (GTM part 03 §7.1) — written by the SERVER, read by everybody.
+   *
+   * These exist because GA4 cannot be trusted alone: ad-blockers eat a large share of
+   * browser events, and the plan's gates (activation ≥30%, W4 ≥30%, free→paid ≥3%) decide
+   * whether money gets spent. Counted from `action_logs` on the server, where nothing can
+   * block them, and never incremented from the client — the rating aggregate in this
+   * product was once wrong for exactly that reason.
+   *
+   * `activated_at` is the "Second Decision": the moment a second successful analysis
+   * landed within the activation window. Null until then; never cleared once set.
+   */
+  signup_source?: string;
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  cohort_week?: string;          // ISO week of signup, e.g. 2026-W38
+  analyses_count?: number;
+  first_analysis_at?: string;
+  last_analysis_at?: string;
+  activated_at?: string;
   // Subscription lifecycle (§30) — server-authoritative
   subscription_status?: SubscriptionStatus;
   plan_renews_at?: string;

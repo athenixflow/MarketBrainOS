@@ -14,6 +14,7 @@ import { PrimaryButton } from '../components/UI';
 import AuthShell from '../components/auth/AuthShell';
 import { AuthField, PasswordStrength, FormAlert, GoogleButton, OrDivider } from '../components/auth/AuthField';
 import { SecurityEngine } from '../services/securityEngine';
+import { readAttribution, track } from '../services/analytics';
 import { useAuth } from '../context/AuthContext';
 import { callRequestPasswordReset, callSendWelcomeEmail } from '../services/persistenceService';
 
@@ -69,7 +70,16 @@ const AuthPage: React.FC = () => {
     let active = true;
     getRedirectResult(auth).then(async (cred) => {
       if (!active || !cred) return;
-      if (getAdditionalUserInfo(cred)?.isNewUser) callSendWelcomeEmail();
+      /*
+       * THE IN-APP BROWSER PATH COUNTS TOO. LinkedIn, Instagram and Facebook block the
+       * popup and land here — and those are the channels the go-to-market plan actually
+       * runs on, so a signup that completes by redirect and fires nothing would make the
+       * one channel we are betting on look like it converts nobody.
+       */
+      const redirectIsNew = getAdditionalUserInfo(cred)?.isNewUser === true;
+      if (redirectIsNew) track('sign_up', { method: 'google', ...readAttribution() });
+      else track('login', { method: 'google' });
+      if (redirectIsNew) callSendWelcomeEmail();
       await refreshProfile();
       navigate('/');
     }).catch((err) => { if (active) setError(err?.message || 'Google sign-in did not complete. Please try again.'); });
@@ -112,11 +122,19 @@ const AuthPage: React.FC = () => {
     try {
       if (mode === 'signup') {
         await createUserWithEmailAndPassword(auth, email, password);
+        /*
+         * GTM E01 — the channel cohort's key (part 03 §7.3 table B). `signup_source` is
+         * first-touch and comes from the visit, not from this form, which is why it is
+         * read here rather than reconstructed from the referrer of the /auth page: by the
+         * time somebody reaches the form the referrer is our own landing page.
+         */
+        track('sign_up', { method: 'email', ...readAttribution() });
         callSendWelcomeEmail(); // fire-and-forget welcome + verification email
         await refreshProfile();
         navigate('/');
       } else if (mode === 'signin') {
         await signInWithEmailAndPassword(auth, email, password);
+        track('login', { method: 'email' });
         await refreshProfile();
         navigate('/');
       } else {
@@ -137,7 +155,11 @@ const AuthPage: React.FC = () => {
     setLoading(true);
     try {
       const cred = await signInWithPopup(auth, googleProvider);
-      if (getAdditionalUserInfo(cred)?.isNewUser) callSendWelcomeEmail(); // welcome for brand-new Google accounts
+      const isNew = getAdditionalUserInfo(cred)?.isNewUser === true;
+      /* The provider tells us which this was; guessing from a profile read would race it. */
+      if (isNew) track('sign_up', { method: 'google', ...readAttribution() });
+      else track('login', { method: 'google' });
+      if (isNew) callSendWelcomeEmail(); // welcome for brand-new Google accounts
       await refreshProfile();
       navigate('/');
     } catch (err: any) {

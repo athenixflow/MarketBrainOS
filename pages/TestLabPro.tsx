@@ -231,13 +231,13 @@ const TestLabPro: React.FC = () => {
       <div className="space-y-16">
         <AnimatedSection index={0}>
           <PageHeader
-            title="TestLab Pro: Performance Simulation"
-            subtitle="Simulate performance outcomes for headlines, hooks, and ad copy. Compare variations and predict the winning asset."
+            title="TestLab Pro: Comparative Review"
+            subtitle="Compare headlines, hooks and ad copy side by side. Each variation is scored against conversion-copywriting principles, with the strongest named and explained."
           />
           <ExpectedOutcome
             estimatedTime="30–60 seconds"
-            analyzes="Scores each variation and predicts the strongest performer before you spend a cent on testing."
-            outcomes={['Variation Scores', 'Predicted Winner', 'Performance Rationale', 'Optimization Notes']}
+            analyzes="Scores each variation on persuasive strength and names the strongest, with the reasoning, before you spend a cent on testing."
+            outcomes={['Variation Scores', 'Strongest Variation', 'The Reasoning', 'Optimization Notes']}
           />
         </AnimatedSection>
 
@@ -260,7 +260,7 @@ const TestLabPro: React.FC = () => {
                   </div>
                 </div>
 
-                <p className="mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">Paste 2 to 5 versions you want to test against each other. We predict a winner and explain why.<span className="text-gray-500"> e.g. two headline options, or two ad primary texts.</span></p>
+                <p className="mb-8 text-[11px] font-medium text-gray-600 leading-relaxed">Paste 2 to 5 versions you want to compare. We score each one, name the strongest and explain why.<span className="text-gray-500"> e.g. two headline options, or two ad primary texts.</span></p>
 
                 <div>
                   {variants.map((v, i) => (
@@ -281,7 +281,7 @@ const TestLabPro: React.FC = () => {
                     <span className="text-base leading-none w-4 text-center">{showAdvanced ? '−' : '+'}</span>
                     Advanced context (optional)
                   </button>
-                  <p className="mt-2 mb-6 text-[11px] font-medium text-gray-500 leading-relaxed pl-6">Context makes the prediction sharper and the explanation more useful. All optional.</p>
+                  <p className="mt-2 mb-6 text-[11px] font-medium text-gray-500 leading-relaxed pl-6">Context makes the review sharper and the explanation more useful. All optional.</p>
                   {showAdvanced && (
                     <div>
                       <Input label="Target audience" placeholder="Who will see these?" value={audience} onChange={(e) => setAudience(e.target.value)}
@@ -346,7 +346,7 @@ const TestLabPro: React.FC = () => {
           <EmptyState
             card
             message="No comparison yet"
-            submessage="Add at least two variations above and run the test to see a predicted winner."
+            submessage="Add at least two variations above and run the comparison to see which is strongest."
           />
         )}
 
@@ -355,8 +355,8 @@ const TestLabPro: React.FC = () => {
             <div className="flex flex-wrap justify-between items-end gap-4 mb-4">
               <SectionHeader
                 onDark
-                title="Performance simulation"
-                subtitle="Predicted performance for each variation, and why the winner wins."
+                title="Comparative review"
+                subtitle="A strength score for each variation, and why the strongest one wins."
                 className="mb-0"
               />
               <ExportControls
@@ -373,7 +373,7 @@ const TestLabPro: React.FC = () => {
                 painted over an empty quote block. */}
             {winningVariant && (
               <div className="mb-12">
-                <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-6 text-center">Predicted winner</p>
+                <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-6 text-center">Strongest variation</p>
                 <Card accent className="!border-[#FF0000]/10 !bg-[#FFF9F9] shadow-2xl">
                   <div className="flex flex-wrap justify-between items-start gap-6 mb-8">
                     <div className="min-w-0">

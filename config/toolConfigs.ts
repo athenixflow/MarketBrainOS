@@ -367,7 +367,7 @@ const BESPOKE_BY_SUITE: Record<Suite, NavEntry[]> = {
   'Business Strategy': [],
   'Operations Intelligence': [],
   'Extras': [
-    { path: '/test-lab', label: 'TestLab Pro', description: 'Simulate ad performance and predict winning variations before launch.', cost: 5 },
+    { path: '/test-lab', label: 'TestLab Pro', description: 'Compare ad variations side by side and see which is strongest, before launch.', cost: 5 },
     { path: '/workflow', label: 'Workflow Pipeline', description: 'Chain ideation, testing, and auditing into one guided campaign workflow.', cost: 6 },
   ],
 };

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PublicLayout from '../components/PublicLayout';
 import AnimatedSection from '../components/AnimatedSection';
@@ -7,6 +7,8 @@ import { callChangeSubscription } from '../services/persistenceService';
 import { DEFAULT_PRICING_CONFIG as CFG, PLAN_META, PLAN_ORDER, Tier } from '../config/pricingConfig';
 import Seo from '../components/Seo';
 import { MARKETING_SEO, SITE_URL, SITE_NAME } from '../config/seo';
+import { track } from '../services/analytics';
+import { fetchBillingStatus } from '../services/billing';
 
 // Product + per-plan Offer structured data (generated from the live pricing config).
 const PRICING_JSONLD = {
@@ -27,17 +29,48 @@ const PRICING_JSONLD = {
 
 const Pricing: React.FC = () => {
   const navigate = useNavigate();
+  /*
+   * GTM E01 — the denominator of free→paid (part 03 §7.2). Fired on arrival rather than
+   * on a CTA, because the page being READ and the page being ACTED ON are the two numbers
+   * the plan's pricing experiments need to tell apart.
+   */
+  useEffect(() => { track('pricing_viewed', { surface: 'pricing_page' }); }, []);
   const { user, profile, refreshProfile } = useAuth();
   const currentTier = profile?.tier as Tier | undefined;
   const currentIdx = currentTier ? PLAN_ORDER.indexOf(currentTier) : -1;
   const [busy, setBusy] = useState<Tier | null>(null);
   const [msg, setMsg] = useState('');
 
+  /* The same switch as the in-app panel: a pricing page that starts a checkout which
+     cannot charge is the worst place in the product to be wrong about this. */
+  const [billingLive, setBillingLive] = useState<boolean | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void fetchBillingStatus().then((s) => { if (alive) setBillingLive(s.billing_live); });
+    return () => { alive = false; };
+  }, []);
+
   const select = async (tier: Tier) => {
+    /* Intent, captured before the branch that sends a signed-out visitor to /auth — so a
+       tier chosen by somebody without an account still counts as interest in that tier. */
+    track('upgrade_clicked', { plan: tier, surface: 'pricing_page', signed_in: !!user });
     if (!user) { navigate('/auth'); return; }
     setMsg('');
     try {
       if (tier === 'free') { navigate('/'); return; }
+      /*
+       * NO SELF-SERVE UPGRADE WHILE BILLING IS SIMULATED.
+       *
+       * `changeSubscription('upgrade')` grants the tier and takes no money, so this
+       * button currently hands out a paid plan for free while implying a charge. Until
+       * Paystack is live it sends people to support instead, which is the honest version
+       * of the same intent and keeps the Founding-50 conversations the plan wants anyway.
+       * The server still decides tiers; this only stops the product offering it.
+       */
+      if (billingLive === false) {
+        setMsg('Card payments are not live yet. Email support and we will set your plan up by hand.');
+        return;
+      }
       if (tier === 'pro') {
         setBusy('pro');
         await callChangeSubscription('upgrade');
@@ -55,6 +88,8 @@ const Pricing: React.FC = () => {
     if (!user) return tier === 'free' ? 'Start free' : 'Get started';
     if (currentTier === tier) return 'Current plan';
     if (currentIdx >= 0 && idx < currentIdx) return 'Included';
+    /* Until there is a way to pay, the button does not offer to take money. */
+    if (billingLive === false && tier !== 'free') return 'Talk to us';
     return tier === 'pro' ? (busy === 'pro' ? 'Upgrading…' : 'Upgrade to Pro') : `Upgrade to ${PLAN_META[tier].name}`;
   };
   const ctaDisabled = (tier: Tier, idx: number) =>

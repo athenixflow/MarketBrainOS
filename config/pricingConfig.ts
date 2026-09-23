@@ -28,19 +28,42 @@ export interface PricingConfig {
 
 export const DEFAULT_PRICING_CONFIG: PricingConfig = {
   plans: {
+    /*
+     * THE LADDER (GTM parts 19 §4, 20 §2). Every number here is a decision with a
+     * reason, and the two that moved most had the same cause: $7 was the right price
+     * for Lagos and the wrong one everywhere else.
+     *
+     * Pro $19 sits just under ChatGPT Plus ($20), so "purpose-built, and cheaper than
+     * the thing you are already paying for" is literally true, and under the $29–49
+     * entry points of Copy.ai and Unbounce, which is honest about having no customer
+     * proof yet. Team $79 for 5 seats is $15.80 a seat; the old $49 for TEN seats was
+     * $4.90 and undercut Agency, so the bundle competed with the tier above it.
+     *
+     * A PRICE RISE IS ONLY FREE BEFORE ANYONE IS PAYING. That is today. Existing
+     * accounts are on simulated billing, so nobody's charge changes; the sooner this
+     * lands the fewer people it can ever surprise.
+     */
     free:       { price: 0,   monthlyTokens: 20 },
-    pro:        { price: 7,   monthlyTokens: 100 },
-    team:       { price: 49,  monthlyTokens: 400,   membersPerWorkspace: 10 },
+    pro:        { price: 19,  monthlyTokens: 300 },
+    team:       { price: 79,  monthlyTokens: 600,   membersPerWorkspace: 5 },
     agency:     { price: 199, monthlyTokens: 2000,  workspaces: 5,  membersPerWorkspace: 10, maxMembers: 50 },
     enterprise: { price: 999, monthlyTokens: 10000, agencies: 5, workspacesPerAgency: 5, membersPerWorkspace: 10, maxMembers: 250 },
   },
-  expansion: { member: 4, workspace: 25, agency: 99 },
+  /* Seats and workspaces priced against the tier they expand, not as an afterthought:
+     a $4 seat on a $79 plan made the 6th seat nearly free and the plan above pointless. */
+  expansion: { member: 12, workspace: 39, agency: 99 },
   tokenPacks: [
-    { id: 'starter',    label: 'Starter Pack',    tokens: 100,   price: 5 },
-    { id: 'growth',     label: 'Growth Pack',     tokens: 500,   price: 20 },
-    { id: 'business',   label: 'Business Pack',   tokens: 1500,  price: 50 },
-    { id: 'agency',     label: 'Agency Pack',     tokens: 5000,  price: 150 },
-    { id: 'enterprise', label: 'Enterprise Pack', tokens: 10000, price: 250 },
+    /*
+     * PACKS MUST NEVER UNDERCUT A PLAN — the config bug this fixes. At $5/100 a Free
+     * user bought tokens at $0.050 while a Pro subscriber paid $0.070, so the rational
+     * customer stayed on Free and topped up forever. Packs now start at $0.10 a token,
+     * above every plan's included rate, and the ladder rewards subscribing.
+     */
+    { id: 'starter',    label: 'Starter Pack',    tokens: 100,   price: 10 },
+    { id: 'growth',     label: 'Growth Pack',     tokens: 500,   price: 40 },
+    { id: 'business',   label: 'Business Pack',   tokens: 1500,  price: 100 },
+    { id: 'agency',     label: 'Agency Pack',     tokens: 5000,  price: 300 },
+    { id: 'enterprise', label: 'Enterprise Pack', tokens: 10000, price: 500 },
   ],
   toolCosts: {
     AngleMiner_Generate: 3, AngleMiner_Improve: 1, ConversionDoctor_Audit: 4, TestLab_Simulation: 5,

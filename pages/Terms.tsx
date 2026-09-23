@@ -23,7 +23,7 @@ const Terms: React.FC = () => (
     <LegalSection heading="1. The Service">
       <p>
         MarketBrain OS is an AI marketing-intelligence platform that provides analysis tools to validate
-        strategy, audit landing pages, simulate campaign performance, and generate marketing insights. The
+        strategy, audit landing pages, compare marketing variants, and generate marketing insights. The
         Service is a decision-support tool — it is not an ad manager, scheduler, or content publisher.
       </p>
     </LegalSection>

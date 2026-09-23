@@ -484,7 +484,7 @@ const AngleMinerX: React.FC = () => {
               <SectionHeader
                 onDark
                 title="Strategic angles"
-                subtitle="Angles ranked by predicted conversion strength, grouped by psychological type."
+                subtitle="Angles ranked by persuasive strength, grouped by psychological type."
                 className="mb-0"
               />
               <ExportControls

@@ -60,7 +60,7 @@ const Privacy: React.FC = () => (
     <LegalSection id="s1" heading="1. Who we are">
       <p>
         MarketBrain OS is an AI marketing-intelligence platform that helps you validate strategy, audit
-        landing pages, simulate campaign performance, and generate marketing insights. This policy applies to
+        landing pages, compare marketing variants, and generate marketing insights. This policy applies to
         the Service available at www.marketbrainos.app and the associated application.
       </p>
     </LegalSection>

@@ -20,6 +20,7 @@ import { Report, ActionLogEntry } from '../types';
 import { NAV_SUITES, TOOL_CONFIG_LIST, getToolMeta } from '../config/toolConfigs';
 import { canSeeFeature, tierAtLeast, isPaidTier } from '../config/access';
 import { PLAN_META } from '../config/pricingConfig';
+import { DEFAULT_PRICING_CONFIG } from '../config/pricingConfig';
 
 // Resolve a server module key to a friendly tool label (covers generic + bespoke modules).
 const moduleLabel = (m: string): string =>
@@ -94,8 +95,12 @@ const Dashboard: React.FC = () => {
       await callConfirmTopUp(mockPaymentRef);
       await refreshProfile();
       setTopUpStatus('success');
-      setFeedbackMsg('100 tokens credited successfully.');
-      if (user) createNotification(user.uid, 'Token', 'Top-up successful', '100 tokens have been added to your balance.');
+      /* The figure comes from the pack the server actually credits (confirmTopUp with no
+         args takes the first pack), not from a number typed here — the same drift that
+         put "200 credits" on the pricing card while the config said something else. */
+      const credited = `${DEFAULT_PRICING_CONFIG.tokenPacks[0].tokens} tokens`;
+      setFeedbackMsg(`${credited} credited successfully.`);
+      if (user) createNotification(user.uid, 'Token', 'Top-up successful', `${credited} have been added to your balance.`);
       setTimeout(() => { setTopUpStatus('idle'); setFeedbackMsg(''); }, 4000);
     } catch (e: any) {
       setTopUpStatus('error');
