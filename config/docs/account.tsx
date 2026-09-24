@@ -13,15 +13,22 @@ const settings: DocArticle = {
     { type: 'paragraph', text: 'Open [Settings](/settings) to manage your account. It is organized into tabs:' },
     { type: 'table', headers: ['Tab', 'What you can change'], rows: [
       ['Profile', 'First/last name, company, job title, bio.'],
-      ['Account', 'Username, timezone, language (email change coming soon); delete your account (see below).'],
+      ['Account', 'Username, timezone, language (email change coming soon); your live [share links](/documentation/account/sharing); delete your account (see below).'],
       ['Security', 'Change password (email sign-in) or send a reset link (Google sign-in).'],
-      ['Notifications', 'Toggle: analysis complete, token alerts, product updates, workspace notifications, and the email channel.'],
+      ['Notifications', 'Toggle: analysis complete, token alerts, product updates, workspace notifications, and the email channel. **Product updates** also governs the onboarding emails.'],
       ['Subscription', 'View your current plan and jump to upgrade.'],
       ['Billing', 'Plan summary, token balance, store, and payment history (CSV export).'],
       ['Integrations', 'Analytics/ads/CRM connections — coming soon.'],
       ['Workspace', 'A shortcut to manage your Team Workspace (Team plan and above).'],
     ] },
     { type: 'callout', tone: 'tip', title: 'Notifications', text: 'Turn on token alerts so you are warned before you run out mid-analysis.' },
+    { type: 'heading', id: 'emails', text: 'The emails we send' },
+    { type: 'paragraph', text: 'Two kinds, and only one of them can be switched off.' },
+    { type: 'table', headers: ['Kind', 'Examples', 'Can you stop them?'], rows: [
+      ['Onboarding and tips', 'How to read a report, the activation nudges, a question from the founder around week two, a month-one summary, a note if you go quiet for a month, and one request for a 0-10 score', 'Yes - the **Unsubscribe** link in any of them, or **Product updates** above. Both do the same thing.'],
+      ['Account and transactional', 'Receipts, password resets, email verification, sign-in alerts, invitations, low-balance warnings', 'No - these answer something you or your account just did, so they carry no unsubscribe link.'],
+    ] },
+    { type: 'paragraph', text: 'Unsubscribing takes effect immediately and needs no sign-in, so it works from whatever device the email was opened on.' },
     { type: 'heading', id: 'delete-account', text: 'Delete your account' },
     { type: 'paragraph', text: 'Open [Settings → Account](/settings) and use **Delete account** in the danger zone at the bottom. This is the self-service route for the deletion right in [Privacy Policy §8](/privacy#s8).' },
     { type: 'steps', items: [
@@ -73,4 +80,40 @@ const reports: DocArticle = {
   ],
 };
 
-export const accountArticles: DocArticle[] = [settings, history, reports];
+
+/**
+ * Share links. Filed with History and Reports because that is where a result lives, and
+ * written to be explicit about the one thing a person must understand before using it:
+ * the link is public to anybody holding it.
+ */
+const sharing: DocArticle = {
+  id: 'sharing',
+  categoryId: 'account',
+  title: 'Share a result with a link',
+  summary: 'Turn any saved analysis into a link anyone can open - and switch it off again.',
+  keywords: ['share', 'link', 'send', 'client', 'colleague', 'public', 'revoke', 'share link'],
+  blocks: [
+    { type: 'heading', id: 'how', text: 'Creating a link' },
+    { type: 'paragraph', text: 'On any result that saved, use **Share**. You get a link like `www.marketbrainos.app/s/abc123`, copied to your clipboard, which opens a read-only page showing the score, the summary and the findings.' },
+    { type: 'paragraph', text: 'Sharing the same result twice gives you back the same link rather than a second one, so a result has one address however many times you send it.' },
+    { type: 'callout', tone: 'warning', title: 'Anyone with the link can read it', text: 'There is no password and no sign-in. Treat it like a document link: anybody you send it to can forward it. If the analysis is of a client page, that is the client\u2019s work on a public URL - send it to the client, not to a group chat.' },
+    { type: 'heading', id: 'what-they-see', text: 'What the recipient sees' },
+    { type: 'list', items: [
+      'The score, the summary and the leading findings - as a plain page that loads without an account. Long reports are trimmed: up to four sections, five findings each.',
+      'A line saying the link is public and can be switched off by the person who shared it.',
+      'An invitation to run the same analysis on their own page.',
+    ] },
+    { type: 'paragraph', text: 'They do **not** see your name, your email, your other analyses, or anything else in your account. The shared page is a copy of that one result, so editing or deleting the original afterwards does not change what they already have a link to.' },
+    { type: 'callout', tone: 'info', title: 'Not indexed by search engines', text: 'Shared pages carry a noindex instruction, so a result is not going to turn up in a search for your client\u2019s brand. Anybody holding the link can still open it.' },
+    { type: 'heading', id: 'revoke', text: 'Switching a link off' },
+    { type: 'paragraph', text: '**Settings → Account → Share links** lists every link you have made that is still live, with how many times each has been opened. **Turn link off** takes effect straight away: the address stops showing the report and tells the reader the person who shared it switched it off. Anybody who already opened it may still have what they read, which is true of any document you have sent somebody.' },
+    { type: 'heading', id: 'limits', text: 'Limits' },
+    { type: 'list', items: [
+      'Twenty new links a day per account - far above ordinary use, and there to stop an automated loop publishing a lot of pages at once.',
+      'Only results you created can be shared.',
+      'A result has to have saved before it can be shared. Where it did not - a run made while the network was failing, or a signed-out run - **Share** copies the result text to your clipboard instead, and says so.',
+    ] },
+  ],
+};
+
+export const accountArticles: DocArticle[] = [settings, history, reports, sharing];

@@ -1224,6 +1224,23 @@ export const callRevokeShareLink = async (id: string): Promise<void> => {
   await fn({ id });
 };
 
+/** One live share link, as Settings lists it. */
+export interface ShareLinkRow {
+  id: string;
+  url: string;
+  label: string;
+  score: number | null;
+  views: number;
+  created_at: string | null;
+}
+
+/** Every link of yours that is still live. Revoked ones are not returned: the list is a
+    control surface, and a row whose only action has already been taken is noise. */
+export const callListShareLinks = async (): Promise<ShareLinkRow[]> => {
+  const fn = httpsCallable(functions, 'listShareLinks');
+  return ((await fn({})).data as { links: ShareLinkRow[] }).links || [];
+};
+
 export const callSendWelcomeEmail = async (): Promise<void> => {
   if (!isFirebaseInitialized) return;
   try { await httpsCallable(functions, 'sendWelcomeEmail')({}); } catch { /* best-effort */ }

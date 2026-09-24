@@ -8,6 +8,18 @@
       "destination": "https://us-central1-marketbrainosweb.cloudfunctions.net/sharePage?id=:id"
     },
     {
+      "source": "/e/nps",
+      "destination": "https://us-central1-marketbrainosweb.cloudfunctions.net/nps"
+    },
+    {
+      "source": "/e/resend",
+      "destination": "https://us-central1-marketbrainosweb.cloudfunctions.net/resendWebhook"
+    },
+    {
+      "source": "/e/unsubscribe",
+      "destination": "https://us-central1-marketbrainosweb.cloudfunctions.net/unsubscribe"
+    },
+    {
       "source": "/tools/(.*)",
       "destination": "/app.html"
     },

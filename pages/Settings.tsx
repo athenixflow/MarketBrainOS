@@ -20,6 +20,7 @@ import { useScope } from '../context/ScopeContext';
 import { googleProvider } from '../services/firebase';
 import {
   updateUserProfile, getUserPaymentHistory, callRequestPasswordReset, callDeleteAccount, DeleteAccountResult,
+  callListShareLinks, callRevokeShareLink, ShareLinkRow,
 } from '../services/persistenceService';
 import { downloadAsCSV, paymentsToCSV } from '../services/exportService';
 import { PaymentRecord, NotificationPrefs } from '../types';
@@ -257,6 +258,33 @@ const Settings: React.FC = () => {
     }
   };
 
+  // --- share links (Account tab) ---
+  const [shares, setShares] = useState<ShareLinkRow[] | null>(null);
+  const [sharesErr, setSharesErr] = useState('');
+  const [revoking, setRevoking] = useState('');
+  useEffect(() => {
+    if (!user || activeTab !== 'Account') return;
+    let live = true;
+    callListShareLinks()
+      .then((rows) => { if (live) { setShares(rows); setSharesErr(''); } })
+      .catch(() => { if (live) { setShares([]); setSharesErr('We could not load your share links. Try again in a moment.'); } });
+    return () => { live = false; };
+  }, [user, activeTab]);
+
+  const revokeShare = async (id: string) => {
+    setRevoking(id);
+    try {
+      await callRevokeShareLink(id);
+      /* Dropped from the list rather than re-fetched: the row's only action is done, and
+         a spinner over a list of one is worse than the row simply leaving. */
+      setShares((rows) => (rows || []).filter((r) => r.id !== id));
+    } catch {
+      setSharesErr('That link could not be switched off. Try again in a moment.');
+    } finally {
+      setRevoking('');
+    }
+  };
+
   // --- billing ---
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
@@ -339,6 +367,40 @@ const Settings: React.FC = () => {
             {savingProfile ? 'Saving…' : 'Save account'}
           </PrimaryButton>
           <Flash msg={profileMsg} error={profileErr} />
+        </Card>
+
+        {/* ---------- SHARE LINKS ----------
+            The page at /s/:id tells its reader the sharer can switch it off at any time.
+            This is where they do it; without it that sentence is a promise the product
+            does not keep. */}
+        <Card className="mt-6" title="Share links">
+          <p className="text-sm text-gray-500 font-medium leading-relaxed mb-5">
+            Anyone holding one of these links can read that result without signing in. Switching a link off takes effect immediately.
+          </p>
+          {sharesErr && <ErrorMessage message={sharesErr} />}
+          {shares === null ? <Skeleton className="h-16" /> : shares.length === 0 ? (
+            <p className="text-sm text-gray-400 font-medium">You have not shared any results yet. Use <strong>Share</strong> on a result to create a link.</p>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {shares.map((row) => (
+                <div key={row.id} className="flex flex-wrap items-center gap-4 py-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-[#0B0B0B]">
+                      {row.label}{row.score != null && <span className="text-gray-400"> · {row.score}/100</span>}
+                    </p>
+                    <p className="text-xs text-gray-400 font-medium break-all">{row.url}</p>
+                    <p className="text-[11px] text-gray-400 font-medium mt-1">
+                      {row.views} {row.views === 1 ? 'view' : 'views'}
+                      {row.created_at && ` · shared ${new Date(row.created_at).toLocaleDateString()}`}
+                    </p>
+                  </div>
+                  <SecondaryButton tone="dark" onClick={() => revokeShare(row.id)} disabled={revoking === row.id}>
+                    {revoking === row.id ? 'Switching off…' : 'Turn link off'}
+                  </SecondaryButton>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
 
         {/* ---------- DANGER ZONE (Privacy §8; flow in docs/qa-fix-deletion-flow.md) ---------- */}

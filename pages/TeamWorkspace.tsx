@@ -26,6 +26,7 @@ import TeamActivity from '../components/team/TeamActivity';
 import TeamAnalytics from '../components/team/TeamAnalytics';
 import TeamSettings from '../components/team/TeamSettings';
 import TeamReports from '../components/team/TeamReports';
+import { track } from '../services/analytics';
 
 const TABS = ['Overview', 'Members', 'Library', 'Reports', 'Analytics', 'Activity', 'Settings'] as const;
 type Tab = typeof TABS[number];
@@ -105,6 +106,9 @@ const TeamWorkspace: React.FC = () => {
     setBusy(true); setError('');
     try {
       await callManageMembership('accept', { workspaceId: inv.workspace_id, invitationId: inv.id });
+      /* The other end of the loop: sent minus accepted is the number that says
+         whether invitations reach people or bounce off an inbox. */
+      track('invite_accepted', { container_type: 'workspace' });
       await refreshMemberships();
       if (user?.email) setInvites(await getPendingInvitations(user.email));
       setScope({ level: 'team', workspaceId: inv.workspace_id }); setActiveId(inv.workspace_id);

@@ -26,6 +26,7 @@ import EnterpriseStructure from '../components/enterprise/EnterpriseStructure';
 import EnterpriseBriefings from '../components/enterprise/EnterpriseBriefings';
 import EnterpriseMembers from '../components/enterprise/EnterpriseMembers';
 import EnterpriseBudgets from '../components/enterprise/EnterpriseBudgets';
+import { track } from '../services/analytics';
 
 const TABS = ['Dashboard', 'Intelligence', 'Performance', 'Briefings', 'Structure', 'Members', 'Budgets', 'Settings'] as const;
 type Tab = typeof TABS[number];
@@ -111,7 +112,10 @@ const EnterpriseSuite: React.FC = () => {
 
   const acceptInvite = async (inv: EnterpriseInvitation) => {
     setBusy(true); setError('');
-    try { await callManageEnterpriseMember('accept', { enterpriseId: inv.enterprise_id, invitationId: inv.id }); await refreshMemberships(); if (user?.email) setInvites(await getEnterpriseInvitations(user.email)); setActiveId(inv.enterprise_id); }
+    try { await callManageEnterpriseMember('accept', { enterpriseId: inv.enterprise_id, invitationId: inv.id });
+      /* The other end of the loop — see the workspace copy. */
+      track('invite_accepted', { container_type: 'enterprise' });
+      await refreshMemberships(); if (user?.email) setInvites(await getEnterpriseInvitations(user.email)); setActiveId(inv.enterprise_id); }
     catch (e: any) { setError(e.message); } finally { setBusy(false); }
   };
 

@@ -14,6 +14,8 @@ import {
   verifyPaystackSignature,
 } from './paystack';
 import { sendTemplate } from './email/send';
+import { verifyUnsubToken, unsubToken } from './email/unsubscribe';
+import { verifyResendWebhook, webhookConfigured, EVENT_FIELD, emailStatusFor } from './email/webhook';
 
 admin.initializeApp();
 // Drop undefined fields on every server-side write instead of throwing (Firestore rejects
@@ -353,6 +355,34 @@ const logAdminAudit = async (adminUid: string, adminEmail: string, action: strin
 // more CPU on Cloud Functions, which helps the JSON parsing around the call.
 // Keep this BELOW the client's abort in services/geminiService.ts, so the browser always outlives the
 // server. If the client gave up first the server could still finish and bill for a result nobody received.
+/**
+ * APP CHECK, IN MONITORING MODE UNTIL SOMEBODY DECIDES OTHERWISE (GTM DO-NOW #9).
+ *
+ * Enforcing attestation on the day it ships is how you find out from a support email that
+ * some real browser — an old one, a privacy extension, a corporate proxy, a bad reCAPTCHA
+ * score — cannot use the product at all. So this RECORDS what it saw and refuses nothing,
+ * until `APP_CHECK_ENFORCED` is set to 'true' in `functions/.env`. Flip it once the logs
+ * show attested requests arriving from real traffic.
+ *
+ * Returns the outcome rather than a boolean: "no token at all" and "a token that failed
+ * verification" are different stories, and only the second one is interesting.
+ */
+type AppCheckOutcome = 'valid' | 'invalid' | 'absent' | 'unconfigured';
+
+const APP_CHECK_ENFORCED = (): boolean => process.env.APP_CHECK_ENFORCED === 'true';
+
+const verifyAppCheck = async (req: any): Promise<AppCheckOutcome> => {
+  const token = String(req.headers?.['x-firebase-appcheck'] || '');
+  if (!token) return 'absent';
+  try {
+    await admin.appCheck().verifyToken(token);
+    return 'valid';
+  } catch (e: any) {
+    console.warn('appCheck: token rejected:', e?.message || e);
+    return 'invalid';
+  }
+};
+
 export const executeAnalysis = functions
   .runWith({ timeoutSeconds: 300, memory: '1GB' })
   .https.onRequest(async (req: any, res: any) => {
@@ -397,6 +427,20 @@ export const executeAnalysis = functions
   try {
     const idToken = authHeader.split('Bearer ')[1];
     const decodedToken = await admin.auth().verifyIdToken(idToken);
+
+    /*
+     * WHO they are is settled above; WHERE FROM is this. Logged always, enforced only when
+     * the flag says so — see the note on verifyAppCheck. A request that fails attestation
+     * while enforcement is off still runs, and says so in the logs.
+     */
+    const attestation = await verifyAppCheck(req);
+    if (attestation !== 'valid') {
+      console.log(`appCheck: ${attestation} for ${decodedToken.uid} (enforced=${APP_CHECK_ENFORCED()})`);
+      if (APP_CHECK_ENFORCED()) {
+        res.status(401).json({ error: 'This request could not be verified as coming from the app.' });
+        return;
+      }
+    }
     uid = decodedToken.uid;
   } catch (e) {
     res.status(401).json({ error: { message: 'Invalid or expired token', code: 'unauthenticated' } });
@@ -972,6 +1016,12 @@ export const executeAnalysis = functions
           const patch: Record<string, unknown> = {
             analyses_count: count,
             last_analysis_at: nowIso,
+            /* WHAT THEY LAST RAN, for the activation nudge. ACT-2 is the email that asks
+               somebody to make their second run — the run that IS activation — and it can
+               only name the pairing that follows from the first if the first is recorded.
+               Two scalar fields beat a query over `action_logs` per user per night. */
+            last_module: module,
+            last_score: typeof (finalOutput as any)?.score === 'number' ? (finalOutput as any).score : null,
           };
           if (!data.first_analysis_at) patch.first_analysis_at = nowIso;
           if (!data.activated_at && count >= ACTIVATION_RUNS) {
@@ -2482,7 +2532,15 @@ export const createAgencyMember = functions.https.onCall(async (data: any, conte
   }, { merge: true });
   if (!wasActive) await db.collection('agencies').doc(agencyId).update({ member_count: (agData.member_count || 1) + 1 });
 
-  if (created) await sendTemplate(email, 'memberAdded', { containerName: agData.name || 'the agency', tempPassword: password, roleLabel: role.replace(/_/g, ' '), email });
+  if (created) {
+    await sendTemplate(email, 'memberAdded', { containerName: agData.name || 'the agency', tempPassword: password, roleLabel: role.replace(/_/g, ' '), email });
+    /* The marker already exists (it suppressed the welcome email); this adds what the
+       INV emails need — which workspace, and as what. Merged, so a re-run of this
+       path never loses the original timestamp. */
+    await db.collection('provisioning_markers').doc(email).set({
+      container: agData.name || '', container_type: 'agency', role_label: role.replace(/_/g, ' '),
+    }, { merge: true });
+  }
   return { success: true, uid, created };
 });
 
@@ -2594,7 +2652,15 @@ export const createWorkspaceMember = functions.https.onCall(async (data: any, co
   }, { merge: true });
   if (!wasActive) await db.collection('workspaces').doc(workspaceId).update({ member_count: (wsData.member_count || 1) + 1 });
 
-  if (created) await sendTemplate(email, 'memberAdded', { containerName: wsData.name || 'the workspace', tempPassword: password, roleLabel: role.replace(/_/g, ' '), email });
+  if (created) {
+    await sendTemplate(email, 'memberAdded', { containerName: wsData.name || 'the workspace', tempPassword: password, roleLabel: role.replace(/_/g, ' '), email });
+    /* The marker already exists (it suppressed the welcome email); this adds what the
+       INV emails need — which workspace, and as what. Merged, so a re-run of this
+       path never loses the original timestamp. */
+    await db.collection('provisioning_markers').doc(email).set({
+      container: wsData.name || '', container_type: 'workspace', role_label: role.replace(/_/g, ' '),
+    }, { merge: true });
+  }
   return { success: true, uid, created };
 });
 
@@ -2965,7 +3031,15 @@ export const createEnterpriseMember = functions.https.onCall(async (data: any, c
   }, { merge: true });
   if (!wasActive) await db.collection('enterprises').doc(enterpriseId).update({ member_count: (entData.member_count || 1) + 1 });
 
-  if (created) await sendTemplate(email, 'memberAdded', { containerName: entData.name || 'the enterprise', tempPassword: password, roleLabel: role.replace(/_/g, ' '), email });
+  if (created) {
+    await sendTemplate(email, 'memberAdded', { containerName: entData.name || 'the enterprise', tempPassword: password, roleLabel: role.replace(/_/g, ' '), email });
+    /* The marker already exists (it suppressed the welcome email); this adds what the
+       INV emails need — which workspace, and as what. Merged, so a re-run of this
+       path never loses the original timestamp. */
+    await db.collection('provisioning_markers').doc(email).set({
+      container: entData.name || '', container_type: 'enterprise', role_label: role.replace(/_/g, ' '),
+    }, { merge: true });
+  }
   return { success: true, uid, created };
 });
 
@@ -3566,17 +3640,120 @@ export const deleteAccount = functions
  */
 
 interface LifecycleStep {
-  key: 'onboardingWhyNotChatgpt' | 'onboardingWeekOne';
-  /** Days after signup this is due. */
-  dueAfterDays: number;
+  key:
+    | 'onboardingHowToRead' | 'onboardingWhyNotChatgpt' | 'onboardingWeekOne'
+    | 'onboardingFounderQuestion' | 'onboardingMonthOne'
+    | 'activationNoRun' | 'activationSecondRun' | 'activationNeverExported'
+    | 'memberFirstSteps' | 'memberFirstRun'
+    | 'winBack30' | 'winBack60' | 'winBack90' | 'npsAsk';
+  /**
+   * WHO THIS IS FOR.
+   *
+   * Somebody added to a workspace by their employer did not choose this product, and
+   * onboarding written for a self-signup reads as a mistake to them — they already had the
+   * "you were added" email. They get the INV pair instead, and self-signups never get that.
+   * One flag, checked once, rather than the same condition repeated in every `dueAt`.
+   */
+  audience: 'self_signup' | 'member' | 'any';
+  /**
+   * When this step became due for this user, or null when it never will.
+   *
+   * A TIMESTAMP, NOT A DAY COUNT. The first cut keyed every step on days-since-signup,
+   * which the onboarding sequence fits and nothing else does: ACT-2 runs from somebody's
+   * FIRST run and the win-back sequence from their LAST one, whenever those happened.
+   * Returning null is how a step says "not for this person" — ACT-1 for somebody who has
+   * already run something — which is a different thing from "not yet".
+   */
+  dueAt: (u: any, now: number) => number | null;
   /** Dropped once this many days late — see the rule above. */
   staleAfterDays: number;
 }
 
+const signupAt = (u: any): number => Date.parse(String(u.created_at || ''));
+const firstRunAt = (u: any): number => Date.parse(String(u.first_analysis_at || ''));
+const lastRunAt = (u: any): number => Date.parse(String(u.last_analysis_at || ''));
+const runs = (u: any): number => Number(u.analyses_count || 0);
+const exportsMade = (u: any): number => Number(u.export_count || 0);
+const isPaidTier = (u: any): boolean => String(u.tier || 'free') !== 'free';
+
 const LIFECYCLE_STEPS: LifecycleStep[] = [
-  { key: 'onboardingWhyNotChatgpt', dueAfterDays: 3, staleAfterDays: 5 },
-  { key: 'onboardingWeekOne', dueAfterDays: 7, staleAfterDays: 5 },
+  /* ---- the onboarding sequence, clocked from SIGNUP ---- */
+  { key: 'onboardingHowToRead', audience: 'self_signup', staleAfterDays: 3,
+    dueAt: (u) => signupAt(u) + 1 * 86_400_000 },
+  { key: 'onboardingWhyNotChatgpt', audience: 'self_signup', staleAfterDays: 5,
+    dueAt: (u) => signupAt(u) + 3 * 86_400_000 },
+  { key: 'onboardingWeekOne', audience: 'self_signup', staleAfterDays: 5,
+    dueAt: (u) => signupAt(u) + 7 * 86_400_000 },
+  /* D14 asks what decision they were making, which is only worth asking of somebody who
+     ran something. Non-runners are the activation nudge's business. */
+  { key: 'onboardingFounderQuestion', audience: 'self_signup', staleAfterDays: 5,
+    dueAt: (u) => (runs(u) >= 1 ? signupAt(u) + 14 * 86_400_000 : null) },
+  { key: 'onboardingMonthOne', audience: 'self_signup', staleAfterDays: 7,
+    dueAt: (u) => signupAt(u) + 30 * 86_400_000 },
+
+  /* ---- the invitee pair: the only mail a provisioned member gets from here ---- */
+  { key: 'memberFirstSteps', audience: 'member', staleAfterDays: 4,
+    dueAt: (u) => signupAt(u) + 1 * 86_400_000 },
+  { key: 'memberFirstRun', audience: 'member', staleAfterDays: 5,
+    dueAt: (u) => (runs(u) === 0 ? signupAt(u) + 3 * 86_400_000 : null) },
+
+  /* ---- the activation nudges, clocked on BEHAVIOUR ---- */
+  { key: 'activationNoRun', audience: 'self_signup', staleAfterDays: 5,
+    dueAt: (u) => (runs(u) === 0 ? signupAt(u) + 2 * 86_400_000 : null) },
+  /*
+   * THE SECOND RUN IS ACTIVATION (part 03 §6.2), so this is the highest-leverage email in
+   * the sequence — and the first whose clock starts somewhere other than signup.
+   */
+  { key: 'activationSecondRun', audience: 'self_signup', staleAfterDays: 5,
+    dueAt: (u) => (runs(u) === 1 ? firstRunAt(u) + 3 * 86_400_000 : null) },
+  /*
+   * Paying for export and never exporting. `export_count` comes from the `action_logs`
+   * trigger, never from GA4 — an ad-blocker must not be able to make a daily exporter look
+   * like somebody who has never pressed the button, and then earn them an email saying so.
+   */
+  /*
+   * CLOCKED ON SIGNUP, NOT ON THE LAST RUN, because of who has to be FOUND. Somebody who
+   * ran something three days ago is active, so no dormancy scan sees them, and unless they
+   * signed up recently no scan sees them at all — the first cut of this step was scheduled,
+   * counted and unsendable. Tying it to signup puts it inside the scan that already runs.
+   * The cost is real and accepted: somebody who upgrades in month three is past the window
+   * and will not get it. Worth revisiting when there are enough paying accounts to care.
+   */
+  { key: 'activationNeverExported', audience: 'self_signup', staleAfterDays: 10,
+    dueAt: (u) => (isPaidTier(u) && runs(u) >= 3 && exportsMade(u) === 0 ? signupAt(u) + 10 * 86_400_000 : null) },
+
+  /*
+   * ---- win-back, clocked from the LAST run ----
+   *
+   * And only for somebody who ever ran anything. Dormancy means "stopped", and a person who
+   * never started has not stopped — they belong to the activation sequence, and sending
+   * both would be two different stories about the same silence.
+   */
+  { key: 'winBack30', audience: 'any', staleAfterDays: 10,
+    dueAt: (u) => (runs(u) >= 1 ? lastRunAt(u) + 30 * 86_400_000 : null) },
+  { key: 'winBack60', audience: 'any', staleAfterDays: 10,
+    dueAt: (u) => (runs(u) >= 1 ? lastRunAt(u) + 60 * 86_400_000 : null) },
+  { key: 'winBack90', audience: 'any', staleAfterDays: 14,
+    dueAt: (u) => (runs(u) >= 1 ? lastRunAt(u) + 90 * 86_400_000 : null) },
+
+  /* ---- the feedback ask, once somebody has used it enough to have an opinion ---- */
+  { key: 'npsAsk', audience: 'any', staleAfterDays: 21,
+    dueAt: (u) => (runs(u) >= 10 ? lastRunAt(u) + 1 * 86_400_000 : null) },
 ];
+
+/**
+ * AFTER WB-90 WE GO QUIET, because WB-90 says we will.
+ *
+ * An email that promises "this is the last one" and is followed by another is the single
+ * most reliable way to earn a spam complaint, and it is earned from somebody who was
+ * willing to say why they left.
+ */
+const LIFECYCLE_TERMINAL_STEP = 'winBack90';
+
+/** Tier ids are internal; an email says what somebody would call their plan. */
+const PLAN_LABELS: Record<string, string> = {
+  free: 'Free', pro: 'Pro', team: 'Team', agency: 'Agency', enterprise: 'Enterprise',
+};
 
 const LIFECYCLE_MIN_GAP_MS = 48 * 60 * 60 * 1000;
 
@@ -3585,9 +3762,36 @@ export const lifecycleEmails = functions.pubsub
   .timeZone('UTC')
   .onRun(async () => {
     const now = Date.now();
-    /* Only accounts young enough for onboarding to be a sensible thing to send. */
-    const oldestRelevant = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const users = await db.collection('users').where('created_at', '>=', oldestRelevant).get();
+    /*
+     * THREE QUERIES, BECAUSE THE STEPS RUN ON THREE DIFFERENT CLOCKS.
+     *
+     * A single "accounts younger than N days" scan fits the onboarding sequence and misses
+     * everything else by construction: somebody dormant for two months signed up long
+     * before that window, and somebody on their tenth run may have signed up last year.
+     * Each query is bounded and keyed on the field its steps actually read, and the results
+     * are merged by uid so nobody is considered twice in one run.
+     *
+     * Forty days on the first, not thirty: the last signup-clocked step is due at D30 and
+     * may be sent up to seven days late, and a window ending the day an email becomes due
+     * can never send it.
+     */
+    const signupWindow = new Date(now - 40 * 24 * 60 * 60 * 1000).toISOString();
+    const dormantBefore = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    const [recentSnap, dormantSnap, heavySnap] = await Promise.all([
+      db.collection('users').where('created_at', '>=', signupWindow).get(),
+      /* ISO strings sort lexicographically, so a string range is a real range here. Users
+         who never ran anything have no `last_analysis_at` and are excluded by the query
+         itself — which is right: they are the activation sequence's, not win-back's. */
+      db.collection('users').where('last_analysis_at', '<=', dormantBefore).limit(500).get(),
+      db.collection('users').where('analyses_count', '>=', 10).limit(500).get(),
+    ]);
+
+    const byUid = new Map<string, admin.firestore.QueryDocumentSnapshot>();
+    for (const snap of [recentSnap, dormantSnap, heavySnap]) {
+      for (const doc of snap.docs) byUid.set(doc.id, doc);
+    }
+    const users = { docs: [...byUid.values()], size: byUid.size };
 
     /*
      * PROVISIONED MEMBERS, READ FROM THE MARKER THAT ACTUALLY EXISTS.
@@ -3599,8 +3803,11 @@ export const lifecycleEmails = functions.pubsub
      * suppresses the welcome email; this reads the same one. Fetched once per run rather
      * than once per user: the set is small and the alternative is a read per account.
      */
-    const provisioned = new Set(
-      (await db.collection('provisioning_markers').get()).docs.map((d) => d.id.toLowerCase()));
+    const markerDocs = (await db.collection('provisioning_markers').get()).docs;
+    const provisioned = new Set(markerDocs.map((d) => d.id.toLowerCase()));
+    /* The same fetch, keyed for the INV emails, which need the container's NAME rather
+       than only the fact that one exists. */
+    const provisionedInfo = new Map<string, any>(markerDocs.map((d) => [d.id.toLowerCase(), d.data()]));
 
     let sent = 0;
     let skipped = 0;
@@ -3616,16 +3823,42 @@ export const lifecycleEmails = functions.pubsub
        * employer did not choose this product and should not be onboarded as though they
        * did; part 12 excludes them by the same marker the welcome email uses.
        */
-      if (provisioned.has(email.toLowerCase())) { skipped++; continue; }
+      /*
+       * PROVISIONED MEMBERS ARE NOT SELF-SIGNUPS — but they are not nobody either. They
+       * used to be dropped here entirely, so the one group most likely to be confused
+       * about whose tokens they are spending heard nothing at all. Now they are an
+       * AUDIENCE: the INV pair is theirs and the onboarding sequence is not.
+       */
+      const audience: 'self_signup' | 'member' = provisioned.has(email.toLowerCase()) ? 'member' : 'self_signup';
       if (u.is_suspended === true) { skipped++; continue; }
+      /*
+       * BOTH CONTROLS, OR NEITHER IS REAL.
+       *
+       * Settings has had a "Product updates" toggle writing `notification_prefs.product`
+       * since long before this sequence existed, and the dispatcher read only
+       * `marketing_opt_out` — so somebody who switched product emails off in their account
+       * kept receiving onboarding, and the toggle was decoration. Two controls for one
+       * decision is worse than one: the person who used the control they were shown has
+       * every reason to report us as spam when it does nothing.
+       */
       if (u.marketing_opt_out === true) { skipped++; continue; }
+      if (u.notification_prefs?.product === false) { skipped++; continue; }
+      /*
+       * AND NOT TO AN ADDRESS THAT BOUNCED OR COMPLAINED. The webhook records both on the
+       * user; this is the read that makes recording them worth anything. A soft bounce is
+       * deliberately not here — a full mailbox recovers, and dropping somebody from
+       * onboarding over one temporary refusal is a worse error than one retry.
+       */
+      if (u.email_status === 'bounced' || u.email_status === 'complained') { skipped++; continue; }
 
       const createdAt = Date.parse(String(u.created_at || ''));
       if (!Number.isFinite(createdAt)) { skipped++; continue; }
-      const ageDays = (now - createdAt) / 86_400_000;
 
       const stateRef = db.collection('lifecycle_sent').doc(uid);
       const state = (await stateRef.get()).data() || {};
+
+      /* WB-90 told them it was the last one. It has to have been. */
+      if (state[LIFECYCLE_TERMINAL_STEP]) { skipped++; continue; }
 
       /* The 48-hour cap, across every lifecycle step. */
       const lastAt = Date.parse(String(state.last_sent_at || 0)) || 0;
@@ -3633,8 +3866,11 @@ export const lifecycleEmails = functions.pubsub
 
       for (const step of LIFECYCLE_STEPS) {
         if (state[step.key]) continue;                       // already sent, ever
-        if (ageDays < step.dueAfterDays) continue;           // not due
-        if (ageDays > step.dueAfterDays + step.staleAfterDays) {
+        if (step.audience !== 'any' && step.audience !== audience) continue;
+        const dueAt = step.dueAt(u, now);
+        if (dueAt == null || !Number.isFinite(dueAt)) continue;   // never applies to this user
+        if (now < dueAt) continue;                           // not due
+        if (now > dueAt + step.staleAfterDays * 86_400_000) {
           /* Too late to be onboarding. Recorded as skipped so it is never reconsidered,
              and so the record says what happened rather than staying silently empty. */
           await stateRef.set({ [step.key]: 'skipped_stale', updated_at: new Date().toISOString() }, { merge: true });
@@ -3652,11 +3888,29 @@ export const lifecycleEmails = functions.pubsub
           continue;
         }
 
+        const marker = audience === 'member' ? provisionedInfo.get(email.toLowerCase()) : undefined;
         await sendTemplate(email, step.key, {
           firstName: (String(u.first_name || '').trim().split(/\s+/)[0]) || undefined,
           balance,
-          analysisCount: Number(u.analyses_count || 0),
-        });
+          analysisCount: runs(u),
+          tier: String(u.tier || 'free'),
+          paid: isPaidTier(u),
+          planName: PLAN_LABELS[String(u.tier || 'free')] || 'Your plan',
+          /* The INV pair names the workspace somebody was added to; without it the email
+             says "your workspace" to a person who belongs to three. */
+          containerName: marker?.container,
+          containerType: marker?.container_type,
+          roleLabel: marker?.role_label,
+          /* Eleven signed links, one per score — see the note on the template. */
+          npsUrls: step.key === 'npsAsk'
+            ? Array.from({ length: 11 }, (_, n) => `${SHARE_SITE}/e/nps?u=${encodeURIComponent(uid)}&t=${unsubToken(uid)}&s=${n}`)
+            : undefined,
+          /* ACT-2 names the tool they ran; without it the email says "your first analysis"
+             and reads like it was sent to everybody, which it was. */
+          lastTool: u.last_module ? String(u.last_module) : undefined,
+          lastToolLabel: u.last_module ? (MODULE_LABELS[String(u.last_module)] || undefined) : undefined,
+          lastScore: typeof u.last_score === 'number' ? u.last_score : null,
+        }, uid);
         await stateRef.set({
           [step.key]: new Date().toISOString(),
           last_sent_at: new Date().toISOString(),
@@ -3670,6 +3924,286 @@ export const lifecycleEmails = functions.pubsub
     console.log(`lifecycleEmails: ${sent} sent, ${skipped} skipped, ${users.size} considered`);
     return null;
   });
+
+/* ============================================================
+   ONE-CLICK UNSUBSCRIBE (GTM part 12 §3, §4.5 step 2)
+   ============================================================ */
+
+/**
+ * The other half of the `List-Unsubscribe` header.
+ *
+ * BOTH VERBS WORK, AND BOTH ACTUALLY UNSUBSCRIBE. RFC 8058 one-click is a POST that the
+ * mail provider sends on the reader's behalf with no page involved, so POST must take
+ * effect on its own. GET must too: plenty of clients simply open the link, and a landing
+ * page with a "confirm" button in front of the action is the pattern that makes people
+ * press the spam button instead — which costs the sending domain far more than an
+ * unsubscribe ever does.
+ *
+ * NO AUTH, BY DESIGN. Somebody unsubscribing is frequently not signed in and frequently
+ * not on the device they signed up on. The signed token is the authorisation, and it only
+ * ever grants ONE thing: switching this account's marketing mail off.
+ */
+export const unsubscribe = functions.https.onRequest(async (req: any, res: any) => {
+  res.set('Content-Type', 'text/html; charset=utf-8');
+  res.set('Cache-Control', 'no-store');
+
+  const uid = String(req.query?.u || '');
+  const token = String(req.query?.t || '');
+
+  const page = (heading: string, message: string, ok: boolean) => res.status(ok ? 200 : 400).send(
+    `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>${esc(heading)} — MarketBrain OS</title>
+<style>
+body{margin:0;background:#0B0B0B;color:#fff;font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px}
+main{max-width:520px}
+h1{font-size:26px;line-height:1.2;margin:0 0 14px}
+p{color:#d4d4d4;margin:0 0 12px}
+a{display:inline-block;margin-top:22px;background:#FF0000;color:#fff;text-decoration:none;font-weight:700;padding:14px 24px;border-radius:14px}
+</style></head><body><main>
+<h1>${esc(heading)}</h1><p>${esc(message)}</p>
+<a href="${SHARE_SITE}/settings">Email preferences</a>
+</main></body></html>`);
+
+  if (!uid || !verifyUnsubToken(uid, token)) {
+    /* Deliberately not "no such user": the link is either ours or it is not, and which
+       uids exist is not something an unsubscribe endpoint should answer. */
+    return page('That link is not valid', 'It may have been truncated by an email client. You can change every email setting from your account instead.', false);
+  }
+
+  try {
+    /* `marketing_opt_out` is the field the dispatcher already checks before every send,
+       so this is the whole mechanism — not a second list that has to be kept in step. */
+    await db.collection('users').doc(uid).set({
+      marketing_opt_out: true,
+      marketing_opt_out_at: new Date().toISOString(),
+      /* The same decision, written where the account page reads it: somebody who
+         unsubscribes from an email and then opens Settings must not be told that product
+         emails are still on. */
+      notification_prefs: { product: false },
+    /* `mergeFields` ALONE, never beside `merge` — Firestore rejects a call carrying both.
+       Naming the paths is what keeps this from clobbering the other notification
+       preferences: a plain merge of `{ notification_prefs: { product: false } }` replaces
+       that whole map and silently switches their other email settings back on. */
+    }, { mergeFields: ['marketing_opt_out', 'marketing_opt_out_at', 'notification_prefs.product'] });
+  } catch (e: any) {
+    console.error('unsubscribe failed:', e?.message || e);
+    return page('Something went wrong', 'We could not record that just now. Please try the link again, or change it in your account settings.', false);
+  }
+
+  return page(
+    'Unsubscribed',
+    'You will not receive onboarding emails or product tips again. Receipts, password resets and security notices still come through — those are not something we can switch off.',
+    true,
+  );
+});
+
+/**
+ * EXPORT COUNTER (GTM part 12 §4.2 item 2).
+ *
+ * ACT-3 tells a paying customer they have never used export. It must never say that to
+ * somebody who exports daily — so the fact is taken from our own ledger rather than from
+ * GA4, where an ad-blocker decides what we know. The client writes an `EXPORT` row to
+ * `action_logs`; this turns rows into a counter the nightly dispatcher can read without
+ * scanning the ledger per user.
+ */
+export const onActionLogged = functions.firestore
+  .document('action_logs/{id}')
+  .onCreate(async (snap: admin.firestore.DocumentSnapshot) => {
+    const row = snap.data() || {};
+    if (String(row.action || '') !== 'EXPORT') return null;
+    const uid = String(row.user_id || row.uid || '');
+    if (!uid) return null;
+    try {
+      await db.collection('users').doc(uid).set({
+        export_count: admin.firestore.FieldValue.increment(1),
+        last_export_at: new Date().toISOString(),
+      }, { merge: true });
+    } catch (e: any) {
+      /* Measurement must never be able to fail somebody's export. */
+      console.error('onActionLogged: export counter failed:', e?.message || e);
+    }
+    return null;
+  });
+
+/* ============================================================
+   NPS CAPTURE (GTM part 12 §2.9)
+   ============================================================ */
+
+/**
+ * ELEVEN LINKS, ONE OF WHICH IS CLICKED.
+ *
+ * The score is recorded by the click itself. A survey that needs a page to load and a form
+ * to be submitted measures who has patience, not who would recommend — and on a phone, in
+ * an inbox, that difference is most of the response rate.
+ *
+ * It reuses the unsubscribe token rather than minting a second kind: the thing being
+ * authorised is identical — "this link was in an email we sent to this account" — and two
+ * token schemes for one idea is two things to get wrong.
+ */
+export const nps = functions.https.onRequest(async (req: any, res: any) => {
+  res.set('Content-Type', 'text/html; charset=utf-8');
+  res.set('Cache-Control', 'no-store');
+
+  const uid = String(req.query?.u || '');
+  const token = String(req.query?.t || '');
+  const score = Number(req.query?.s);
+
+  const page = (heading: string, message: string, ok: boolean, comment = false) => res.status(ok ? 200 : 400).send(
+    `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>${esc(heading)} — MarketBrain OS</title>
+<style>
+body{margin:0;background:#0B0B0B;color:#fff;font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px}
+main{max-width:520px;width:100%}
+h1{font-size:26px;line-height:1.2;margin:0 0 14px}
+p{color:#d4d4d4;margin:0 0 12px}
+textarea{width:100%;box-sizing:border-box;background:#141414;color:#fff;border:1px solid #2a2a2a;border-radius:14px;padding:14px;font:inherit;min-height:110px}
+button{margin-top:14px;background:#FF0000;color:#fff;border:0;font-weight:700;font-size:15px;padding:14px 24px;border-radius:14px;cursor:pointer}
+</style></head><body><main>
+<h1>${esc(heading)}</h1><p>${esc(message)}</p>
+${comment ? `<form method="POST" action="/e/nps?u=${esc(uid)}&amp;t=${esc(token)}&amp;s=${esc(String(score))}">
+<textarea name="comment" maxlength="2000" placeholder="Anything you want to add? Optional."></textarea>
+<button type="submit">Send</button></form>` : ''}
+</main></body></html>`);
+
+  if (!uid || !verifyUnsubToken(uid, token) || !Number.isInteger(score) || score < 0 || score > 10) {
+    return page('That link is not valid', 'It may have been truncated by an email client.', false);
+  }
+
+  try {
+    if (req.method === 'POST') {
+      /* The optional comment, arriving from the form on the thank-you page. Stored against
+         the same document so a score and its reason never drift apart. */
+      const comment = String(req.body?.comment || '').slice(0, 2000);
+      await db.collection('nps_responses').doc(`${uid}_${score}`).set({
+        uid, score, comment, comment_at: new Date().toISOString(),
+      }, { merge: true });
+      return page('Thank you', 'Read and noted.', true);
+    }
+
+    await db.collection('nps_responses').doc(`${uid}_${score}`).set({
+      uid, score, created_at: new Date().toISOString(),
+    }, { merge: true });
+    /* On the user too, so the dispatcher can hold off asking again without a second read. */
+    await db.collection('users').doc(uid).set({
+      nps_last_score: score, nps_last_at: new Date().toISOString(),
+    }, { mergeFields: ['nps_last_score', 'nps_last_at'] });
+  } catch (e: any) {
+    console.error('nps failed:', e?.message || e);
+    return page('Something went wrong', 'We could not record that just now.', false);
+  }
+
+  return page(
+    `${score} out of 10 — thank you`,
+    score >= 9
+      ? 'Recorded. If you have thirty seconds, what would you tell somebody about it?'
+      : score >= 7
+        ? 'Recorded. What would have made it a nine or a ten?'
+        : 'Recorded, and taken seriously. What went wrong?',
+    true,
+    true,
+  );
+});
+
+/* ============================================================
+   RESEND WEBHOOK (GTM part 12 §4.2 item 6) — what happened to the mail we sent
+   ============================================================ */
+
+/**
+ * THE ONLY HONEST SOURCE FOR THE PART 12 §5 NUMBERS.
+ *
+ * A sequence measured by what we HANDED to Resend measures our own intentions. Delivery,
+ * clicks, bounces and complaints are facts about the recipient's mail server, and they
+ * only arrive here.
+ *
+ * TWO OF THESE EVENTS ARE NOT STATISTICS. A hard bounce means the address does not exist,
+ * and a complaint means somebody pressed the spam button — continuing to mail either one
+ * is how a sending domain loses its reputation, and the first thing that costs is the
+ * transactional mail everybody else depends on. Both stop future marketing mail here, in
+ * the same write that records them.
+ *
+ * IDEMPOTENT BY CONSTRUCTION. Svix retries on any non-2xx, so the same event arrives more
+ * than once as a matter of course: every write is a merge of a named timestamp field onto
+ * a document keyed by the email's own id, so a replay overwrites a value with itself.
+ */
+export const resendWebhook = functions.https.onRequest(async (req: any, res: any) => {
+  if (req.method !== 'POST') { res.status(405).send('Use POST.'); return; }
+
+  if (!webhookConfigured()) {
+    /* Not configured is not the same as rejected: 503 tells Resend to retry, so events
+       that arrive between a deploy and the secret being set are not lost. */
+    res.status(503).send('Webhook not configured.');
+    return;
+  }
+
+  const raw: Buffer | undefined = (req as any).rawBody;
+  if (!raw) {
+    console.error('resendWebhook: no rawBody — refusing to verify against a re-serialised payload');
+    res.status(400).send('Bad request.');
+    return;
+  }
+
+  const event = verifyResendWebhook(raw.toString('utf8'), req.headers || {});
+  if (!event) { res.status(401).send('Invalid signature.'); return; }
+
+  const field = EVENT_FIELD[String(event.type)];
+  if (!field) {
+    /* An event type we do not model. Acknowledged so Resend stops retrying it, and logged
+       so a new one shows up in the logs rather than in a number nobody can explain. */
+    console.log(`resendWebhook: unmodelled event ${event.type}`);
+    res.status(200).send('ok');
+    return;
+  }
+
+  const emailId = String(event.data?.email_id || event.data?.message_id || '');
+  const to = Array.isArray(event.data?.to) ? String(event.data.to[0] || '') : '';
+  const nowIso = new Date().toISOString();
+
+  try {
+    if (emailId) {
+      await db.collection('email_log').doc(emailId).set({
+        [field]: String(event.data?.created_at || nowIso),
+        last_event: event.type,
+        to,
+        subject: String(event.data?.subject || '').slice(0, 200),
+        updated_at: nowIso,
+      }, { merge: true });
+    }
+
+    /*
+     * A BOUNCE OR A COMPLAINT HAS TO REACH THE ACCOUNT, not just the log. The log answers
+     * "how did that send go"; the user document is what the dispatcher reads before the
+     * NEXT one, and a complaint recorded only in a log is a complaint we will earn again.
+     */
+    const status = emailStatusFor(event);
+    if (status && to) {
+      const match = await db.collection('users').where('email', '==', to).limit(1).get();
+      if (!match.empty) {
+        const patch: Record<string, unknown> = { email_status: status, email_status_at: nowIso };
+        const fields = ['email_status', 'email_status_at'];
+        if (status !== 'soft_bounce') {
+          /* Same decision the unsubscribe link writes, so all three controls — the link,
+             the Settings toggle and this — end in one place the dispatcher already reads. */
+          patch.marketing_opt_out = true;
+          patch.notification_prefs = { product: false };
+          fields.push('marketing_opt_out', 'notification_prefs.product');
+        }
+        await match.docs[0]!.ref.set(patch, { mergeFields: fields });
+        console.log(`resendWebhook: ${event.type} for ${match.docs[0]!.id} — marketing mail stopped (${status})`);
+      }
+    }
+  } catch (e: any) {
+    /* A 500 asks Svix to retry, which is right: the event is a fact we have not recorded. */
+    console.error('resendWebhook write failed:', e?.message || e);
+    res.status(500).send('Retry.');
+    return;
+  }
+
+  res.status(200).send('ok');
+});
 
 /* ============================================================
    PAYSTACK WEBHOOK (GTM parts 15, 19 §5; DO-NOW #1)
@@ -4065,6 +4599,45 @@ export const revokeShareLink = functions.https.onCall(async (data: any, context:
   }
   await ref.set({ revoked: true, revoked_at: new Date().toISOString() }, { merge: true });
   return { id, revoked: true };
+});
+
+
+/**
+ * THE OWNER'S INVENTORY, so revocation is a control and not a promise.
+ *
+ * The shared page tells every reader that "the person who shared it can switch the link
+ * off at any time". That sentence was true of the SERVER and false of the PRODUCT: the
+ * revoke callable shipped with nothing that could call it, so a person who had sent a
+ * client's audit to the wrong address had no way to take it back. A link cannot be turned
+ * off from a screen that cannot list it.
+ *
+ * Read through a callable rather than by opening `shared_results` to clients: the
+ * collection is what a public page renders, and a rule permissive enough to list your own
+ * rows is a rule somebody later widens.
+ */
+export const listShareLinks = functions.https.onCall(async (_data: any, context: any) => {
+  const uid = context.auth?.uid;
+  if (!uid) throw new functions.https.HttpsError('unauthenticated', 'Sign in first.');
+
+  /* Equality filters only, deliberately: two equalities need no composite index, and a
+     hundred live links is already far past anything an honest account reaches. */
+  const snap = await db.collection('shared_results')
+    .where('owner_uid', '==', uid).where('revoked', '==', false).limit(100).get();
+
+  const links = snap.docs.map((doc) => {
+    const row = doc.data();
+    return {
+      id: doc.id,
+      url: `${SHARE_SITE}/s/${doc.id}`,
+      label: MODULE_LABELS[String(row.module)] || 'Analysis',
+      score: typeof row.score === 'number' ? row.score : null,
+      views: Number(row.views || 0),
+      created_at: row.created_at?.toDate?.()?.toISOString?.() || null,
+    };
+  });
+  /* Sorted here, not in the query, for the same index reason. */
+  links.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+  return { links };
 });
 
 /**

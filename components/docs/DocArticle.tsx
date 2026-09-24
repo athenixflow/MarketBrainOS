@@ -9,12 +9,20 @@ import { scrollToHeading } from './useScrollSpy';
 import Icon from './icons';
 import Seo from '../Seo';
 import { SITE_URL, SITE_NAME, DOCS_LAST_UPDATED, canonicalUrl } from '../../config/seo';
+import { track } from '../../services/analytics';
 
 const DocArticle: React.FC = () => {
   const { categoryId, articleId } = useParams();
   const location = useLocation();
   const article = getArticle(categoryId, articleId);
   const category = getCategory(categoryId);
+
+  /* WHICH ARTICLES GET READ. The docs hub is a support cost and an acquisition surface at
+     once, and both readings need the same fact: which pages people actually open. Fired on
+     the article, not the hash change, so scrolling to a heading is not a second read. */
+  useEffect(() => {
+    if (article) track('docs_article_viewed', { article_slug: article.id, category: article.categoryId });
+  }, [article]);
 
   // On navigation: jump to the #anchor (set via react-router) or to the top.
   useEffect(() => {

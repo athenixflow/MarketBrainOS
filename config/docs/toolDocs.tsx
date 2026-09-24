@@ -171,14 +171,15 @@ const conversionDoctor: DocArticle = {
     { type: 'heading', id: 'overview', text: 'Overview' },
     { type: 'paragraph', text: 'Conversion Doctor diagnoses a landing page or funnel step for conversion friction — messaging gaps, unclear value, weak calls-to-action, and journey blockers — and returns a prioritized fix list with a 0–100 score.' },
     { type: 'heading', id: 'inputs', text: 'Inputs, field by field' },
-    { type: 'paragraph', text: 'The main input is **Page Source**: paste a URL starting with `https://` **or** the raw page copy (**min 20 characters**).' },
+    { type: 'paragraph', text: 'The main input is **Page Source**: paste a URL starting with `https://` **or** the raw page copy (**min 20 characters**). **Target audience** and **conversion goal** are required as well — the audit is weighed against them, so it cannot run without them.' },
     { type: 'table', caption: 'Fields', headers: ['Field', 'What to enter'], rows: [
       ['Page Source (main input)', 'A public `https://` URL, or paste the page copy directly.'],
+      ['Target Audience (required)', 'Who the page is meant to convert — "first-time visitors from cold Meta ads", not "everyone".'],
+      ['Conversion Goal (required)', 'The single action the page should drive — start a trial, book a call, buy.'],
       ['Page Context', 'What kind of page it is — Landing Page, Homepage, Sales Page, or Funnel Step.'],
-      ['Target Audience (advanced)', 'Who the page is meant to convert.'],
-      ['Conversion Goal (advanced)', 'The single action the page should drive.'],
       ['Traffic Source (advanced)', 'Where visitors arrive from — sets expectations for intent and awareness.'],
     ] },
+    { type: 'callout', tone: 'info', title: 'Why those two are required', text: 'A page is not good or bad in the abstract. The same headline is strong for a warm list and weak for cold traffic, and copy that serves a trial signup can undermine a demo booking — so every blocker is judged against the audience and the goal you name. Where the page looks written for a different audience or a different action, that becomes the leading finding. Most AI page auditors never ask, which is why their output reads the same for every page.' },
     { type: 'callout', tone: 'tip', title: 'When you give it a URL', text: 'The page is fetched and read before the audit runs, and the report is labelled with the URL that was actually read (after any redirects). If the page cannot be read — it is behind a login, returns an error, or renders its content with JavaScript after load — you get that reason and **no tokens are charged**. Paste the copy directly and run it again.' },
     { type: 'heading', id: 'results', text: 'Reading the results' },
     { type: 'paragraph', text: 'You get an **Intelligence Grade (0–100)**, a verdict, and sections covering the specific blockers and the recommended fixes in priority order. Work top-down: the highest-impact friction is surfaced first.' },
@@ -241,7 +242,46 @@ const workflowPipeline: DocArticle = {
   ],
 };
 
-export const bespokeToolArticles: DocArticle[] = [angleMiner, conversionDoctor, testLab, workflowPipeline];
+
+/**
+ * The free public scorer. Documented under Tools because that is where somebody looks for
+ * it, and flagged as the one thing here that needs no account — the docs are read by
+ * people deciding whether to sign up as often as by people who already have.
+ */
+const landingPageScore: DocArticle = {
+  id: 'landing-page-score',
+  categoryId: CATEGORY,
+  title: 'Free landing page score',
+  summary: 'Score any public page 0-100 with its three biggest blockers - no account, no tokens.',
+  keywords: ['free', 'no account', 'public', 'landing page', 'score', 'audit', 'try', 'demo', 'scorer'],
+  blocks: [
+    { type: 'keyValue', pairs: [
+      { label: 'Where', value: '/tools/landing-page-score' },
+      { label: 'Token cost', value: 'None - it does not touch your balance' },
+      { label: 'Account', value: 'Not required' },
+      { label: 'Limit', value: '3 pages per day, per network' },
+    ] },
+    { type: 'heading', id: 'what-it-does', text: 'What it does' },
+    { type: 'paragraph', text: 'Paste a public URL and you get a 0-100 conversion score, a one-line verdict, and the three most costly blockers on the page. The page is fetched and read first, exactly as [Conversion Doctor](/documentation/tools/conversion-doctor) does it - the score describes the page, not the address.' },
+    { type: 'heading', id: 'free-vs-full', text: 'What is free, and what is not' },
+    { type: 'paragraph', text: 'The split is deliberate, and it is stated on the page rather than discovered after waiting:' },
+    { type: 'table', headers: ['Free scorer', 'Conversion Doctor (free account)'], rows: [
+      ['A 0-100 score and a one-line verdict', 'The same score, with the full reasoning'],
+      ['The three biggest blockers', 'Every blocker found, ranked by impact'],
+      ['-', 'The specific fix for each one, and what to expect from it'],
+      ['-', 'Ready-to-paste rewrites of the highest-leverage copy'],
+      ['-', 'Saved to your history, exportable, shareable as a link'],
+    ] },
+    { type: 'callout', tone: 'info', title: 'It is the same engine', text: 'The free scorer runs a faster model over the same fetched page, because it returns three findings rather than a full report. It is not a weaker demo of a better product - it is a smaller job.' },
+    { type: 'heading', id: 'limits', text: 'Limits, and why they exist' },
+    { type: 'paragraph', text: 'Three pages a day per network, and a cap on the total across everybody each day. Each run costs us a real model call on behalf of somebody with no account, so the limits are what keep it free rather than switched off. A page scored earlier the same day returns the stored answer immediately and does not count against your three.' },
+    { type: 'callout', tone: 'tip', title: 'If you hit the limit', text: 'A free account includes a token allowance and the full audit, which is more than the scorer gives you anyway.' },
+    { type: 'heading', id: 'errors', text: 'When a page cannot be read' },
+    { type: 'paragraph', text: 'You are told why rather than given a score for nothing: the page is behind a login, it returns an error, it blocks automated readers, or it renders its content with JavaScript after load. Pasting the copy into [Conversion Doctor](/documentation/tools/conversion-doctor) works in every one of those cases.' },
+  ],
+};
+
+export const bespokeToolArticles: DocArticle[] = [angleMiner, conversionDoctor, testLab, workflowPipeline, landingPageScore];
 
 // Overview article that opens the Tools category.
 export const toolsOverviewArticle: DocArticle = {

@@ -11,6 +11,7 @@ import { callCreateAgencyMember, callUpdateAgencyMember, callManageAgencyMember 
 import { can, Membership, ROLE_LABELS } from '../../services/permissionService';
 import { TOOL_CONFIG_LIST } from '../../config/toolConfigs';
 import { DEFAULT_PRICING_CONFIG } from '../../config/pricingConfig';
+import { track } from '../../services/analytics';
 
 const ASSIGNABLE: AgencyRole[] = ['agency_director', 'account_manager', 'strategist', 'analyst', 'viewer'];
 const DEFAULT_BUDGET = 200;
@@ -78,6 +79,9 @@ const AgencyMembers: React.FC<{
       } else if (mode === 'invite') {
         // Wrapper posts { action, payload }; the server reads payload.agencyId/email/role only.
         await callManageAgencyMember('invite', { agencyId: agency.id, email, role });
+        /* The invite loop is the product's only organic distribution today (part 03 §1),
+           and `role` separates a colleague from a client seat. */
+        track('invite_sent', { container_type: 'agency', role, surface: 'members_panel' });
         flash(`Invitation sent to ${email}.`);
       } else {
         await callCreateAgencyMember({ agencyId: agency.id, email, password, role, allowed_tools, token_budget: budget });

@@ -83,6 +83,11 @@ export default defineConfig(({ mode }) => {
       'process.env.FIREBASE_MESSAGING_SENDER_ID': JSON.stringify(process.env.FIREBASE_MESSAGING_SENDER_ID || env.FIREBASE_MESSAGING_SENDER_ID || "516175764122"),
       'process.env.FIREBASE_APP_ID': JSON.stringify(process.env.FIREBASE_APP_ID || env.FIREBASE_APP_ID || "1:516175764122:web:e165516d5e6fbb3f1b9d23"),
       'process.env.FIREBASE_MEASUREMENT_ID': JSON.stringify(process.env.FIREBASE_MEASUREMENT_ID || env.FIREBASE_MEASUREMENT_ID || "G-JE1NN5VX00"),
+      // reCAPTCHA Enterprise SITE key for App Check. Public by definition — a site key is
+      // readable in any page that uses it, which is why it belongs in this block and its
+      // secret counterpart never would. Empty until one is configured, and empty means
+      // App Check does not start at all.
+      'process.env.RECAPTCHA_SITE_KEY': JSON.stringify(process.env.RECAPTCHA_SITE_KEY || env.RECAPTCHA_SITE_KEY || ""),
 
       // No Gemini key here. There was a `process.env.VITE_GEMINI_API_KEY` entry that resolved to
       // undefined only because nothing sets that variable — with the empty-prefix loadEnv above, the

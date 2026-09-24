@@ -21,6 +21,7 @@ import TokenBudgets from '../components/agency/TokenBudgets';
 import CapacityPanel from '../components/CapacityPanel';
 import { callPurchaseExpansion } from '../services/persistenceService';
 import { DEFAULT_PRICING_CONFIG } from '../config/pricingConfig';
+import { track } from '../services/analytics';
 
 const TABS = ['Dashboard', 'Clients', 'Members', 'Analytics', 'Budgets', 'Settings'] as const;
 type Tab = typeof TABS[number];
@@ -100,6 +101,9 @@ const AgencyHub: React.FC = () => {
     setBusy(true); setError('');
     try {
       await callManageAgencyMember('accept', { agencyId: inv.agency_id, invitationId: inv.id });
+      /* The other end of the loop: sent minus accepted is the number that says
+         whether invitations reach people or bounce off an inbox. */
+      track('invite_accepted', { container_type: 'agency' });
       await refreshMemberships();
       if (user?.email) setInvites(await getAgencyInvitations(user.email));
       setActiveId(inv.agency_id);

@@ -29,7 +29,7 @@ import { getScoreBand } from '../services/scoreBands';
 import { ExpectedOutcome, AnalysisPreview, RunProgress, CharCounter, FieldHint, RunStage, TAKING_LONG_MS } from './ToolGuide';
 import { ResultItemList } from './ResultSections';
 import { track } from '../services/analytics';
-import { callCreateShareLink } from '../services/persistenceService';
+import { callCreateShareLink, logUserAction } from '../services/persistenceService';
 import { checkTokenBalance, canExport, TokenVerdict } from '../config/access';
 import { useRunGuard, IN_FLIGHT_NOTE } from './useRunGuard';
 
@@ -270,6 +270,10 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
         score: data.score,
         duration_ms: Date.now() - startedAt,
         saved: data.saveError == null,
+        /* WHICH RUN THIS IS, because activation is the SECOND one and a funnel that cannot
+           tell run 1 from run 4 cannot see it. Read from the profile the run just
+           incremented server-side; the profile in hand is the pre-run value, so +1. */
+        run_index: Number(profile?.analyses_count || 0) + 1,
       });
       setRunStage('completed');
       setResult(data);
@@ -300,9 +304,22 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
   const exportText = () => (result ? formatToolResult(config.title, result) : '');
   const fileBase = `${config.title.replace(/\s+/g, '_')}_Report`;
   const handleCopy = () => copyToClipboard(exportText());
-  /* Export is the paid gate's visible edge; every format reports through one place. */
-  const trackExport = (format: 'txt' | 'csv' | 'pdf') =>
+  /*
+   * Export is the paid gate's visible edge; every format reports through one place.
+   *
+   * TWICE, ON PURPOSE, AND THEY ARE NOT THE SAME RECORD. `track` is GA4: it answers "how
+   * many exports happened", and an ad-blocker is free to drop it. `logUserAction` is our
+   * own ledger: it answers "has THIS person ever exported", which is what ACT-3 needs
+   * before it tells somebody they have never used the feature they are paying for. A
+   * funnel measured only in the browser would send that email to people who export daily.
+   */
+  const trackExport = (format: 'txt' | 'csv' | 'pdf') => {
     track('export_clicked', { format, tool_slug: config.module, plan_tier: profile?.tier });
+    if (user) {
+      logUserAction({ user_id: user.uid, module: config.title, action: 'EXPORT', metadata: { format } })
+        .catch(() => undefined);   // a missing log must never cost somebody their download
+    }
+  };
   const handleExportTxt = () => { trackExport('txt'); downloadAsText(fileBase, exportText()); };
   const handleExportCSV = () => { if (result) { trackExport('csv'); downloadAsCSV(fileBase, toolResultToCSV(result)); } };
   const handleExportPDF = () => {
@@ -354,6 +371,7 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
         report_type: 'analysis',
         content: { score: result.score, verdict: result.verdict, summary: result.summary, sections: result.sections },
       }, scope);
+      track('report_created', { tool_slug: config.module, scope_type: scope?.level });
       setActionMsg('Saved to Reports');
     } catch (e: any) {
       console.error(e);
@@ -551,7 +569,13 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
                     tone="light"
                     tabs={result.sections.map(s => s.title)}
                     activeTab={activeSection?.title || ''}
-                    onTabChange={setActiveTab}
+                    /* The spec's `result_section_expanded`: sections are tabs here, so
+                       "opened" is a tab change. The first section is open on arrival and
+                       nobody chose it, so it is not an event. */
+                    onTabChange={(title: string) => {
+                      setActiveTab(title);
+                      track('result_section_expanded', { tool_slug: config.module, section: title });
+                    }}
                   />
                   {activeSection && <ResultItemList items={activeSection.items} />}
                 </Card>

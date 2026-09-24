@@ -10,6 +10,13 @@ export interface RenderedEmail { subject: string; html: string; }
 const money = (n: number) => `$${(Number(n) || 0).toFixed(2)}`;
 const span = (t: string) => `<span style="color:#ff5a5a;">${esc(t)}</span>`;
 
+/** The footer every lifecycle email carries. One place, so none of them can forget it. */
+const lifecycleFooter = (d: { unsubUrl?: string }) => ({
+  footerLinks: d.unsubUrl ? [...FOOTER_LINKS, { label: 'Unsubscribe', href: d.unsubUrl }] : FOOTER_LINKS,
+  footerNote: "You're receiving this because you created an account at marketbrainos.app. "
+    + 'One click unsubscribes you from onboarding and tips; receipts and security emails keep coming.',
+});
+
 // ---- TIER 1 -----------------------------------------------------------------------------------
 
 const welcome = (d: { firstName?: string; verifyUrl?: string; monthlyTokens?: number }): RenderedEmail => ({
@@ -471,7 +478,7 @@ const accountDeleted = (d: { firstName?: string }): RenderedEmail => ({
  * differentiator. It is not one, because the product does not predict; the line here
  * claims the comparison it actually performs.
  */
-const onboardingWhyNotChatgpt = (d: { firstName?: string }): RenderedEmail => ({
+const onboardingWhyNotChatgpt = (d: { firstName?: string; unsubUrl?: string }): RenderedEmail => ({
   subject: 'Honest answer to "why not just use ChatGPT?"',
   html: renderEmail({
     preheader: 'Same model family. Different output: scored, sectioned, saved, comparable.',
@@ -489,6 +496,7 @@ const onboardingWhyNotChatgpt = (d: { firstName?: string }): RenderedEmail => ({
       ]) +
       button('Compare two headlines →', `${SITE_URL}/test-lab`, 'One run, 5 tokens') +
       paragraph('If two headlines are being argued about right now, that is the fastest way to feel the difference.'),
+    ...lifecycleFooter(d),
   }),
 });
 
@@ -501,7 +509,7 @@ const onboardingWhyNotChatgpt = (d: { firstName?: string }): RenderedEmail => ({
  * whether anything was actually run.
  */
 const onboardingWeekOne = (d: {
-  firstName?: string; balance?: number; analysisCount?: number;
+  firstName?: string; balance?: number; analysisCount?: number; unsubUrl?: string;
 }): RenderedEmail => {
   const ran = (d.analysisCount ?? 0) > 0;
   return {
@@ -527,6 +535,378 @@ const onboardingWeekOne = (d: {
         : paragraph(`Hi${d.firstName ? ` ${esc(d.firstName)}` : ''} — the quickest first run is a page you already have: paste the URL into Conversion Doctor, say who it is for and what you want them to do, and read the three things it finds.`) +
           paragraph('It costs 4 tokens and takes about a minute.') +
           button('Audit a page →', `${SITE_URL}/conversion-doctor`, 'Roughly 60 seconds'),
+      ...lifecycleFooter(d),
+    }),
+  };
+};
+
+
+/* ==============================================================================================
+   LIFECYCLE — the onboarding sequence and the activation nudges (GTM part 12 §2.1–2.2)
+
+   These are MARKETING mail: nobody asked for any individual one of them. Every template here
+   takes `unsubUrl` and puts it in the footer, `MARKETING_KEYS` lists them, and `sendTemplate`
+   refuses to send one without a working link. The transactional templates above deliberately
+   do not carry it — an unsubscribe control on a receipt teaches people that unsubscribing
+   stops their receipts.
+   ============================================================================================== */
+
+
+/**
+ * ONB-D1 — how to read a report.
+ *
+ * Branches on whether they have run anything, because the same email is either "here is what
+ * your result means" or "here is what will come back" — and sending the first to somebody
+ * with no results is how a sequence tells its reader it is not paying attention.
+ */
+const onboardingHowToRead = (d: {
+  firstName?: string; analysisCount?: number; unsubUrl?: string;
+}): RenderedEmail => {
+  const ran = (d.analysisCount ?? 0) > 0;
+  return {
+    subject: ran ? 'Your result, explained' : 'The three parts of every MarketBrain OS report',
+    html: renderEmail({
+      preheader: 'Why "why it matters" and "do this" are the parts to act on, not the score.',
+      tag: 'Getting started',
+      heading: ran ? 'How to read what came back' : 'What a report looks like',
+      heroSubtext: ran
+        ? 'You have a result. The score is the least useful part of it.'
+        : 'Before your first run, here is what comes back — so you know what to look for.',
+      body:
+        paragraph(`Hi${d.firstName ? ` ${esc(d.firstName)}` : ''} — every report has three layers, and they are worth different amounts.`) +
+        steps([
+          '<b>The score or verdict</b> — a 0–100 number. Useful for comparing two versions of the same thing. Not useful on its own, and not a forecast.',
+          '<b>The findings, each with why it matters</b> — the reasoning. This is where you decide whether you agree.',
+          '<b>"Do this" per finding</b> — the concrete change. Copy it into your task list.',
+        ]) +
+        callout('Run it, change one thing, run it again. Same input, same structure, comparable score — that repeatability is the thing an open chat window cannot give you.', 'The habit that makes it pay') +
+        button(ran ? 'Open your results →' : 'Run your first analysis →', `${SITE_URL}${ran ? '/history' : '/conversion-doctor'}`),
+      ...lifecycleFooter(d),
+    }),
+  };
+};
+
+/**
+ * ONB-D14 — a question from the founder.
+ *
+ * DELIBERATELY PLAIN. No hero art, no button, no tracked CTA: the ask is a reply, and an
+ * email that looks like a campaign does not get one. The spec calls this Mode A with the
+ * founder on reply-to; the layout's reply-to is already a monitored address.
+ */
+const onboardingFounderQuestion = (d: {
+  firstName?: string; analysisCount?: number; unsubUrl?: string;
+}): RenderedEmail => {
+  const n = d.analysisCount ?? 0;
+  return {
+    subject: 'What were you trying to decide?',
+    html: renderEmail({
+      preheader: 'One question, no survey. A sentence is plenty.',
+      tag: 'From the founder',
+      heading: 'One question',
+      heroSubtext: 'I read every reply to this one.',
+      body:
+        paragraph(`Hi${d.firstName ? ` ${esc(d.firstName)}` : ''} — two weeks ago you signed up${n > 0 ? ` and ran ${n} analys${n === 1 ? 'is' : 'es'}` : ''}.`) +
+        paragraph('What decision were you trying to make? A launch, a page rewrite, a pitch, a client deliverable — whatever it was.') +
+        paragraph('I ask because the tools are only as good as the decisions they are pointed at, and your answer tells me what to build next. Just hit reply.') +
+        paragraph('— Founder, MarketBrain OS'),
+      ...lifecycleFooter(d),
+    }),
+  };
+};
+
+/**
+ * ONB-D30 — where you are, and what is next.
+ *
+ * THEIR NUMBERS, NOT OUR PITCH. Three lines of account summary and one next step chosen by
+ * what those lines say: somebody who has run nothing needs a different sentence from somebody
+ * who has run eleven times, and a single generic "upgrade?" serves neither.
+ */
+const onboardingMonthOne = (d: {
+  firstName?: string; balance?: number; analysisCount?: number; tier?: string; unsubUrl?: string;
+}): RenderedEmail => {
+  const n = d.analysisCount ?? 0;
+  const balance = d.balance ?? 0;
+  const paid = String(d.tier || 'free') !== 'free';
+  const next = n === 0
+    ? paragraph('You have not run anything yet, which usually means the first step felt like work. It does not have to be: paste one URL into Conversion Doctor and the tool does the rest.')
+      + button('Audit a page →', `${SITE_URL}/conversion-doctor`, '4 tokens · about a minute')
+    : paid
+      ? paragraph('If somebody else is reading your exports — a client, a manager, a colleague — Team gives them their own login and a shared library of everything you have run.')
+        + button('See what Team adds →', `${SITE_URL}/pricing`)
+      : paragraph(`You have ${balance} token${balance === 1 ? '' : 's'} left. They do not refill, but they do not expire either. The highest-value run is usually the one you are avoiding: the page or offer you already suspect is weak.`)
+        + button('Pick a tool →', `${SITE_URL}/`);
+  return {
+    subject: 'One month in — your numbers',
+    html: renderEmail({
+      preheader: 'A short account summary, and the one next step that fits it.',
+      tag: 'Month one',
+      heading: 'Thirty days in',
+      heroSubtext: 'Your account in two lines, and what to do with it.',
+      body:
+        paragraph(`Hi${d.firstName ? ` ${esc(d.firstName)}` : ''} — here is where you are:`) +
+        metaTable([
+          { k: 'Analyses run', v: String(n) },
+          { k: 'Tokens remaining', v: String(balance) },
+        ]) +
+        next,
+      ...lifecycleFooter(d),
+    }),
+  };
+};
+
+/**
+ * ACT-1 — signed up, ran nothing (48h).
+ *
+ * The spec's diagnosis is the whole email: people do not start because the first step LOOKS
+ * like it needs a brief. So the body is three inputs that need no preparation at all, with
+ * their costs, rather than encouragement.
+ */
+const activationNoRun = (d: { firstName?: string; balance?: number; unsubUrl?: string }): RenderedEmail => ({
+  subject: `Your ${d.balance ?? 20} tokens are still untouched`,
+  html: renderEmail({
+    preheader: 'No brief to write. Paste a URL, get a scored audit.',
+    tag: 'Getting started',
+    heading: 'One URL is all you need',
+    heroSubtext: 'The first step looks like it needs preparation. It does not.',
+    body:
+      paragraph(`Hi${d.firstName ? ` ${esc(d.firstName)}` : ''} — three inputs that work with zero preparation:`) +
+      steps([
+        '<b>Your homepage URL</b> → Conversion Doctor (4 tokens). The page is fetched and read for you.',
+        "<b>A competitor's page URL</b> → Conversion Doctor again. Compare the two scores.",
+        "<b>Two headlines you cannot choose between</b> → TestLab Pro (5 tokens). Paste both.",
+      ]) +
+      paragraph(`Any one of them takes about a minute and leaves you with most of your ${d.balance ?? 20} tokens.`) +
+      button('Paste a URL →', `${SITE_URL}/conversion-doctor`),
+    ...lifecycleFooter(d),
+  }),
+});
+
+/**
+ * ACT-2 — one run, no second (72h after the first).
+ *
+ * THE SECOND RUN IS ACTIVATION (part 03 §6.2), so this is the single highest-leverage email
+ * in the sequence. It names the tool they used and the one that pairs with it, because "come
+ * back and run something" is advice nobody acts on.
+ */
+const PAIRINGS: Record<string, string> = {
+  ConversionDoctor_Audit: 'Apply one of the rewrites it gave you, then put the old headline against the new one in <b>TestLab Pro</b> (5 tokens).',
+  TestLab_Simulation: 'Put the winning variant on the page and run <b>Conversion Doctor</b> on the live URL (4 tokens).',
+  AngleMiner_Generate: 'Take your top two angles into <b>TestLab Pro</b> and let it rank them (5 tokens).',
+  StrategyLab_Analyze: '<b>Growth Analyzer</b> answers the follow-up: where this grows fastest (5 tokens).',
+  AudienceIntel_Analyze: 'Feed the personas into <b>Messaging Analyzer</b> and score your copy against them (3 tokens).',
+  OfferAnalyzer_Analyze: 'Run <b>Conversion Doctor</b> on the page that sells the offer — the two findings usually disagree, and that gap is the work.',
+};
+
+const activationSecondRun = (d: {
+  firstName?: string; lastTool?: string; lastToolLabel?: string; lastScore?: number | null; unsubUrl?: string;
+}): RenderedEmail => {
+  const pairing = PAIRINGS[String(d.lastTool)] || 'Run the same tool on a competitor and compare the two scores.';
+  const label = d.lastToolLabel || 'your first analysis';
+  return {
+    subject: 'One result is a data point. Two is a direction.',
+    html: renderEmail({
+      preheader: 'Same input, one change, comparable score. That is the whole method.',
+      tag: 'Next step',
+      heading: 'The natural next step',
+      heroSubtext: `You ran ${esc(label)}${typeof d.lastScore === 'number' ? ` and scored ${d.lastScore}/100` : ''}.`,
+      body:
+        paragraph(`Hi${d.firstName ? ` ${esc(d.firstName)}` : ''} — one result tells you where you stand. The second tells you whether a change helped, which is the only question that matters.`) +
+        callout(pairing, 'From where you are') +
+        button('Open your last result →', `${SITE_URL}/history`),
+      ...lifecycleFooter(d),
+    }),
+  };
+};
+
+
+/**
+ * ACT-3P — paying for export, never exported.
+ *
+ * The free-tier twin (ACT-3F) is a pitch to upgrade and is deliberately NOT here: it asks
+ * somebody to buy something that cannot be bought yet. It belongs with the rest of the
+ * billing-gated mail.
+ */
+const activationNeverExported = (d: {
+  firstName?: string; analysisCount?: number; planName?: string; unsubUrl?: string;
+}): RenderedEmail => ({
+  subject: 'Your results can leave the app',
+  html: renderEmail({
+    preheader: 'Turn a saved result into something you can hand to a client or a manager.',
+    tag: 'Your plan',
+    heading: 'The export button you have not pressed',
+    heroSubtext: `${d.analysisCount ?? 0} analyses run, none exported yet.`,
+    body:
+      paragraph(`Hi${d.firstName ? ` ${esc(d.firstName)}` : ''} — export is the part of ${esc(d.planName || 'your plan')} that turns a result into a deliverable. Three formats, all from the same result:`) +
+      featureRows([
+        { icon: '📄', title: 'PDF', desc: 'The full report — score, findings, actions — plain enough to forward to a client.' },
+        { icon: '📊', title: 'CSV', desc: 'Findings as rows, for a sheet or a task tracker.' },
+        { icon: '📝', title: 'TXT', desc: 'Clean text for pasting into a doc or a deck.' },
+      ]) +
+      paragraph('Open any result in History, or group several with <strong>Save as report</strong> first and export the set together.') +
+      button('Export a result →', `${SITE_URL}/history`),
+    ...lifecycleFooter(d),
+  }),
+});
+
+/**
+ * INV-1 — the first day inside somebody else's workspace.
+ *
+ * A member did not choose this product; their employer did. The three things below are the
+ * three that cause support questions, in the order they cause them — whose tokens am I
+ * spending, where does my work end up, and what am I allowed to do.
+ */
+const memberFirstSteps = (d: {
+  firstName?: string; containerName?: string; containerType?: string; roleLabel?: string; unsubUrl?: string;
+}): RenderedEmail => {
+  const where = d.containerType === 'agency' ? '/agency' : d.containerType === 'enterprise' ? '/enterprise' : '/team';
+  const name = d.containerName || 'your workspace';
+  return {
+    subject: `You're in ${name} — three things to know`,
+    html: renderEmail({
+      preheader: 'Where results go, whose tokens you are using, and what your role can do.',
+      tag: 'Getting started',
+      heading: `Your first day in ${esc(name)}`,
+      heroSubtext: d.roleLabel ? `You are a ${esc(d.roleLabel)} here.` : 'Three things that save confusion later.',
+      body:
+        paragraph(`Hi${d.firstName ? ` ${esc(d.firstName)}` : ''} — three things that save confusion later:`) +
+        steps([
+          `<b>Whose tokens.</b> Analyses you run inside ${esc(name)} draw on its shared balance, not a personal plan. You never need to buy anything.`,
+          `<b>Where results go.</b> Anything you run with the scope switcher set to ${esc(name)} is visible to the rest of the team. Set it to <b>Personal</b> for scratch work.`,
+          '<b>What your role can do.</b> Roles decide who can invite people, change budgets and remove members. If something is greyed out, that is why.',
+        ]) +
+        button(`Open ${name} →`, `${SITE_URL}${where}`),
+      ...lifecycleFooter(d),
+    }),
+  };
+};
+
+/** INV-2 — three days in, nothing run. The easiest start is to copy a colleague. */
+const memberFirstRun = (d: {
+  firstName?: string; containerName?: string; containerType?: string; unsubUrl?: string;
+}): RenderedEmail => {
+  const where = d.containerType === 'agency' ? '/agency' : d.containerType === 'enterprise' ? '/enterprise' : '/team';
+  const name = d.containerName || 'your workspace';
+  return {
+    subject: `Your first run in ${name}`,
+    html: renderEmail({
+      preheader: 'Follow a teammate: same tool, your own input, directly comparable.',
+      tag: 'Getting started',
+      heading: 'The easiest start is somebody else’s',
+      heroSubtext: `Three days in ${esc(name)} and nothing run yet.`,
+      body:
+        paragraph(`Hi${d.firstName ? ` ${esc(d.firstName)}` : ''} — open the shared library, find the most recent result somebody ran, and run the same tool on your own page, offer or copy.`) +
+        paragraph('Same structure means the two are directly comparable, which is most of the point of doing this in a team rather than in separate chat windows.') +
+        paragraph('It costs a few tokens from the shared pool. Nobody is watching the meter that closely.') +
+        button('Open the shared library →', `${SITE_URL}${where}`),
+      ...lifecycleFooter(d),
+    }),
+  };
+};
+
+/**
+ * WB-30 — a month quiet.
+ *
+ * NO CHANGELOG BULLETS. The spec fills this with "what shipped while you were away", from a
+ * list somebody maintains by hand in admin settings. A list nobody updates becomes an email
+ * that says "Since then:" followed by nothing, which is worse than not mentioning it.
+ */
+const winBack30 = (d: {
+  firstName?: string; balance?: number; analysisCount?: number; paid?: boolean; planName?: string; unsubUrl?: string;
+}): RenderedEmail => {
+  const balance = d.balance ?? 0;
+  return {
+    subject: d.paid
+      ? `You have ${balance} tokens you have not touched`
+      : 'Your results are still here',
+    html: renderEmail({
+      preheader: 'The fastest way back in is the thing you changed most recently.',
+      tag: 'A month on',
+      heading: 'It has been a month',
+      heroSubtext: d.paid
+        ? `${esc(d.planName || 'Your plan')} has been adding tokens the whole time — ${balance} are waiting.`
+        : `Your ${balance} tokens and ${d.analysisCount ?? 0} saved result${(d.analysisCount ?? 0) === 1 ? '' : 's'} are where you left them.`,
+      body:
+        paragraph(`Hi${d.firstName ? ` ${esc(d.firstName)}` : ''} — no pitch. If you are back, the fastest re-entry is whatever you have changed most recently: a page, an offer, a pitch. Paste it in and see where it scores.`) +
+        button('Open your history →', `${SITE_URL}/history`),
+      ...lifecycleFooter(d),
+    }),
+  };
+};
+
+/** WB-60 — one concrete thing to run, not a "we miss you". */
+const winBack60 = (d: { firstName?: string; balance?: number; unsubUrl?: string }): RenderedEmail => {
+  const balance = d.balance ?? 0;
+  return {
+    subject: 'One page. Four tokens. Two minutes.',
+    html: renderEmail({
+      preheader: 'Not a "we miss you" — one specific audit to run on something you already have.',
+      tag: 'A suggestion',
+      heading: 'One specific thing',
+      heroSubtext: 'No "we miss you". A suggestion instead.',
+      body:
+        paragraph(`Hi${d.firstName ? ` ${esc(d.firstName)}` : ''} — take the page you are most uneasy about. The one where traffic arrives and nothing happens.`) +
+        paragraph(`Run Conversion Doctor on the live URL. It costs 4 tokens${balance > 0 ? ` and you have ${balance}` : ''}, and you get the blockers ranked with a rewrite for each.`) +
+        (balance > 0
+          ? button('Audit that page →', `${SITE_URL}/conversion-doctor`)
+          /* At zero there is nothing honest to offer yet: buying is not live. Say so rather
+             than sending somebody to a button that cannot complete. */
+          : paragraph('Your balance is at zero, so this one is on hold until top-ups open. Nothing you saved has gone anywhere in the meantime.')) +
+        paragraph('If the result is not worth two minutes, reply and say so. I would rather hear that than nothing.'),
+      ...lifecycleFooter(d),
+    }),
+  };
+};
+
+/**
+ * WB-90 — the last one.
+ *
+ * It says it is the last one, so it has to BE the last one: the dispatcher records a
+ * dormant pause after this send and nothing further goes out until they sign in again. An
+ * email that promises silence and then keeps mailing is the one that earns a complaint.
+ */
+const winBack90 = (d: { firstName?: string; unsubUrl?: string }): RenderedEmail => ({
+  subject: 'Should I stop emailing?',
+  html: renderEmail({
+    preheader: 'After this we go quiet. Your account and results stay.',
+    tag: 'Last one',
+    heading: 'Closing the loop',
+    heroSubtext: 'Three months without a run, so this is the last one.',
+    body:
+      paragraph(`Hi${d.firstName ? ` ${esc(d.firstName)}` : ''} — I will assume this was not the right fit, and this is the last of these you will get.`) +
+      paragraph('Your account and every saved result stay exactly where they are. Sign in whenever and things pick up again.') +
+      paragraph('If you have thirty seconds: was it the tools, the price, the timing, or something else? Two words help more than you would think — just reply.') +
+      paragraph('— Founder, MarketBrain OS'),
+    ...lifecycleFooter(d),
+  }),
+});
+
+/**
+ * NPS-1 — one number.
+ *
+ * ELEVEN LINKS, NOT A FORM. The score is captured by the click itself, because a survey
+ * that needs a page to load before it records anything measures who has patience, not who
+ * would recommend. Each link carries the same signed token the unsubscribe link uses.
+ */
+const npsAsk = (d: { firstName?: string; npsUrls?: string[]; unsubUrl?: string }): RenderedEmail => {
+  const urls = Array.isArray(d.npsUrls) ? d.npsUrls : [];
+  const scale = urls.length === 11
+    ? `<p style="font-size:18px;line-height:2;margin:0 0 8px;">${urls
+        .map((u, n) => `<a href="${esc(u)}" style="color:${RED};font-weight:700;text-decoration:none;padding:0 6px;">${n}</a>`)
+        .join('·')}</p><p style="font-size:12px;color:#9a9a9a;margin:0;">Click a number — that is the whole survey.</p>`
+    : '';
+  return {
+    subject: 'One number, 0 to 10',
+    html: renderEmail({
+      preheader: 'One click. A comment is optional and read by the founder.',
+      tag: 'One question',
+      heading: 'How likely are you to recommend us?',
+      heroSubtext: 'To somebody who makes marketing decisions.',
+      body:
+        paragraph(`Hi${d.firstName ? ` ${esc(d.firstName)}` : ''} — one number, nothing else:`) +
+        scale +
+        paragraph('If you want to say why, there is a box on the next page. I read every one.') +
+        paragraph('— Founder, MarketBrain OS'),
+      ...lifecycleFooter(d),
     }),
   };
 };
@@ -539,6 +919,24 @@ export const EMAIL_TEMPLATES = {
   memberBudgetExhausted, ownershipTransferred, briefingReady, accountSuspended, accountReinstated,
   accountDeleted,
   onboardingWhyNotChatgpt, onboardingWeekOne,
+  onboardingHowToRead, onboardingFounderQuestion, onboardingMonthOne,
+  activationNoRun, activationSecondRun, activationNeverExported,
+  memberFirstSteps, memberFirstRun,
+  winBack30, winBack60, winBack90, npsAsk,
 } as const;
 
 export type EmailTemplateKey = keyof typeof EMAIL_TEMPLATES;
+
+/**
+ * WHICH KEYS ARE MARKETING MAIL. `sendTemplate` refuses to send any of these without a
+ * working unsubscribe link, so this set is the one place that decides which mail is
+ * subject to that rule — and anything not listed here is transactional by default, which
+ * is the right default: an unsubscribe control on a receipt is worse than none.
+ */
+export const MARKETING_KEYS: ReadonlySet<EmailTemplateKey> = new Set<EmailTemplateKey>([
+  'onboardingWhyNotChatgpt', 'onboardingWeekOne',
+  'onboardingHowToRead', 'onboardingFounderQuestion', 'onboardingMonthOne',
+  'activationNoRun', 'activationSecondRun', 'activationNeverExported',
+  'memberFirstSteps', 'memberFirstRun',
+  'winBack30', 'winBack60', 'winBack90', 'npsAsk',
+]);

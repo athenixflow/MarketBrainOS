@@ -160,7 +160,44 @@ const shareRule = rules.slice(rules.indexOf('match /shared_results/'), rules.ind
 ok(/allow read, write: if false;/.test(shareRule),
   'no client may read or write shared_results directly');
 
-/* ================================ 5. the link is reachable */
+/* ====================== 5. the owner's control is reachable from a screen */
+
+console.log('\nTHE OWNER\'S CONTROL:');
+
+/*
+ * THE PAGE PROMISES REVOCATION; THIS CHECKS THE PRODUCT KEEPS IT.
+ *
+ * `revokeShareLink` shipped with no caller outside the service wrapper — the exact
+ * "wired to nothing" shape: a server control that passes every server test while the
+ * person who shared a client's audit to the wrong address has no way to take it back.
+ * Comments are blanked first, because a file's own prose about revocation must never be
+ * what satisfies a check about revocation.
+ */
+const srcFiles: string[] = [];
+const walk = (dir: string) => {
+  for (const entry of fs.readdirSync(path.join(root, dir), { withFileTypes: true })) {
+    if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+    const rel = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) walk(rel);
+    else if (/\.(tsx?|jsx?)$/.test(entry.name)) srcFiles.push(rel);
+  }
+};
+for (const top of ['pages', 'components']) walk(top);
+const blank = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+const callers = srcFiles.filter((rel) =>
+  /callRevokeShareLink\s*\(/.test(blank(fs.readFileSync(path.join(root, rel), 'utf8'))));
+ok(callers.length > 0,
+  'some screen can actually revoke a link', 'no page or component calls callRevokeShareLink');
+
+/* And it must be listable, or there is nothing to revoke FROM. */
+const listers = srcFiles.filter((rel) =>
+  /callListShareLinks\s*\(/.test(blank(fs.readFileSync(path.join(root, rel), 'utf8'))));
+ok(listers.length > 0,
+  'some screen lists the links you have made', 'no page or component calls callListShareLinks');
+ok(/export const listShareLinks/.test(server) && /owner_uid', '==', uid/.test(server),
+  'the listing is scoped to the caller on the server');
+
+/* ================================ 6. the link is reachable */
 
 console.log('\nROUTING:');
 const vercel = JSON.parse(fs.readFileSync(path.join(root, 'vercel.json'), 'utf8'));

@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { PrimaryButton } from './UI';
 import { useAuth } from '../context/AuthContext';
 import { setOnboarded } from '../services/persistenceService';
+import { track } from '../services/analytics';
 
 interface Step {
   eyebrow: string;
@@ -49,7 +50,17 @@ const OnboardingOverlay: React.FC = () => {
   const isLast = step === STEPS.length - 1;
   const current = STEPS[step];
 
+  /* WHERE PEOPLE LEAVE THE OVERLAY. A three-step overlay that 40% abandon at step 2 is a
+     fixable problem; without the per-step event it is invisible, and only the completion
+     rate shows — which says something is wrong but never where. */
+  useEffect(() => {
+    track('onboarding_step_viewed', { step: step + 1, step_title: current?.title });
+  }, [step, current?.title]);
+
   const finish = async (goToTool: boolean) => {
+    /* `completed` means "reached the end or dismissed it", and `to_tool` separates the
+       person who took the offered first run from the one who closed the box. */
+    track('onboarding_completed', { last_step: step + 1, to_tool: goToTool });
     setClosing(true);
     if (user) {
       try { await setOnboarded(user.uid); await refreshProfile(); } catch { /* best-effort */ }

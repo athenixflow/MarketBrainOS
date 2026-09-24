@@ -10,6 +10,7 @@ import {
   createNotification
 } from "./persistenceService";
 import { AngleMinerResults, TestLabResults, AuditResult, MarketingAngle, TestLabVariant, ToolAnalysisResult, ResultItem, Scope } from "../types";
+import { appCheckHeader } from './appCheck';
 
 export const MAX_INPUT_CHARS = 12000;
 
@@ -82,6 +83,11 @@ const executeAsyncJobWithMeta = async (module: string, input: any, scope?: Scope
   if (!user) throw new Error("ERR_AUTH_REQUIRED: User must be logged in.");
 
   const token = await user.getIdToken();
+  /* Attestation rides alongside the ID token, never instead of it: one says which account
+     this is, the other says which app it came from. An empty object when App Check is not
+     configured or could not produce a token — see the note in services/appCheck.ts about
+     failing open. */
+  const attestation = await appCheckHeader();
 
   let res: Response;
   try {
@@ -89,7 +95,8 @@ const executeAsyncJobWithMeta = async (module: string, input: any, scope?: Scope
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`
+        "Authorization": `Bearer ${token}`,
+        ...attestation,
       },
       // `scope` lets the server bill the workspace owner's pooled wallet for team analyses.
       body: JSON.stringify({ module, input, scope: scope || null }),

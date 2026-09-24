@@ -3,6 +3,7 @@ import { getAuth, GoogleAuthProvider, Auth, User } from 'firebase/auth';
 import { getFirestore, initializeFirestore, Firestore } from 'firebase/firestore';
 import { getFunctions, Functions } from 'firebase/functions';
 import { getAnalytics, setAnalyticsCollectionEnabled, Analytics } from 'firebase/analytics';
+import { startAppCheck } from './appCheck';
 
 const initializeApp = (firebaseApp as any).initializeApp;
 const getApps = (firebaseApp as any).getApps;
@@ -56,6 +57,11 @@ try {
   }
 
   functions = getFunctions(app);
+
+  /* Attestation starts as early as the app does: the first analysis can be seconds after
+     load, and a token that is not being fetched yet is a header that is not sent. It is a
+     no-op when no site key is configured. */
+  startAppCheck();
 
   // Analytics is NOT started here. getAnalytics() loads gtag and fires a page_view on the spot, which
   // is a non-essential cookie set before anyone agreed to it. It starts only via enableAnalytics()

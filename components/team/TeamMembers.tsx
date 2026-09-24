@@ -11,6 +11,7 @@ import { callCreateWorkspaceMember, callUpdateWorkspaceMember, callManageMembers
 import { can, Membership, ROLE_LABELS } from '../../services/permissionService';
 import { TOOL_CONFIG_LIST } from '../../config/toolConfigs';
 import { DEFAULT_PRICING_CONFIG } from '../../config/pricingConfig';
+import { track } from '../../services/analytics';
 
 const ASSIGNABLE: WorkspaceRole[] = ['admin', 'manager', 'analyst', 'viewer'];
 const DEFAULT_BUDGET = 50;
@@ -78,6 +79,9 @@ const TeamMembers: React.FC<{
       } else if (mode === 'invite') {
         // Wrapper posts { action, payload }; the server reads payload.workspaceId/email/role only.
         await callManageMembership('invite', { workspaceId: workspace.id, email, role });
+        /* The invite loop is the product's only organic distribution today (part 03 §1),
+           and `role` separates a colleague from a client seat. */
+        track('invite_sent', { container_type: 'workspace', role, surface: 'members_panel' });
         flash(`Invitation sent to ${email}.`);
       } else {
         await callCreateWorkspaceMember({ workspaceId: workspace.id, email, password, role, allowed_tools, token_budget: budget });

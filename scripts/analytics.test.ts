@@ -94,11 +94,22 @@ ok(directSenders.length === 0,
 /* The funnel the plan's gates are defined over must actually be instrumented; a gate with
    no event behind it reads as a flat zero and gets blamed on the market. */
 const allApp = appFiles.map(read).join('\n');
-for (const event of [
-  'sign_up', 'login', 'tool_viewed', 'analysis_started', 'analysis_completed',
-  'analysis_failed', 'export_clicked', 'token_wall_viewed', 'pricing_viewed',
-  'upgrade_clicked', 'landing_view',
-]) {
+/*
+ * DERIVED FROM THE UNION, not a list kept by hand. A hand-kept list only ever checks the
+ * events somebody remembered to add to it, so a name declared in `AnalyticsEvent` and sent
+ * by nothing - the dead-event shape - passes it silently. Reading the union means adding a
+ * name to the type is itself the promise this checks.
+ */
+/* Comments are stripped BEFORE the split on `;`, because a comment inside the union can
+   contain one - and the first cut of this check stopped at exactly that semicolon,
+   testing 8 of the names and saying nothing about the rest. */
+const unionBlock = read('services/analytics.ts').split('export type AnalyticsEvent =')[1]!
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/\/\/[^\n]*/g, '')
+  .split(';')[0]!;
+const declared = [...unionBlock.matchAll(/'([a-z_0-9]+)'/g)].map((m) => m[1]!);
+ok(declared.length >= 11, `the event union was parsed (${declared.length} names)`);
+for (const event of declared) {
   ok(new RegExp(`track\\(\\s*'${event}'`).test(allApp), `${event} is fired somewhere`);
 }
 

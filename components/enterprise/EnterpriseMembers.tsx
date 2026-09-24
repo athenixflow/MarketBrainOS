@@ -12,6 +12,7 @@ import { callCreateEnterpriseMember, callUpdateEnterpriseMember, callManageEnter
 import { can, Membership, ROLE_LABELS } from '../../services/permissionService';
 import { TOOL_CONFIG_LIST } from '../../config/toolConfigs';
 import { DEFAULT_PRICING_CONFIG } from '../../config/pricingConfig';
+import { track } from '../../services/analytics';
 
 const ASSIGNABLE: EnterpriseRole[] = ['executive_admin', 'department_director', 'department_manager', 'executive_viewer'];
 const DEFAULT_BUDGET = 0;
@@ -79,6 +80,9 @@ const EnterpriseMembers: React.FC<{
       } else if (mode === 'invite') {
         // Wrapper posts { action, payload }; the server reads payload.enterpriseId/email/role only.
         await callManageEnterpriseMember('invite', { enterpriseId: enterprise.id, email, role });
+        /* The invite loop is the product's only organic distribution today (part 03 §1),
+           and `role` separates a colleague from a client seat. */
+        track('invite_sent', { container_type: 'enterprise', role, surface: 'members_panel' });
         flash(`Invitation sent to ${email}.`);
       } else {
         await callCreateEnterpriseMember({ enterpriseId: enterprise.id, email, password, role, allowed_tools, token_budget: budget });

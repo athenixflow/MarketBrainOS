@@ -36,3 +36,8 @@ media-src/
 
 # Claude Code local-only settings (machine-specific, not part of the project)
 .claude/settings.local.json
+
+# The GTM playbook. THIS REPOSITORY IS PUBLIC and docs/gtm is the whole go-to-market
+# strategy, pricing reasoning, competitor analysis and channel plan. It has survived this
+# long by nobody running `git add -A` on a day they were in a hurry; this makes that safe.
+docs/gtm/

@@ -125,6 +125,21 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // ---------- email delivery log (GTM part 12 §4.1) ----------
+    // Written only by the Resend webhook through the Admin SDK. Nobody reads it from a
+    // client: it holds recipient addresses and what their mail server did with our mail,
+    // which is nobody's business but ours and theirs.
+    match /email_log/{id} {
+      allow read, write: if false;
+    }
+
+    // ---------- NPS responses (GTM part 12 ss2.9) ----------
+    // Written only by the /e/nps endpoint through the Admin SDK. Not client-readable: a
+    // score is a person's candid opinion of the product, attached to their uid.
+    match /nps_responses/{id} {
+      allow read, write: if false;
+    }
+
     // ---------- growth rollup (GTM part 03 §7) ----------
     // One document per day, written ONLY by the scheduled function through the Admin SDK
     // (which bypasses these rules). No client may write it: a dashboard a user can edit is

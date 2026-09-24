@@ -50,8 +50,19 @@ export type AnalyticsEvent =
   | 'analysis_started'
   | 'analysis_completed'
   | 'analysis_failed'
-  | 'result_saved'
+  /* No `result_saved`: every run saves as part of itself, and `analysis_completed`
+     carries `saved` — a second event for the same fact double-counts the step. */
+  | 'result_section_expanded'  // sections are tabs; opening one is a read of the detail
+  | 'report_created'
   | 'export_clicked'
+  // onboarding — where people leave the overlay, not just whether they finished it
+  | 'onboarding_step_viewed'
+  | 'onboarding_completed'
+  // the invite loop (part 03 §1) — sent and accepted, because the gap between them is the signal
+  | 'invite_sent'
+  | 'invite_accepted'
+  // the docs hub, which is a support cost and an acquisition surface at once
+  | 'docs_article_viewed'
   // monetisation
   | 'token_wall_viewed'
   | 'token_wall_action'
