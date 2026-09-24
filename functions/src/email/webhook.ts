@@ -17,7 +17,7 @@
  * from a test.
  */
 
-import { Resend } from 'resend';
+import crypto from 'node:crypto';
 
 export interface ResendEvent {
   type: string;
@@ -36,31 +36,63 @@ export interface ResendEvent {
 /** True when the endpoint is configured at all. Without it nothing can be verified. */
 export const webhookConfigured = (): boolean => Boolean(process.env.RESEND_WEBHOOK_SECRET);
 
+/** Svix allows five minutes of clock skew; a correctly signed request older than that is
+    a captured one being replayed. */
+const TOLERANCE_MS = 5 * 60 * 1000;
+
 /**
  * Verify and parse. Returns null on ANY failure — a bad signature, a missing header, a
- * malformed body — because the caller's only correct response to all of them is the same
- * 401, and distinguishing them in the reply tells an attacker which part they got wrong.
+ * malformed body, a stale timestamp — because the caller's only correct response to all of
+ * them is the same 401, and distinguishing them in the reply tells an attacker which part
+ * they got wrong.
+ *
+ * NODE CRYPTO, NOT THE SDK, AND THE REASON IS STRUCTURAL. `scripts/lifecycle.test.ts`
+ * imports this module so it can exercise the SHIPPED verifier rather than a copy of it,
+ * and the site build runs from the ROOT package, where `functions/node_modules` does not
+ * exist. Importing `resend` here therefore passed locally and broke the production build —
+ * every other module that `scripts/` reaches into (`escape.ts`, `paystack.ts`) is
+ * dependency-free for exactly this reason, and this one now is too.
+ *
+ * The scheme is Svix's, which Resend uses: HMAC-SHA256 over `id.timestamp.body`, base64,
+ * against the secret's decoded bytes. The header carries a space-separated list of
+ * versioned signatures because a secret can be rotated with both live at once, so EVERY
+ * v1 entry is checked and any match is a pass.
  */
 export const verifyResendWebhook = (
   rawBody: string,
   headers: Record<string, unknown>,
 ): ResendEvent | null => {
   const secret = process.env.RESEND_WEBHOOK_SECRET;
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!secret || !apiKey || !rawBody) return null;
+  if (!secret || !rawBody) return null;
 
   const id = String(headers['svix-id'] || '');
   const timestamp = String(headers['svix-timestamp'] || '');
   const signature = String(headers['svix-signature'] || '');
   if (!id || !timestamp || !signature) return null;
 
+  /* The timestamp is signed, but it still has to be checked: a replay carries a perfectly
+     valid signature over a perfectly valid old timestamp. */
+  const sentAt = Number(timestamp) * 1000;
+  if (!Number.isFinite(sentAt) || Math.abs(Date.now() - sentAt) > TOLERANCE_MS) return null;
+
   try {
-    const event = new Resend(apiKey).webhooks.verify({
-      payload: rawBody,
-      headers: { id, timestamp, signature },
-      webhookSecret: secret,
-    });
-    return event as unknown as ResendEvent;
+    const key = Buffer.from(secret.replace(/^whsec_/, ''), 'base64');
+    if (key.length === 0) return null;
+    const expected = crypto.createHmac('sha256', key)
+      .update(`${id}.${timestamp}.${rawBody}`)
+      .digest();
+
+    const offered = signature.split(' ')
+      .filter((part) => part.startsWith('v1,'))
+      .map((part) => Buffer.from(part.slice(3), 'base64'));
+
+    /* Constant-time, and length-checked first because timingSafeEqual throws on a mismatch
+       rather than returning false. */
+    const matches = offered.some((sig) =>
+      sig.length === expected.length && crypto.timingSafeEqual(sig, expected));
+    if (!matches) return null;
+
+    return JSON.parse(rawBody) as ResendEvent;
   } catch {
     return null;
   }
