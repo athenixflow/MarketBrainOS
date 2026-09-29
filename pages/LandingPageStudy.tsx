@@ -211,12 +211,17 @@ const LandingPageStudy: React.FC = () => {
         <h2 className="text-2xl font-bold text-white mb-4">Method</h2>
         <div className="space-y-4 text-gray-400 leading-relaxed mb-12">
           <p>
-            <strong className="text-gray-200">The sample.</strong> {method.listed} pages chosen by us, not at random: half from
-            African startups found through regional tech press and accelerator lists, half from indie software products that
-            launched on public launch sites in the sixty days before the study. {method.audited} could be audited;{' '}
+            <strong className="text-gray-200">The sample.</strong> {method.listed} pages chosen by us, not at random: African
+            startups found through regional tech press and accelerator lists, and small independent software products that
+            launched on public launch sites in the sixty days before the study. Venture-backed products and ones that existed
+            well before their launch date were left out of the second group. {method.audited} could be audited;{' '}
             {method.excluded.total} could not — {method.excluded.unreadable} returned no readable text (usually because the page is
-            drawn by JavaScript after it loads), {method.excluded.robots} asked crawlers not to read them and were skipped, and{' '}
-            {method.excluded.model_error} did not return a usable audit. Pages that need JavaScript to show any copy are therefore
+            drawn by JavaScript after it loads), {method.excluded.robots} asked crawlers not to read them and were skipped,{' '}
+            {method.excluded.model_error} did not return a usable audit, and {method.excluded.thin} gave us fewer than{' '}
+            {method.thin_cutoff} characters of text. We drew that last line after seeing the results: those pages all scored very
+            low, and their audits kept reporting a missing headline or call to action — what we would see if both were drawn by
+            JavaScript and we never read them. With them included, the median score would be {method.median_with_thin ?? '—'}{' '}
+            rather than {all.median ?? '—'}. Pages that need JavaScript to show any copy are therefore
             missing, which is a bias, not a detail.
           </p>
           <p>

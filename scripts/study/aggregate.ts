@@ -30,6 +30,18 @@ import { Filing, blockerKey, latestResults } from './classify';
 
 export const MIN_CELL = 5;
 
+/**
+ * PAGES WE ONLY HALF-READ ARE NOT AUDITED PAGES. The fetcher refuses under 200 characters, but a
+ * JavaScript site can return a few hundred characters of meta tags and navigation and pass. On the
+ * 2026 run, nine pages under this line all scored 5-35 and their audits kept reporting a "missing
+ * headline" and "no call to action" - what a page looks like when the headline and the buttons
+ * were drawn after load and we never saw them. They are excluded as `thin` and counted.
+ *
+ * THIS LINE WAS DRAWN AFTER SEEING THE DATA, and the report says so and prints the median with
+ * those pages included, so a reader can judge the choice rather than trust it.
+ */
+export const MIN_PAGE_CHARS = 500;
+
 const quantile = (sorted: number[], q: number): number | null => {
   if (!sorted.length) return null;
   const pos = (sorted.length - 1) * q;
@@ -72,7 +84,9 @@ export const PUBLIC_CSV_HEADER = ['id', 'segment', 'country_group', 'score', 'is
 export const buildPublic = (
   listed: unknown[], results: StudyResult[], filings: Record<string, Filing>, previous: { published?: boolean },
 ) => {
-  const ok = results.filter((r) => r.status === 'ok' && typeof r.audit?.score === 'number');
+  const scored = results.filter((r) => r.status === 'ok' && typeof r.audit?.score === 'number');
+  const thin = scored.filter((r) => (r.page_chars ?? 0) < MIN_PAGE_CHARS);
+  const ok = scored.filter((r) => (r.page_chars ?? 0) >= MIN_PAGE_CHARS);
   let unfiled = 0;
   const pages: Page[] = ok.map((r) => {
     const cats = r.audit!.issues.map((iss, i) => {
@@ -94,7 +108,7 @@ export const buildPublic = (
   const groupOf = (p: Page) => p.segment === 'global' ? 'Global'
     : (africaCounts.get(p.country) || 0) >= MIN_CELL && p.country ? p.country : 'Other Africa';
 
-  const excluded = results.filter((r) => r.status !== 'ok' || typeof r.audit?.score !== 'number');
+  const excluded = [...results.filter((r) => r.status !== 'ok' || typeof r.audit?.score !== 'number'), ...thin];
   const byStatus = (s: string) => excluded.filter((r) => r.status === s).length;
   const dates = results.map((r) => r.fetched_at).sort();
 
@@ -121,9 +135,13 @@ export const buildPublic = (
         total: excluded.length,
         unreadable: byStatus('fetch_error'),
         robots: byStatus('robots_disallowed'),
-        model_error: byStatus('model_error') + excluded.filter((r) => r.status === 'ok').length,
+        model_error: byStatus('model_error') + excluded.filter((r) => r.status === 'ok' && typeof r.audit?.score !== 'number').length,
+        thin: thin.length,
       },
       min_cell: MIN_CELL,
+      thin_cutoff: MIN_PAGE_CHARS,
+      /* The number a reader needs to judge the cutoff: the median had we kept those pages. */
+      median_with_thin: quantile(scored.map((r) => Math.max(0, Math.min(100, Math.round(r.audit!.score!)))).sort((a, b) => a - b), 0.5),
     },
     all, africa, global,
     gap: {

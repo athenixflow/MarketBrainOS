@@ -119,7 +119,7 @@ const leaks = (text: string, domains: string[]): string[] => {
 /** The summary may only carry these keys; a new free-text field has to be added here on purpose. */
 const ALLOWED_KEYS = new Set([
   'study', 'published', 'generated_at', 'method', 'audit_model', 'classify_model', 'fetched_from', 'fetched_to',
-  'listed', 'audited', 'excluded', 'total', 'unreadable', 'robots', 'model_error', 'min_cell',
+  'listed', 'audited', 'excluded', 'total', 'unreadable', 'robots', 'model_error', 'thin', 'min_cell', 'thin_cutoff', 'median_with_thin',
   'all', 'africa', 'global', 'gap', 'groups', 'group',
   'n', 'mean', 'median', 'p25', 'p75', 'min', 'max', 'under50', 'anyCritical', 'meanIssues',
   'buckets', 'from', 'to', 'count', 'categories', 'id', 'label', 'pages', 'leading', 'num', 'den', 'pct',
@@ -142,7 +142,7 @@ const planted: StudyResult[] = [
   ...Array.from({ length: 6 }, (_, i) => ({ country: '', i: 200 + i, global: true })),
 ].map(({ country, i, global }: any) => ({
   url: `https://www.${BRAND.toLowerCase()}${i}.ng/pricing`, segment: global ? 'global' : 'africa', country,
-  sector: 'fintech', fetched_at: '2026-10-01T10:00:00Z', status: 'ok', final_url: `https://${BRAND.toLowerCase()}${i}.ng/`,
+  sector: 'fintech', fetched_at: '2026-10-01T10:00:00Z', status: 'ok', page_chars: 4000, final_url: `https://${BRAND.toLowerCase()}${i}.ng/`,
   audit: {
     score: 30 + i % 60,
     summary: `${BRAND} hides its price behind "Talk to ${BRAND} sales".`,
@@ -155,6 +155,8 @@ const planted: StudyResult[] = [
 }) as StudyResult);
 planted.push({ url: `https://${BRAND.toLowerCase()}-down.ng/`, segment: 'africa', country: 'Kenya', sector: 's',
   fetched_at: '2026-10-02T10:00:00Z', status: 'fetch_error', error: `${BRAND}-down.ng refused`, error_kind: 'unreachable' });
+planted.push({ ...planted[0], url: `https://${BRAND.toLowerCase()}-thin.ng/`, page_chars: 300,
+  audit: { ...planted[0].audit!, score: 5 } } as StudyResult);
 const filings = Object.fromEntries(planted.filter((r) => r.audit).flatMap((r) =>
   r.audit!.issues.map((iss, i) => [blockerKey(r.url, i, iss.blocker), { category: i === 0 ? 'value-prop' : 'pricing', reason: `${BRAND} r`, model: 'm' }])));
 
@@ -173,8 +175,12 @@ ok(built.csv.split('\n')[0] === PUBLIC_CSV_HEADER.join(','), 'the CSV has exactl
 ok(!built.csv.includes('Rwanda') && built.csv.includes('Other Africa') && built.csv.includes('Nigeria'),
   `a country with fewer than ${MIN_CELL} pages is merged; one with ${MIN_CELL} or more is kept`);
 ok(!(built.summary.groups || []).some((g: any) => g.group === 'Rwanda'), 'and the same holds in the country table');
-ok(built.summary.method.excluded.unreadable === 1 && built.summary.method.audited === planted.length - 1,
+ok(built.summary.method.excluded.unreadable === 1 && built.summary.method.audited === planted.length - 2,
   'an unreadable page is counted as excluded, not dropped silently');
+ok(built.summary.method.excluded.thin === 1 && built.summary.method.excluded.total === 2,
+  'a page we only half-read (under the character line) is excluded and counted as thin');
+ok(typeof built.summary.method.median_with_thin === 'number' && built.summary.method.median_with_thin <= (built.summary.all.median ?? 0),
+  'and the median with thin pages included is published beside the cutoff');
 ok(built.summary.published === false, 'a fresh summary starts unpublished');
 ok(buildPublic(planted, planted, filings, { published: true }).summary.published === true,
   'and re-aggregating keeps a publication decision a person already made');

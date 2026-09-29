@@ -28,8 +28,8 @@ export interface StudySummary {
     audit_model: string; classify_model: string;
     fetched_from: string | null; fetched_to: string | null;
     listed: number; audited: number;
-    excluded: { total: number; unreadable: number; robots: number; model_error: number };
-    min_cell: number;
+    excluded: { total: number; unreadable: number; robots: number; model_error: number; thin: number };
+    min_cell: number; thin_cutoff: number; median_with_thin: number | null;
   };
   all?: SegmentSummary; africa?: SegmentSummary; global?: SegmentSummary;
   gap?: { mean: number | null; median: number | null };

@@ -24,8 +24,12 @@ import {
   CATEGORIES, CATEGORY_IDS, CATEGORIES_JSON, CLASSIFY_MODEL, PRIVATE_DIR, RESULTS_JSONL, StudyResult,
 } from './shared';
 
+/* The functions package owns the SDK; loading it from there keeps the study on the exact
+   version the Cloud Function runs. LOADED ON CALL, NEVER ON IMPORT: Vercel installs only the root
+   package, and scripts/study.test.ts imports this file during the build — a top-level require
+   of functions/node_modules failed the 2026-09-29 deploy. scripts/deploy.test.mjs guards it. */
 const require = createRequire(import.meta.url);
-const { GoogleGenerativeAI } = require('../../functions/node_modules/@google/generative-ai');
+const loadSdk = () => require('../../functions/node_modules/@google/generative-ai');
 
 export interface Filing { category: string; reason: string; model: string }
 
@@ -65,7 +69,7 @@ const main = async () => {
   console.log(`${Object.keys(filings).length} blockers already filed, ${todo.length} to file.`);
   if (!todo.length) return;
 
-  const model = new GoogleGenerativeAI(readApiKey()).getGenerativeModel({ model: CLASSIFY_MODEL });
+  const model = new (loadSdk().GoogleGenerativeAI)(readApiKey()).getGenerativeModel({ model: CLASSIFY_MODEL });
   const list = CATEGORIES.map((c) => `- ${c.id}: ${c.label} (${c.hint})`).join('\n');
 
   for (let i = 0; i < todo.length; i += 25) {
@@ -83,7 +87,13 @@ const main = async () => {
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: { responseMimeType: 'application/json', temperature: 0 },
     });
-    const parsed = JSON.parse(res.response.text());
+    /* A malformed reply loses this batch, not the run: it stays unfiled, a rerun retries it, and
+       aggregate.ts refuses to count while anything is unfiled. */
+    let parsed: any;
+    try { parsed = JSON.parse(res.response.text()); } catch (e: any) {
+      console.log(`  batch at ${i} came back malformed (${String(e?.message || e).slice(0, 60)}) — rerun to retry`);
+      continue;
+    }
     for (const f of Array.isArray(parsed.filings) ? parsed.filings : []) {
       const b = batch[Number(f.n)];
       if (!b) continue;

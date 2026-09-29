@@ -28,9 +28,11 @@ import {
 } from './shared';
 
 /* The functions package owns the SDK; loading it from there keeps the study on the exact
-   version the Cloud Function runs rather than whatever a root install would resolve. */
+   version the Cloud Function runs. LOADED ON CALL, NEVER ON IMPORT: Vercel installs only the root
+   package, and scripts/study.test.ts imports this file during the build — a top-level require
+   of functions/node_modules failed the 2026-09-29 deploy. scripts/deploy.test.mjs guards it. */
 const require = createRequire(import.meta.url);
-const { GoogleGenerativeAI } = require('../../functions/node_modules/@google/generative-ai');
+const loadSdk = () => require('../../functions/node_modules/@google/generative-ai');
 
 const args = process.argv.slice(2);
 const flag = (name: string) => args.includes(name);
@@ -135,7 +137,7 @@ const main = async () => {
 
   const apiKey = DRY ? '' : readApiKey();
   if (!DRY && !apiKey) throw new Error('No API_KEY in the environment or functions/.env.');
-  const model = DRY ? null : new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: AUDIT_MODEL, systemInstruction });
+  const model = DRY ? null : new (loadSdk().GoogleGenerativeAI)(apiKey).getGenerativeModel({ model: AUDIT_MODEL, systemInstruction });
 
   fs.mkdirSync(PRIVATE_DIR, { recursive: true });
   const totals = { ok: 0, failed: 0, prompt: 0, output: 0 };

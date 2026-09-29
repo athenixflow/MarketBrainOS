@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/routes.test.mjs && tsx scripts/results.test.ts && tsx scripts/fetchpage.test.ts && tsx scripts/access.test.ts && tsx scripts/runtime.test.ts && tsx scripts/copy.test.ts && tsx scripts/analytics.test.ts && tsx scripts/pricing.test.ts && tsx scripts/share.test.ts && tsx scripts/lifecycle.test.ts && tsx scripts/appcheck.test.ts && tsx scripts/onboarding.test.ts && tsx scripts/paystack.test.ts && tsx scripts/compare.test.ts && tsx scripts/study.test.ts && tsx scripts/pdf.test.ts && tsc && vite build && tsx scripts/prerender.ts",
+    "build": "node scripts/deploy.test.mjs && node scripts/routes.test.mjs && tsx scripts/results.test.ts && tsx scripts/fetchpage.test.ts && tsx scripts/access.test.ts && tsx scripts/runtime.test.ts && tsx scripts/copy.test.ts && tsx scripts/analytics.test.ts && tsx scripts/pricing.test.ts && tsx scripts/share.test.ts && tsx scripts/lifecycle.test.ts && tsx scripts/appcheck.test.ts && tsx scripts/onboarding.test.ts && tsx scripts/paystack.test.ts && tsx scripts/compare.test.ts && tsx scripts/study.test.ts && tsx scripts/pdf.test.ts && tsc && vite build && tsx scripts/prerender.ts",
     "build:novite": "tsx scripts/prerender.ts",
     "preview": "vite preview",
     "media:generate": "tsx scripts/media/generate.ts",
@@ -33,6 +33,7 @@
     "test:paystack": "tsx scripts/paystack.test.ts",
     "test:compare": "tsx scripts/compare.test.ts",
     "test:study": "tsx scripts/study.test.ts",
+    "test:deploy": "node scripts/deploy.test.mjs",
     "study:run": "tsx scripts/study/run.ts",
     "study:classify": "tsx scripts/study/classify.ts",
     "study:aggregate": "tsx scripts/study/aggregate.ts"
