@@ -1,7 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import AnimatedSection from '../components/AnimatedSection';
-import { ExpectedOutcome, FieldHint, CharCounter, TAKING_LONG_MS } from '../components/ToolGuide';
+import { ExpectedOutcome, FieldHint, CharCounter, TAKING_LONG_MS, ExampleNotice } from '../components/ToolGuide';
+import { useLocation } from 'react-router-dom';
+import { findExample } from '../config/onboardingExamples';
 import {
   PageHeader,
   Card,
@@ -48,13 +50,17 @@ const severityTone = (s?: string): BadgeTone => {
 };
 
 const ConversionDoctor: React.FC = () => {
+  /* E03: an example carried here by the onboarding overlay, in router state. */
+  const location = useLocation();
+  const example = findExample((location.state as any)?.exampleId);
+  const [showExampleNotice, setShowExampleNotice] = useState(Boolean(example));
   const { user, profile, refreshProfile } = useAuth();
   const { memberships } = useScope();
   const run = useRunGuard();
-  const [input, setInput] = useState('');
-  const [context, setContext] = useState('Landing Page');
-  const [audience, setAudience] = useState('');
-  const [goal, setGoal] = useState('');
+  const [input, setInput] = useState(example?.prefill.input || '');
+  const [context, setContext] = useState(example?.prefill.context || 'Landing Page');
+  const [audience, setAudience] = useState(example?.prefill.audience || '');
+  const [goal, setGoal] = useState(example?.prefill.goal || '');
   const [trafficSource, setTrafficSource] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -283,6 +289,16 @@ const ConversionDoctor: React.FC = () => {
                     ))}
                   </div>
                 </div>
+
+                {showExampleNotice && (
+                  <ExampleNotice
+                    toolLabel="Conversion Doctor"
+                    onClear={() => {
+                      setInput(''); setAudience(''); setGoal(''); setContext('Landing Page');
+                      setShowExampleNotice(false);
+                    }}
+                  />
+                )}
 
                 {/*
                   REQUIRED, AND SAID OUT LOUD. A page cannot be audited well without

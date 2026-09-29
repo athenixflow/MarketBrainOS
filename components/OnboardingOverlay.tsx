@@ -1,71 +1,60 @@
+/**
+ * ONE SCREEN, ONE QUESTION (GTM part 03 §4, experiment E03).
+ *
+ * This was five screens explaining the product — what it is, how many tools there are, how
+ * tokens work, where to find things — and the fifth one said "try a tool". Every part of it
+ * was true and none of it was value: the person still had to pick a tool, work out what it
+ * wanted, and write a brief before anything happened. Time-to-value was the explanation
+ * plus the form, and only the form produced a result.
+ *
+ * So it asks one question, and every answer lands on a tool with the fields already filled.
+ * The token explanation did not need a screen of its own — it lives on the balance chip,
+ * where somebody looks when the number matters to them.
+ */
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { PrimaryButton } from './UI';
+import { motion, useReducedMotion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { setOnboarded } from '../services/persistenceService';
 import { track } from '../services/analytics';
-
-interface Step {
-  eyebrow: string;
-  title: string;
-  body: string;
-}
-
-const STEPS: Step[] = [
-  {
-    eyebrow: 'Welcome',
-    title: 'Welcome to MarketBrain OS',
-    body: 'Your operating system for business decision-making. Turn raw ideas, campaigns, and funnels into clear, actionable strategic intelligence.',
-  },
-  {
-    eyebrow: 'The Platform',
-    title: 'One connected intelligence suite',
-    body: 'Fourteen analysis tools across Marketing, Sales, Business Strategy, and Operations. Each analysis follows the same rigorous, structured format so results are easy to compare and act on.',
-  },
-  {
-    eyebrow: 'Tokens',
-    title: 'How tokens work',
-    body: 'Each analysis consumes tokens. Free accounts get a one-time starting allowance, while Pro refills your balance every month and lets you top up any time. Tokens are only charged when an analysis completes successfully.',
-  },
-  {
-    eyebrow: 'Your Tools',
-    title: 'Find the right tool fast',
-    body: 'Browse tools from the sidebar or your dashboard, grouped by suite. Every result can be saved, exported, shared, rerun, or revisited later from your Analysis History.',
-  },
-  {
-    eyebrow: 'Get Started',
-    title: 'Run your first analysis',
-    body: 'The fastest way to see value is to try a tool. Strategy Lab is a great place to start, and it can pressure-test any idea in under a minute.',
-  },
-];
+import { ONBOARDING_EXAMPLES, OnboardingExample } from '../config/onboardingExamples';
 
 const OnboardingOverlay: React.FC = () => {
   const { user, refreshProfile } = useAuth();
   const navigate = useNavigate();
-  const [step, setStep] = useState(0);
   const [closing, setClosing] = useState(false);
   const reduce = useReducedMotion();
 
-  const isLast = step === STEPS.length - 1;
-  const current = STEPS[step];
-
-  /* WHERE PEOPLE LEAVE THE OVERLAY. A three-step overlay that 40% abandon at step 2 is a
-     fixable problem; without the per-step event it is invisible, and only the completion
-     rate shows — which says something is wrong but never where. */
+  /* One screen, so one view event. The per-step event stays in the union because it still
+     describes what happened: this overlay has one step. */
   useEffect(() => {
-    track('onboarding_step_viewed', { step: step + 1, step_title: current?.title });
-  }, [step, current?.title]);
+    track('onboarding_step_viewed', { step: 1, step_title: 'Pick a decision' });
+  }, []);
 
-  const finish = async (goToTool: boolean) => {
-    /* `completed` means "reached the end or dismissed it", and `to_tool` separates the
-       person who took the offered first run from the one who closed the box. */
-    track('onboarding_completed', { last_step: step + 1, to_tool: goToTool });
+  const close = async () => {
     setClosing(true);
     if (user) {
       try { await setOnboarded(user.uid); await refreshProfile(); } catch { /* best-effort */ }
     }
-    if (goToTool) navigate('/strategy-lab');
+  };
+
+  const pick = async (example: OnboardingExample) => {
+    track('template_used', { template_id: example.id, tool_slug: example.path.replace('/', '') });
+    track('onboarding_completed', { last_step: 1, to_tool: true, template_id: example.id });
+    await close();
+    /*
+     * Router state, not a query string. The prefill is a page's starting input, not an
+     * address: a URL carrying somebody's example copy would be shareable, bookmarkable and
+     * indexable, none of which anybody wants. It is lost on refresh, which is correct —
+     * a reload should give you the empty form you were about to fill in yourself.
+     */
+    navigate(example.path, { state: { exampleId: example.id } });
+  };
+
+  const skip = async () => {
+    track('onboarding_completed', { last_step: 1, to_tool: false });
+    await close();
   };
 
   if (closing) return null;
@@ -75,73 +64,48 @@ const OnboardingOverlay: React.FC = () => {
       initial={reduce ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-[#0B0B0B]/95 backdrop-blur-md p-6"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-[#0B0B0B]/95 backdrop-blur-md p-4 sm:p-6 overflow-y-auto"
       role="dialog"
       aria-modal="true"
-      aria-label="Getting started"
+      aria-labelledby="onboarding-title"
     >
       <motion.div
         initial={reduce ? false : { opacity: 0, y: 20, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-        className="paper bg-white text-[#0B0B0B] max-w-lg w-full p-6 sm:p-8 rounded-2xl shadow-2xl relative"
+        className="paper bg-white text-[#0B0B0B] max-w-2xl w-full my-auto p-6 sm:p-8 rounded-2xl shadow-2xl relative"
       >
-        <button
-          onClick={() => finish(false)}
-          className="absolute top-6 right-6 sm:top-8 sm:right-8 text-[11px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors"
-        >
-          Skip
-        </button>
-
-        {/* Step position, so the reader knows how long this takes. */}
-        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-8 tabular-nums">
-          Step {step + 1} of {STEPS.length}
+        <div className="w-8 h-[2px] bg-[#FF0000] rounded-full mb-6" />
+        <h2 id="onboarding-title" className="text-2xl sm:text-3xl font-black tracking-tight mb-3 leading-tight">
+          What are you deciding?
+        </h2>
+        <p className="text-[15px] text-gray-600 leading-relaxed mb-8">
+          Pick the closest one and we will open it with an example already filled in, so you can see
+          what a result looks like before writing anything. Swap in your own whenever you like.
         </p>
 
-        {/* Content swaps in place; motion communicates the step transition. */}
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={step}
-            initial={reduce ? false : { opacity: 0, x: 12 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={reduce ? undefined : { opacity: 0, x: -12 }}
-            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-          >
-            <div className="w-8 h-[2px] bg-[#FF0000] rounded-full mb-6" />
-            <h2 className="text-2xl sm:text-3xl font-black tracking-tight mb-4 leading-tight">{current.title}</h2>
-            <p className="text-[15px] text-gray-600 leading-relaxed">{current.body}</p>
-          </motion.div>
-        </AnimatePresence>
-
-        {/* Progress bars double as jump targets. */}
-        <div className="flex items-center gap-2 mt-10 mb-8">
-          {STEPS.map((s, i) => (
+        <div className="grid grid-cols-1 gap-3">
+          {ONBOARDING_EXAMPLES.map((example) => (
             <button
-              key={s.eyebrow}
-              onClick={() => setStep(i)}
-              aria-label={`Go to step ${i + 1}: ${s.title}`}
-              aria-current={i === step ? 'step' : undefined}
-              className={`h-1.5 rounded-full transition-all duration-300 ${
-                i === step ? 'w-10 bg-[#FF0000]' : 'w-4 bg-gray-200 hover:bg-gray-300'
-              }`}
-            />
+              key={example.id}
+              onClick={() => pick(example)}
+              className="group text-left rounded-2xl border border-gray-200 hover:border-[#FF0000] hover:bg-[#FF0000]/[0.03] transition-colors p-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF0000] focus-visible:ring-offset-2"
+            >
+              <p className="text-base font-bold tracking-tight mb-1">{example.title}</p>
+              <p className="text-sm text-gray-500 leading-relaxed mb-3">{example.blurb}</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 group-hover:text-[#FF0000] transition-colors tabular-nums">
+                {example.toolLabel} · {example.cost} tokens
+              </p>
+            </button>
           ))}
         </div>
 
-        <div className="flex items-center justify-between gap-4">
-          <button
-            onClick={() => setStep((s) => Math.max(0, s - 1))}
-            disabled={step === 0}
-            className="text-[11px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors disabled:opacity-0 disabled:pointer-events-none"
-          >
-            Back
-          </button>
-          {isLast ? (
-            <PrimaryButton onClick={() => finish(true)}>Run first analysis</PrimaryButton>
-          ) : (
-            <PrimaryButton onClick={() => setStep((s) => s + 1)}>Next</PrimaryButton>
-          )}
-        </div>
+        <button
+          onClick={skip}
+          className="mt-6 text-[11px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors"
+        >
+          I&rsquo;ll start from scratch
+        </button>
       </motion.div>
     </motion.div>
   );

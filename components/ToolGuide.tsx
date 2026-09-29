@@ -111,6 +111,33 @@ export const FieldHint: React.FC<{ children?: React.ReactNode; example?: string;
 
 // Character counter for text inputs. A small right-aligned line so it can be passed as the Input `hint`,
 // alone or after a FieldHint.
+
+/**
+ * THE EXAMPLE NOTICE (GTM part 03 §4, E03).
+ *
+ * Prefilled fields that do not announce themselves are a trap: somebody presses Run,
+ * spends real tokens, and gets a careful audit of a company that does not exist. The
+ * notice is not decoration — it is the thing that makes prefilling honest, so it sits
+ * above the form, says what the inputs are, and offers one control to empty them.
+ */
+export const ExampleNotice: React.FC<{ toolLabel: string; onClear: () => void }> = ({ toolLabel, onClear }) => (
+  <div className="mb-8 rounded-2xl border border-[#FF0000]/20 bg-[#FF0000]/[0.04] p-5">
+    <p className="text-[10px] font-bold uppercase tracking-widest text-[#FF0000] mb-2">Example inputs</p>
+    <p className="text-sm text-gray-600 leading-relaxed">
+      These are made-up inputs, filled in so you can see what {toolLabel} returns without writing a brief
+      first. Run them as they are to see the shape of a result, or replace them with your own — the
+      score only means something about work you actually own.
+    </p>
+    <button
+      type="button"
+      onClick={onClear}
+      className="mt-3 text-[11px] font-bold text-gray-500 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors"
+    >
+      Clear and start blank
+    </button>
+  </div>
+);
+
 export const CharCounter: React.FC<{ value: string; max: number }> = ({ value, max }) => (
   <span className={`block text-right text-[10px] font-bold uppercase tracking-widest tabular-nums ${value.length > max ? 'text-[#FF0000]' : 'text-gray-400'}`}>
     {value.length} / {max}

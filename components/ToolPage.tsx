@@ -26,7 +26,9 @@ import { SecurityEngine } from '../services/securityEngine';
 import { ToolConfig, getToolMeta, getToolGuide } from '../config/toolConfigs';
 import { getUserToolAnalyses, ToolAnalysisRecord, deleteGenericAnalysis, saveReport } from '../services/persistenceService';
 import { getScoreBand } from '../services/scoreBands';
-import { ExpectedOutcome, AnalysisPreview, RunProgress, CharCounter, FieldHint, RunStage, TAKING_LONG_MS } from './ToolGuide';
+import { ExpectedOutcome, AnalysisPreview, RunProgress, CharCounter, FieldHint, RunStage, TAKING_LONG_MS, ExampleNotice } from './ToolGuide';
+import { useLocation } from 'react-router-dom';
+import { findExample } from '../config/onboardingExamples';
 import { ResultItemList } from './ResultSections';
 import { track } from '../services/analytics';
 import { callCreateShareLink, logUserAction } from '../services/persistenceService';
@@ -38,11 +40,27 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
   const { scope, memberships } = useScope();
   const run = useRunGuard();
 
-  const initialValues = useMemo(() => {
+  /* E03: an example carried here by the onboarding overlay, in router state. Keys that do
+     not match a field of this tool are ignored rather than stored — a prefill is a set of
+     values for THIS form, and `scripts/onboarding.test.ts` fails the build if one drifts. */
+  const location = useLocation();
+  const example = findExample((location.state as any)?.exampleId);
+  const [showExampleNotice, setShowExampleNotice] = useState(Boolean(example));
+
+  const blankValues = useMemo(() => {
     const v: Record<string, string> = {};
     config.inputs.forEach(f => { v[f.key] = f.options ? f.options[0] : ''; });
     return v;
   }, [config]);
+
+  const initialValues = useMemo(() => {
+    if (!example || example.path !== `/${config.slug}`) return blankValues;
+    const v = { ...blankValues };
+    for (const [key, value] of Object.entries(example.prefill)) {
+      if (key in v) v[key] = value;
+    }
+    return v;
+  }, [blankValues, example, config.slug]);
 
   const [values, setValues] = useState<Record<string, string>>(initialValues);
   const [honeypotValue, setHoneypotValue] = useState('');
@@ -415,6 +433,12 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
         {/* INPUT PANEL */}
         <AnimatedSection index={0}>
           <Card>
+            {showExampleNotice && (
+              <ExampleNotice
+                toolLabel={config.title}
+                onClear={() => { setValues(blankValues); setShowExampleNotice(false); }}
+              />
+            )}
             <div className="space-y-2">
               {essentialFields.map(renderField)}
 

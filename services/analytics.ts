@@ -58,6 +58,9 @@ export type AnalyticsEvent =
   // onboarding — where people leave the overlay, not just whether they finished it
   | 'onboarding_step_viewed'
   | 'onboarding_completed'
+  /* E03: which prefilled example somebody picked, so the three can be compared and a
+     dead one replaced rather than guessed about. */
+  | 'template_used'
   // the invite loop (part 03 §1) — sent and accepted, because the gap between them is the signal
   | 'invite_sent'
   | 'invite_accepted'
