@@ -383,8 +383,8 @@ export const executeAnalysis = functions
     'https://marketbrainosweb.firebaseapp.com',  // Firebase Hosting (alt domain)
     'https://www.marketbrainos.app',             // Custom domain (primary)
     'https://marketbrainos.app',                 // Custom domain (apex)
-    'https://www.marketbrainos.com',             // Legacy domain (kept during transition)
-    'https://marketbrainos.com',                 // Legacy domain (kept during transition)
+    // The legacy .com hosts were removed (Sep 2026): the domain is on registrar hold with the
+    // account lost and may lapse to someone else, who must not inherit an allowed origin.
     'http://localhost:5173'
   ];
   const origin = req.headers.origin;

@@ -174,5 +174,23 @@ const ui = fs.readFileSync(path.join(root, 'components', 'UI.tsx'), 'utf8');
 ok(!/href="\/admin\/debug/.test(ui), 'the honeypot no longer points into the real /admin route family');
 ok(!/>\s*Internal Logs\s*</.test(ui), 'the honeypot no longer carries human-readable admin wording');
 
+/*
+ * THE .COM IS NOT OURS TO RELY ON. marketbrainos.com is registered but on registrar hold with the
+ * account lost (Sep 2026), and may lapse to someone else. Nothing we ship may name it: not as a link
+ * (it would send people to whoever owns it next), not in structured data (it would tell engines the
+ * dead domain is us), and not in the API's CORS allowlist, which still carried both hosts as
+ * "legacy". Scanned over everything that ships, including functions/src and public/.
+ */
+{
+  const shipped = [
+    ...sources, ...walk(path.join(root, 'functions', 'src')), ...walk(path.join(root, 'public')),
+  ];
+  const dotCom = shipped.flatMap((f) => fs.readFileSync(f, 'utf8').split(/\r?\n/)
+    .map((line, i) => (/marketbrainos\.com/i.test(line) ? `${path.relative(root, f)}:${i + 1}` : ''))
+    .filter(Boolean));
+  ok(dotCom.length === 0, 'nothing shipped names marketbrainos.com (a domain we may not keep)', dotCom.join(', '));
+  ok(/marketbrainos\.com/i.test('https://www.marketbrainos.com/x'), 'CONTROL: the .com pattern matches a .com link');
+}
+
 console.log(failures === 0 ? '\nPASS — copy, robots and honeypot guards hold.' : `\nFAILED — ${failures} assertion(s).`);
 process.exit(failures === 0 ? 0 : 1);
