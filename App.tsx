@@ -42,6 +42,7 @@ import { TOOL_CONFIG_LIST, NAV_SUITES } from './config/toolConfigs';
 import { NAV_CORE, NAV_COLLABORATION, NAV_ACCOUNT, visibleLinks, NavLink } from './config/access';
 import { visibleAdminSections, adminPath } from './config/adminAccess';
 import LandingPageScore from './pages/LandingPageScore';
+import LandingPageStudy from './pages/LandingPageStudy';
 import Compare from './pages/Compare';
 import CompareHub from './pages/CompareHub';
 
@@ -316,6 +317,7 @@ const AppRoutes: React.FC = () => {
       <Route path="/faq" element={<FAQ />} />
       {/* GTM part 10 — the free scorer. A marketing route: prerendered, public, no auth. */}
       <Route path="/tools/landing-page-score" element={<LandingPageScore />} />
+      <Route path="/research/landing-page-study-2026" element={<LandingPageStudy />} />
       {/* GTM part 10 §4.2 — `/compare/<slug>` only. A second `/vs/` pattern for the
           same intent would be self-inflicted duplicate content. */}
       {/* The hub the comparison breadcrumbs point at. Declared BEFORE the slug route

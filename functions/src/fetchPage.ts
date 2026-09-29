@@ -259,7 +259,11 @@ export interface FetchedPage {
  * redirecting to an internal address is the standard SSRF bypass - the guard has to run again on each
  * new location, which automatic following gives no opportunity to do.
  */
-export const fetchPageText = async (raw: string): Promise<FetchedPage> => {
+/**
+ * `userAgent` exists for the 100-page study (scripts/study): its fetches are not "requested by a
+ * signed-in user", and a crawler that says otherwise in its User-Agent is lying to the site it reads.
+ */
+export const fetchPageText = async (raw: string, opts: { userAgent?: string } = {}): Promise<FetchedPage> => {
   let current = await assertSafeUrl(raw);
   // One deadline for the whole operation, not per hop: four hops at 15s each would otherwise let a
   // slow redirect chain eat a minute of the 300s function budget before Gemini is even called.
@@ -273,7 +277,7 @@ export const fetchPageText = async (raw: string): Promise<FetchedPage> => {
       res = await fetch(current.toString(), {
         redirect: 'manual',
         signal: AbortSignal.timeout(remaining),
-        headers: { 'User-Agent': UA, Accept: 'text/html,text/plain;q=0.9,*/*;q=0.1' },
+        headers: { 'User-Agent': opts.userAgent || UA, Accept: 'text/html,text/plain;q=0.9,*/*;q=0.1' },
       });
     } catch (e: any) {
       const timedOut = e?.name === 'TimeoutError' || /abort/i.test(String(e?.message));

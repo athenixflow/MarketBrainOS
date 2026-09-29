@@ -11,6 +11,7 @@ import sirv from 'sirv';
 import { DOC_CATEGORIES, DOC_ARTICLES } from '../config/docs/registry';
 import { SITE_URL } from '../config/seo';
 import { COMPETITORS, isPublishable } from '../config/pseo/competitors';
+import { STUDY_PATH, isStudyPublished } from '../config/research/study';
 
 // Launch headless Chrome. On Vercel/CI the build sandbox (Amazon Linux) has no usable Chromium, so
 // use @sparticuz/chromium (a self-contained Linux binary) via puppeteer-core. Locally, use full
@@ -50,9 +51,12 @@ const ORIGIN = `http://localhost:${PORT}`;
  * what is served from the filesystem, and a comment inside it broke that parse — which
  * then reported the prerendered hub as a route that would 404 in production.
  */
+/* The study joins the prerender (and so the sitemap) only once a person has published it. */
+const STUDY_PATHS = [STUDY_PATH];
 const MARKETING = ['/', '/features', '/pricing', '/about', '/faq', '/privacy', '/terms',
   '/tools/landing-page-score', '/compare',
-  ...COMPETITORS.filter((c) => isPublishable(c)).map((c) => `/compare/${c.slug}`)];
+  ...COMPETITORS.filter((c) => isPublishable(c)).map((c) => `/compare/${c.slug}`),
+  ...STUDY_PATHS.filter(() => isStudyPublished())];
 const DOCS = [
   '/documentation',
   ...DOC_CATEGORIES.map((c) => `/documentation/${c.id}`),

@@ -41,3 +41,7 @@ media-src/
 # strategy, pricing reasoning, competitor analysis and channel plan. It has survived this
 # long by nobody running `git add -A` on a day they were in a hurry; this makes that safe.
 docs/gtm/
+
+# The 100-page study's private data: the URL list and raw audits name every company in the sample.
+# Only scripts/study/aggregate.ts output (config/research, public/research) is publishable.
+study-data/
