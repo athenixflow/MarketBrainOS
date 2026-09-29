@@ -116,19 +116,21 @@ export const COMPETITORS: Competitor[] = [
   {
     slug: 'claude',
     name: 'Claude',
-    pricingUrl: 'https://www.anthropic.com/pricing',
-    verifiedOn: null,
+    pricingUrl: 'https://claude.com/pricing',
+    /* Checked 2026-09-29 against claude.com/pricing (prices are in its static HTML); the URL row
+       from support.claude.com: with web search on, it retrieves pages from URLs you provide. */
+    verifiedOn: '2026-09-29',
     strengths: [
       'Long documents: it will hold a whole brand guide or a research deck in context and reason across it.',
       'Careful, qualified writing — it hedges where a claim is uncertain rather than asserting it.',
       'Strong at editing and critiquing prose you already have.',
     ],
     plans: [
-      { name: 'Free', monthlyUsd: null },
-      { name: 'Pro', monthlyUsd: null },
-      { name: 'Team', monthlyUsd: null, note: 'per seat' },
+      { name: 'Free', monthlyUsd: 0 },
+      { name: 'Pro', monthlyUsd: 20, note: '$17 a month billed annually' },
+      { name: 'Team', monthlyUsd: 25, note: 'per standard seat; $20 billed annually' },
     ],
-    capabilities: ['unknown', 'unknown', 'unknown', 'unknown', 'unknown', 'no'],
+    capabilities: ['partial', 'unknown', 'unknown', 'unknown', 'unknown', 'no'],
     faq: [
       {
         q: 'Is Claude better at writing than this?',
@@ -155,16 +157,18 @@ export const COMPETITORS: Competitor[] = [
   {
     slug: 'gemini',
     name: 'Gemini',
-    pricingUrl: 'https://one.google.com/about/google-ai-plans/',
-    verifiedOn: null,
+    /* one.google.com shows no amounts in its page text; Google's own subscriptions page does. */
+    pricingUrl: 'https://gemini.google/us/subscriptions/',
+    /* Checked 2026-09-29 against gemini.google/us/subscriptions (US prices). */
+    verifiedOn: '2026-09-29',
     strengths: [
-      'The same model family this product is built on, available directly and often for less.',
+      'The same model family this product is built on, available directly — including on a free tier.',
       'Deep integration with Google Docs, Sheets and Gmail, where marketing work already lives.',
       'Generous free access compared with most assistants.',
     ],
     plans: [
-      { name: 'Free', monthlyUsd: null },
-      { name: 'Google AI Pro', monthlyUsd: null },
+      { name: 'Free', monthlyUsd: 0 },
+      { name: 'Google AI Pro', monthlyUsd: 19.99, note: 'US price' },
     ],
     capabilities: ['unknown', 'unknown', 'unknown', 'unknown', 'unknown', 'no'],
     faq: [

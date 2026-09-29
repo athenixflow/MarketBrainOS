@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { STATUS, STATE_LABEL } from '../config/status';
 
 const PublicFooter: React.FC = () => {
   const year = new Date().getFullYear();
@@ -41,7 +42,8 @@ const PublicFooter: React.FC = () => {
       </div>
       <div className="max-w-7xl mx-auto mt-16 pt-8 border-t border-gray-900/50 text-xs text-gray-700 flex flex-col sm:flex-row justify-between gap-3">
         <p>© {year} MarketBrain OS Intelligence.</p>
-        <p>System Status: Operational</p>
+        {/* Read from config/status.ts, not hard-coded: this used to say Operational whatever was true. */}
+        <Link to="/status" className="hover:text-gray-400 transition-colors">System status: {STATE_LABEL[STATUS.state]}</Link>
       </div>
     </footer>
   );

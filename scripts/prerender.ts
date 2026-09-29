@@ -54,7 +54,7 @@ const ORIGIN = `http://localhost:${PORT}`;
 /* The study joins the prerender (and so the sitemap) only once a person has published it. */
 const STUDY_PATHS = [STUDY_PATH];
 const MARKETING = ['/', '/features', '/pricing', '/about', '/faq', '/privacy', '/terms',
-  '/tools/landing-page-score', '/compare',
+  '/tools/landing-page-score', '/compare', '/status', '/press',
   ...COMPETITORS.filter((c) => isPublishable(c)).map((c) => `/compare/${c.slug}`),
   ...STUDY_PATHS.filter(() => isStudyPublished())];
 const DOCS = [
