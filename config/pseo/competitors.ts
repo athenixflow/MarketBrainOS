@@ -40,8 +40,14 @@ export type Capability = 'yes' | 'no' | 'partial' | 'unknown';
 
 export interface CompetitorPlan {
   name: string;
-  /** USD per month. Null renders as "Not publicly available" with a link. */
-  monthlyUsd: number | null;
+  /** Per month, in `currency`. Null renders as "Not publicly available" with a link. */
+  monthly: number | null;
+  /**
+   * USD unless stated. Some vendors localise the page by country and show no dollar price to a
+   * visitor in Nigeria; the figure is then published in the currency the page actually showed,
+   * never converted by us - a conversion is our number, not theirs.
+   */
+  currency?: 'USD' | 'NGN';
   note?: string;
 }
 
@@ -75,18 +81,21 @@ export const COMPETITORS: Competitor[] = [
   {
     slug: 'chatgpt',
     name: 'ChatGPT',
-    pricingUrl: 'https://openai.com/chatgpt/pricing',
-    /* NOT VERIFIED. Plan prices change; this publishes only once somebody has checked. */
-    verifiedOn: null,
+    pricingUrl: 'https://chatgpt.com/pricing',
+    /* Checked 2026-09-29 by the founder in a browser at chatgpt.com/pricing, which showed Nigerian
+       prices (NGN) with no dollar figure; published as shown. Business was formerly Team. */
+    verifiedOn: '2026-09-29',
     strengths: [
       'It does almost everything, and it is probably already open in another tab.',
       'It will argue back, change direction mid-conversation and write the copy as well as critique it.',
       'A single subscription covers every task, not just marketing ones.',
     ],
     plans: [
-      { name: 'Free', monthlyUsd: null },
-      { name: 'Plus', monthlyUsd: null },
-      { name: 'Team', monthlyUsd: null, note: 'per seat' },
+      { name: 'Free', monthly: 0, currency: 'NGN' },
+      { name: 'Go', monthly: 7000, currency: 'NGN' },
+      { name: 'Plus', monthly: 31500, currency: 'NGN' },
+      { name: 'Pro', monthly: 144900, currency: 'NGN', note: 'starting price' },
+      { name: 'Business', monthly: 33600, currency: 'NGN', note: 'per standard seat billed monthly; NGN 26,900 billed annually' },
     ],
     /* 'unknown' until somebody checks each one against the live product. */
     capabilities: ['unknown', 'unknown', 'unknown', 'unknown', 'unknown', 'no'],
@@ -126,9 +135,9 @@ export const COMPETITORS: Competitor[] = [
       'Strong at editing and critiquing prose you already have.',
     ],
     plans: [
-      { name: 'Free', monthlyUsd: 0 },
-      { name: 'Pro', monthlyUsd: 20, note: '$17 a month billed annually' },
-      { name: 'Team', monthlyUsd: 25, note: 'per standard seat; $20 billed annually' },
+      { name: 'Free', monthly: 0 },
+      { name: 'Pro', monthly: 20, note: '$17 a month billed annually' },
+      { name: 'Team', monthly: 25, note: 'per standard seat; $20 billed annually' },
     ],
     capabilities: ['partial', 'unknown', 'unknown', 'unknown', 'unknown', 'no'],
     faq: [
@@ -167,8 +176,8 @@ export const COMPETITORS: Competitor[] = [
       'Generous free access compared with most assistants.',
     ],
     plans: [
-      { name: 'Free', monthlyUsd: 0 },
-      { name: 'Google AI Pro', monthlyUsd: 19.99, note: 'US price' },
+      { name: 'Free', monthly: 0 },
+      { name: 'Google AI Pro', monthly: 19.99, note: 'US price' },
     ],
     capabilities: ['unknown', 'unknown', 'unknown', 'unknown', 'unknown', 'no'],
     faq: [

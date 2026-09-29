@@ -23,6 +23,10 @@ import {
  * `/vs/` IS DELIBERATELY NOT A ROUTE. Two URL patterns for one intent is self-inflicted
  * duplicate content, and the existing JSON-LD and breadcrumbs already use `/compare/`.
  */
+/* In the currency the vendor's page showed; never converted (see CompetitorPlan.currency). */
+const formatPrice = (amount: number, currency: 'USD' | 'NGN' = 'USD') =>
+  currency === 'NGN' ? `NGN ${amount.toLocaleString('en-US')}/mo` : `$${amount}/mo`;
+
 const Compare: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const competitor = COMPETITORS.find((c) => c.slug === slug);
@@ -119,11 +123,17 @@ const Compare: React.FC = () => {
               <span className="text-gray-400">{competitor.name} {p.name}{p.note ? ` (${p.note})` : ''}</span>
               <span className="text-gray-300 font-bold">
                 {/* NEVER A GUESS. A missing figure says so and points at the source. */}
-                {p.monthlyUsd == null ? 'Not publicly available' : `$${p.monthlyUsd}/mo`}
+                {p.monthly == null ? 'Not publicly available' : formatPrice(p.monthly, p.currency)}
               </span>
             </li>
           ))}
         </ul>
+        {competitor.plans.some((p) => p.currency === 'NGN') && (
+          <p className="text-xs text-gray-500 mb-2">
+            Shown in naira: {competitor.name}’s pricing page shows prices by country, and these are the figures
+            it showed from Nigeria. We have not converted them — check the page for your own country.
+          </p>
+        )}
         <p className="text-xs text-gray-600 mb-12">
           <a href={competitor.pricingUrl} rel="nofollow noopener" target="_blank" className="underline">
             {competitor.name}’s own pricing page

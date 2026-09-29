@@ -89,7 +89,7 @@ ok(/COMPETITORS\s*\.filter\(\([^)]*\)\s*=>\s*isPublishable\(/.test(prerender),
 console.log('\nFIGURES:');
 ok(/Not publicly available/.test(pageSrc),
   'a missing price renders as "not publicly available", never as zero or a guess');
-ok(/p\.monthlyUsd == null \?/.test(pageSrc),
+ok(/p\.monthly == null \?/.test(pageSrc),
   'the null check is on the price itself');
 for (const c of COMPETITORS) {
   ok(/^https:\/\//.test(c.pricingUrl), `${c.slug}: links to the competitor's own pricing page`);
