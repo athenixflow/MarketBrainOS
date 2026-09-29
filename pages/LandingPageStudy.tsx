@@ -47,7 +47,7 @@ const Histogram: React.FC<{ title: string; s: SegmentSummary; max: number }> = (
           >
             <div
               className="w-full rounded-t-[4px] bg-[#FF0000]"
-              style={{ height: `${max ? (b.count / max) * 100 : 0}%`, opacity: hover === null || hover === i ? 1 : 0.45 }}
+              style={{ height: `${max ? (b.count / max) * 88 : 0}%`, opacity: hover === null || hover === i ? 1 : 0.45 }}
             />
           </div>
         ))}
@@ -129,7 +129,9 @@ const LandingPageStudy: React.FC = () => {
           {[
             { k: 'Median score', v: String(all.median ?? '—'), d: `of ${all.n} pages` },
             { k: 'Scored under 50', v: pct(all.under50.pct), d: `${all.under50.num} of ${all.under50.den}` },
-            { k: 'At least one critical blocker', v: pct(all.anyCritical.pct), d: `${all.anyCritical.num} of ${all.anyCritical.den}` },
+            /* Not "pages with a critical blocker": the audit always ranks 4-7 issues and nearly always
+               marks one Critical, so that share is a property of the format, not a finding. */
+            { k: 'Most-flagged blocker', v: pct(top[0]?.pages.pct), d: top[0]?.label ?? '—' },
             { k: 'Africa vs global, median', v: gap.median == null ? '—' : `${gap.median > 0 ? '+' : ''}${gap.median}`, d: `${africa.median} vs ${global.median} points` },
           ].map((t) => (
             <div key={t.k} className="border border-gray-800 rounded-2xl p-5">
