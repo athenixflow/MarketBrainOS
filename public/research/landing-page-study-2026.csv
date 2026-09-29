@@ -1,0 +1,77 @@
+id,segment,country_group,score,issues,critical,high,category_1,category_2,category_3
+P001,africa,South Africa,5,6,2,2,cta,proof,objections
+P002,africa,Nigeria,12,6,3,1,value-prop,benefits,cta
+P003,global,Global,25,6,2,2,cta,value-prop,trust
+P004,africa,Other Africa,32,5,2,2,audience,value-prop,cta
+P005,africa,Kenya,35,5,2,2,value-prop,proof,cta
+P006,africa,Nigeria,35,6,2,2,value-prop,proof,value-prop
+P007,africa,Other Africa,35,6,2,2,audience,objections,cta
+P008,africa,Kenya,35,5,2,1,value-prop,generic,trust
+P009,global,Global,35,6,2,2,value-prop,cta,benefits
+P010,africa,Nigeria,45,6,2,2,audience,trust,benefits
+P011,africa,Nigeria,45,5,2,2,audience,value-prop,cta
+P012,africa,Other Africa,45,6,2,2,value-prop,value-prop,proof
+P013,africa,Nigeria,45,6,2,2,audience,value-prop,value-prop
+P014,africa,Nigeria,45,6,2,2,value-prop,cta,audience
+P015,global,Global,45,6,2,2,proof,proof,value-prop
+P016,global,Global,45,6,1,2,structure,value-prop,proof
+P017,global,Global,45,6,1,2,cta,value-prop,value-prop
+P018,africa,Nigeria,55,5,2,1,value-prop,structure,proof
+P019,africa,Kenya,55,6,1,3,trust,value-prop,cta
+P020,africa,Kenya,55,6,2,2,cta,audience,value-prop
+P021,africa,Kenya,55,6,2,2,value-prop,objections,benefits
+P022,africa,South Africa,55,5,1,2,pricing,trust,proof
+P023,africa,South Africa,55,6,2,2,value-prop,value-prop,proof
+P024,africa,South Africa,55,5,2,2,proof,value-prop,benefits
+P025,africa,Other Africa,55,5,2,2,value-prop,proof,cta
+P026,africa,Nigeria,55,5,2,1,trust,proof,generic
+P027,africa,Nigeria,55,6,2,2,value-prop,pricing,structure
+P028,africa,Nigeria,55,6,2,2,audience,cta,trust
+P029,africa,Other Africa,55,6,2,2,value-prop,cta,proof
+P030,global,Global,55,6,1,2,value-prop,value-prop,pricing
+P031,global,Global,55,5,2,2,value-prop,proof,structure
+P032,global,Global,55,6,2,1,value-prop,proof,benefits
+P033,africa,Nigeria,58,6,2,2,proof,benefits,cta
+P034,africa,Nigeria,62,5,1,2,value-prop,friction,structure
+P035,africa,Kenya,62,6,2,1,value-prop,proof,audience
+P036,global,Global,62,6,2,2,trust,trust,value-prop
+P037,global,Global,62,6,2,1,proof,friction,benefits
+P038,africa,Kenya,65,6,2,1,cta,trust,proof
+P039,africa,South Africa,65,6,2,2,trust,audience,cta
+P040,africa,Other Africa,65,5,1,2,proof,value-prop,pricing
+P041,africa,Nigeria,65,5,2,1,cta,value-prop,audience
+P042,africa,Nigeria,65,6,1,2,cta,generic,trust
+P043,africa,Nigeria,65,6,2,2,value-prop,cta,trust
+P044,africa,South Africa,65,5,1,2,proof,cta,value-prop
+P045,africa,Other Africa,65,6,1,2,value-prop,friction,proof
+P046,africa,Nigeria,65,6,2,1,value-prop,proof,benefits
+P047,global,Global,65,5,2,1,proof,cta,proof
+P048,global,Global,65,5,1,2,cta,proof,value-prop
+P049,global,Global,65,5,2,2,generic,cta,benefits
+P050,global,Global,65,6,2,1,proof,cta,value-prop
+P051,global,Global,65,5,2,1,cta,value-prop,structure
+P052,global,Global,65,6,1,2,proof,proof,cta
+P053,global,Global,65,5,1,1,value-prop,value-prop,cta
+P054,global,Global,65,5,2,2,value-prop,objections,proof
+P055,global,Global,65,5,2,1,friction,proof,value-prop
+P056,global,Global,65,5,2,1,objections,structure,value-prop
+P057,global,Global,65,5,1,2,objections,cta,value-prop
+P058,global,Global,65,5,1,2,value-prop,structure,value-prop
+P059,global,Global,65,5,2,2,trust,proof,value-prop
+P060,africa,Nigeria,68,5,1,2,value-prop,proof,generic
+P061,africa,Kenya,68,5,1,3,trust,objections,cta
+P062,africa,Kenya,68,5,1,2,proof,value-prop,cta
+P063,global,Global,68,6,1,2,value-prop,pricing,structure
+P064,global,Global,68,5,1,2,trust,value-prop,structure
+P065,global,Global,68,6,2,1,value-prop,value-prop,structure
+P066,africa,Nigeria,70,6,1,2,value-prop,proof,objections
+P067,africa,Other Africa,72,5,1,2,proof,value-prop,structure
+P068,africa,South Africa,72,6,2,2,cta,proof,value-prop
+P069,africa,Kenya,72,5,1,1,audience,value-prop,proof
+P070,global,Global,72,5,1,2,value-prop,proof,structure
+P071,global,Global,72,6,1,2,cta,value-prop,pricing
+P072,global,Global,72,6,2,2,value-prop,structure,value-prop
+P073,africa,Nigeria,78,5,1,1,value-prop,generic,cta
+P074,africa,South Africa,78,6,1,1,pricing,proof,value-prop
+P075,global,Global,78,5,1,2,cta,benefits,cta
+P076,global,Global,78,5,1,1,proof,generic,value-prop

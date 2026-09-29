@@ -1,5 +1,785 @@
 {
   "study": "landing-page-study-2026",
-  "published": false,
-  "generated_at": null
+  "published": true,
+  "generated_at": "2026-09-29T18:18:07.615Z",
+  "method": {
+    "audit_model": "gemini-2.5-pro",
+    "classify_model": "gemini-2.5-flash",
+    "fetched_from": "2026-09-29",
+    "fetched_to": "2026-09-29",
+    "listed": 88,
+    "audited": 76,
+    "excluded": {
+      "total": 12,
+      "unreadable": 3,
+      "robots": 0,
+      "model_error": 0,
+      "thin": 9
+    },
+    "min_cell": 5,
+    "thin_cutoff": 500,
+    "median_with_thin": 62
+  },
+  "all": {
+    "n": 76,
+    "mean": 57.8,
+    "median": 65,
+    "p25": 55,
+    "p75": 65,
+    "min": 5,
+    "max": 78,
+    "under50": {
+      "num": 17,
+      "den": 76,
+      "pct": 22.4
+    },
+    "anyCritical": {
+      "num": 76,
+      "den": 76,
+      "pct": 100
+    },
+    "meanIssues": 5.5,
+    "buckets": [
+      {
+        "from": 0,
+        "to": 9,
+        "count": 1
+      },
+      {
+        "from": 10,
+        "to": 19,
+        "count": 1
+      },
+      {
+        "from": 20,
+        "to": 29,
+        "count": 1
+      },
+      {
+        "from": 30,
+        "to": 39,
+        "count": 6
+      },
+      {
+        "from": 40,
+        "to": 49,
+        "count": 8
+      },
+      {
+        "from": 50,
+        "to": 59,
+        "count": 16
+      },
+      {
+        "from": 60,
+        "to": 69,
+        "count": 32
+      },
+      {
+        "from": 70,
+        "to": 79,
+        "count": 11
+      },
+      {
+        "from": 80,
+        "to": 89,
+        "count": 0
+      },
+      {
+        "from": 90,
+        "to": 100,
+        "count": 0
+      }
+    ],
+    "categories": [
+      {
+        "id": "value-prop",
+        "label": "Unclear what it is or who it is for",
+        "pages": {
+          "num": 67,
+          "den": 76,
+          "pct": 88.2
+        },
+        "leading": {
+          "num": 31,
+          "den": 76,
+          "pct": 40.8
+        }
+      },
+      {
+        "id": "cta",
+        "label": "Weak or competing calls to action",
+        "pages": {
+          "num": 63,
+          "den": 76,
+          "pct": 82.9
+        },
+        "leading": {
+          "num": 12,
+          "den": 76,
+          "pct": 15.8
+        }
+      },
+      {
+        "id": "proof",
+        "label": "Missing or thin proof",
+        "pages": {
+          "num": 60,
+          "den": 76,
+          "pct": 78.9
+        },
+        "leading": {
+          "num": 12,
+          "den": 76,
+          "pct": 15.8
+        }
+      },
+      {
+        "id": "structure",
+        "label": "Structure and hierarchy",
+        "pages": {
+          "num": 47,
+          "den": 76,
+          "pct": 61.8
+        },
+        "leading": {
+          "num": 1,
+          "den": 76,
+          "pct": 1.3
+        }
+      },
+      {
+        "id": "benefits",
+        "label": "Features without outcomes",
+        "pages": {
+          "num": 32,
+          "den": 76,
+          "pct": 42.1
+        },
+        "leading": {
+          "num": 0,
+          "den": 76,
+          "pct": 0
+        }
+      },
+      {
+        "id": "audience",
+        "label": "Mixed or mismatched audience",
+        "pages": {
+          "num": 23,
+          "den": 76,
+          "pct": 30.3
+        },
+        "leading": {
+          "num": 7,
+          "den": 76,
+          "pct": 9.2
+        }
+      },
+      {
+        "id": "generic",
+        "label": "Generic or jargon-heavy copy",
+        "pages": {
+          "num": 22,
+          "den": 76,
+          "pct": 28.9
+        },
+        "leading": {
+          "num": 1,
+          "den": 76,
+          "pct": 1.3
+        }
+      },
+      {
+        "id": "trust",
+        "label": "Trust and risk gaps",
+        "pages": {
+          "num": 20,
+          "den": 76,
+          "pct": 26.3
+        },
+        "leading": {
+          "num": 7,
+          "den": 76,
+          "pct": 9.2
+        }
+      },
+      {
+        "id": "objections",
+        "label": "Objections left unanswered",
+        "pages": {
+          "num": 20,
+          "den": 76,
+          "pct": 26.3
+        },
+        "leading": {
+          "num": 2,
+          "den": 76,
+          "pct": 2.6
+        }
+      },
+      {
+        "id": "pricing",
+        "label": "Price absent or unclear",
+        "pages": {
+          "num": 14,
+          "den": 76,
+          "pct": 18.4
+        },
+        "leading": {
+          "num": 2,
+          "den": 76,
+          "pct": 2.6
+        }
+      },
+      {
+        "id": "friction",
+        "label": "Friction at the next step",
+        "pages": {
+          "num": 8,
+          "den": 76,
+          "pct": 10.5
+        },
+        "leading": {
+          "num": 1,
+          "den": 76,
+          "pct": 1.3
+        }
+      },
+      {
+        "id": "other",
+        "label": "Other",
+        "pages": {
+          "num": 0,
+          "den": 76,
+          "pct": 0
+        },
+        "leading": {
+          "num": 0,
+          "den": 76,
+          "pct": 0
+        }
+      }
+    ]
+  },
+  "africa": {
+    "n": 45,
+    "mean": 55.3,
+    "median": 55,
+    "p25": 45,
+    "p75": 65,
+    "min": 5,
+    "max": 78,
+    "under50": {
+      "num": 12,
+      "den": 45,
+      "pct": 26.7
+    },
+    "anyCritical": {
+      "num": 45,
+      "den": 45,
+      "pct": 100
+    },
+    "meanIssues": 5.6,
+    "buckets": [
+      {
+        "from": 0,
+        "to": 9,
+        "count": 1
+      },
+      {
+        "from": 10,
+        "to": 19,
+        "count": 1
+      },
+      {
+        "from": 20,
+        "to": 29,
+        "count": 0
+      },
+      {
+        "from": 30,
+        "to": 39,
+        "count": 5
+      },
+      {
+        "from": 40,
+        "to": 49,
+        "count": 5
+      },
+      {
+        "from": 50,
+        "to": 59,
+        "count": 13
+      },
+      {
+        "from": 60,
+        "to": 69,
+        "count": 14
+      },
+      {
+        "from": 70,
+        "to": 79,
+        "count": 6
+      },
+      {
+        "from": 80,
+        "to": 89,
+        "count": 0
+      },
+      {
+        "from": 90,
+        "to": 100,
+        "count": 0
+      }
+    ],
+    "categories": [
+      {
+        "id": "value-prop",
+        "label": "Unclear what it is or who it is for",
+        "pages": {
+          "num": 38,
+          "den": 45,
+          "pct": 84.4
+        },
+        "leading": {
+          "num": 20,
+          "den": 45,
+          "pct": 44.4
+        }
+      },
+      {
+        "id": "cta",
+        "label": "Weak or competing calls to action",
+        "pages": {
+          "num": 38,
+          "den": 45,
+          "pct": 84.4
+        },
+        "leading": {
+          "num": 6,
+          "den": 45,
+          "pct": 13.3
+        }
+      },
+      {
+        "id": "proof",
+        "label": "Missing or thin proof",
+        "pages": {
+          "num": 35,
+          "den": 45,
+          "pct": 77.8
+        },
+        "leading": {
+          "num": 6,
+          "den": 45,
+          "pct": 13.3
+        }
+      },
+      {
+        "id": "structure",
+        "label": "Structure and hierarchy",
+        "pages": {
+          "num": 28,
+          "den": 45,
+          "pct": 62.2
+        },
+        "leading": {
+          "num": 0,
+          "den": 45,
+          "pct": 0
+        }
+      },
+      {
+        "id": "benefits",
+        "label": "Features without outcomes",
+        "pages": {
+          "num": 20,
+          "den": 45,
+          "pct": 44.4
+        },
+        "leading": {
+          "num": 0,
+          "den": 45,
+          "pct": 0
+        }
+      },
+      {
+        "id": "audience",
+        "label": "Mixed or mismatched audience",
+        "pages": {
+          "num": 18,
+          "den": 45,
+          "pct": 40
+        },
+        "leading": {
+          "num": 7,
+          "den": 45,
+          "pct": 15.6
+        }
+      },
+      {
+        "id": "generic",
+        "label": "Generic or jargon-heavy copy",
+        "pages": {
+          "num": 16,
+          "den": 45,
+          "pct": 35.6
+        },
+        "leading": {
+          "num": 0,
+          "den": 45,
+          "pct": 0
+        }
+      },
+      {
+        "id": "trust",
+        "label": "Trust and risk gaps",
+        "pages": {
+          "num": 13,
+          "den": 45,
+          "pct": 28.9
+        },
+        "leading": {
+          "num": 4,
+          "den": 45,
+          "pct": 8.9
+        }
+      },
+      {
+        "id": "objections",
+        "label": "Objections left unanswered",
+        "pages": {
+          "num": 11,
+          "den": 45,
+          "pct": 24.4
+        },
+        "leading": {
+          "num": 0,
+          "den": 45,
+          "pct": 0
+        }
+      },
+      {
+        "id": "pricing",
+        "label": "Price absent or unclear",
+        "pages": {
+          "num": 6,
+          "den": 45,
+          "pct": 13.3
+        },
+        "leading": {
+          "num": 2,
+          "den": 45,
+          "pct": 4.4
+        }
+      },
+      {
+        "id": "friction",
+        "label": "Friction at the next step",
+        "pages": {
+          "num": 4,
+          "den": 45,
+          "pct": 8.9
+        },
+        "leading": {
+          "num": 0,
+          "den": 45,
+          "pct": 0
+        }
+      },
+      {
+        "id": "other",
+        "label": "Other",
+        "pages": {
+          "num": 0,
+          "den": 45,
+          "pct": 0
+        },
+        "leading": {
+          "num": 0,
+          "den": 45,
+          "pct": 0
+        }
+      }
+    ]
+  },
+  "global": {
+    "n": 31,
+    "mean": 61.5,
+    "median": 65,
+    "p25": 58.5,
+    "p75": 66.5,
+    "min": 25,
+    "max": 78,
+    "under50": {
+      "num": 5,
+      "den": 31,
+      "pct": 16.1
+    },
+    "anyCritical": {
+      "num": 31,
+      "den": 31,
+      "pct": 100
+    },
+    "meanIssues": 5.5,
+    "buckets": [
+      {
+        "from": 0,
+        "to": 9,
+        "count": 0
+      },
+      {
+        "from": 10,
+        "to": 19,
+        "count": 0
+      },
+      {
+        "from": 20,
+        "to": 29,
+        "count": 1
+      },
+      {
+        "from": 30,
+        "to": 39,
+        "count": 1
+      },
+      {
+        "from": 40,
+        "to": 49,
+        "count": 3
+      },
+      {
+        "from": 50,
+        "to": 59,
+        "count": 3
+      },
+      {
+        "from": 60,
+        "to": 69,
+        "count": 18
+      },
+      {
+        "from": 70,
+        "to": 79,
+        "count": 5
+      },
+      {
+        "from": 80,
+        "to": 89,
+        "count": 0
+      },
+      {
+        "from": 90,
+        "to": 100,
+        "count": 0
+      }
+    ],
+    "categories": [
+      {
+        "id": "value-prop",
+        "label": "Unclear what it is or who it is for",
+        "pages": {
+          "num": 29,
+          "den": 31,
+          "pct": 93.5
+        },
+        "leading": {
+          "num": 11,
+          "den": 31,
+          "pct": 35.5
+        }
+      },
+      {
+        "id": "cta",
+        "label": "Weak or competing calls to action",
+        "pages": {
+          "num": 25,
+          "den": 31,
+          "pct": 80.6
+        },
+        "leading": {
+          "num": 6,
+          "den": 31,
+          "pct": 19.4
+        }
+      },
+      {
+        "id": "proof",
+        "label": "Missing or thin proof",
+        "pages": {
+          "num": 25,
+          "den": 31,
+          "pct": 80.6
+        },
+        "leading": {
+          "num": 6,
+          "den": 31,
+          "pct": 19.4
+        }
+      },
+      {
+        "id": "structure",
+        "label": "Structure and hierarchy",
+        "pages": {
+          "num": 19,
+          "den": 31,
+          "pct": 61.3
+        },
+        "leading": {
+          "num": 1,
+          "den": 31,
+          "pct": 3.2
+        }
+      },
+      {
+        "id": "benefits",
+        "label": "Features without outcomes",
+        "pages": {
+          "num": 12,
+          "den": 31,
+          "pct": 38.7
+        },
+        "leading": {
+          "num": 0,
+          "den": 31,
+          "pct": 0
+        }
+      },
+      {
+        "id": "objections",
+        "label": "Objections left unanswered",
+        "pages": {
+          "num": 9,
+          "den": 31,
+          "pct": 29
+        },
+        "leading": {
+          "num": 2,
+          "den": 31,
+          "pct": 6.5
+        }
+      },
+      {
+        "id": "pricing",
+        "label": "Price absent or unclear",
+        "pages": {
+          "num": 8,
+          "den": 31,
+          "pct": 25.8
+        },
+        "leading": {
+          "num": 0,
+          "den": 31,
+          "pct": 0
+        }
+      },
+      {
+        "id": "trust",
+        "label": "Trust and risk gaps",
+        "pages": {
+          "num": 7,
+          "den": 31,
+          "pct": 22.6
+        },
+        "leading": {
+          "num": 3,
+          "den": 31,
+          "pct": 9.7
+        }
+      },
+      {
+        "id": "generic",
+        "label": "Generic or jargon-heavy copy",
+        "pages": {
+          "num": 6,
+          "den": 31,
+          "pct": 19.4
+        },
+        "leading": {
+          "num": 1,
+          "den": 31,
+          "pct": 3.2
+        }
+      },
+      {
+        "id": "audience",
+        "label": "Mixed or mismatched audience",
+        "pages": {
+          "num": 5,
+          "den": 31,
+          "pct": 16.1
+        },
+        "leading": {
+          "num": 0,
+          "den": 31,
+          "pct": 0
+        }
+      },
+      {
+        "id": "friction",
+        "label": "Friction at the next step",
+        "pages": {
+          "num": 4,
+          "den": 31,
+          "pct": 12.9
+        },
+        "leading": {
+          "num": 1,
+          "den": 31,
+          "pct": 3.2
+        }
+      },
+      {
+        "id": "other",
+        "label": "Other",
+        "pages": {
+          "num": 0,
+          "den": 31,
+          "pct": 0
+        },
+        "leading": {
+          "num": 0,
+          "den": 31,
+          "pct": 0
+        }
+      }
+    ]
+  },
+  "gap": {
+    "mean": -6.2,
+    "median": -10
+  },
+  "groups": [
+    {
+      "group": "Global",
+      "n": 31,
+      "median": 65,
+      "mean": 61.5
+    },
+    {
+      "group": "Nigeria",
+      "n": 19,
+      "median": 55,
+      "mean": 54.9
+    },
+    {
+      "group": "Kenya",
+      "n": 10,
+      "median": 58.5,
+      "mean": 57
+    },
+    {
+      "group": "South Africa",
+      "n": 8,
+      "median": 60,
+      "mean": 56.3
+    },
+    {
+      "group": "Other Africa",
+      "n": 8,
+      "median": 55,
+      "mean": 53
+    }
+  ]
 }
