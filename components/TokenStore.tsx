@@ -1,16 +1,14 @@
-// Token Store — buy token packs (simulated payment). Purchased tokens credit `purchased_tokens`
+// Token Store — token packs. Purchased tokens credit `purchased_tokens`
 // (never expire) and are spent only after the plan allowance is exhausted. Reused by the Token
 // Store page, the Settings billing tab and the Billing Center.
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, Badge, PrimaryButton, SuccessMessage, ErrorMessage } from './UI';
 import { useAuth } from '../context/AuthContext';
 import { DEFAULT_PRICING_CONFIG } from '../config/pricingConfig';
-import { callConfirmTopUp, createNotification } from '../services/persistenceService';
+import { fetchBillingStatus } from '../services/billing';
 import { track } from '../services/analytics';
-
-const genRef = () => `tx_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 
 // The pack with the most tokens per dollar gets the "Best value" badge. Derived from config so it
 // can never disagree with the prices shown.
@@ -18,31 +16,30 @@ const PACKS = DEFAULT_PRICING_CONFIG.tokenPacks;
 const BEST_VALUE_ID = PACKS.reduce((best, p) => (p.tokens / p.price > best.tokens / best.price ? p : best), PACKS[0]).id;
 
 export const TokenStore: React.FC<{ onPurchased?: () => void; compact?: boolean }> = ({ onPurchased, compact }) => {
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, profile } = useAuth();
   const packs = PACKS;
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
   // Tone of `msg` is tracked here rather than inferred from the text.
   const [msgErr, setMsgErr] = useState(false);
   const isFree = !profile || profile.tier === 'free';
+  /* The server no longer credits a pack on the client's say-so (confirmTopUp refuses), so the
+     store offers nothing until a real checkout exists — the same switch as the plan panel. */
+  const [billingLive, setBillingLive] = useState<boolean | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void fetchBillingStatus().then((s) => { if (alive) setBillingLive(s.billing_live); });
+    return () => { alive = false; };
+  }, []);
+  const closed = billingLive !== true;
 
   const buy = async (packId: string, tokens: number) => {
     /* The other half of `token_wall_viewed` — of everyone who hit the wall, who acted. */
     track('token_wall_action', { action: 'store', pack_id: packId, tokens });
     if (!user) return;
     if (isFree) { setMsgErr(true); setMsg('Upgrade to a paid plan to buy token packs.'); return; }
-    setBusy(packId); setMsgErr(false); setMsg('Processing…');
-    try {
-      await callConfirmTopUp(genRef(), packId);
-      await refreshProfile();
-      createNotification(user.uid, 'Token', 'Tokens added', `${tokens.toLocaleString()} tokens credited to your balance.`);
-      setMsg(`${tokens.toLocaleString()} tokens credited.`);
-      onPurchased?.();
-      setTimeout(() => setMsg(''), 3000);
-    } catch (e: any) {
-      setMsgErr(true);
-      setMsg(e.message || 'Purchase failed.');
-    } finally { setBusy(null); }
+    /* Checkout arrives with the payment integration; until then nothing can be bought here. */
+    setMsgErr(false); setMsg('Token packs open when payments go live.');
   };
 
   return (
@@ -64,7 +61,7 @@ export const TokenStore: React.FC<{ onPurchased?: () => void; compact?: boolean 
               <PrimaryButton
                 size="sm"
                 onClick={() => buy(p.id, p.tokens)}
-                disabled={busy !== null || isFree}
+                disabled={busy !== null || isFree || closed}
                 className="w-full"
               >
                 {busy === p.id ? 'Processing…' : isFree ? (
@@ -74,7 +71,7 @@ export const TokenStore: React.FC<{ onPurchased?: () => void; compact?: boolean 
                     </svg>
                     Buy
                   </span>
-                ) : 'Buy'}
+                ) : closed ? 'Opens soon' : 'Buy'}
               </PrimaryButton>
               {isFree && (
                 <p className="mt-3 text-[10px] font-bold uppercase tracking-widest leading-relaxed">
@@ -87,6 +84,9 @@ export const TokenStore: React.FC<{ onPurchased?: () => void; compact?: boolean 
           </Card>
         ))}
       </div>
+      {!isFree && closed && (
+        <p className="mt-6 text-sm text-gray-500 font-medium">Token packs open when payments go live.</p>
+      )}
       {isFree && (
         <div className="mt-6 flex flex-wrap items-center gap-3">
           <Badge tone="neutral">Paid plans only</Badge>

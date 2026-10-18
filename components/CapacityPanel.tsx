@@ -1,9 +1,10 @@
 // Org capacity + paid expansions (Phase 5). Shows used/cap per resource and lets the owner buy extra
-// seats/workspaces/agencies (simulated). Effective cap = plan base + purchased extras. Reused by the
+// seats/workspaces/agencies. Effective cap = plan base + purchased extras. Reused by the
 // Agency Hub, Team Workspace and Enterprise Suite.
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, PrimaryButton, Badge, SuccessMessage, ErrorMessage } from './UI';
+import { fetchBillingStatus } from '../services/billing';
 
 export interface CapacityRow {
   label: string;
@@ -18,6 +19,14 @@ const CapacityPanel: React.FC<{ title?: string; rows: CapacityRow[] }> = ({ titl
   const [msg, setMsg] = useState('');
   // Tone of `msg` is tracked here rather than inferred from the text.
   const [msgErr, setMsgErr] = useState(false);
+  /* purchaseExpansion refuses until a real checkout exists, so no Buy button is shown before then. */
+  const [billingLive, setBillingLive] = useState<boolean | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void fetchBillingStatus().then((s) => { if (alive) setBillingLive(s.billing_live); });
+    return () => { alive = false; };
+  }, []);
+  const canBuy = billingLive === true;
 
   const buy = async (i: number, fn: () => Promise<void>) => {
     setBusy(i); setMsg(''); setMsgErr(false);
@@ -42,7 +51,7 @@ const CapacityPanel: React.FC<{ title?: string; rows: CapacityRow[] }> = ({ titl
                   {full && <Badge tone="red">Full</Badge>}
                 </div>
               </div>
-              {r.onBuy && r.buyLabel && (
+              {canBuy && r.onBuy && r.buyLabel && (
                 <PrimaryButton size="sm" onClick={() => buy(i, r.onBuy!)} disabled={busy !== null}>
                   {busy === i ? 'Processing…' : r.buyLabel}
                 </PrimaryButton>
@@ -51,6 +60,9 @@ const CapacityPanel: React.FC<{ title?: string; rows: CapacityRow[] }> = ({ titl
           );
         })}
       </div>
+      {!canBuy && rows.some((r) => r.onBuy) && (
+        <p className="mt-6 text-sm text-gray-500 font-medium">Extra capacity can be bought once payments go live.</p>
+      )}
       {msg && (msgErr ? <ErrorMessage message={msg} className="mt-6" /> : <SuccessMessage message={msg} className="mt-6" />)}
     </Card>
   );

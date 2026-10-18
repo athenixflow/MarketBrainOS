@@ -1493,118 +1493,17 @@ export const updateSystemSettings = functions.https.onCall(async (data: any, con
   }
 });
 
-// --- TOKEN TOP-UP FUNCTION ---
-
-export const confirmTopUp = functions.https.onCall(async (data: any, context: any) => {
-  // 1. AUTH & INPUT VALIDATION
-  if (!context.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
-  }
-  const uid = context.auth.uid;
-  const { paymentReference, packId, amountPaid } = data;
-
-  if (!paymentReference || typeof paymentReference !== 'string') {
-    throw new functions.https.HttpsError('invalid-argument', 'Missing payment reference.');
-  }
-
-  // Resolve the requested token pack from the live config. Back-compat: a legacy call with only
-  // amountPaid maps to the pack at that price; no args defaults to the first (starter) pack.
-  const cfg = await getPricingConfig();
-  const pack = (packId && cfg.tokenPacks.find((p) => p.id === packId))
-    || (typeof amountPaid === 'number' && cfg.tokenPacks.find((p) => p.price === amountPaid))
-    || (packId == null && amountPaid == null ? cfg.tokenPacks[0] : null);
-  if (!pack) {
-    throw new functions.https.HttpsError('invalid-argument', 'Unknown token pack.');
-  }
-
-  const paymentRef = db.collection('payments').doc(paymentReference);
-  const userRef = db.collection('users').doc(uid);
-  let newBalance = 0; let credited = false;  // captured for the receipt email
-
-  try {
-    await db.runTransaction(async (t: admin.firestore.Transaction) => {
-      // 2. IDEMPOTENCY CHECK
-      // If payment already recorded, assume it was successful (idempotent) and return success.
-      const paymentDoc = await t.get(paymentRef);
-      if (paymentDoc.exists) {
-        console.log(`Payment ${paymentReference} already processed. Skipping.`);
-        return { success: true, message: 'Payment already processed.' };
-      }
-
-      // 3. ELIGIBILITY CHECKS
-      const userDoc = await t.get(userRef);
-      if (!userDoc.exists) {
-        throw new functions.https.HttpsError('not-found', 'User profile not found.');
-      }
-      const userData = userDoc.data()!;
-
-      if (userData.is_suspended) {
-        throw new functions.https.HttpsError('permission-denied', 'Account suspended. Top-up rejected.');
-      }
-
-      if (userData.tier === 'free') {
-        throw new functions.https.HttpsError('permission-denied', 'Upgrade to a paid plan to purchase token packs.');
-      }
-
-      // 4. MOCK VERIFICATION (In production, verify against Stripe/Provider API here)
-      // verifyPaymentWithProvider(paymentReference);
-      const verificationStatus = 'verified'; // Assumed valid for this implementation scope
-
-      if (verificationStatus !== 'verified') {
-        throw new functions.https.HttpsError('aborted', 'Payment verification failed.');
-      }
-
-      // 5. EXECUTE CREDIT — packs add to purchased tokens (never expire).
-      const { monthly, purchased } = readBalances(userData);
-
-      t.update(userRef, {
-        ...balanceFields(monthly, purchased + pack.tokens),
-        last_topup: admin.firestore.FieldValue.serverTimestamp()
-      });
-      newBalance = monthly + purchased + pack.tokens; credited = true;
-
-      // Payment record (immutable, simulated provider).
-      t.set(paymentRef, {
-        uid,
-        payment_reference: paymentReference,
-        amount_paid: pack.price,
-        tokens_credited: pack.tokens,
-        pack_id: pack.id,
-        type: 'token_pack',
-        provider: 'stripe_simulated',
-        status: 'completed',
-        created_at: admin.firestore.FieldValue.serverTimestamp()
-      });
-
-      // Action log (immutable).
-      const actionLogRef = db.collection('action_logs').doc();
-      t.set(actionLogRef, {
-        uid,
-        action: 'token_topup',
-        tokens_added: pack.tokens,
-        amount_paid: pack.price,
-        pack_id: pack.id,
-        payment_reference: paymentReference,
-        created_at: admin.firestore.FieldValue.serverTimestamp()
-      });
-      
-      return { success: true };
-    });
-
-    if (credited && context.auth.token.email) {
-      await sendTemplate(context.auth.token.email, 'tokenReceipt', {
-        packLabel: pack.label, tokens: pack.tokens, amount: pack.price, newBalance,
-        reference: paymentReference,
-        date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
-      });
-    }
-    return { success: true };
-
-  } catch (error: any) {
-    console.error("Top-Up Failed:", error);
-    if (error instanceof functions.https.HttpsError) throw error;
-    throw new functions.https.HttpsError('internal', error.message || 'Top-up transaction failed.');
-  }
+// --- TOKEN TOP-UP FUNCTION (closed) ---
+/*
+ * CLOSED 2026-10. This credited a token pack to any payment reference the CALLER supplied
+ * ("MOCK VERIFICATION ... assumed valid"), so any signed-in user could mint tokens from a browser
+ * console and spend the Gemini budget with them. Token packs are credited only by a verified payment
+ * webhook. The export stays so an old client gets a clear refusal, not a missing-function error.
+ * scripts/grants.test.ts fails the build if this can credit anything again.
+ */
+export const confirmTopUp = functions.https.onCall(async (_data: any, context: any) => {
+  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
+  throw new functions.https.HttpsError('failed-precondition', 'Token packs are bought through checkout.');
 });
 
 // --- TOKEN ALLOCATION (true hierarchical budgets) ---
@@ -1664,54 +1563,21 @@ export const allocateTokens = functions.https.onCall(async (data: any, context: 
   throw new functions.https.HttpsError('invalid-argument', 'Unknown allocation level.');
 });
 
-// --- PAID EXPANSIONS (simulated) ---
-// Raise an org container's capacity by buying an extra seat / workspace / agency. Increments the
-// container's extra_* counter (effective cap = plan base + extras) and records a recurring expansion
-// payment. Only the container owner can purchase.
-export const purchaseExpansion = functions.https.onCall(async (data: any, context: any) => {
+// --- PAID EXPANSIONS (closed) ---
+/*
+ * CLOSED 2026-10. This raised a container's seat / workspace / agency cap and recorded a
+ * 'stripe_simulated' payment without taking one, so any owner could add capacity for free.
+ * Expansions will be granted by a verified payment webhook like everything else that costs money.
+ * scripts/grants.test.ts guards it.
+ */
+export const purchaseExpansion = functions.https.onCall(async (_data: any, context: any) => {
   if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
-  const uid = context.auth.uid;
-  const type = data?.type as 'member' | 'workspace' | 'agency';
-  const level = data?.level as 'workspace' | 'agency' | 'enterprise';
-  const containerId = (data?.containerId || '').toString();
-  if (!['member', 'workspace', 'agency'].includes(type)) throw new functions.https.HttpsError('invalid-argument', 'Invalid expansion type.');
-  if (!['workspace', 'agency', 'enterprise'].includes(level)) throw new functions.https.HttpsError('invalid-argument', 'Invalid level.');
-  if (!containerId) throw new functions.https.HttpsError('invalid-argument', 'containerId required.');
-  // Valid combinations: member on any container; workspace only on an agency; agency only on an enterprise.
-  if ((type === 'workspace' && level !== 'agency') || (type === 'agency' && level !== 'enterprise')) {
-    throw new functions.https.HttpsError('invalid-argument', 'Invalid level/type combination.');
-  }
-
-  const coll = ({ workspace: 'workspaces', agency: 'agencies', enterprise: 'enterprises' } as Record<string, string>)[level];
-  const field = type === 'member' ? (level === 'workspace' ? 'extra_seats' : 'extra_members')
-    : type === 'workspace' ? 'extra_workspaces' : 'extra_agencies';
-
-  const ref = db.collection(coll).doc(containerId);
-  const snap = await ref.get();
-  if (!snap.exists) throw new functions.https.HttpsError('not-found', 'Container not found.');
-  if (snap.data()!.owner_id !== uid) throw new functions.https.HttpsError('permission-denied', 'Only the owner can buy expansions.');
-
-  const cfg = await getPricingConfig();
-  const price = cfg.expansion[type];
-
-  await ref.update({ [field]: admin.firestore.FieldValue.increment(1) });
-  await db.collection('payments').add({
-    uid, type: 'expansion', expansion_type: type, level, container_id: containerId,
-    amount_paid: price, recurring: 'monthly', provider: 'stripe_simulated', status: 'completed',
-    payment_reference: `exp_${type}_${new Date().getTime()}`, created_at: admin.firestore.FieldValue.serverTimestamp(),
-  });
-  await db.collection('action_logs').add({ uid, action: `expansion_${type}`, level, container_id: containerId, amount_paid: price, created_at: admin.firestore.FieldValue.serverTimestamp() });
-  if (context.auth.token.email) {
-    const typeLabel = ({ member: 'Extra member seat', workspace: 'Extra workspace', agency: 'Extra agency slot' } as Record<string, string>)[type] || 'Capacity add-on';
-    await sendTemplate(context.auth.token.email, 'expansionPurchased', { typeLabel, containerName: snap.data()!.name || 'your account', price });
-  }
-  return { success: true, type, field, price };
+  throw new functions.https.HttpsError('failed-precondition', 'Extra capacity is bought through checkout.');
 });
 
 // --- SUBSCRIPTION LIFECYCLE FUNCTION (§30) ---
-// Simulated billing: server-authoritative transitions. A real provider (Stripe) would
-// verify payment before `upgrade`/`renew` — that check is the documented seam below.
-const PRO_MONTHLY_TOKENS = DEFAULT_PRICING_CONFIG.plans.pro.monthlyTokens;
+// Server-authoritative transitions. Since 2026-10 only cancel and downgrade happen here: upgrade and
+// renew are refused, because a paid plan is granted only by a verified payment webhook.
 const RENEWAL_DAYS = DEFAULT_PRICING_CONFIG.renewalDays;
 
 export const changeSubscription = functions.https.onCall(async (data: any, context: any) => {
@@ -1738,38 +1604,10 @@ export const changeSubscription = functions.https.onCall(async (data: any, conte
       const renewsAt = new Date(now.getTime() + RENEWAL_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
       if (action === 'upgrade' || action === 'renew') {
-        // SEAM: verify payment with provider here before granting (simulated as success).
-        // A Team/Agency/Enterprise account renewing keeps ITS tier and allowance. This used to write
-        // `tier: 'pro'` unconditionally, so "Renew" on a Team account silently downgraded it to Pro -
-        // invisible while the panel mislabelled every paid plan as "Pro", exposed once it stopped.
-        const keptTier = (['team', 'agency', 'enterprise'] as const).includes(userData.tier) ? userData.tier as Tier : 'pro';
-        const keptTokens = planMonthlyDefault(keptTier);
-        const keptPrice = (DEFAULT_PRICING_CONFIG.plans as any)[keptTier]?.price ?? DEFAULT_PRICING_CONFIG.plans.pro.price;
-        const { purchased } = readBalances(userData);
-        t.update(userRef, {
-          tier: keptTier,
-          subscription_status: 'active',
-          plan_renews_at: renewsAt,
-          subscription_started_at: userData.subscription_started_at || now.toISOString(),
-          ...balanceFields(keptTokens, purchased),
-        });
-
-        // Payment record (immutable) — subscription type.
-        const payRef = db.collection('payments').doc();
-        t.set(payRef, {
-          uid,
-          payment_reference: `sub_${action}_${now.getTime()}`,
-          amount_paid: keptPrice,
-          tokens_credited: keptTokens,
-          type: 'subscription',
-          provider: 'stripe_simulated',
-          status: 'completed',
-          created_at: admin.firestore.FieldValue.serverTimestamp(),
-        });
-
-        const logRef = db.collection('action_logs').doc();
-        t.set(logRef, { uid, action: `subscription_${action}`, tier: keptTier, amount_paid: keptPrice, created_at: admin.firestore.FieldValue.serverTimestamp() });
-        result = { status: 'active', plan_renews_at: renewsAt, tier: keptTier, monthlyTokens: keptTokens };
+        /* CLOSED 2026-10. This granted a paid tier "simulated as success" - the plan, a full
+           allowance and a fake payment record - to whoever called it. A plan is granted only by a
+           verified payment webhook; scripts/grants.test.ts fails the build if this writes again. */
+        throw new functions.https.HttpsError('failed-precondition', 'Plans are bought through checkout.');
       } else if (action === 'cancel') {
         // Cancelled but retains access/tokens until period end (status reflects intent).
         t.update(userRef, { subscription_status: 'cancelled' });
@@ -1777,6 +1615,11 @@ export const changeSubscription = functions.https.onCall(async (data: any, conte
         t.set(logRef, { uid, action: 'subscription_cancel', created_at: admin.firestore.FieldValue.serverTimestamp() });
         result = { status: 'cancelled' };
       } else if (action === 'downgrade') {
+        /* Downgrade writes the free allowance, so an account that is ALREADY free could call it
+           repeatedly for a fresh 20 tokens each time. Only a paid plan can be downgraded. */
+        if (!userData.tier || userData.tier === 'free') {
+          throw new functions.https.HttpsError('failed-precondition', 'This account is already on the free plan.');
+        }
         // Downgrade grants the free allowance ONCE. It does not cycle: monthlyTokenRefresh skips free
         // accounts, so the plan_renews_at written here is inert for as long as the account stays free
         // and only becomes meaningful again if the user upgrades.
@@ -1790,12 +1633,7 @@ export const changeSubscription = functions.https.onCall(async (data: any, conte
     const subEmail = context.auth.token.email;
     if (subEmail) {
       const tierName = (result as any).tier ? String((result as any).tier).charAt(0).toUpperCase() + String((result as any).tier).slice(1) : 'Pro';
-      const tokens = (result as any).monthlyTokens ?? PRO_MONTHLY_TOKENS;
-      const price = (DEFAULT_PRICING_CONFIG.plans as any)[(result as any).tier || 'pro']?.price ?? DEFAULT_PRICING_CONFIG.plans.pro.price;
-      const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-      if (action === 'upgrade') await sendTemplate(subEmail, 'subscriptionUpgraded', { planName: tierName, monthlyTokens: tokens, price });
-      else if (action === 'renew') await sendTemplate(subEmail, 'subscriptionRenewed', { planName: tierName, monthlyTokens: tokens, amount: price, date: today });
-      else if (action === 'cancel' || action === 'downgrade') await sendTemplate(subEmail, 'subscriptionCancelled', { planName: tierName });
+      if (action === 'cancel' || action === 'downgrade') await sendTemplate(subEmail, 'subscriptionCancelled', { planName: tierName });
     }
     return { success: true, ...result };
   } catch (error: any) {
