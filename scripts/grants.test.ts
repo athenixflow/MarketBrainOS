@@ -76,6 +76,35 @@ const expansion = exported(index, 'purchaseExpansion');
 ok(expansion.length > 0 && REFUSES.test(expansion) && !/FieldValue\.increment|extra_(seats|members|workspaces|agencies)/.test(expansion),
   'purchaseExpansion refuses, and raises no seat / workspace / agency cap');
 
+/*
+ * EVERY EXPORT, NOT A LIST OF SUSPECTS. The first version of this guard checked the three
+ * billing callables by name and passed while `manageWorkspace`, `manageAgency` and
+ * `manageEnterprise` upgraded whoever created a container (up to Enterprise and 10,000
+ * tokens) — the hole had more doors than the names it knew. So every exported function is
+ * scanned for a write of a paid tier, and the only ones allowed are listed with a reason.
+ * A new function that grants a plan fails the build until somebody adds it here on purpose.
+ */
+const PAID_TIER_WRITE = /\btier\s*:(?!\s*['"]free['"])(?!\s*string\b)|^\s*tier,\s*$/m;
+export const ALLOWED_TIER_WRITERS: Record<string, string> = {
+  manageUser: 'admin only (role check inline)',
+  adminManageSubscription: 'admin only (assertAdmin)',
+  adminBulkAction: 'admin only (assertAdmin)',
+  adminCreateUser: 'admin only (assertAdmin)',
+  paystackWebhook: 'verified payment webhook (replaced by bachsWebhook)',
+  lifecycleEmails: 'reads tier into email data; writes no user tier',
+  growthDaily: 'reads tier to price revenue; writes no user tier',
+};
+export const tierWriters = (src: string): string[] =>
+  src.split(/\nexport const /).slice(1)
+    .filter((part) => PAID_TIER_WRITE.test(part))
+    .map((part) => part.slice(0, part.search(/[\s=]/)));
+const unexpected = tierWriters(index).filter((name) => !(name in ALLOWED_TIER_WRITERS));
+ok(unexpected.length === 0, 'no exported function outside the allowlist writes a paid tier', unexpected.join(', '));
+for (const name of ['manageWorkspace', 'manageAgency', 'manageEnterprise']) {
+  const fn = exported(index, name);
+  ok(fn.length > 0 && REFUSES.test(fn), `${name} refuses to create a container above the account's plan`);
+}
+
 console.log('\nADMIN GRANTS ARE STILL ADMIN-ONLY:');
 for (const name of ['adminManageTokens', 'adminManageSubscription', 'adminBulkAction']) {
   const fn = exported(index, name);
@@ -99,6 +128,10 @@ ok(!upgradeIsClosed("if (action === 'upgrade' || action === 'renew') { t.update(
   'CONTROL: an upgrade branch that writes a tier is caught');
 ok(!downgradeIsOnce("} else if (action === 'downgrade') { t.update(userRef, { tier: 'free', ...balanceFields(20, 0) }); "),
   'CONTROL: a downgrade that refills a free account is caught');
+ok(tierWriters("x\nexport const sneaky = f(() => { t.update(ref, { tier: 'enterprise' }); });\nexport const fine = f(() => { t.update(ref, { tier: 'free' }); });").join() === 'sneaky',
+  'CONTROL: an unknown function writing a paid tier is found, and a free-tier write is not');
+ok(tierWriters("x\nexport const shorthand = f(() => { t.update(ref, {\n  tier,\n}); });").join() === 'shorthand',
+  'CONTROL: the `tier,` shorthand is found too');
 ok(downgradeIsOnce("} else if (action === 'downgrade') { if (userData.tier === 'free') throw new functions.https.HttpsError('failed-precondition', 'x'); t.update(userRef, { tier: 'free' }); "),
   'a downgrade that refuses free accounts first passes');
 

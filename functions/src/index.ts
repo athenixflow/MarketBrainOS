@@ -1719,7 +1719,6 @@ export const monthlyTokenRefresh = functions.pubsub
 // billing: upgrading to Team grants a pooled token allowance on the OWNER's wallet.
 // ============================================================
 
-const TEAM_MONTHLY_TOKENS = DEFAULT_PRICING_CONFIG.plans.team.monthlyTokens;     // pooled Team allowance (owner's wallet)
 
 // Server mirror of the workspace permission matrix (keep in sync with permissionService.ts).
 const wsCanManageMembers = (role: string) => role === 'owner' || role === 'admin';
@@ -1762,24 +1761,11 @@ export const manageWorkspace = functions.https.onCall(async (data: any, context:
       const userData = userDoc.data()!;
       if (userData.is_suspended) throw new functions.https.HttpsError('permission-denied', 'Account suspended.');
 
-      // Simulated upgrade: creating a workspace promotes Free/Pro → Team and grants the
-      // pooled allowance. (SEAM: a real provider would verify payment first.)
-      const belowTeam = userData.tier === 'free' || userData.tier === 'pro';
-      if (belowTeam) {
-        const renewsAt = new Date(now.getTime() + RENEWAL_DAYS * 24 * 60 * 60 * 1000).toISOString();
-        t.update(userRef, {
-          tier: 'team',
-          subscription_status: 'active',
-          plan_renews_at: renewsAt,
-          subscription_started_at: userData.subscription_started_at || now.toISOString(),
-          ...balanceFields(TEAM_MONTHLY_TOKENS, readBalances(userData).purchased),
-        });
-        const payRef = db.collection('payments').doc();
-        t.set(payRef, {
-          uid, payment_reference: `sub_team_${now.getTime()}`, amount_paid: 0,
-          tokens_credited: TEAM_MONTHLY_TOKENS, type: 'subscription', provider: 'stripe_simulated',
-          status: 'completed', created_at: admin.firestore.FieldValue.serverTimestamp(),
-        });
+      /* CLOSED 2026-10: creating a workspace promoted Free/Pro to Team ("simulated upgrade"),
+         with the pooled allowance and no payment. The plan now has to exist first: bought
+         through checkout, or granted by an admin. scripts/grants.test.ts guards it. */
+      if (!['team', 'agency', 'enterprise'].includes(userData.tier)) {
+        throw new functions.https.HttpsError('failed-precondition', 'Creating a workspace needs the Team plan.');
       }
 
       t.set(wsRef, {
@@ -1971,7 +1957,6 @@ export const manageMembership = functions.https.onCall(async (data: any, context
 // assigned (client_assignments). Tokens belong to the agency owner's pooled wallet.
 // ============================================================
 
-const AGENCY_MONTHLY_TOKENS = DEFAULT_PRICING_CONFIG.plans.agency.monthlyTokens;  // pooled Agency allowance (owner's wallet)
 
 const agencyCanManageClients = (role: string) => ['agency_owner', 'agency_director', 'account_manager'].includes(role);
 const agencyCanManageMembersOrClients = (role: string) => ['agency_owner', 'agency_director'].includes(role);
@@ -2011,20 +1996,10 @@ export const manageAgency = functions.https.onCall(async (data: any, context: an
       const userData = userDoc.data()!;
       if (userData.is_suspended) throw new functions.https.HttpsError('permission-denied', 'Account suspended.');
 
-      // Simulated upgrade to Agency (from anything below).
-      if (userData.tier !== 'agency' && userData.tier !== 'enterprise') {
-        const renewsAt = new Date(now.getTime() + RENEWAL_DAYS * 24 * 60 * 60 * 1000).toISOString();
-        t.update(userRef, {
-          tier: 'agency', subscription_status: 'active', plan_renews_at: renewsAt,
-          subscription_started_at: userData.subscription_started_at || now.toISOString(),
-          ...balanceFields(AGENCY_MONTHLY_TOKENS, readBalances(userData).purchased),
-        });
-        const payRef = db.collection('payments').doc();
-        t.set(payRef, {
-          uid, payment_reference: `sub_agency_${now.getTime()}`, amount_paid: 0,
-          tokens_credited: AGENCY_MONTHLY_TOKENS, type: 'subscription', provider: 'stripe_simulated',
-          status: 'completed', created_at: admin.firestore.FieldValue.serverTimestamp(),
-        });
+      /* CLOSED 2026-10: creating an agency upgraded any account to Agency (2,000 tokens) with
+         no payment. The plan now has to exist first. scripts/grants.test.ts guards it. */
+      if (!['agency', 'enterprise'].includes(userData.tier)) {
+        throw new functions.https.HttpsError('failed-precondition', 'Creating an agency needs the Agency plan.');
       }
 
       t.set(agRef, {
@@ -2513,7 +2488,6 @@ export const updateWorkspaceMember = functions.https.onCall(async (data: any, co
 // the AI briefing engine synthesizes those into an executive briefing.
 // ============================================================
 
-const ENTERPRISE_MONTHLY_TOKENS = DEFAULT_PRICING_CONFIG.plans.enterprise.monthlyTokens;  // pooled Enterprise allowance
 
 const entCanManage = (role: string) => ['enterprise_owner', 'executive_admin'].includes(role);
 const entCanManageDepts = (role: string) => ['enterprise_owner', 'executive_admin', 'department_director'].includes(role);
@@ -2544,16 +2518,12 @@ export const manageEnterprise = functions.https.onCall(async (data: any, context
       if (!userDoc.exists) throw new functions.https.HttpsError('not-found', 'User profile not found.');
       const userData = userDoc.data()!;
       if (userData.is_suspended) throw new functions.https.HttpsError('permission-denied', 'Account suspended.');
+      /* CLOSED 2026-10: creating an enterprise upgraded any account to Enterprise (10,000
+         tokens) with no payment. Enterprise is not sold self-serve; an admin grants it. */
       if (userData.tier !== 'enterprise') {
-        const renewsAt = new Date(now.getTime() + RENEWAL_DAYS * 24 * 60 * 60 * 1000).toISOString();
-        t.update(userRef, {
-          tier: 'enterprise', subscription_status: 'active', plan_renews_at: renewsAt,
-          subscription_started_at: userData.subscription_started_at || now.toISOString(),
-          ...balanceFields(ENTERPRISE_MONTHLY_TOKENS, readBalances(userData).purchased),
-        });
-        const payRef = db.collection('payments').doc();
-        t.set(payRef, { uid, payment_reference: `sub_enterprise_${now.getTime()}`, amount_paid: 0, tokens_credited: ENTERPRISE_MONTHLY_TOKENS, type: 'subscription', provider: 'stripe_simulated', status: 'completed', created_at: admin.firestore.FieldValue.serverTimestamp() });
+        throw new functions.https.HttpsError('failed-precondition', 'Creating an enterprise needs the Enterprise plan.');
       }
+
       t.set(entRef, {
         name, description: (payload.description || '').toString().slice(0, 1000), logo: payload.logo || null,
         owner_id: uid, status: 'active', member_count: 1, department_count: 0, brand_count: 0,
