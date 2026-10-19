@@ -7,9 +7,28 @@ import { Card } from '../../UI';
 import { useAdmin } from '../AdminContext';
 import { AdminSectionHeader } from '../primitives';
 import { getLivePricingConfig, callUpdatePricingConfig } from '../../../services/persistenceService';
-import { PricingConfig, Tier, PLAN_ORDER, PLAN_META } from '../../../config/pricingConfig';
+import { PricingConfig, Tier, PLAN_ORDER, PLAN_META, DEFAULT_PRICING_CONFIG } from '../../../config/pricingConfig';
+import { formatPrice } from '../../../services/billing';
 
 const num = (v: any) => Math.max(0, Math.round(Number(v) || 0));
+
+/* PRICES ARE NOT EDITABLE HERE. Each Bachs product bills the price it was set up with and the pages
+   show the code's config, so the server charges and checks the code's prices whatever this doc says
+   (functions withPinnedPrices). The cells show those prices, and a save writes them back unchanged. */
+const PRICES_NOTE = 'Prices are fixed in code while Bachs products are pinned.';
+const codePrice = (usd: number | undefined, ngn: number | undefined) =>
+  [usd ? formatPrice(usd, 'USD') : '$0', ngn ? formatPrice(ngn, 'NGN') : null].filter(Boolean).join(' · ');
+const withCodePrices = (c: PricingConfig): PricingConfig => ({
+  ...c,
+  plans: Object.fromEntries(Object.entries(c.plans).map(([t, p]) => {
+    const d = DEFAULT_PRICING_CONFIG.plans[t as Tier];
+    return [t, { ...p, price: d?.price ?? p.price, priceNgn: d?.priceNgn }];
+  })) as PricingConfig['plans'],
+  tokenPacks: c.tokenPacks.map((p) => {
+    const d = DEFAULT_PRICING_CONFIG.tokenPacks.find((x) => x.id === p.id);
+    return d ? { ...p, price: d.price, priceNgn: d.priceNgn } : p;
+  }),
+});
 
 const NumInput: React.FC<{ value: number | undefined; onChange: (v: number) => void; disabled?: boolean; w?: string }> =
   ({ value, onChange, disabled, w = 'w-24' }) => (
@@ -41,26 +60,27 @@ const PricingAdmin: React.FC = () => {
     setCfg((c) => ({ ...c!, expansion: { ...c!.expansion, [key]: val } }));
   const setTool = (mod: string, val: number) =>
     setCfg((c) => ({ ...c!, toolCosts: { ...c!.toolCosts, [mod]: val } }));
-  const setPack = (i: number, key: 'tokens' | 'price', val: number) =>
+  const setPack = (i: number, key: 'tokens', val: number) =>
     setCfg((c) => ({ ...c!, tokenPacks: c!.tokenPacks.map((p, idx) => (idx === i ? { ...p, [key]: val } : p)) }));
 
   const save = async () => {
     setBusy(true); setMsg('');
-    try { await callUpdatePricingConfig(cfg); setMsg('Saved. New values take effect within ~1 minute.'); }
+    try { await callUpdatePricingConfig(withCodePrices(cfg)); setMsg('Saved. New values take effect within ~1 minute.'); }
     catch (e: any) { setMsg(e.message || 'Save failed.'); } finally { setBusy(false); }
   };
 
   return (
     <div className="space-y-6">
-      <AdminSectionHeader title="Pricing & Plans" subtitle="Edit plan prices, token allowances, limits, expansion pricing, packs and tool costs." />
+      <AdminSectionHeader title="Pricing & Plans" subtitle="Edit token allowances, limits, expansion pricing, pack sizes and tool costs." />
       {!isSuper && <p className="text-xs font-bold text-amber-600 uppercase tracking-widest">Read-only — super-admin required to save.</p>}
 
       <Card title="Plans">
+        <p className="text-xs font-medium text-gray-500 mb-4">{PRICES_NOTE}</p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-[10px] font-black uppercase tracking-widest text-gray-400 text-left">
-                <th className="py-2 pr-4">Plan</th><th className="py-2 pr-4">$/mo</th><th className="py-2 pr-4">Monthly tokens</th>
+                <th className="py-2 pr-4">Plan</th><th className="py-2 pr-4">Price ($/mo · ₦/30 days)</th><th className="py-2 pr-4">Monthly tokens</th>
                 {limitKeys.map((l) => <th key={l.key as string} className="py-2 pr-4">{l.label}</th>)}
               </tr>
             </thead>
@@ -70,7 +90,9 @@ const PricingAdmin: React.FC = () => {
                 return (
                   <tr key={tier} className="border-t border-gray-100">
                     <td className="py-3 pr-4 font-bold text-[#0B0B0B]">{PLAN_META[tier].name}</td>
-                    <td className="py-3 pr-4"><NumInput value={p.price} onChange={(v) => setPlan(tier, 'price', v)} disabled={!isSuper} w="w-20" /></td>
+                    <td className="py-3 pr-4 font-bold text-gray-700 tabular-nums whitespace-nowrap" title={PRICES_NOTE}>
+                      {codePrice(DEFAULT_PRICING_CONFIG.plans[tier]?.price, DEFAULT_PRICING_CONFIG.plans[tier]?.priceNgn)}
+                    </td>
                     <td className="py-3 pr-4"><NumInput value={p.monthlyTokens} onChange={(v) => setPlan(tier, 'monthlyTokens', v)} disabled={!isSuper} /></td>
                     {limitKeys.map((l) => (
                       <td key={l.key as string} className="py-3 pr-4">
@@ -95,15 +117,21 @@ const PricingAdmin: React.FC = () => {
         </Card>
 
         <Card title="Token packs">
+          <p className="text-xs font-medium text-gray-500 mb-4">{PRICES_NOTE}</p>
           <div className="space-y-3">
-            {cfg.tokenPacks.map((pk, i) => (
-              <div key={pk.id} className="flex items-center justify-between gap-3">
-                <span className="text-sm font-medium text-gray-700 flex-1 truncate">{pk.label}</span>
-                <NumInput value={pk.tokens} onChange={(v) => setPack(i, 'tokens', v)} disabled={!isSuper} />
-                <span className="text-[10px] text-gray-400 uppercase">tokens · $</span>
-                <NumInput value={pk.price} onChange={(v) => setPack(i, 'price', v)} disabled={!isSuper} w="w-16" />
-              </div>
-            ))}
+            {cfg.tokenPacks.map((pk, i) => {
+              const d = DEFAULT_PRICING_CONFIG.tokenPacks.find((x) => x.id === pk.id);
+              return (
+                <div key={pk.id} className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium text-gray-700 flex-1 truncate">{pk.label}</span>
+                  <NumInput value={pk.tokens} onChange={(v) => setPack(i, 'tokens', v)} disabled={!isSuper} />
+                  <span className="text-[10px] text-gray-400 uppercase">tokens</span>
+                  <span className="text-sm font-bold text-gray-700 tabular-nums whitespace-nowrap" title={PRICES_NOTE}>
+                    {d ? codePrice(d.price, d.priceNgn) : 'Not for sale'}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </Card>
       </div>

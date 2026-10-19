@@ -13,7 +13,7 @@ import { escapeHtml } from './escape';
 import { sendTemplate } from './email/send';
 import { verifyUnsubToken, unsubToken } from './email/unsubscribe';
 import { verifyResendWebhook, webhookConfigured, EVENT_FIELD, emailStatusFor } from './email/webhook';
-import { catalogItem, toMajorString, TIER_RANK, PAID_TIERS, PaidTier, Kind, Currency } from './bachs/catalog';
+import { catalogItem, toMajorString, withPinnedPrices, TIER_RANK, PAID_TIERS, PaidTier, Kind, Currency } from './bachs/catalog';
 import { billingLive as bachsBillingLive, productForTier, tierForProduct } from './bachs/config';
 import { BachsEvent, parseBachsEvent, parseCheckoutSession, parseSubscription } from './bachs/events';
 import { BACHS_SIGNATURE_HEADER, verifyBachsSignature } from './bachs/signature';
@@ -189,6 +189,9 @@ const getPricingConfig = async (): Promise<PricingConfig> => {
   _pricingCache = { cfg, at: nowMs };
   return cfg;
 };
+/* What every Bachs money path reads: the runtime config with its prices pinned to the code's
+   (bachs/catalog.ts withPinnedPrices), because the pages show those and the products bill them. */
+const getBillingConfig = async (): Promise<PricingConfig> => withPinnedPrices(await getPricingConfig(), DEFAULT_PRICING_CONFIG);
 
 // ---- Token balance helpers ----
 // Billing containers track `monthly_tokens` (resets each cycle) and `purchased_tokens` (never expire),
@@ -4060,7 +4063,7 @@ const applyOneOffPayment = async (
 ): Promise<'ignored' | 'already handled' | 'deferred' | GrantOutcome> => {
   if (!event.reference) return 'ignored';
   const reference = event.reference;
-  const cfg = await getPricingConfig();
+  const cfg = await getBillingConfig();
   const nowIso = new Date().toISOString();
   /* A reference we issued is `mb_` + hex. Anything else cannot name a checkout document (a "/"
      would throw and Bachs would retry forever), so it is read as "no checkout" and reviewed. */
@@ -4208,7 +4211,7 @@ const syncSubscriptionById = async (
     await alertOrphan(reason);
     return 'orphan reviewed';
   }
-  const cfg = await getPricingConfig();
+  const cfg = await getBillingConfig();
   const paidTier: PaidTier | null = tierForProduct(snap.productId, process.env);
   const userRef = db.collection('users').doc(uid);
   const endKey = `end:${snap.id}`;
@@ -4318,7 +4321,7 @@ export const createCheckout = functions.runWith({ secrets: BACHS_SECRETS }).http
   const nowIso = new Date().toISOString();
   const allowed = checkoutAllowed(account, kind, item, nowIso);
   if (!allowed.ok) throw new functions.https.HttpsError('failed-precondition', allowed.reason);
-  const ci = catalogItem(await getPricingConfig(), kind, item, currency);
+  const ci = catalogItem(await getBillingConfig(), kind, item, currency);
   if (!ci) throw new functions.https.HttpsError('invalid-argument', 'That is not for sale in that currency.');
   const productId = kind === 'plan' ? productForTier(ci.tier as PaidTier, process.env) : null;
   if (kind === 'plan' && !productId) throw new functions.https.HttpsError('failed-precondition', 'Plans are not set up yet.');
@@ -4643,7 +4646,7 @@ export const bachsReconcile = functions.runWith({ secrets: ['BACHS_SECRET_KEY'],
  */
 export const passLifecycle = functions.runWith({ timeoutSeconds: 300 })
   .pubsub.schedule('0 7 * * *').timeZone('Africa/Lagos').onRun(async () => {
-    const cfg = await getPricingConfig();
+    const cfg = await getBillingConfig();
     const nowIso = new Date().toISOString();
     const passes = await db.collection('users').where('billing_mode', '==', 'pass').get();
     for (const doc of passes.docs) {

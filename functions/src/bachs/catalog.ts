@@ -63,6 +63,25 @@ export const catalogItem = (cfg: PricingLike, kind: Kind, item: string, currency
   return null;
 };
 
+/**
+ * THE PRICE CHARGED IS THE PRICE SHOWN. The pages show the code's pricing config, and each Bachs
+ * product bills the price it was set up with; the runtime config doc is editable from the admin
+ * pricing editor. So every money amount the server charges or checks comes from `pinned` (the
+ * functions' code defaults), while `runtime` still supplies the allowances, the limits and which
+ * packs exist. A pack that exists only in the runtime config has no code price: not for sale.
+ */
+export const withPinnedPrices = <T extends PricingLike>(runtime: T, pinned: PricingLike): T => ({
+  ...runtime,
+  plans: Object.fromEntries(Object.entries(runtime.plans).map(([tier, p]) => {
+    const own = Object.prototype.hasOwnProperty.call(pinned.plans, tier) ? pinned.plans[tier] : undefined;
+    return [tier, { ...p, price: own?.price ?? 0, priceNgn: own?.priceNgn }];
+  })) as T['plans'],
+  tokenPacks: runtime.tokenPacks.map((p) => {
+    const own = pinned.tokenPacks.find((x) => x.id === p.id);
+    return { ...p, price: own?.price ?? 0, priceNgn: own?.priceNgn };
+  }),
+});
+
 /** 1900 → "19.00". Refuses anything that is not a whole non-negative minor amount. */
 export const toMajorString = (amountMinor: number): string => {
   if (!Number.isInteger(amountMinor) || amountMinor < 0) throw new Error(`not a minor amount: ${amountMinor}`);

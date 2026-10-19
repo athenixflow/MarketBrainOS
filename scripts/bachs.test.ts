@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEFAULT_PRICING_CONFIG as CFG } from '../config/pricingConfig';
-import { catalogItem, toMajorString, toMinor } from '../functions/src/bachs/catalog';
+import { catalogItem, toMajorString, toMinor, withPinnedPrices } from '../functions/src/bachs/catalog';
 import { billingLive, productForTier, tierForProduct } from '../functions/src/bachs/config';
 import { signPayload, verifyBachsSignature } from '../functions/src/bachs/signature';
 import { parseBachsEvent, parseCheckoutSession, parseSubscription } from '../functions/src/bachs/events';
@@ -790,6 +790,57 @@ const amountCol = csv[0].indexOf('Amount');
 const currencyCol = csv[0].indexOf('Currency');
 ok(csv[1][amountCol] === '9900.00' && csv[1][currencyCol] === 'NGN' && csv[2][amountCol] === '79.00' && csv[3][amountCol] === '7.00' && csv[3][currencyCol] === 'USD',
   'and its amounts are major units converted exactly from minor ones, each with its currency', JSON.stringify(csv));
+
+/* THE PRICE CHARGED IS THE PRICE SHOWN (final review I7). The pages show the code's pricing config; the server
+   read the runtime doc, whose prices the admin editor can change, and the Bachs products bill the price
+   they were set up with. So the server's money amounts come from the code (withPinnedPrices); the
+   runtime config still supplies tokens, limits and which packs exist. */
+console.log('\nTHE PRICE CHARGED IS THE PRICE SHOWN:');
+const runtimeCfg = {
+  ...CFG,
+  plans: { ...CFG.plans, pro: { ...CFG.plans.pro, price: 5, priceNgn: 100, monthlyTokens: 999 } },
+  tokenPacks: [...CFG.tokenPacks.map((p) => (p.id === 'starter' ? { ...p, price: 1, priceNgn: 1, tokens: 777 } : p)), { id: 'sneaky', label: 'Sneaky', tokens: 1, price: 1, priceNgn: 1 }],
+};
+const pinnedCfg = withPinnedPrices(runtimeCfg, CFG);
+ok(catalogItem(runtimeCfg, 'plan', 'pro', 'USD')?.amountMinor === 500, 'CONTROL: unpinned, the edited runtime config would charge $5 for Pro');
+ok(catalogItem(pinnedCfg, 'plan', 'pro', 'USD')?.amountMinor === 1900 && catalogItem(pinnedCfg, 'pass', 'pro', 'NGN')?.amountMinor === 990000,
+  'a runtime price change does not change the checkout amount (plan $19, pass ₦9,900)');
+ok(catalogItem(pinnedCfg, 'pack', 'starter', 'USD')?.amountMinor === 1000 && catalogItem(pinnedCfg, 'pack', 'starter', 'NGN')?.amountMinor === 500000,
+  'nor a pack\'s, in either currency');
+ok(catalogItem(pinnedCfg, 'plan', 'pro', 'USD')?.tokens === 999 && catalogItem(pinnedCfg, 'pack', 'starter', 'USD')?.tokens === 777,
+  'the runtime config still sets the allowance and the pack size');
+ok(catalogItem(pinnedCfg, 'pack', 'sneaky', 'USD') === null, 'a pack that exists only in the runtime config has no code price, so it is not for sale');
+const pinnedSub = syncSubscription({ tier: 'free' }, snap() as any, 'pro', pinnedCfg);
+const runtimePriced = syncSubscription({ tier: 'free' }, snap({ amountMinor: 500 }) as any, 'pro', pinnedCfg);
+ok(pinnedSub.grant.userUpdate?.tier === 'pro' && pinnedSub.grant.review === null && runtimePriced.grant.userUpdate === null && runtimePriced.grant.review !== null,
+  'the subscription\'s expected amount is the code price: $19 grants, the edited $5 is reviewed');
+const selfPinned = withPinnedPrices(CFG, CFG);
+ok((['pro', 'team', 'agency'] as const).every((t) => catalogItem(selfPinned, 'plan', t, 'USD')?.amountMinor === catalogItem(CFG, 'plan', t, 'USD')?.amountMinor
+  && catalogItem(selfPinned, 'pass', t, 'NGN')?.amountMinor === catalogItem(CFG, 'pass', t, 'NGN')?.amountMinor)
+  && CFG.tokenPacks.every((p) => (['USD', 'NGN'] as const).every((c) => catalogItem(selfPinned, 'pack', p.id, c)?.amountMinor === catalogItem(CFG, 'pack', p.id, c)?.amountMinor)),
+  'pinning the code prices to themselves changes no price');
+/* Each server path that charges or checks money reads the pinned config, never the runtime one. */
+const bodyOf = (name: string): string => {
+  const s = idx.search(new RegExp(`\\n(?:export )?const ${name} = `));
+  if (s < 0) return '';
+  const ends = [idx.indexOf('\n};', s + 5), idx.indexOf('\n});', s + 5), idx.indexOf('\n  });', s + 5)].filter((n) => n > s);
+  return code(idx.slice(s, Math.min(...ends)));
+};
+export const readsPinnedPrices = (body: string): boolean => body.length > 0 && /await getBillingConfig\(\)/.test(body) && !/getPricingConfig\(/.test(body);
+for (const name of ['createCheckout', 'applyOneOffPayment', 'syncSubscriptionById', 'passLifecycle']) {
+  ok(readsPinnedPrices(bodyOf(name)), `${name} prices from the code (getBillingConfig), not the runtime config`);
+}
+ok(/const getBillingConfig = async \(\)[^\n]*withPinnedPrices\(await getPricingConfig\(\), DEFAULT_PRICING_CONFIG\)/.test(idx),
+  'getBillingConfig pins the runtime config to the functions\' code defaults');
+ok(!readsPinnedPrices('const ci = catalogItem(await getPricingConfig(), kind, item, currency);'), 'CONTROL: a checkout priced from the runtime config is caught');
+export const editorPricesReadOnly = (editor: string): boolean =>
+  /Prices are fixed in code while Bachs products are pinned\./.test(editor) && !/NumInput value=\{(?:p|pk)\.price(?:Ngn)?\}/.test(editor) && !/'price(?:Ngn)?', v\)/.test(editor);
+ok(editorPricesReadOnly(code(src('components/admin/sections/Pricing.tsx'))), 'the admin pricing editor shows plan and pack prices read-only, with the note');
+ok(!editorPricesReadOnly("const PRICES_NOTE = 'Prices are fixed in code while Bachs products are pinned.'; <NumInput value={p.price} onChange={(v) => setPlan(tier, 'price', v)} />"),
+  'CONTROL: an editor that still lets a plan price be typed is caught');
+ok(!editorPricesReadOnly("const PRICES_NOTE = 'Prices are fixed in code while Bachs products are pinned.'; <NumInput value={pk.price} onChange={(v) => setPack(i, 'price', v)} />"),
+  'CONTROL: an editor that still lets a pack price be typed is caught');
+ok(!readsPinnedPrices('const cfg = await getBillingConfig(); const live = await getPricingConfig();'), 'CONTROL: a path that also reads the runtime config is caught');
 
 /* A naira refund is mailed in naira (final review M2): adminRefund records the currency and the email uses it. */
 const ngnRefundMail = mail('refundIssued', { amount: 9900, currency: 'NGN', reference: 'refund_1', date: '1 Nov 2026' });
