@@ -4264,10 +4264,34 @@ const syncSubscriptionById = async (subscriptionId: string, chargedMinor: number
     const q = await db.collection('users').where('bachs_subscription_id', '==', subscriptionId).limit(1).get();
     uid = q.empty ? null : q.docs[0]!.id;
   }
+  /* A subscription with no live account grants nothing, but Bachs keeps charging for it, so it is
+     reviewed — ONCE per paid period. The ledger entry under this key is what stops every webhook
+     delivery and every hourly run from adding another review and another email. */
+  const orphanKey = `orphan:${snap.id}:${snap.currentPeriodStart ?? 'nostart'}`;
+  const orphanWrites = (t: admin.firestore.Transaction, reason: string, forUid: string | null) => {
+    t.set(ledgerDoc(orphanKey), { key: orphanKey, source, outcome: 'review', created_at: admin.firestore.FieldValue.serverTimestamp() });
+    t.set(db.collection('billing_reviews').doc(ledgerDoc(orphanKey).id), {
+      reason, key: orphanKey, uid: forUid, subscription_id: snap.id, granted: false, source,
+      created_at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  };
+  const alertOrphan = async (reason: string) => {
+    try {
+      await billingAlertEmail('A subscription has no account', [subscriptionId, reason]);
+    } catch (e: any) {
+      console.error('syncSubscriptionById: orphan alert failed:', e?.message || e);
+    }
+  };
   if (!uid) {
-    await db.collection('billing_reviews').add({ reason: 'subscription with no account', key: `sub:${subscriptionId}`, source, created_at: admin.firestore.FieldValue.serverTimestamp() });
-    await billingAlertEmail('A subscription has no account', [subscriptionId]);
-    return 'review';
+    const reason = 'subscription with no account';
+    const created = await db.runTransaction(async (t: admin.firestore.Transaction) => {
+      if ((await t.get(ledgerDoc(orphanKey))).exists) return false;
+      orphanWrites(t, reason, null);
+      return true;
+    });
+    if (!created) return 'orphan already reviewed';
+    await alertOrphan(reason);
+    return 'orphan reviewed';
   }
   const cfg = await getPricingConfig();
   const paidTier: PaidTier | null = tierForProduct(snap.productId, process.env);
@@ -4281,7 +4305,15 @@ const syncSubscriptionById = async (subscriptionId: string, chargedMinor: number
     state.reviewWhy = null; state.notice = null; // a retried attempt starts clean
     /* Firestore wants every read before the first write, so all of them are here. */
     const userSnap = await t.get(userRef);
-    if (!userSnap.exists) return 'no account';
+    if (!userSnap.exists) {
+      /* The uid names an account that was deleted. Nothing is granted; the review and its ledger
+         entry are written together, once per period. */
+      if ((await t.get(ledgerDoc(orphanKey))).exists) return 'orphan already reviewed';
+      const reason = `subscription is paid for account ${uid}, which no longer exists`;
+      state.reviewWhy = reason;
+      orphanWrites(t, reason, uid);
+      return 'orphan reviewed';
+    }
     const account = userSnap.data() as Account;
     const r = syncSubscription(account, snap, paidTier, cfg, chargedMinor);
     const isEnd = r.grant.ledgerKey === endKey;
@@ -4317,7 +4349,7 @@ const syncSubscriptionById = async (subscriptionId: string, chargedMinor: number
   });
   /* Mail is best effort and happens after the commit, exactly as in applyOneOffPayment. The
      receipt goes out only when THIS call granted a paid period: not on 'state synced',
-     'already ended', 'no account' or a bare 'review'. A grant that was also flagged
+     'already ended', 'orphan reviewed' or a bare 'review'. A grant that was also flagged
      ('granted+review') was paid and applied, so its customer still gets the receipt. */
   try {
     const n = state.notice;
@@ -4334,6 +4366,7 @@ const syncSubscriptionById = async (subscriptionId: string, chargedMinor: number
     if (outcome === 'review' || outcome === 'granted+review') {
       await billingAlertEmail('A subscription needs review', [`${subscriptionId}: ${state.reviewWhy}`]);
     }
+    if (outcome === 'orphan reviewed') await alertOrphan(state.reviewWhy ?? 'the account no longer exists');
   } catch (e: any) {
     console.error('syncSubscriptionById: notification failed:', e?.message || e);
   }

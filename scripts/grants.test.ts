@@ -91,8 +91,6 @@ export const ALLOWED_TIER_WRITERS: Record<string, string> = {
   adminBulkAction: 'admin only (assertAdmin)',
   adminCreateUser: 'admin only (assertAdmin)',
   paystackWebhook: 'verified payment webhook (replaced by bachsWebhook)',
-  createCheckout: 'writes a checkout record and the requested item; grants nothing',
-  manageBilling: 'calls Bachs, then the shared subscription sync (verified state only)',
   lifecycleEmails: 'reads tier into email data; writes no user tier',
   growthDaily: 'reads tier to price revenue; writes no user tier',
 };
@@ -123,6 +121,20 @@ export const sendsPaymentReceiptOnGrant = (body: string) =>
   /sendTemplate\(\s*[^,]+,\s*'paymentReceipt'/.test(body) && /outcome === 'granted'/.test(body) && /outcome === 'granted\+review'/.test(body);
 ok(sendsPaymentReceiptOnGrant(helperBody(index, 'syncSubscriptionById')),
   'syncSubscriptionById sends the paymentReceipt on a granted subscription period');
+/* A paid subscription with no live account (no uid anywhere, or a uid whose user document is
+   gone) grants nothing, but the money is still being taken: it must be reviewed ONCE per period
+   through the ledger. Two ways to get this wrong, both seen: dropping the case silently, and
+   adding a review plus an alert on every webhook and every hourly run. So both branches must
+   read the ledger entry under an `orphan:` key, write the review under an id derived from it,
+   and never use a bare `.add(`. */
+export const orphansAreRecordedOnce = (body: string) =>
+  /`orphan:\$\{snap\.id\}:\$\{snap\.currentPeriodStart \?\? 'nostart'\}`/.test(body)
+  && (body.match(/t\.get\(ledgerDoc\(orphanKey\)\)/g) || []).length >= 2
+  && /billing_reviews'\)\.doc\(ledgerDoc\(orphanKey\)\.id\)/.test(body)
+  && !/billing_reviews'\)\.add\(/.test(body)
+  && /'orphan reviewed'/.test(body);
+ok(orphansAreRecordedOnce(helperBody(index, 'syncSubscriptionById')),
+  'syncSubscriptionById records a subscription with no account once per period, through the ledger (both branches)');
 for (const name of ['manageWorkspace', 'manageAgency', 'manageEnterprise']) {
   const fn = exported(index, name);
   ok(fn.length > 0 && REFUSES.test(fn), `${name} refuses to create a container above the account's plan`);
@@ -172,6 +184,30 @@ ok(!sendsPaymentReceiptOnGrant(helperBody(receiptBody.replace('const h', 'const 
 const elsewhere = "\nconst syncSubscriptionById = async () => { return 'x'; };\nexport const other = () => { if (outcome === 'granted' || outcome === 'granted+review') sendTemplate(a, 'paymentReceipt', {}); };";
 ok(!sendsPaymentReceiptOnGrant(helperBody(elsewhere, 'syncSubscriptionById')),
   'CONTROL: a receipt sent by a different function does not count');
+const orphanBody = [
+  "\nconst syncSubscriptionById = async () => {",
+  "  const orphanKey = `orphan:${snap.id}:${snap.currentPeriodStart ?? 'nostart'}`;",
+  "  if (!uid) { await db.runTransaction(async (t) => { if ((await t.get(ledgerDoc(orphanKey))).exists) return; t.set(db.collection('billing_reviews').doc(ledgerDoc(orphanKey).id), {}); }); return 'orphan reviewed'; }",
+  "  await db.runTransaction(async (t) => { if (!userSnap.exists) { if ((await t.get(ledgerDoc(orphanKey))).exists) return 'x'; return 'orphan reviewed'; } });",
+  "};",
+  "export const next = 1;",
+].join('\n');
+ok(orphansAreRecordedOnce(helperBody(orphanBody, 'syncSubscriptionById')),
+  'a helper that records both orphan cases once through the ledger passes');
+ok(!orphansAreRecordedOnce(helperBody(orphanBody.replace("t.set(db.collection('billing_reviews').doc(ledgerDoc(orphanKey).id), {});", "db.collection('billing_reviews').add({});"), 'syncSubscriptionById')),
+  'CONTROL: an orphan review added with a bare .add( (repeats forever) is caught');
+ok(!orphansAreRecordedOnce(helperBody(orphanBody.replace("if ((await t.get(ledgerDoc(orphanKey))).exists) return 'x'; ", ''), 'syncSubscriptionById')),
+  'CONTROL: the user-document-missing branch skipping the ledger read is caught');
+ok(!orphansAreRecordedOnce(helperBody(orphanBody.replace("if ((await t.get(ledgerDoc(orphanKey))).exists) return; ", ''), 'syncSubscriptionById')),
+  'CONTROL: the no-uid branch skipping the ledger read is caught');
+ok(!orphansAreRecordedOnce("\nconst syncSubscriptionById = async () => { if (!userSnap.exists) return 'no account'; };\nexport const next = 1;"),
+  'CONTROL: the old silent `return \'no account\'` is caught');
+/* createCheckout and manageBilling are NOT on the tier-writer allowlist, so a tier write added to
+   either one later (an upgrade that "just sets the tier") fails the scan above. */
+ok(tierWriters("x\nexport const manageBilling = f(() => { t.update(userRef, { tier: target }); });").filter((n) => !(n in ALLOWED_TIER_WRITERS)).join() === 'manageBilling',
+  'CONTROL: a manageBilling that writes `tier: target` is flagged');
+ok(tierWriters("x\nexport const createCheckout = f(() => { t.update(userRef, { tier: item }); });").filter((n) => !(n in ALLOWED_TIER_WRITERS)).join() === 'createCheckout',
+  'CONTROL: a createCheckout that writes a tier is flagged');
 ok(downgradeIsOnce("} else if (action === 'downgrade') { if (userData.tier === 'free') throw new functions.https.HttpsError('failed-precondition', 'x'); t.update(userRef, { tier: 'free' }); "),
   'a downgrade that refuses free accounts first passes');
 
