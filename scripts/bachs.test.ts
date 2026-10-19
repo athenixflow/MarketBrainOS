@@ -11,6 +11,7 @@ import { catalogItem, toMajorString, toMinor } from '../functions/src/bachs/cata
 import { billingLive, productForTier, tierForProduct } from '../functions/src/bachs/config';
 import { signPayload, verifyBachsSignature } from '../functions/src/bachs/signature';
 import { parseBachsEvent, parseCheckoutSession, parseSubscription } from '../functions/src/bachs/events';
+import { applyOneOff, checkoutAllowed, expirePass, reminderDue, PASS_DAYS } from '../functions/src/bachs/grant';
 
 let failures = 0;
 const ok = (cond: boolean, label: string, detail = '') => {
@@ -128,6 +129,77 @@ console.log('\nCHECKOUT PAYMENT STATE:');
 ok(parseCheckoutSession({ id: 'chk_5', status: 'completed', payment_status: 'unpaid', amount: '9900.00' })?.paid === false, 'a completed session with payment_status unpaid is not paid');
 ok(parseCheckoutSession({ id: 'chk_6', status: 'completed', payment_status: 'failed' })?.paid === false, 'a completed session with payment_status failed is not paid');
 ok(parseCheckoutSession({ id: 'chk_7', status: 'completed' })?.paid === true, 'with no payment_status, a completed session still reads as paid');
+
+console.log('\nONE-OFF GRANTS:');
+const T0 = '2026-10-20T10:00:00.000Z';
+const day = (n: number) => new Date(Date.parse(T0) + n * 86_400_000).toISOString();
+const free = { tier: 'free', monthly_tokens: 0, purchased_tokens: 7 };
+const proPass = (expires: string) => ({ tier: 'pro', billing_mode: 'pass' as const, pass_expires_at: expires, monthly_tokens: 50, purchased_tokens: 7, subscription_status: 'active' });
+const usdSub = { tier: 'team', billing_mode: 'subscription' as const, subscription_status: 'active', bachs_subscription_id: 'sub_1', monthly_tokens: 10, purchased_tokens: 0 };
+const checkout = (kind: any, item: string, currency: any, amount: number) => ({ uid: 'u1', kind, item, currency, amount_minor: amount, status: 'open' });
+const pay = (amount: number | null, currency = 'NGN') => ({ reference: 'mb_1', amountMinor: amount, currency });
+
+const first = applyOneOff(free, checkout('pass', 'pro', 'NGN', 990000), pay(990000), CFG, T0);
+ok(first.ledgerKey === 'checkout:mb_1' && first.review === null && first.checkoutStatus === 'paid', 'a matching pass payment is granted, keyed by its checkout');
+ok(first.userUpdate?.tier === 'pro' && first.userUpdate?.billing_mode === 'pass' && first.userUpdate?.pass_expires_at === day(PASS_DAYS),
+  'a first pass gives Pro for 30 days');
+ok(first.userUpdate?.monthly_tokens === 300 && first.userUpdate?.purchased_tokens === 7, 'with a fresh 300 allowance, purchased tokens kept');
+ok(first.payment?.amount_minor === 990000 && first.payment?.currency === 'NGN', 'the payment record is in kobo, as charged');
+
+const early = applyOneOff(proPass(day(5)), checkout('pass', 'pro', 'NGN', 990000), pay(990000), CFG, T0);
+ok(early.userUpdate?.pass_expires_at === day(35), 'renewing the same tier with 5 days left gives 35 days');
+const twoTabs = applyOneOff(proPass(day(30)), checkout('pass', 'pro', 'NGN', 990000), pay(990000), CFG, T0);
+ok(twoTabs.userUpdate?.pass_expires_at === day(60), 'two payments for the same pass stack to 60 days (Review Focus 5)');
+const up = applyOneOff(proPass(day(20)), checkout('pass', 'team', 'NGN', 3900000), pay(3900000), CFG, T0);
+ok(up.userUpdate?.tier === 'team' && up.userUpdate?.pass_expires_at === day(30), 'an upgrade mid-pass starts a fresh 30 days of the new tier');
+const down = applyOneOff({ ...proPass(day(20)), tier: 'agency' }, checkout('pass', 'pro', 'NGN', 990000), pay(990000), CFG, T0);
+ok(down.review !== null && down.userUpdate === null && down.ledgerKey === 'checkout:mb_1', 'a lower pass paid during a higher one goes to review, recorded once');
+ok(applyOneOff(usdSub, checkout('pass', 'pro', 'NGN', 990000), pay(990000), CFG, T0).review !== null, 'a pass paid on top of a USD subscription goes to review');
+
+const lateExpired = applyOneOff(free, { ...checkout('pass', 'pro', 'NGN', 990000), status: 'expired' }, pay(990000), CFG, T0);
+ok(lateExpired.review === null && lateExpired.userUpdate?.tier === 'pro', 'a payment on a checkout we marked expired is still granted (Review Focus 4)');
+
+const pack = applyOneOff({ tier: 'pro', monthly_tokens: 40, purchased_tokens: 10 }, checkout('pack', 'starter', 'USD', 1000), pay(1000, 'USD'), CFG, T0);
+ok(pack.userUpdate?.purchased_tokens === 110 && pack.userUpdate?.monthly_tokens === 40 && pack.userUpdate?.tier === undefined,
+  'a pack adds to purchased tokens and touches nothing else');
+
+ok(applyOneOff(free, checkout('pass', 'pro', 'NGN', 990000), pay(100), CFG, T0).review !== null, 'an amount mismatch goes to review');
+ok(applyOneOff(free, checkout('pass', 'pro', 'NGN', 990000), pay(990000, 'USD'), CFG, T0).review !== null, 'a currency mismatch goes to review');
+ok(applyOneOff(free, checkout('pass', 'pro', 'NGN', 990000), pay(null), CFG, T0).review !== null, 'an unparseable amount goes to review (Review Focus 2)');
+ok(applyOneOff(free, null, pay(990000), CFG, T0).review !== null, 'a reference we never issued goes to review');
+const gone = applyOneOff(null, checkout('pass', 'pro', 'NGN', 990000), pay(990000), CFG, T0);
+ok(gone.review !== null && gone.userUpdate === null && gone.ledgerKey !== null, 'a deleted account is reviewed and recorded, not retried (Review Focus 3)');
+ok(applyOneOff(free, checkout('plan', 'pro', 'USD', 1900), pay(1900, 'USD'), CFG, T0).ledgerKey === null,
+  'a subscription checkout grants nothing here (the subscription sync does)');
+ok(applyOneOff(free, checkout('pass', 'pro', 'NGN', 990000), { reference: null, amountMinor: 990000, currency: 'NGN' }, CFG, T0).ledgerKey === null,
+  'no reference → nothing to do');
+
+console.log('\nCHECKOUT ELIGIBILITY:');
+ok(!checkoutAllowed(free, 'pack', 'starter', T0).ok, 'a free account cannot buy a pack');
+ok(checkoutAllowed({ tier: 'pro' }, 'pack', 'starter', T0).ok, 'a paid account can');
+ok(!checkoutAllowed({ ...proPass(day(10)), tier: 'agency' }, 'pass', 'pro', T0).ok, 'a lower pass is refused while a higher one is active');
+ok(checkoutAllowed(proPass(day(10)), 'pass', 'pro', T0).ok && checkoutAllowed(proPass(day(10)), 'pass', 'team', T0).ok, 'same or higher pass is allowed');
+ok(!checkoutAllowed(proPass(day(10)), 'plan', 'pro', T0).ok, 'a USD plan is refused while a naira pass is active');
+ok(!checkoutAllowed(usdSub, 'plan', 'agency', T0).ok && !checkoutAllowed(usdSub, 'pass', 'pro', T0).ok,
+  'with a live USD subscription: no second subscription, no pass');
+ok(checkoutAllowed({ tier: 'pro' }, 'plan', 'pro', T0).ok, 'an admin-granted plan does not block buying');
+/* TIER_RANK is a plain object: 'constructor' / '__proto__' must rank as unknown (0), not as an inherited function/object. */
+const protoProbe = attempt(() => checkoutAllowed({ tier: 'pro' }, 'pass', 'constructor', T0));
+ok(protoProbe !== THREW && typeof protoProbe === 'object' && protoProbe !== null && 'ok' in protoProbe,
+  "an inherited key as the item ('constructor') does not throw and still yields a verdict");
+ok(attempt(() => !checkoutAllowed(proPass(day(10)), 'pass', 'constructor', T0).ok) === true,
+  "an inherited key ('constructor') ranks as unknown (0), so it is below an active Pro pass and refused");
+ok(attempt(() => !checkoutAllowed(proPass(day(10)), 'pass', '__proto__', T0).ok) === true,
+  "an inherited key ('__proto__') ranks as unknown (0), so it is below an active Pro pass and refused");
+
+console.log('\nPASS LIFECYCLE:');
+ok(reminderDue(proPass(day(4.5)), T0) === 5 && reminderDue({ ...proPass(day(4.5)), pass_reminded: [5] }, T0) === null, '5-day reminder once');
+ok(reminderDue({ ...proPass(day(0.5)), pass_reminded: [5] }, T0) === 1, '1-day reminder');
+ok(reminderDue(proPass(day(10)), T0) === null && reminderDue(usdSub, T0) === null, 'no reminder early, or for a subscription');
+const exp = expirePass(proPass(day(-0.1)), T0);
+ok(exp?.tier === 'free' && exp?.monthly_tokens === 0 && exp?.purchased_tokens === 7 && exp?.subscription_status === 'expired',
+  'an ended pass → Free, allowance 0, purchased tokens kept');
+ok(expirePass(proPass(day(1)), T0) === null && expirePass(usdSub, T0) === null, 'an active pass or a subscription is not expired');
 
 console.log(failures === 0
   ? '\nPASS — Bachs: amounts, signatures, events and every grant rule behave.'
