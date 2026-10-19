@@ -17,7 +17,7 @@ import { catalogItem, toMajorString, TIER_RANK, PAID_TIERS, PaidTier, Kind, Curr
 import { billingLive as bachsBillingLive, productForTier, tierForProduct } from './bachs/config';
 import { BachsEvent, parseBachsEvent, parseCheckoutSession, parseSubscription } from './bachs/events';
 import { BACHS_SIGNATURE_HEADER, verifyBachsSignature } from './bachs/signature';
-import { Account, CheckoutRecord, applyOneOff, checkoutAllowed, expirePass, reminderDue, syncSubscription } from './bachs/grant';
+import { Account, CheckoutRecord, applyOneOff, checkoutAllowed, expirePass, manageOwnership, reminderDue, syncSubscription } from './bachs/grant';
 import { bachsApi } from './bachs/api';
 
 admin.initializeApp();
@@ -4337,14 +4337,24 @@ export const manageBilling = functions.runWith({ secrets: BACHS_SECRETS }).https
   const account = (await db.collection('users').doc(uid).get()).data() as Account | undefined;
   if (!account) throw new functions.https.HttpsError('not-found', 'User profile not found.');
 
-  if (action === 'portal') {
-    if (!account.bachs_customer_id) throw new functions.https.HttpsError('failed-precondition', 'There is no card on file.');
-    const s = await bachs().createPortalSession(account.bachs_customer_id, `portal_${uid}_${Date.now()}`);
-    return { url: s.url };
-  }
   const subId = account.bachs_subscription_id;
-  if (account.billing_mode !== 'subscription' || !subId) {
-    throw new functions.https.HttpsError('failed-precondition', 'There is no dollar subscription to change.');
+  if (!subId || (action === 'portal' ? !account.bachs_customer_id : account.billing_mode !== 'subscription')) {
+    throw new functions.https.HttpsError('failed-precondition',
+      action === 'portal' ? 'There is no card on file.' : 'There is no dollar subscription to change.');
+  }
+  /* The stored ids are not proof of ownership: the subscription Bachs reports must name this caller
+     (bachs/grant.ts manageOwnership). Checked before anything is cancelled, changed or opened. */
+  const snap = parseSubscription(await bachs().getSubscription(subId));
+  const owned = manageOwnership(uid, account, snap, action);
+  if (!owned.ok) {
+    try { await billingAlertEmail('A billing action was refused', [owned.alert]); }
+    catch (e: any) { console.error('manageBilling: ownership alert failed:', e?.message || e); }
+    throw new functions.https.HttpsError('permission-denied', owned.reason);
+  }
+
+  if (action === 'portal') {
+    const s = await bachs().createPortalSession(account.bachs_customer_id as string, `portal_${uid}_${Date.now()}`);
+    return { url: s.url };
   }
   if (action === 'cancel') {
     await bachs().cancelSubscriptionAtPeriodEnd(subId, `cancel_${subId}`);

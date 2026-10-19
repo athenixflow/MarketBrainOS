@@ -95,6 +95,33 @@ export const checkoutAllowed = (a: Account, kind: Kind, item: string, nowIso: st
   return { ok: true };
 };
 
+export type ManageAction = 'cancel' | 'upgrade' | 'portal';
+
+/**
+ * May this caller cancel, upgrade, or open the card portal for the subscription stored on their
+ * account? manageBilling used to act on the stored ids alone, and ids are only as good as whoever
+ * wrote them. The subscription Bachs reports NOW must be the stored one and name the caller in its
+ * metadata (createCheckout puts the uid there and Bachs copies it onto the subscription); the
+ * portal also needs the stored customer to be that subscription's customer. No uid in the metadata
+ * fails closed: refused with a support message, and the founder is alerted.
+ */
+export const manageOwnership = (uid: string, account: Account, snap: SubscriptionSnapshot | null, action: ManageAction):
+  { ok: true } | { ok: false; reason: string; alert: string } => {
+  const refuse = (why: string) => ({
+    ok: false as const,
+    reason: 'We could not confirm this subscription belongs to your account. Contact support@marketbrainos.app and we will sort it out.',
+    alert: `manageBilling ${action} by ${uid} refused: ${why}`,
+  });
+  if (!snap) return refuse(`subscription ${account.bachs_subscription_id} could not be read`);
+  if (snap.id !== account.bachs_subscription_id) return refuse(`Bachs returned ${snap.id} for stored ${account.bachs_subscription_id}`);
+  if (!snap.metadata.uid) return refuse(`subscription ${snap.id} carries no uid in its metadata`);
+  if (snap.metadata.uid !== uid) return refuse(`subscription ${snap.id} belongs to ${snap.metadata.uid}`);
+  if (action === 'portal' && (!account.bachs_customer_id || account.bachs_customer_id !== snap.customerId)) {
+    return refuse(`stored customer ${account.bachs_customer_id ?? 'none'} is not ${snap.id}'s customer ${snap.customerId ?? 'none'}`);
+  }
+  return { ok: true };
+};
+
 export const applyOneOff = (
   account: Account | null,
   checkout: CheckoutRecord | null,

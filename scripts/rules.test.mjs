@@ -212,6 +212,22 @@ await check('registering admin@marketbrainos.app cannot create a super_admin pro
 await check('the same sign-up can still create a normal user profile', () =>
   assertSucceeds(setDoc(doc(squatterDb, 'users', 'squatter'), freshProfile('user'))));
 
+console.log('\nNO BILLING STATE AT SIGN-UP (must be DENIED):');
+
+const seederDb = testEnv.authenticatedContext('seeder', { email: 'seeder@example.com' }).firestore();
+const seed = (extra) => ({ ...freshProfile('user'), email: 'seeder@example.com', ...extra });
+for (const [field, value] of [
+  ['billing_mode', 'subscription'], ['billing_currency', 'USD'], ['pass_expires_at', '2099-01-01T00:00:00.000Z'],
+  ['pass_tier', 'agency'], ['pass_reminded', []], ['bachs_customer_id', 'cust_other'], ['bachs_subscription_id', 'sub_other'],
+  ['bachs_product_id', 'prod_x'], ['bachs_last_event_at', '2099-01-01T00:00:00.000Z'], ['subscription_started_at', '2026-01-01T00:00:00.000Z'],
+]) {
+  await check(`a new profile cannot arrive holding ${field}`, () => assertFails(setDoc(doc(seederDb, 'users', 'seeder'), seed({ [field]: value }))));
+}
+await check('a new profile cannot arrive with subscription_status active', () =>
+  assertFails(setDoc(doc(seederDb, 'users', 'seeder'), seed({ subscription_status: 'active' }))));
+await check('the profile ensureUserProfile writes (free status, a plan_renews_at string) still passes', () =>
+  assertSucceeds(setDoc(doc(seederDb, 'users', 'seeder'), seed({}))));
+
 console.log('\nINVITATION READS NEED A VERIFIED EMAIL:');
 
 await testEnv.withSecurityRulesDisabled(async (ctx) => {

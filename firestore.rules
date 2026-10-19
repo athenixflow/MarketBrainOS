@@ -96,6 +96,17 @@ service cloud.firestore {
         && request.resource.data.tokens <= 20
         && request.resource.data.get('monthly_tokens', 0) <= 20
         && request.resource.data.get('purchased_tokens', 0) == 0
+        // No billing state at birth. These are written by the payment functions only, and the
+        // server acts on them (manageBilling on the stored Bachs ids, passLifecycle on the pass
+        // fields); a profile that arrived holding them could seed another customer's subscription.
+        // plan_renews_at is the one exception: ensureUserProfile writes it (inert while free).
+        && !request.resource.data.keys().hasAny([
+             'billing_mode', 'billing_currency', 'pass_expires_at', 'pass_tier', 'pass_reminded',
+             'bachs_customer_id', 'bachs_subscription_id', 'bachs_product_id', 'bachs_last_event_at',
+             'subscription_started_at'
+           ])
+        && request.resource.data.get('subscription_status', 'free') == 'free'
+        && request.resource.data.get('plan_renews_at', '') is string
         // Client-created profiles are always plain users. An email-based super_admin clause used to
         // live here; Firebase sign-up does not verify addresses, so registering that address would
         // have minted an admin. Admins are promoted in the console / Admin SDK only.

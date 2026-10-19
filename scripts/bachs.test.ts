@@ -14,7 +14,7 @@ import { catalogItem, toMajorString, toMinor } from '../functions/src/bachs/cata
 import { billingLive, productForTier, tierForProduct } from '../functions/src/bachs/config';
 import { signPayload, verifyBachsSignature } from '../functions/src/bachs/signature';
 import { parseBachsEvent, parseCheckoutSession, parseSubscription } from '../functions/src/bachs/events';
-import { applyOneOff, checkoutAllowed, expirePass, reminderDue, syncSubscription, PASS_DAYS } from '../functions/src/bachs/grant';
+import { applyOneOff, checkoutAllowed, expirePass, manageOwnership, reminderDue, syncSubscription, PASS_DAYS } from '../functions/src/bachs/grant';
 import { bachsApi, bachsBaseUrl, BachsApiError } from '../functions/src/bachs/api';
 import { EMAIL_TEMPLATES, MARKETING_KEYS } from '../functions/src/email/templates';
 
@@ -695,6 +695,28 @@ ok(wrongPaid.review !== null && wrongPaid.ledgerKey === 'checkout:mb_1' && wrong
   'a READABLE amount that is wrong still goes to review, keyed and recorded once');
 ok(applyOneOff(free, null, { reference: 'mb_1', amountMinor: null, currency: null }, CFG, T0).review !== null,
   'a reference we never issued is reviewed whatever the amount (that decision does not need one)');
+
+/* manageBilling ACTS ONLY ON A SUBSCRIPTION THE CALLER OWNS (final review I5). It used to act on the ids
+   stored on the account, and a self-created profile could seed those ids: cancel or upgrade somebody
+   else's subscription, or open their card portal. The subscription Bachs reports must name the caller in
+   its metadata (we put the uid there at checkout); with no uid there it fails closed and alerts. */
+console.log('\nmanageBilling OWNERSHIP:');
+const owner = { tier: 'pro', billing_mode: 'subscription' as const, subscription_status: 'active', bachs_subscription_id: 'sub_1', bachs_customer_id: 'cust_1' };
+const ownedSnap = snap() as any;
+ok(manageOwnership('u1', owner, ownedSnap, 'cancel').ok && manageOwnership('u1', owner, ownedSnap, 'upgrade').ok && manageOwnership('u1', owner, ownedSnap, 'portal').ok,
+  'the owner may cancel, upgrade and open the portal');
+const stranger = manageOwnership('u2', owner, ownedSnap, 'cancel');
+ok(!stranger.ok && !!stranger.reason && !!stranger.alert, 'another uid is refused (and the founder is alerted)');
+ok(!manageOwnership('u2', owner, ownedSnap, 'upgrade').ok && !manageOwnership('u2', owner, ownedSnap, 'portal').ok, 'for every action');
+const noUid = manageOwnership('u1', owner, snap({ metadata: {} }) as any, 'cancel');
+ok(!noUid.ok && /support/i.test(noUid.reason) && !!noUid.alert, 'a subscription with no uid in its metadata is refused with a support message and an alert (fail closed)');
+ok(!manageOwnership('u1', owner, null, 'cancel').ok, 'an unreadable subscription is refused');
+ok(!manageOwnership('u1', owner, snap({ id: 'sub_9' }) as any, 'cancel').ok, 'a snapshot of a different subscription than the stored one is refused');
+ok(!manageOwnership('u1', { ...owner, bachs_customer_id: 'cust_9' }, ownedSnap, 'portal').ok,
+  'the portal is refused when the stored customer is not the subscription\'s customer');
+ok(!manageOwnership('u1', { ...owner, bachs_customer_id: null }, ownedSnap, 'portal').ok, 'and when no customer is stored');
+ok(manageOwnership('u1', { ...owner, bachs_customer_id: 'cust_9' }, ownedSnap, 'cancel').ok,
+  'the customer match is a portal rule only (a cancel is checked by the subscription\'s uid)');
 
 /* The webhook's Bachs reads must answer inside Bachs' 10s delivery window (final review M4). */
 const hang = (async (_url: string, init: any) => new Promise((_resolve, reject) => {

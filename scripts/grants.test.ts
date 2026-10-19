@@ -651,6 +651,86 @@ ok(!oneOffLooksUpUnreadAmount(goodOneOff.replace("res.status(200).send('deferred
 ok(!oneOffLooksUpUnreadAmount(goodOneOff.replace("stored?.bachs_checkout_id || ", '')),
   'CONTROL: a lookup that ignores the stored session id is caught');
 
+/* A SELF-CREATED PROFILE SEEDS NO BILLING FIELD (final review I5). The users create rule pinned only
+   tier, tokens and role, so a new account could arrive already holding a billing_mode, a pass expiry,
+   or another customer's Bachs subscription and customer ids — which manageBilling then acted on.
+   Every server-written billing field is refused at create, and subscription_status may only be
+   absent or 'free'. plan_renews_at is NOT in the list: ensureUserProfile writes it at sign-up (inert
+   on a free account), so it is only required to be a string. */
+export const SEEDED_BILLING_FIELDS = [
+  'billing_mode', 'billing_currency', 'pass_expires_at', 'pass_tier', 'pass_reminded',
+  'bachs_customer_id', 'bachs_subscription_id', 'bachs_product_id', 'bachs_last_event_at',
+  'subscription_started_at',
+];
+export const usersCreateRule = (rules: string): string => {
+  const users = rules.indexOf('match /users/{uid}');
+  const create = users < 0 ? -1 : rules.indexOf('allow create:', users);
+  const update = create < 0 ? -1 : rules.indexOf('allow update:', create);
+  return create < 0 || update < 0 ? '' : rules.slice(create, update);
+};
+export const createRuleRefusesBilling = (rule: string): string[] => {
+  const list = rule.match(/!request\.resource\.data\.keys\(\)\.hasAny\(\[([^\]]*)\]\)/);
+  const named = list ? [...list[1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]) : [];
+  const missing = SEEDED_BILLING_FIELDS.filter((f) => !named.includes(f));
+  if (!/request\.resource\.data\.get\('subscription_status', 'free'\) == 'free'/.test(rule)) missing.push('subscription_status');
+  if (named.includes('plan_renews_at')) missing.push('plan_renews_at (ensureUserProfile writes it; refusing it breaks sign-up)');
+  return missing;
+};
+console.log('\nA SELF-CREATED PROFILE SEEDS NO BILLING FIELD:');
+const rulesSrc = blank(fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8'));
+const createRule = usersCreateRule(rulesSrc);
+const seedable = createRuleRefusesBilling(createRule);
+ok(createRule.length > 0 && seedable.length === 0, 'the users create rule refuses every server-written billing field and any subscription_status but free', seedable.join(', '));
+const persistSrc = blank(fs.readFileSync(path.join(root, 'services', 'persistenceService.ts'), 'utf8'));
+const ensure = exported(persistSrc, 'ensureUserProfile');
+const ensureWrites = SEEDED_BILLING_FIELDS.filter((f) => new RegExp(`\\b${f}\\s*:`).test(ensure));
+ok(ensure.length > 0 && ensureWrites.length === 0 && /subscription_status: 'free'/.test(ensure),
+  'and ensureUserProfile writes none of them (sign-up still passes the rule)', ensureWrites.join(', '));
+const goodCreate = "allow create: if self(uid)\n  && request.resource.data.tier == 'free'\n  && !request.resource.data.keys().hasAny([" + SEEDED_BILLING_FIELDS.map((f) => `'${f}'`).join(', ') + "])\n  && request.resource.data.get('subscription_status', 'free') == 'free'\n  && request.resource.data.role == 'user';\n";
+ok(createRuleRefusesBilling(goodCreate).length === 0, 'a create rule that refuses them all passes');
+for (const f of SEEDED_BILLING_FIELDS) {
+  ok(createRuleRefusesBilling(goodCreate.replace(new RegExp(`'${f}'(, )?`), '')).join() === f, `CONTROL: a create rule that lets ${f} be seeded is caught`);
+}
+ok(createRuleRefusesBilling(goodCreate.replace("  && request.resource.data.get('subscription_status', 'free') == 'free'\n", '')).join() === 'subscription_status',
+  'CONTROL: a create rule that lets subscription_status be seeded as active is caught');
+ok(createRuleRefusesBilling(goodCreate.replace('!request.resource.data.keys()', 'request.resource.data.keys()')).length === SEEDED_BILLING_FIELDS.length,
+  'CONTROL: a rule that REQUIRES the fields instead of refusing them is caught');
+ok(createRuleRefusesBilling(blank(goodCreate.replace("  && !request.resource.data.keys()", "  // && !request.resource.data.keys()"))).length >= SEEDED_BILLING_FIELDS.length,
+  'CONTROL: a refusal that is only commented out is caught');
+
+/* manageBilling CHECKS OWNERSHIP BEFORE IT ACTS (final review I5). Before any cancel, upgrade or portal
+   call it fetches the stored subscription and asks manageOwnership (bachs/grant.ts, proved in
+   bachs.test) whether the caller owns it; a refusal throws. */
+export const manageChecksOwnership = (fn: string): boolean => {
+  const fetchAt = fn.search(/parseSubscription\(await bachs\(\)\.getSubscription\(subId\)\)/);
+  const decide = fn.indexOf('manageOwnership(uid, account, ');
+  const acts = ['cancelSubscriptionAtPeriodEnd(', 'changeSubscriptionProduct(', 'createPortalSession(', 'syncSubscriptionById(']
+    .map((a) => fn.indexOf(a));
+  const refuse = fn.slice(decide).search(/if \(!owned\.ok\)[^]{0,400}?throw new functions\.https\.HttpsError\('permission-denied', owned\.reason\)/);
+  return fetchAt >= 0 && decide > fetchAt && refuse >= 0 && acts.every((at) => at < 0 || at > decide + refuse)
+    && acts.filter((at) => at >= 0).length >= 3;
+};
+const manage = exported(index, 'manageBilling');
+ok(manageChecksOwnership(manage), 'manageBilling fetches the subscription and refuses a caller who does not own it, before it cancels, upgrades or opens the portal');
+const goodManage = [
+  "export const manageBilling = f(async (data, context) => {",
+  "  const snap = parseSubscription(await bachs().getSubscription(subId));",
+  "  const owned = manageOwnership(uid, account, snap, action);",
+  "  if (!owned.ok) { await alert(); throw new functions.https.HttpsError('permission-denied', owned.reason); }",
+  "  if (action === 'portal') { const s = await bachs().createPortalSession(customerId, k); return s; }",
+  "  if (action === 'cancel') { await bachs().cancelSubscriptionAtPeriodEnd(subId, k); await syncSubscriptionById(subId, null, 'manage'); }",
+  "  await bachs().changeSubscriptionProduct(subId, productId, k);",
+  "});",
+].join('\n');
+ok(manageChecksOwnership(goodManage), 'a manageBilling that checks ownership first passes');
+ok(!manageChecksOwnership(goodManage.replace("  const owned = manageOwnership(uid, account, snap, action);\n", '')),
+  'CONTROL: a manageBilling that acts on the stored ids with no ownership check is caught');
+ok(!manageChecksOwnership(goodManage.replace("throw new functions.https.HttpsError('permission-denied', owned.reason);", 'console.warn(owned.reason);')),
+  'CONTROL: an ownership check whose refusal does not stop the action is caught');
+const portalFirst = goodManage.split('\n');
+portalFirst.splice(1, 0, portalFirst.splice(4, 1)[0]!);
+ok(!manageChecksOwnership(portalFirst.join('\n')), 'CONTROL: a portal opened before the ownership check is caught');
+
 console.log(failures === 0
   ? '\nPASS — no signed-in user can grant themselves a plan, a token pack or a refill.'
   : `\nFAILED — ${failures} assertion(s).`);
