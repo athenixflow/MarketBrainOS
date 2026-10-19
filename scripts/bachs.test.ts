@@ -478,6 +478,8 @@ ok(expired.subject === 'Your Team pass has ended' && expired.html.includes('Buy 
 const alertMail = mail('billingAlert', { title: '2 payments need review', lines: ['order o_1: amount mismatch', 'order o_2: unknown account'] });
 ok(alertMail.subject === '[Billing] 2 payments need review', 'billingAlert subject carries the [Billing] prefix', alertMail.subject);
 ok(alertMail.html.includes('order o_1: amount mismatch') && alertMail.html.includes('order o_2: unknown account'), 'billingAlert lists every line');
+ok(!alertMail.html.includes('Nothing was granted') && alertMail.html.includes('Review the items below'),
+  'billingAlert hero stays neutral: it must not claim nothing was granted (reconciliation lines say payments were)');
 ok(!mail('billingAlert', { title: 'No lines' }).subject.startsWith('RENDER_FAILED'), 'billingAlert with no lines still renders (an alert that throws is silence)');
 ok(!mail('billingAlert', { title: '<b>x</b> & y', lines: [] }).html.includes('<b>x</b>'), 'billingAlert escapes its title (the layout heading is raw HTML)');
 for (const key of ['passReminder', 'passExpired', 'billingAlert']) {

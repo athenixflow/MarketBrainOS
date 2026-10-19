@@ -952,7 +952,7 @@ const billingAlert = (d: { title: string; lines: string[] }): RenderedEmail => (
     preheader: d.title,
     tag: 'Billing alert',
     heading: esc(d.title), // heading is raw HTML in the layout; the title may carry an email or plan name
-    heroSubtext: 'Nothing was granted automatically for the items below. Check them in Firestore (billing_reviews) and the Bachs dashboard.',
+    heroSubtext: 'Review the items below — each line says what happened. Check billing_reviews in Firestore and the Bachs dashboard before granting anything by hand.',
     body: metaTable((d.lines || []).map((line, i) => ({ k: String(i + 1), v: line }))),
     footerLinks: [],
     footerNote: 'Sent by the MarketBrain OS billing checks.',
