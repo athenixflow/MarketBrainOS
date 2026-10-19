@@ -150,7 +150,15 @@ const mergePricingConfig = (base: PricingConfig, over: any): PricingConfig => {
   return {
     plans,
     expansion: { ...base.expansion, ...(over.expansion || {}) },
-    tokenPacks: Array.isArray(over.tokenPacks) && over.tokenPacks.length ? over.tokenPacks : base.tokenPacks,
+    /* A stored pack list replaces the defaults wholesale, and a doc saved before packs had a
+       naira price would drop it for every pack. So a stored pack missing `priceNgn` takes the
+       default pack's of the same id; a stored value wins; an id with no default stays without. */
+    tokenPacks: Array.isArray(over.tokenPacks) && over.tokenPacks.length
+      ? over.tokenPacks.map((p: any) => {
+          const def = base.tokenPacks.find((d) => d.id === p?.id);
+          return typeof p?.priceNgn === 'number' || typeof def?.priceNgn !== 'number' ? p : { ...p, priceNgn: def.priceNgn };
+        })
+      : base.tokenPacks,
     toolCosts: { ...base.toolCosts, ...(over.toolCosts || {}) },
     analysisTiers: { ...base.analysisTiers, ...(over.analysisTiers || {}) },
     renewalDays: typeof over.renewalDays === 'number' ? over.renewalDays : base.renewalDays,

@@ -15,6 +15,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import { DEFAULT_PRICING_CONFIG as CLIENT } from '../config/pricingConfig';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -202,6 +203,43 @@ const cheapestUsdPack = Math.min(...CLIENT.tokenPacks.map((p) => p.price / p.tok
 ok(cheapestPack / proNgnPerToken >= (cheapestUsdPack / proUsdPerToken) * 0.95,
   'naira packs keep the same pack-to-plan ratio as dollar packs (within 5%)',
   `naira ${(cheapestPack / proNgnPerToken).toFixed(3)} vs dollar ${(cheapestUsdPack / proUsdPerToken).toFixed(3)}`);
+
+/*
+ * A STORED CONFIG MUST NOT DROP NAIRA PRICES. `mergePricingConfig` takes a stored doc's
+ * `tokenPacks` wholesale, and the live `pricing_config/global` doc was written before packs had
+ * a naira price, so without a per-pack fallback every pack would lose its price in naira the
+ * moment the server read that doc. The function is lifted out of the server source as text and
+ * run, rather than imported, for the same reason the rest of this file reads that source as
+ * text: importing `functions/src/index.ts` drags in the Admin SDK.
+ */
+const mergeStart = serverSrc.indexOf('const mergePricingConfig');
+const mergeEnd = mergeStart < 0 ? -1 : serverSrc.indexOf('\n};', mergeStart);
+let merge: ((base: any, over: any) => any) | null = null;
+if (mergeStart >= 0 && mergeEnd > mergeStart) {
+  const js = ts.transpileModule(serverSrc.slice(mergeStart, mergeEnd + 3), {
+    compilerOptions: { target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  merge = new Function(`${js}\nreturn mergePricingConfig;`)();
+}
+ok(merge != null, 'the server still declares mergePricingConfig');
+if (merge) {
+  const stored = merge(CLIENT, { tokenPacks: [
+    { id: 'starter', label: 'Starter Pack', tokens: 100, price: 10 },
+    { id: 'growth', label: 'Growth Pack', tokens: 500, price: 40, priceNgn: 19000 },
+    { id: 'custom', label: 'Custom Pack', tokens: 1, price: 1 },
+  ] });
+  const byId = (id: string) => stored.tokenPacks.find((p: any) => p.id === id);
+  ok(byId('starter')?.priceNgn === 5000, 'a stored pack with no naira price takes its default pack\'s',
+    `got ${byId('starter')?.priceNgn}`);
+  ok(byId('growth')?.priceNgn === 19000, 'a stored naira price wins over the default',
+    `got ${byId('growth')?.priceNgn}`);
+  ok(byId('custom') != null && byId('custom').priceNgn === undefined, 'a stored pack with no default to match gets no naira price',
+    `got ${byId('custom')?.priceNgn}`);
+  ok(merge(CLIENT, {}).tokenPacks.every((p: any) => typeof p.priceNgn === 'number'), 'with no stored packs the defaults keep every naira price');
+  ok(merge(CLIENT, { ngnPerUsd: 1500 }).ngnPerUsd === 1500, 'a stored exchange rate is honoured');
+  ok([0, -5, '1450', null].every((bad) => merge!(CLIENT, { ngnPerUsd: bad }).ngnPerUsd === 1450),
+    'a zero, negative or non-numeric stored exchange rate falls back to the default');
+}
 
 console.log(failures === 0
   ? '\nPASS — one ladder, both copies agreeing, and no pack undercutting a plan.'
