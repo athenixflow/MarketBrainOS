@@ -317,8 +317,8 @@ for (const name of ['adminManageTokens', 'adminManageSubscription', 'adminBulkAc
 
 console.log('\nTHE STORE DOES NOT OFFER WHAT THE SERVER REFUSES:');
 const store = blank(fs.readFileSync(path.join(root, 'components', 'TokenStore.tsx'), 'utf8'));
-ok(/fetchBillingStatus\(\)/.test(store), 'components/TokenStore.tsx reads billing_live');
-ok(!/callConfirmTopUp\(/.test(store), 'and no longer calls the refused confirmTopUp');
+ok(/fetchBillingStatus\(\)/.test(store) && /startCheckout\('pack'/.test(store), 'components/TokenStore.tsx buys packs through checkout, gated on billing status');
+ok(!/callConfirmTopUp\(/.test(store), 'and never calls the refused confirmTopUp');
 const capacity = blank(fs.readFileSync(path.join(root, 'components', 'CapacityPanel.tsx'), 'utf8'));
 ok(/fetchBillingStatus\(\)/.test(capacity) && /canBuy && r\.onBuy/.test(capacity),
   'components/CapacityPanel.tsx shows no Buy button until billing is live');

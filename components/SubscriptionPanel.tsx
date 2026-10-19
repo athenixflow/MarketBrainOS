@@ -1,18 +1,15 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, PrimaryButton, SecondaryButton, Badge, SuccessMessage, ErrorMessage, useConfirmTap } from './UI';
 import { useAuth } from '../context/AuthContext';
 import { isPaidTier } from '../config/access';
-import { callChangeSubscription, createNotification } from '../services/persistenceService';
 import { SubscriptionStatus } from '../types';
 import { DEFAULT_PRICING_CONFIG, PLAN_META } from '../config/pricingConfig';
 import { track } from '../services/analytics';
-import { fetchBillingStatus } from '../services/billing';
+import { fetchBillingStatus, BillingStatus, Currency, defaultCurrency, formatPrice, canPay, startCheckout, callManageBilling } from '../services/billing';
 
 // Derived, never hardcoded: plan copy must track the pricing config or it drifts (it previously
 // advertised 200 tokens while the config granted 100).
-const PRO_TOKENS = DEFAULT_PRICING_CONFIG.plans.pro.monthlyTokens;
-const PRO_PRICE = DEFAULT_PRICING_CONFIG.plans.pro.price;
-const PRO_NAME = PLAN_META.pro.name;
+const PRO = DEFAULT_PRICING_CONFIG.plans.pro;
 
 type BadgeTone = 'neutral' | 'red' | 'green' | 'blue' | 'yellow' | 'dark';
 const STATUS_BADGE: Record<SubscriptionStatus, { label: string; tone: BadgeTone }> = {
@@ -23,76 +20,73 @@ const STATUS_BADGE: Record<SubscriptionStatus, { label: string; tone: BadgeTone 
   expired: { label: 'Expired', tone: 'red' },
 };
 
+/**
+ * The account's plan and what can be done with it (spec §5). Every money action goes to Bachs:
+ * a checkout for a new plan or pass, `manageBilling` for a USD subscription. Nothing here changes
+ * a tier — the webhook does, once Bachs confirms the payment.
+ *
+ * There is no "Downgrade to Free": a cancelled USD subscription ends at the period's end through
+ * Bachs, and a naira pass simply expires.
+ */
 const SubscriptionPanel: React.FC = () => {
   const { user, profile, refreshProfile } = useAuth();
-  const [busy, setBusy] = useState<string>('');
-  const [msg, setMsg] = useState<string>('');
+  const [busy, setBusy] = useState('');
+  const [msg, setMsg] = useState('');
   // Tone of `msg` is tracked here rather than inferred from the text.
   const [msgErr, setMsgErr] = useState(false);
+  const [billing, setBilling] = useState<BillingStatus | null>(null);
+  const [currency, setCurrency] = useState<Currency>(defaultCurrency());
 
-  // The panel serves every paid tier (Team/Agency/Enterprise included), so copy names the account's
-  // real plan; it used to say "Pro" for all of them. Read before the early return so the taps below
-  // can use it.
-  const planName = profile ? (PLAN_META[profile.tier]?.name || profile.tier) : PLAN_META.free.name;
-  // Monthly allowance of the account's own plan, for the "includes N tokens" line.
-  const planTokens = profile ? (DEFAULT_PRICING_CONFIG.plans[profile.tier]?.monthlyTokens ?? PRO_TOKENS) : PRO_TOKENS;
-
-  // Cancelling or downgrading a paid plan fired on a single tap; both now need a second tap.
-  const cancelTap = useConfirmTap(() => run('cancel', 'Subscription cancelled.', `Your ${planName} plan has been cancelled.`));
-  const downgradeTap = useConfirmTap(() => run('downgrade', 'Downgraded to Free.', 'Your account moved to the Free plan.'));
-
-  /*
-   * NO PAY BUTTON UNTIL THERE IS A WAY TO PAY (GTM part 19 §5 step 3).
-   *
-   * Until billing is live, "Upgrade to Pro, $19/mo" takes no money AND grants the plan.
-   * That is a promise of a charge that never arrives sitting on top of a paid tier given
-   * away — and the first person to notice the second half tells everybody. The control
-   * says what is actually true instead, and the server keeps deciding tiers.
-   */
-  const [billingLive, setBillingLive] = React.useState<boolean | null>(null);
-  React.useEffect(() => {
+  useEffect(() => {
     let alive = true;
-    void fetchBillingStatus().then((s) => { if (alive) setBillingLive(s.billing_live); });
+    void fetchBillingStatus().then((s) => { if (alive) setBilling(s); });
+    const q = new URLSearchParams(window.location.search).get('checkout');
+    if (q === 'success') { setMsg('Payment received — your plan updates within a minute.'); void refreshProfile(); }
+    if (q === 'cancelled') { setMsgErr(true); setMsg('Checkout was cancelled. Nothing was charged.'); }
     return () => { alive = false; };
+    /* Runs once on mount. Listing refreshProfile here would loop if it is not memoised:
+       refresh → new profile → new function → effect → refresh. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const cancelTap = useConfirmTap(() => act('cancel'));
   if (!profile) return null;
 
+  const planName = PLAN_META[profile.tier]?.name || profile.tier;
+  const planTokens = DEFAULT_PRICING_CONFIG.plans[profile.tier]?.monthlyTokens ?? PRO.monthlyTokens;
   const status: SubscriptionStatus = profile.subscription_status || (isPaidTier(profile.tier) ? 'active' : 'free');
-  const isPro = isPaidTier(profile.tier);
   const badge = STATUS_BADGE[status] || STATUS_BADGE.free;
+  const isPaid = isPaidTier(profile.tier);
+  const isPass = profile.billing_mode === 'pass';
+  const isSub = profile.billing_mode === 'subscription';
+  const payable = canPay(billing, profile.role);
+  const proPrice = currency === 'NGN' ? formatPrice(PRO.priceNgn ?? 0, 'NGN') + ' for 30 days' : formatPrice(PRO.price, 'USD') + '/mo';
 
-  const run = async (action: 'upgrade' | 'cancel' | 'downgrade' | 'renew', successMsg: string, notif: string) => {
+  async function act(action: 'buy-pro' | 'renew-pass' | 'cancel' | 'portal') {
     if (!user) return;
-    /* See the note above: upgrading grants a paid tier and charges nothing until billing
-       is live. Cancelling and downgrading stay available — those take nothing away that
-       was paid for, and blocking them would trap somebody in a plan. */
-    if ((action === 'upgrade' || action === 'renew') && billingLive === false) {
-      setMsgErr(true);
-      setMsg('Card payments are not live yet. Email support and we will set your plan up by hand.');
-      return;
-    }
-    /* The same intent event from inside the product, so the two surfaces are comparable
-       and a change of plan is never confused with a cancellation in the funnel. */
-    if (action === 'upgrade' || action === 'renew') {
-      track('upgrade_clicked', { plan: action === 'renew' ? profile?.tier : 'pro', surface: 'subscription_panel', signed_in: true });
-    }
-    setBusy(action);
-    setMsg('');
-    setMsgErr(false);
+    setBusy(action); setMsg(''); setMsgErr(false);
     try {
-      await callChangeSubscription(action);
-      await refreshProfile();
-      setMsg(successMsg);
-      createNotification(user.uid, 'Subscription', notif);
-      setTimeout(() => setMsg(''), 4000);
+      if (action === 'buy-pro') {
+        track('upgrade_clicked', { plan: 'pro', surface: 'subscription_panel', signed_in: true });
+        await startCheckout(currency === 'USD' ? 'plan' : 'pass', 'pro', currency);
+      } else if (action === 'renew-pass') {
+        track('upgrade_clicked', { plan: String(profile!.tier), surface: 'subscription_panel', signed_in: true });
+        await startCheckout('pass', String(profile!.tier), 'NGN');
+      } else if (action === 'portal') {
+        const r = await callManageBilling('portal');
+        if (r.url) window.location.assign(r.url);
+      } else {
+        await callManageBilling('cancel');
+        await refreshProfile();
+        setMsg('Cancelled. You keep access until the end of the period.');
+      }
     } catch (e: any) {
-      setMsgErr(true);
-      setMsg(e.message || 'Action failed.');
-    } finally {
-      setBusy('');
-    }
-  };
+      // The callables write their refusals for customers ("You have an active naira pass…"): shown as they are.
+      setMsgErr(true); setMsg(e.message || 'That did not work.');
+    } finally { setBusy(''); }
+  }
+
+  const ends = profile.pass_expires_at || profile.plan_renews_at;
 
   return (
     <Card title="Subscription">
@@ -101,56 +95,54 @@ const SubscriptionPanel: React.FC = () => {
           <span className="text-2xl font-black text-[#0B0B0B]">{planName}</span>
           <Badge tone={badge.tone}>{badge.label}</Badge>
         </div>
-        {isPro && profile.plan_renews_at && status === 'active' && (
+        {isPaid && ends && (
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums">
-            Renews {new Date(profile.plan_renews_at).toLocaleDateString()}
+            {isPass ? 'Ends' : status === 'cancelled' ? 'Access until' : 'Renews'} {new Date(ends).toLocaleDateString()}
           </p>
         )}
       </div>
 
       <p className="text-sm text-gray-500 font-medium leading-relaxed mb-8">
-        {isPro
-          ? status === 'cancelled'
-            ? `Your ${planName} plan is cancelled and will not renew. You keep access until the end of the current period.`
-            : `${planName} includes ${planTokens} tokens every month, all tools, priority support, and token top-ups. Purchased tokens never expire.`
-          : `Your Free allowance is a one-time balance and does not refill. Upgrade to ${PRO_NAME} for ${PRO_TOKENS} tokens every month, all tools, priority support, and the ability to top up.`}
+        {!isPaid && `Your Free allowance is a one-time balance and does not refill. ${PLAN_META.pro.name} gives you ${PRO.monthlyTokens} tokens every month and the ability to top up.`}
+        {isPass && `Your ${planName} pass includes ${planTokens} tokens. It does not renew by itself — renewing early adds 30 days to the end.`}
+        {isSub && status !== 'cancelled' && `${planName} renews monthly and includes ${planTokens} tokens each period. Purchased tokens never expire.`}
+        {isSub && status === 'cancelled' && `Your ${planName} plan is cancelled and will not renew. You keep access until the end of the period.`}
+        {isPaid && !isPass && !isSub && `${planName} was set up by our team. Contact support to change it.`}
       </p>
 
-      <div className="flex flex-wrap gap-4">
-        {!isPro && (
-          <PrimaryButton size="md" onClick={() => run('upgrade', `Upgraded to ${PRO_NAME}.`, `Welcome to ${PRO_NAME}. ${PRO_TOKENS} tokens added.`)} disabled={!!busy}>
-            {busy === 'upgrade' ? 'Processing...' : `Upgrade to ${PRO_NAME}, $${PRO_PRICE}/mo`}
-          </PrimaryButton>
-        )}
-        {isPro && status === 'active' && (
+      {!payable && (isPaid ? isPass : true) && (
+        <p className="text-sm text-gray-500 mb-6">Card payments are not live yet. Email support and we will set your plan up by hand.</p>
+      )}
+
+      <div className="flex flex-wrap items-center gap-4">
+        {payable && !isPaid && (
           <>
-            <SecondaryButton
-              onClick={() => run('renew', 'Subscription renewed.', `Your ${planName} plan renewed. ${planTokens} tokens added.`)}
-              disabled={!!busy}
-            >
-              {busy === 'renew' ? 'Processing...' : 'Renew Now'}
-            </SecondaryButton>
-            <SecondaryButton
-              onClick={cancelTap.tap}
-              disabled={!!busy}
-              className={cancelTap.armed ? '!border-[#FF0000] !text-[#FF0000]' : ''}
-            >
-              {busy === 'cancel' ? 'Processing...' : cancelTap.armed ? 'Tap again to cancel plan' : 'Cancel Plan'}
-            </SecondaryButton>
+            <div className="flex" role="group" aria-label="Currency">
+              {(['NGN', 'USD'] as Currency[]).map((c) => (
+                <button key={c} type="button" onClick={() => setCurrency(c)} aria-pressed={currency === c}
+                  className={`px-3 py-2 text-[10px] font-bold uppercase tracking-widest border border-gray-200 first:rounded-l-lg last:rounded-r-lg ${currency === c ? 'bg-[#0B0B0B] text-white' : 'text-gray-500'}`}>
+                  {c === 'NGN' ? '₦' : '$'}
+                </button>
+              ))}
+            </div>
+            <PrimaryButton size="md" onClick={() => act('buy-pro')} disabled={!!busy}>
+              {busy === 'buy-pro' ? 'Opening checkout…' : `Get ${PLAN_META.pro.name}, ${proPrice}`}
+            </PrimaryButton>
           </>
         )}
-        {isPro && status === 'cancelled' && (
+        {payable && isPass && (
+          <PrimaryButton size="md" onClick={() => act('renew-pass')} disabled={!!busy}>
+            {busy === 'renew-pass' ? 'Opening checkout…' : 'Renew pass (+30 days)'}
+          </PrimaryButton>
+        )}
+        {isSub && (
           <>
-            <PrimaryButton size="md" onClick={() => run('renew', 'Subscription reactivated.', `Your ${planName} plan is active again.`)} disabled={!!busy}>
-              {busy === 'renew' ? 'Processing...' : `Reactivate ${planName}`}
-            </PrimaryButton>
-            <SecondaryButton
-              onClick={downgradeTap.tap}
-              disabled={!!busy}
-              className={downgradeTap.armed ? '!border-[#FF0000] !text-[#FF0000]' : ''}
-            >
-              {busy === 'downgrade' ? 'Processing...' : downgradeTap.armed ? 'Tap again to downgrade' : 'Downgrade to Free'}
-            </SecondaryButton>
+            <SecondaryButton onClick={() => act('portal')} disabled={!!busy}>{busy === 'portal' ? 'Opening…' : 'Update card'}</SecondaryButton>
+            {status !== 'cancelled' && (
+              <SecondaryButton onClick={cancelTap.tap} disabled={!!busy} className={cancelTap.armed ? '!border-[#FF0000] !text-[#FF0000]' : ''}>
+                {busy === 'cancel' ? 'Cancelling…' : cancelTap.armed ? 'Tap again to cancel' : 'Cancel plan'}
+              </SecondaryButton>
+            )}
           </>
         )}
       </div>

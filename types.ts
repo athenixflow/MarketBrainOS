@@ -482,6 +482,10 @@ export interface UserProfile {
   subscription_status?: SubscriptionStatus;
   plan_renews_at?: string;
   subscription_started_at?: string;
+  // Bachs billing (server-authoritative): 'subscription' = USD plan, 'pass' = 30-day naira pass.
+  billing_mode?: 'subscription' | 'pass' | null;
+  pass_expires_at?: string | null;
+  bachs_customer_id?: string | null;
   // Profile / account (client-editable via Settings — NOT economy/authority fields).
   first_name?: string;
   last_name?: string;

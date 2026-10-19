@@ -1,4 +1,5 @@
-import { functionsBaseUrl } from './firebase';
+import { httpsCallable } from 'firebase/functions';
+import { functions, functionsBaseUrl } from './firebase';
 
 /**
  * IS THERE A WAY TO PAY? (GTM part 19 §5 step 3.)
@@ -35,4 +36,35 @@ export const fetchBillingStatus = async (): Promise<BillingStatus> => {
   } catch {
     return { billing_live: false, provider: 'none' };
   }
+};
+
+export type Currency = 'USD' | 'NGN';
+
+/** ₦ for visitors whose browser says Nigeria; anyone can switch (spec §2). */
+export const defaultCurrency = (): Currency => {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const langs = typeof navigator !== 'undefined' ? navigator.languages || [navigator.language] : [];
+    return tz === 'Africa/Lagos' || langs.some((l) => /-NG$/i.test(l)) ? 'NGN' : 'USD';
+  } catch { return 'USD'; }
+};
+
+export const formatPrice = (major: number, currency: Currency): string =>
+  currency === 'NGN' ? `₦${Math.round(major).toLocaleString('en-US')}` : `$${major}`;
+
+/** Super-admins see checkout before launch; the server refuses everyone else (createCheckout). */
+export const canPay = (status: BillingStatus | null, role?: string): boolean =>
+  status?.billing_live === true || role === 'super_admin';
+
+export const startCheckout = async (kind: 'plan' | 'pass' | 'pack', item: string, currency: Currency): Promise<void> => {
+  const fn = httpsCallable(functions, 'createCheckout');
+  const r = await fn({ kind, item, currency });
+  const url = (r.data as { url?: string })?.url;
+  if (!url) throw new Error('Checkout could not be started.');
+  window.location.assign(url);
+};
+
+export const callManageBilling = async (action: 'cancel' | 'upgrade' | 'portal', item?: string): Promise<{ url?: string }> => {
+  const fn = httpsCallable(functions, 'manageBilling');
+  return (await fn({ action, item })).data as { url?: string };
 };

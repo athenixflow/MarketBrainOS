@@ -3,12 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import PublicLayout from '../components/PublicLayout';
 import AnimatedSection from '../components/AnimatedSection';
 import { useAuth } from '../context/AuthContext';
-import { callChangeSubscription } from '../services/persistenceService';
 import { DEFAULT_PRICING_CONFIG as CFG, PLAN_META, PLAN_ORDER, Tier } from '../config/pricingConfig';
 import Seo from '../components/Seo';
 import { MARKETING_SEO, SITE_URL, SITE_NAME } from '../config/seo';
 import { track } from '../services/analytics';
-import { fetchBillingStatus } from '../services/billing';
+import { fetchBillingStatus, BillingStatus, Currency, defaultCurrency, formatPrice, canPay, startCheckout, callManageBilling } from '../services/billing';
 
 // Product + per-plan Offer structured data (generated from the live pricing config).
 const PRICING_JSONLD = {
@@ -35,7 +34,7 @@ const Pricing: React.FC = () => {
    * the plan's pricing experiments need to tell apart.
    */
   useEffect(() => { track('pricing_viewed', { surface: 'pricing_page' }); }, []);
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, profile } = useAuth();
   const currentTier = profile?.tier as Tier | undefined;
   const currentIdx = currentTier ? PLAN_ORDER.indexOf(currentTier) : -1;
   const [busy, setBusy] = useState<Tier | null>(null);
@@ -43,12 +42,14 @@ const Pricing: React.FC = () => {
 
   /* The same switch as the in-app panel: a pricing page that starts a checkout which
      cannot charge is the worst place in the product to be wrong about this. */
-  const [billingLive, setBillingLive] = useState<boolean | null>(null);
+  const [billing, setBilling] = useState<BillingStatus | null>(null);
+  const [currency, setCurrency] = useState<Currency>(defaultCurrency());
   useEffect(() => {
     let alive = true;
-    void fetchBillingStatus().then((s) => { if (alive) setBillingLive(s.billing_live); });
+    void fetchBillingStatus().then((s) => { if (alive) setBilling(s); });
     return () => { alive = false; };
   }, []);
+  const payable = canPay(billing, profile?.role);
 
   const select = async (tier: Tier) => {
     /* Intent, captured before the branch that sends a signed-out visitor to /auth — so a
@@ -59,28 +60,25 @@ const Pricing: React.FC = () => {
     try {
       if (tier === 'free') { navigate('/'); return; }
       /*
-       * NO SELF-SERVE UPGRADE WHILE BILLING IS SIMULATED.
+       * NO CHECKOUT UNLESS THE SERVER WOULD ACCEPT IT.
        *
-       * `changeSubscription('upgrade')` grants the tier and takes no money, so this
-       * button currently hands out a paid plan for free while implying a charge. Until
-       * billing is live it sends people to support instead, which is the honest version
-       * of the same intent and keeps the Founding-50 conversations the plan wants anyway.
-       * The server still decides tiers; this only stops the product offering it.
+       * `createCheckout` refuses everyone but a super-admin until billing is live, so this
+       * button sends people to support instead, which is the honest version of the same
+       * intent. Once live, nothing here changes a tier: a checkout (or `manageBilling` for
+       * a USD subscription) goes to Bachs and the webhook grants the plan after payment.
        */
-      if (billingLive === false) {
+      if (!payable) {
         setMsg('Card payments are not live yet. Email support and we will set your plan up by hand.');
         return;
       }
-      if (tier === 'pro') {
-        setBusy('pro');
-        await callChangeSubscription('upgrade');
-        await refreshProfile();
-        setMsg('You are now on Pro.');
-        setTimeout(() => navigate('/'), 1200);
+      if (tier === 'enterprise') { navigate('/enterprise'); return; }
+      setBusy(tier);
+      if (currency === 'USD' && profile?.billing_mode === 'subscription') {
+        await callManageBilling('upgrade', tier);
+        setMsg('Upgrade requested — your plan changes as soon as Bachs confirms the payment.');
         return;
       }
-      // Team/Agency/Enterprise are provisioned in their hubs (creating the container upgrades the plan).
-      navigate(tier === 'team' ? '/team' : tier === 'agency' ? '/agency' : '/enterprise');
+      await startCheckout(currency === 'USD' ? 'plan' : 'pass', tier, currency);
     } catch (e: any) { setMsg(e.message || 'Upgrade failed.'); } finally { setBusy(null); }
   };
 
@@ -89,8 +87,9 @@ const Pricing: React.FC = () => {
     if (currentTier === tier) return 'Current plan';
     if (currentIdx >= 0 && idx < currentIdx) return 'Included';
     /* Until there is a way to pay, the button does not offer to take money. */
-    if (billingLive === false && tier !== 'free') return 'Talk to us';
-    return tier === 'pro' ? (busy === 'pro' ? 'Upgrading…' : 'Upgrade to Pro') : `Upgrade to ${PLAN_META[tier].name}`;
+    if (!payable && tier !== 'free') return 'Talk to us';
+    if (busy === tier) return 'Processing…';
+    return currency === 'NGN' ? `Get ${PLAN_META[tier].name} — 30 days` : `Upgrade to ${PLAN_META[tier].name}`;
   };
   const ctaDisabled = (tier: Tier, idx: number) =>
     busy !== null || (!!user && (currentTier === tier || (currentIdx >= 0 && idx < currentIdx)));
@@ -115,6 +114,15 @@ const Pricing: React.FC = () => {
       </AnimatedSection>
 
       <AnimatedSection as="section" index={1} className="pb-16 px-6 md:px-12 max-w-7xl mx-auto">
+        <div className="flex justify-center mb-8" role="group" aria-label="Currency">
+          {(['NGN', 'USD'] as Currency[]).map((c) => (
+            <button key={c} type="button" onClick={() => setCurrency(c)} aria-pressed={currency === c}
+              className={`px-5 py-2 text-[11px] font-bold uppercase tracking-widest border border-gray-800 first:rounded-l-xl last:rounded-r-xl ${currency === c ? 'bg-white text-[#0B0B0B]' : 'text-gray-400'}`}>
+              {c === 'NGN' ? '₦ Naira' : '$ Dollars'}
+            </button>
+          ))}
+        </div>
+        {currency === 'NGN' && <p className="text-center text-xs text-gray-500 mb-8">Naira plans are 30-day passes: pay once, no automatic charge. We email you before it ends.</p>}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
           {PLAN_ORDER.map((tier, idx) => {
             const plan = CFG.plans[tier];
@@ -127,7 +135,12 @@ const Pricing: React.FC = () => {
                 {popular && <div className="absolute top-0 right-4 -translate-y-1/2 bg-[#FF0000] text-white text-[9px] font-bold uppercase tracking-widest px-3 py-1 rounded-full">Most popular</div>}
                 <h3 className="text-xl font-bold text-white">{meta.name}</h3>
                 <p className="text-gray-500 text-xs mb-5 mt-1">{meta.tagline}</p>
-                <div className="text-3xl font-black text-white mb-1">${plan.price}<span className="text-base font-medium text-gray-600">/mo</span></div>
+                <div className="text-3xl font-black text-white mb-1">
+                  {currency === 'NGN' && plan.priceNgn ? formatPrice(plan.priceNgn, 'NGN') : formatPrice(plan.price, 'USD')}
+                  {/* In naira the suffix sits on its own line on every card: "/30 days" does not fit beside ₦120,000 at five
+                      columns, and a wrap on some cards only would push their token line out of line with the rest of the row. */}
+                  <span className={`text-base font-medium text-gray-600 ${currency === 'NGN' ? 'block' : ''}`}>{currency === 'NGN' && plan.priceNgn ? '/30 days' : '/mo'}</span>
+                </div>
                 <p className="text-[#FF0000] text-xs font-bold uppercase tracking-widest mb-5">
                   {plan.monthlyTokens.toLocaleString()} tokens {tier === 'free' ? 'one-time' : '/ mo'}
                 </p>
