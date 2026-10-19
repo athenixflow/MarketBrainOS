@@ -162,6 +162,70 @@ for (const name of ['passLifecycle', 'billingDailyCheck']) {
   const fn = exported(index, name);
   ok(isScheduledOnly(fn) && bindsNoBachsSecret(fn), `${name} is a scheduled function and is bound to no Bachs secret`);
 }
+/* THE JOBS MUST NOT QUIETLY STOP FINISHING. Each of these shapes was a real defect once, and each
+   fails silently: the run just ends early and the same accounts are skipped every day.
+   - passLifecycle opened a transaction for EVERY pass holder under the default 60s timeout; at
+     enough accounts it timed out part-way, and the same tail never got an expiry or a reminder.
+     So it looks at the query snapshot first and transacts only for an account that is expiring or
+     due a reminder, re-checks inside the transaction, runs with 300s, and writes through the
+     transaction only (a reminder mark written outside it can resurrect a stale "5 days" flag after
+     a renewal reset the list). */
+export const passLifecycleIsBounded = (fn: string): boolean => {
+  const tx = fn.indexOf('runTransaction(');
+  return fn.length > 0 && tx > 0
+    && /timeoutSeconds:\s*300/.test(fn.slice(0, 300))
+    && fn.indexOf('expirePass(') >= 0 && fn.indexOf('expirePass(') < tx && fn.indexOf('expirePass(', tx) > tx
+    && fn.indexOf('reminderDue(') >= 0 && fn.indexOf('reminderDue(') < tx && fn.indexOf('reminderDue(', tx) > tx
+    && fn.indexOf('arrayUnion(') > tx
+    && !/\.ref\.(?:update|set)\(/.test(fn);
+};
+ok(passLifecycleIsBounded(exported(index, 'passLifecycle')),
+  'passLifecycle checks the snapshot before it transacts, re-checks inside, marks reminders inside, and runs with 300s');
+/* - billingDailyCheck read 500 documents with no order and no time filter, so past 500 it counted
+     the OLDEST ones and missed today's. Both reads are now a 24h range on created_at (a single-field
+     index, no composite), with `source` filtered in code. */
+export const dailyCheckReadsItsWindow = (fn: string): boolean =>
+  fn.length > 0
+  && /collection\('payment_events'\)\s*\.where\('created_at', '>=', /.test(fn)
+  && /collection\('billing_reviews'\)\s*\.where\('created_at', '>=', /.test(fn)
+  && !/where\('source'/.test(fn) && /source === 'reconcile'/.test(fn)
+  && !/\.limit\(500\)/.test(fn);
+ok(dailyCheckReadsItsWindow(exported(index, 'billingDailyCheck')),
+  'billingDailyCheck reads the last 24h by created_at (no unordered limit, no composite index)');
+/* - bachsReconcile read the first 200 checkouts and 500 subscribers by document id every hour, so
+     past that the same accounts were never reconciled. It pages by document id with a cursor kept
+     in platform_settings/reconcile_cursor and stops on a deadline, wrapping when a page is short. */
+export const reconcilePagesByCursor = (fn: string): boolean =>
+  fn.length > 0
+  && /orderBy\(admin\.firestore\.FieldPath\.documentId\(\)\)/.test(fn) && /\.startAfter\(/.test(fn)
+  && /platform_settings'\)\.doc\('reconcile_cursor'\)/.test(fn)
+  && /subscriptions_after/.test(fn) && /checkouts_after/.test(fn)
+  && /Date\.now\(\) >/.test(fn)
+  && !/\.limit\((?:200|500)\)/.test(fn);
+ok(reconcilePagesByCursor(reconcile),
+  'bachsReconcile pages checkouts and subscribers by document id with a persisted cursor and a deadline');
+/* - Nothing may write a subscription or customer id from reconciliation (the sync adopts them under
+     its current-subscription rules), and the job never alerts (the helpers do). */
+export const reconcileWritesNoIdsAndNeverAlerts = (fn: string): boolean =>
+  fn.length > 0 && !/bachs_(?:subscription|customer)_id\s*[:,}]|billingAlertEmail/.test(fn);
+ok(reconcileWritesNoIdsAndNeverAlerts(reconcile), 'bachsReconcile writes no subscription or customer id and sends no alert of its own');
+/* - A plan checkout is marked paid only AFTER the sync succeeded, in the webhook and in
+     reconciliation alike: marked first, a sync that keeps failing leaves a checkout that looks
+     settled with nothing granted, and reconciliation (which reads only OPEN ones) never retries it. */
+export const syncsBeforeMarkingPaid = (branchText: string): boolean => {
+  const sync = branchText.indexOf('syncSubscriptionById(');
+  const mark = branchText.search(/status: 'paid'/);
+  return sync >= 0 && mark > sync;
+};
+export const between = (src: string, from: string, to: string): string => {
+  const a = src.indexOf(from);
+  const b = a < 0 ? -1 : src.indexOf(to, a + from.length);
+  return a < 0 || b < 0 ? '' : src.slice(a, b);
+};
+ok(syncsBeforeMarkingPaid(between(exported(index, 'bachsWebhook'), "event.kind === 'subscription_linked'", "event.kind === 'subscription_changed'")),
+  'the webhook syncs a linked subscription before it marks the checkout paid');
+ok(syncsBeforeMarkingPaid(between(reconcile, "s?.paid && c.kind === 'plan'", 'else if (s?.paid)')),
+  'reconciliation syncs a paid plan checkout before it marks it paid');
 /* Deleting an account must stop its subscription. Bachs keeps charging a card for a product whose
    account is gone, and the customer cannot cancel what they can no longer sign in to. So, in
    deleteAccount: only on a real run (after the dry-run return), only once the re-auth check has
@@ -436,6 +500,80 @@ const goodLifecycle = "export const passLifecycle = functions.pubsub.schedule('0
 ok(isScheduledOnly(goodLifecycle) && bindsNoBachsSecret(goodLifecycle), 'a scheduled job bound to no Bachs secret passes');
 ok(!bindsNoBachsSecret(goodLifecycle.replace('functions.pubsub', "functions.runWith({ secrets: BACHS_SECRETS }).pubsub")),
   'CONTROL: a pass lifecycle that binds a Bachs secret it never reads is caught');
+const goodPass = [
+  "export const passLifecycle = functions.runWith({ timeoutSeconds: 300 }).pubsub.schedule('0 7 * * *').onRun(async () => {",
+  "  for (const doc of passes.docs) {",
+  "    const snap = doc.data();",
+  "    if (!expirePass(snap, nowIso) && !reminderDue(snap, nowIso)) continue;",
+  "    await db.runTransaction(async (t) => {",
+  "      const a = (await t.get(doc.ref)).data();",
+  "      const expired = expirePass(a, nowIso);",
+  "      if (expired) { t.update(doc.ref, expired); return 1; }",
+  "      const due = reminderDue(a, nowIso);",
+  "      if (due) t.update(doc.ref, { pass_reminded: admin.firestore.FieldValue.arrayUnion(due) });",
+  "    });",
+  "  }",
+  "});",
+].join('\n');
+ok(passLifecycleIsBounded(goodPass), 'a pass lifecycle that checks the snapshot, transacts only when due, and runs with 300s passes');
+ok(!passLifecycleIsBounded(goodPass.replace("functions.runWith({ timeoutSeconds: 300 }).pubsub", 'functions.pubsub')),
+  'CONTROL: a pass lifecycle on the default 60s timeout is caught');
+ok(!passLifecycleIsBounded(goodPass.replace("    if (!expirePass(snap, nowIso) && !reminderDue(snap, nowIso)) continue;\n", '')),
+  'CONTROL: a pass lifecycle that opens a transaction for every pass holder (no snapshot check first) is caught');
+ok(!passLifecycleIsBounded(goodPass.replace("    if (!expirePass(snap, nowIso) && !reminderDue(snap, nowIso)) continue;\n", '    if (!expirePass(snap, nowIso)) continue;\n')),
+  'CONTROL: a snapshot check that only looks for expiry (reminders would transact for everyone) is caught');
+ok(!passLifecycleIsBounded(goodPass.replace("      const expired = expirePass(a, nowIso);\n      if (expired) { t.update(doc.ref, expired); return 1; }\n", '')),
+  'CONTROL: a transaction that does not re-check the expiry on the fresh read is caught');
+ok(!passLifecycleIsBounded(goodPass.replace('t.update(doc.ref, { pass_reminded', 'doc.ref.update({ pass_reminded')),
+  'CONTROL: a reminder mark written outside the transaction is caught');
+ok(!passLifecycleIsBounded(goodPass.replace("t.update(doc.ref, expired)", 'doc.ref.update(expired)')),
+  'CONTROL: an expiry written outside the transaction is caught');
+const goodDaily = [
+  "export const billingDailyCheck = functions.pubsub.schedule('0 8 * * *').onRun(async () => {",
+  "  const recon = await db.collection('payment_events').where('created_at', '>=', sinceTs).limit(5000).get();",
+  "  const missed = recon.docs.filter((d) => d.data().source === 'reconcile');",
+  "  const reviews = await db.collection('billing_reviews').where('created_at', '>=', sinceTs).limit(5000).get();",
+  "});",
+].join('\n');
+ok(dailyCheckReadsItsWindow(goodDaily), 'a daily check that reads the 24h window by created_at passes');
+ok(!dailyCheckReadsItsWindow(goodDaily.replace("db.collection('payment_events').where('created_at', '>=', sinceTs)", "db.collection('payment_events').where('source', '==', 'reconcile')")),
+  'CONTROL: the old unordered source query on payment_events (and the composite index a range on it would need) is caught');
+ok(!dailyCheckReadsItsWindow(goodDaily.replace("db.collection('billing_reviews').where('created_at', '>=', sinceTs).limit(5000)", "db.collection('billing_reviews').limit(500)")),
+  'CONTROL: billing_reviews read with an unordered limit(500) is caught');
+ok(!dailyCheckReadsItsWindow(goodDaily.replace("d.data().source === 'reconcile'", 'true')),
+  'CONTROL: a daily check that no longer filters on source reconcile is caught');
+const goodPaging = [
+  "export const bachsReconcile = functions.runWith({ secrets: ['BACHS_SECRET_KEY'], timeoutSeconds: 300 }).pubsub.schedule('every 60 minutes').onRun(async () => {",
+  "  const cursorRef = db.collection('platform_settings').doc('reconcile_cursor');",
+  "  let after = (await cursorRef.get()).data()?.subscriptions_after ?? null; const co = 'checkouts_after';",
+  "  const page = await base.orderBy(admin.firestore.FieldPath.documentId()).startAfter(after).limit(100).get();",
+  "  for (const doc of page.docs) { if (Date.now() > deadline) return null; }",
+  "});",
+].join('\n');
+ok(reconcilePagesByCursor(goodPaging), 'a reconciliation that pages by document id with a persisted cursor and a deadline passes');
+ok(!reconcilePagesByCursor(goodPaging.replace("orderBy(admin.firestore.FieldPath.documentId()).startAfter(after).limit(100)", "limit(500)")),
+  'CONTROL: the old fixed first-500 read (the same accounts never reconciled) is caught');
+ok(!reconcilePagesByCursor(goodPaging.replace('.startAfter(after)', '')), 'CONTROL: a page read that never advances past the cursor is caught');
+ok(!reconcilePagesByCursor(goodPaging.replace("doc('reconcile_cursor')", "doc('somewhere_else')")), 'CONTROL: a cursor that is not persisted is caught');
+ok(!reconcilePagesByCursor(goodPaging.replace('subscriptions_after', 'x')), 'CONTROL: no cursor for the subscribers is caught');
+ok(!reconcilePagesByCursor(goodPaging.replace("const co = 'checkouts_after';", '')), 'CONTROL: no cursor for the open checkouts is caught');
+ok(!reconcilePagesByCursor(goodPaging.replace('Date.now() > deadline', 'false')), 'CONTROL: a sweep with no deadline (it would outrun the function timeout) is caught');
+ok(reconcileWritesNoIdsAndNeverAlerts(goodPaging + "\n  const id = u.data().bachs_subscription_id;"), 'reading a subscription id is not writing one');
+ok(!reconcileWritesNoIdsAndNeverAlerts(goodPaging + "\n  await userRef.set({ bachs_subscription_id: s.subscriptionId, bachs_customer_id: s.customerId }, { merge: true });"),
+  'CONTROL: a reconciliation that pre-writes the subscription and customer ids is caught');
+ok(!reconcileWritesNoIdsAndNeverAlerts(goodPaging + "\n  await userRef.set({ bachs_customer_id: x }, { merge: true });"),
+  'CONTROL: a reconciliation that writes only the customer id is caught');
+ok(!reconcileWritesNoIdsAndNeverAlerts(goodPaging + "\n  await userRef.set({ bachs_subscription_id }, { merge: true });"),
+  'CONTROL: a shorthand id write is caught');
+ok(!reconcileWritesNoIdsAndNeverAlerts(goodPaging + "\n  await billingAlertEmail('x', []);"), 'CONTROL: a reconciliation that alerts on its own (the helpers already do) is caught');
+const goodLinked = "if (ref) { const out = await syncSubscriptionById(id, n, 'webhook'); await ref.update({ status: 'paid', settled_at: now }); res.status(200).send(out); }";
+ok(syncsBeforeMarkingPaid(goodLinked), 'a branch that syncs and then marks the checkout paid passes');
+ok(!syncsBeforeMarkingPaid("if (ref) { await ref.update({ status: 'paid', settled_at: now }); res.status(200).send(await syncSubscriptionById(id, n, 'webhook')); }"),
+  'CONTROL: a branch that marks the checkout paid before the sync (the old webhook order) is caught');
+ok(!syncsBeforeMarkingPaid("if (ref) { await ref.update({ status: 'paid', settled_at: now }); }"), 'CONTROL: a branch that never syncs is caught');
+ok(!syncsBeforeMarkingPaid(''), 'CONTROL: a branch that cannot be found is not "in order"');
+ok(between('a X b Y c', 'X', 'Y') === 'X b ' && between('a X b', 'X', 'Y') === '' && between('a b Y', 'X', 'Y') === '',
+  'the branch cutter returns the text between two markers, and nothing when either is missing');
 
 console.log(failures === 0
   ? '\nPASS — no signed-in user can grant themselves a plan, a token pack or a refill.'

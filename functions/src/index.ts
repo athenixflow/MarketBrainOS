@@ -4402,16 +4402,21 @@ export const bachsWebhook = functions.runWith({ secrets: BACHS_SECRETS }).https.
       return;
     }
     if (event.kind === 'subscription_linked') {
-      /* The customer finished a subscription checkout. Our checkout record is marked paid, then
-         the subscription is synced from Bachs — and the sync alone finds the account (from the
-         metadata we put on the subscription) and adopts the subscription and customer ids under
-         its own current-subscription rules. Writing the ids onto the user here first would
-         bypass those rules, so this does not. A reference we did not issue grants nothing. */
+      /* The customer finished a subscription checkout. The subscription is synced from Bachs —
+         and the sync alone finds the account (from the metadata we put on the subscription) and
+         adopts the subscription and customer ids under its own current-subscription rules.
+         Writing the ids onto the user here would bypass those rules, so this does not. Our
+         checkout record is marked paid only AFTER the sync returned: marked first, a sync that
+         keeps failing through all of Bachs' retries would leave a checkout that looks settled with
+         nothing granted, and reconciliation (which reads only open checkouts) would never retry
+         it. A failure at either step answers 500, and the retry repeats both safely. A reference
+         we did not issue grants nothing. */
       const ref = event.reference && /^[A-Za-z0-9_-]{1,128}$/.test(event.reference)
         ? db.collection('checkouts').doc(event.reference) : null;
       if (ref && event.subscriptionId && (await ref.get()).exists) {
+        const outcome = await syncSubscriptionById(event.subscriptionId, event.amountMinor, 'webhook');
         await ref.update({ status: 'paid', settled_at: new Date().toISOString() });
-        res.status(200).send(await syncSubscriptionById(event.subscriptionId, event.amountMinor, 'webhook'));
+        res.status(200).send(outcome);
         return;
       }
       res.status(200).send('Ignored');
@@ -4484,40 +4489,80 @@ export const billingStatus = functions.runWith({ secrets: ['BACHS_SECRET_KEY'] }
 export const bachsReconcile = functions.runWith({ secrets: ['BACHS_SECRET_KEY'], timeoutSeconds: 300 })
   .pubsub.schedule('every 60 minutes').onRun(async () => {
     if (!process.env.BACHS_SECRET_KEY) return null;
-    const now = Date.now();
-    const open = await db.collection('checkouts').where('status', '==', 'open').limit(200).get();
-    for (const doc of open.docs) {
-      const c = doc.data();
-      const age = now - Date.parse(String(c.created_at));
-      if (age < 10 * 60_000) continue;
-      try {
-        if (!c.bachs_checkout_id) {
-          /* createCheckout writes the record before it calls Bachs, so a Bachs outage leaves an open
-             record with nothing to look up. It cannot be paid (there is no session), and left open it
-             would crowd real checkouts out of the 200 read above. */
-          if (age > 24 * 3_600_000) await doc.ref.update({ status: 'expired' });
-          continue;
+    const startedAt = Date.now();
+    const PAGE = 100;
+    /* Where the last run stopped, per list. A fixed "first N by document id" read would reconcile the
+       same N accounts every hour and never reach the rest; this resumes after the last id finished
+       and wraps to the start when a page comes back short. */
+    const cursorRef = db.collection('platform_settings').doc('reconcile_cursor');
+    let cursor: Record<string, unknown> = {};
+    try { cursor = (await cursorRef.get()).data() || {}; }
+    catch (e: any) { console.error('reconcile cursor read', e?.message || e); }
+
+    /* Pages through `base` by document id until a page is short (done: the cursor resets) or the
+       deadline passes (stopped: the cursor keeps the last id handled). The deadline is checked per
+       item, not per page, so one slow page cannot run the function past its timeout. */
+    const sweep = async (
+      field: 'checkouts_after' | 'subscriptions_after',
+      base: admin.firestore.Query,
+      deadline: number,
+      handle: (doc: admin.firestore.QueryDocumentSnapshot) => Promise<void>,
+    ) => {
+      let after = typeof cursor[field] === 'string' ? (cursor[field] as string) : null;
+      const save = async (value: string | null) => {
+        try { await cursorRef.set({ [field]: value }, { merge: true }); }
+        catch (e: any) { console.error('reconcile cursor write', field, e?.message || e); }
+      };
+      for (;;) {
+        const ordered = base.orderBy(admin.firestore.FieldPath.documentId());
+        const page = await (after ? ordered.startAfter(after) : ordered).limit(PAGE).get();
+        for (const doc of page.docs) {
+          if (Date.now() > deadline) { await save(after); return; }
+          await handle(doc);
+          after = doc.id;
         }
-        const s = parseCheckoutSession(await bachs().getCheckoutSession(String(c.bachs_checkout_id)));
-        if (s?.paid && c.kind === 'plan' && s.subscriptionId) {
-          /* The sync first, the mark after: if Bachs is unreachable the checkout stays open and the
-             next run tries again, instead of looking settled while nothing was granted. */
-          await syncSubscriptionById(s.subscriptionId, null, 'reconcile');
-          await doc.ref.update({ status: 'paid', settled_at: new Date().toISOString() });
-        } else if (s?.paid) {
-          await applyOneOffPayment({ id: `reconcile:${doc.id}`, reference: doc.id, amountMinor: s.amountMinor, currency: s.currency, checkoutId: s.id }, 'reconcile');
-        } else if (s?.expired || age > 24 * 3_600_000) {
-          await doc.ref.update({ status: 'expired' });
-        }
-      } catch (e: any) { console.error('reconcile checkout', doc.id, e?.message || e); }
-    }
-    const subs = await db.collection('users').where('billing_mode', '==', 'subscription').limit(500).get();
-    for (const u of subs.docs) {
-      const id = u.data().bachs_subscription_id;
-      if (!id) continue;
-      try { await syncSubscriptionById(String(id), null, 'reconcile'); }
-      catch (e: any) { console.error('reconcile subscription', id, e?.message || e); }
-    }
+        if (page.size < PAGE) { await save(null); return; }
+      }
+    };
+
+    /* Checkouts get the first half of the budget and subscribers the rest, so neither list can
+       starve the other. */
+    try {
+      await sweep('checkouts_after', db.collection('checkouts').where('status', '==', 'open'), startedAt + 120_000, async (doc) => {
+        const c = doc.data();
+        const age = Date.now() - Date.parse(String(c.created_at));
+        if (age < 10 * 60_000) return;
+        try {
+          if (!c.bachs_checkout_id) {
+            /* createCheckout writes the record before it calls Bachs, so a Bachs outage leaves an open
+               record with nothing to look up. It cannot be paid (there is no session), and left open it
+               would stay in this list for good. */
+            if (age > 24 * 3_600_000) await doc.ref.update({ status: 'expired' });
+            return;
+          }
+          const s = parseCheckoutSession(await bachs().getCheckoutSession(String(c.bachs_checkout_id)));
+          if (s?.paid && c.kind === 'plan' && s.subscriptionId) {
+            /* The sync first, the mark after: if Bachs is unreachable the checkout stays open and the
+               next run tries again, instead of looking settled while nothing was granted. */
+            await syncSubscriptionById(s.subscriptionId, null, 'reconcile');
+            await doc.ref.update({ status: 'paid', settled_at: new Date().toISOString() });
+          } else if (s?.paid) {
+            await applyOneOffPayment({ id: `reconcile:${doc.id}`, reference: doc.id, amountMinor: s.amountMinor, currency: s.currency, checkoutId: s.id }, 'reconcile');
+          } else if (s?.expired || age > 24 * 3_600_000) {
+            await doc.ref.update({ status: 'expired' });
+          }
+        } catch (e: any) { console.error('reconcile checkout', doc.id, e?.message || e); }
+      });
+    } catch (e: any) { console.error('reconcile checkouts', e?.message || e); }
+
+    try {
+      await sweep('subscriptions_after', db.collection('users').where('billing_mode', '==', 'subscription'), startedAt + 240_000, async (u) => {
+        const id = u.data().bachs_subscription_id;
+        if (!id) return;
+        try { await syncSubscriptionById(String(id), null, 'reconcile'); }
+        catch (e: any) { console.error('reconcile subscription', id, e?.message || e); }
+      });
+    } catch (e: any) { console.error('reconcile subscriptions', e?.message || e); }
     return null;
   });
 
@@ -4526,57 +4571,69 @@ export const bachsReconcile = functions.runWith({ secrets: ['BACHS_SECRET_KEY'],
  * renews it and nothing else ends it: this is what returns a lapsed account to Free. It calls
  * Bachs not at all, so it binds no Bachs secret.
  *
- * One account failing must not stop the rest, and the expiry re-reads the account INSIDE a
- * transaction: a customer who renews at 07:00 must not have their fresh pass overwritten by an
- * expiry computed from the copy this query read a moment earlier.
+ * It must FINISH, because a run that stops part-way skips the same accounts every day: no
+ * reminder and no expiry for the tail. So most accounts cost nothing — the query snapshot says
+ * whether a pass is expiring or due a reminder, and only those open a transaction — and the run
+ * gets 300s, not the default 60. One account failing is logged and does not stop the rest.
+ *
+ * The transaction re-reads the account and re-checks, because a customer who renews at 07:00 must
+ * not have their fresh pass overwritten by an expiry computed from the copy the query read a
+ * moment earlier; and it writes the reminder mark too, because a mark written outside it could put
+ * a stale "5 days" flag back after the renewal reset the list. Mail goes out after the commit,
+ * and only for what the transaction actually did.
  */
-export const passLifecycle = functions.pubsub.schedule('0 7 * * *').timeZone('Africa/Lagos').onRun(async () => {
-  const cfg = await getPricingConfig();
-  const nowIso = new Date().toISOString();
-  const passes = await db.collection('users').where('billing_mode', '==', 'pass').get();
-  for (const doc of passes.docs) {
-    try {
-      const outcome = await db.runTransaction(async (t: admin.firestore.Transaction) => {
-        const fresh = await t.get(doc.ref);
-        if (!fresh.exists) return null;
-        const a = fresh.data() as Account & { email?: string };
-        const expired = expirePass(a, nowIso);
-        if (expired) t.update(doc.ref, expired);
-        return { a, expired };
-      });
-      if (!outcome) continue;
-      const { a, expired } = outcome;
-      const planName = String(a.tier || 'pro').charAt(0).toUpperCase() + String(a.tier || 'pro').slice(1);
-      if (expired) {
-        if (a.email) await sendTemplate(a.email, 'passExpired', { planName });
-        continue;
-      }
-      const due = reminderDue(a, nowIso);
-      if (due && a.email) {
-        /* Marked first, mailed second: sendTemplate never throws, so the reverse order could only
-           ever send twice (mail out, mark fails, tomorrow's run sends it again). */
-        await doc.ref.update({ pass_reminded: admin.firestore.FieldValue.arrayUnion(due) });
+export const passLifecycle = functions.runWith({ timeoutSeconds: 300 })
+  .pubsub.schedule('0 7 * * *').timeZone('Africa/Lagos').onRun(async () => {
+    const cfg = await getPricingConfig();
+    const nowIso = new Date().toISOString();
+    const passes = await db.collection('users').where('billing_mode', '==', 'pass').get();
+    for (const doc of passes.docs) {
+      try {
+        const seen = doc.data() as Account & { email?: string };
+        const expiring = expirePass(seen, nowIso) !== null;
+        if (!expiring && !(seen.email && reminderDue(seen, nowIso))) continue;
+        const done = await db.runTransaction(async (t: admin.firestore.Transaction) => {
+          const fresh = await t.get(doc.ref);
+          if (!fresh.exists) return null;
+          const a = fresh.data() as Account & { email?: string };
+          const expired = expirePass(a, nowIso);
+          if (expired) { t.update(doc.ref, expired); return { a, due: null }; }
+          const due = reminderDue(a, nowIso);
+          if (!due) return null;
+          t.update(doc.ref, { pass_reminded: admin.firestore.FieldValue.arrayUnion(due) });
+          return { a, due };
+        });
+        if (!done || !done.a.email) continue;
+        const { a, due } = done;
+        const planName = String(a.tier || 'pro').charAt(0).toUpperCase() + String(a.tier || 'pro').slice(1);
+        if (!due) { await sendTemplate(done.a.email, 'passExpired', { planName }); continue; }
         const price = cfg.plans[(a.tier as Tier) || 'pro']?.priceNgn ?? 0;
-        await sendTemplate(a.email, 'passReminder', {
+        await sendTemplate(done.a.email, 'passReminder', {
           planName, daysLeft: due, amount: price, currency: 'NGN',
           expiresAt: new Date(String(a.pass_expires_at)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
         });
-      }
-    } catch (e: any) { console.error('passLifecycle', doc.id, e?.message || e); }
-  }
-  return null;
-});
+      } catch (e: any) { console.error('passLifecycle', doc.id, e?.message || e); }
+    }
+    return null;
+  });
 
 /**
  * Daily: if reconciliation had to grant anything, the webhook is not reaching us — say so. The
  * founder hears about it here, not from the hourly job (which never alerts).
+ *
+ * Both reads are the last 24 hours by `created_at` — a single-field range, so no composite index —
+ * and the source is filtered here. An unordered `limit` over the whole collection would, past that
+ * many documents, count the oldest ones and miss today's.
  */
 export const billingDailyCheck = functions.pubsub.schedule('0 8 * * *').timeZone('Africa/Lagos').onRun(async () => {
+  const CAP = 5000;
   const since = Date.now() - 24 * 3_600_000;
-  const recon = await db.collection('payment_events').where('source', '==', 'reconcile').limit(500).get();
-  const missed = recon.docs.filter((d: admin.firestore.QueryDocumentSnapshot) => (d.data().created_at?.toMillis?.() ?? 0) >= since);
-  const reviews = await db.collection('billing_reviews').limit(500).get();
-  const newReviews = reviews.docs.filter((d: admin.firestore.QueryDocumentSnapshot) => (d.data().created_at?.toMillis?.() ?? 0) >= since);
+  const sinceTs = admin.firestore.Timestamp.fromMillis(since);
+  const recon = await db.collection('payment_events').where('created_at', '>=', sinceTs).limit(CAP).get();
+  const missed = recon.docs.filter((d: admin.firestore.QueryDocumentSnapshot) => d.data().source === 'reconcile');
+  const reviews = await db.collection('billing_reviews').where('created_at', '>=', sinceTs).limit(CAP).get();
+  const newReviews = reviews.docs;
+  if (recon.size >= CAP || reviews.size >= CAP) console.error(`billingDailyCheck: a 24h window hit the ${CAP} read cap; the counts below are a floor`);
   if (missed.length || newReviews.length) {
     await billingAlertEmail('Daily billing check', [
       `${missed.length} payment(s) granted by reconciliation in the last 24h — the webhook missed them; check the endpoint in the Bachs dashboard (it is disabled after 72h of failures).`,
