@@ -496,15 +496,22 @@ const src = (p: string) => fs.readFileSync(path.join(root, p), 'utf8');
 const code = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 const idx = src('functions/src/index.ts');
 const webhookAt = idx.indexOf('export const bachsWebhook');
-const webhook = code(webhookAt < 0 ? '' : idx.slice(webhookAt, idx.indexOf('export const billingStatus', webhookAt)));
+/* The webhook alone: from its export to the next export, comments blanked. Anything the file says
+   about `rawBody` or a signature elsewhere (or in prose) cannot vouch for it. */
+const nextExport = (at: number) => { const n = idx.indexOf('\nexport const ', at + 10); return n < 0 ? idx.length : n; };
+const webhook = code(webhookAt < 0 ? '' : idx.slice(webhookAt, nextExport(webhookAt)));
 /* The retired provider's name is spelled with a character class so that this file, like the rest of
    the source tree, never contains it (the cleanup is checked by grepping for the name). */
 ok(/export const bachsWebhook = /.test(idx) && !/export const pay[s]tackWebhook = /.test(idx), 'bachsWebhook is the payment webhook; the old provider\'s webhook is gone');
 const statusAt = idx.indexOf('export const billingStatus');
 ok(statusAt >= 0 && /provider: 'bachs'/.test(idx.slice(statusAt, statusAt + 500)), 'billingStatus reports provider bachs');
-ok(/billingStatus = functions\.runWith\(\{ secrets: BACHS_SECRETS \}\)/.test(idx),
-  'billingStatus is bound to the secret (otherwise it can never see the key and always says "not live")');
-ok(/rawBody/.test(idx.slice(idx.indexOf('export const bachsWebhook'))), 'the webhook verifies the raw body');
+ok(/billingStatus = functions\.runWith\(\{ secrets: \['BACHS_SECRET_KEY'\] \}\)/.test(idx),
+  'billingStatus is bound to the key (otherwise it can never see it and always says "not live")');
+/* Least privilege: billingStatus only asks whether a key is present and never reads the webhook secret. */
+const statusText = code(statusAt < 0 ? '' : idx.slice(statusAt, nextExport(statusAt)));
+ok(statusText.length > 0 && !/BACHS_WEBHOOK_SECRET|BACHS_SECRETS/.test(statusText.slice(0, 400)),
+  'billingStatus does not bind the webhook secret');
+ok(/rawBody/.test(webhook), 'the webhook verifies the raw body');
 ok(/fetchBillingStatus\(\)/.test(src('pages/Pricing.tsx')) && /fetchBillingStatus\(\)/.test(src('components/SubscriptionPanel.tsx')),
   'the pricing page and the plan panel read billing status');
 const billingSvc = code(src('services/billing.ts'));
@@ -525,6 +532,47 @@ ok(webhook.length > 0 && !/\btier\s*:|balanceFields\(/.test(webhook), 'the webho
 ok(/res\.status\(500\)\.send\('Retry'\)/.test(webhook) && /res\.status\(401\)/.test(webhook),
   'a transient failure answers 500 (Bachs retries) and a bad signature answers 401');
 ok(!/void applyOneOffPayment/.test(idx), 'the "no caller yet" placeholder is gone now the helper has one');
+
+/* THE SIGNATURE CHECK MUST ACTUALLY BLOCK. Text that merely mentions `rawBody` and `verifyBachsSignature(`
+   passes while the handler goes on to the grant helpers after a failed check — and anybody can open a
+   checkout of their own, POST an unsigned "paid" event for its reference and get the plan. So the exact
+   shape is pinned, on the webhook's own comment-blanked text: the raw bytes are required (400 without
+   them), they and nothing re-serialised are what is verified, a failed check answers 401 AND returns,
+   and that all happens before the body is read as an event. Whitespace is `\s`, so LF and CRLF both hold. */
+export const signatureGateHolds = (w: string): boolean =>
+  /const raw: Buffer \| undefined = \(req as any\)\.rawBody;/.test(w)
+  && /if \(!raw\)[^\n]*res\.status\(400\)[^\n]*return;/.test(w)
+  && /if \(!verifyBachsSignature\(raw, req\.headers\[BACHS_SIGNATURE_HEADER\], process\.env\.BACHS_WEBHOOK_SECRET\)\)\s*\{\s*res\.status\(401\)\.send\('Unauthorized'\);\s*return;\s*\}/.test(w)
+  && !/JSON\.stringify\(req\.body\)/.test(w)
+  && w.indexOf('verifyBachsSignature(') > 0 && w.indexOf('verifyBachsSignature(') < w.indexOf('parseBachsEvent(');
+ok(signatureGateHolds(webhook), 'the webhook requires the raw body, verifies exactly those bytes, and answers 401 and RETURNS before reading any event');
+const goodGate = [
+  "export const bachsWebhook = functions.runWith({ secrets: BACHS_SECRETS }).https.onRequest(async (req: any, res: any) => {",
+  "  if (req.method !== 'POST') { res.status(405).send('Use POST.'); return; }",
+  "  const raw: Buffer | undefined = (req as any).rawBody;",
+  "  if (!raw) { console.error('bachsWebhook: no rawBody'); res.status(400).send('Cannot verify.'); return; }",
+  "  if (!verifyBachsSignature(raw, req.headers[BACHS_SIGNATURE_HEADER], process.env.BACHS_WEBHOOK_SECRET)) {",
+  "    res.status(401).send('Unauthorized');",
+  "    return;",
+  "  }",
+  "  const event = parseBachsEvent(req.body);",
+  "});",
+].join('\n');
+ok(signatureGateHolds(goodGate) && signatureGateHolds(goodGate.replace(/\n/g, '\r\n')), 'a handler with the full gate passes (LF and CRLF)');
+ok(!signatureGateHolds(goodGate.replace("res.status(401).send('Unauthorized');\n    return;\n", "res.status(401).send('Unauthorized');\n")),
+  'CONTROL: a 401 that does not return (the handler carries on to the grant helpers) is caught');
+ok(!signatureGateHolds(goodGate.replace('verifyBachsSignature(raw,', 'verifyBachsSignature(Buffer.from(JSON.stringify(req.body)),')),
+  'CONTROL: verifying a re-serialised body instead of the raw bytes is caught');
+ok(!signatureGateHolds(goodGate.replace(/  if \(!raw\)[^\n]*\n/, '')),
+  'CONTROL: a handler that no longer refuses a missing raw body is caught');
+ok(!signatureGateHolds(goodGate.replace("res.status(400).send('Cannot verify.'); return;", "res.status(400).send('Cannot verify.');")),
+  'CONTROL: a missing raw body that answers 400 but does not return is caught');
+ok(!signatureGateHolds(goodGate.replace("res.status(401).send('Unauthorized');", "res.status(200).send('Ignored');")),
+  'CONTROL: a failed signature that is not answered 401 is caught');
+ok(!signatureGateHolds(goodGate.replace('process.env.BACHS_WEBHOOK_SECRET', 'process.env.BACHS_SECRET_KEY')),
+  'CONTROL: verifying against the wrong secret is caught');
+ok(!signatureGateHolds(goodGate.replace("  const event = parseBachsEvent(req.body);\n", '').replace('  if (!raw)', "  const event = parseBachsEvent(req.body);\n  if (!raw)")),
+  'CONTROL: reading the event before the signature is checked is caught');
 
 console.log(failures === 0
   ? '\nPASS — Bachs: amounts, signatures, events and every grant rule behave.'

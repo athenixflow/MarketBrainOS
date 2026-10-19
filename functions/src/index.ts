@@ -27,10 +27,11 @@ admin.initializeApp();
 admin.firestore().settings({ ignoreUndefinedProperties: true });
 const db = admin.firestore();
 
-/* The Secret Manager secrets every function that calls Bachs or verifies its webhook is bound to.
+/* The Secret Manager secrets for the functions that talk to Bachs AND verify its webhook:
+   bachsWebhook, createCheckout, manageBilling. Least privilege: billingStatus and deleteAccount only
+   ever read the key, so they bind `['BACHS_SECRET_KEY']` alone and never see the webhook secret.
    Declared up here, not beside the Bachs functions, because `runWith({ secrets })` is evaluated
-   when this module loads: deleteAccount (which cancels a subscription) sits far above that block,
-   and a `const` read before its line has run is a ReferenceError. */
+   when this module loads: a `const` read before its line has run is a ReferenceError. */
 const BACHS_SECRETS = ['BACHS_SECRET_KEY', 'BACHS_WEBHOOK_SECRET'];
 
 // --- SERVER-SIDE CONFIGURATION ---
@@ -3245,7 +3246,7 @@ const containersOwnedBy = async (uid: string) => {
 };
 
 export const deleteAccount = functions
-  .runWith({ secrets: BACHS_SECRETS, timeoutSeconds: 300, memory: '512MB' })
+  .runWith({ secrets: ['BACHS_SECRET_KEY'], timeoutSeconds: 300, memory: '512MB' })
   .https.onCall(async (data: any, context: any) => {
     if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
     const uid: string = context.auth.uid;
@@ -3307,7 +3308,8 @@ export const deleteAccount = functions
     //     sign in to, and its owner cannot cancel it once the profile is gone. Cancelled at period end (they
     //     paid for the period), idempotent under a fixed key so a resumed deletion does not repeat it, and
     //     NEVER fatal: Bachs being down must not stop somebody erasing their account. A failure is logged
-    //     and sent to the founder, who can cancel it by hand before the next charge. Reached only on a
+    //     and sent to the founder (not awaited: a slow mail provider must never delay the purge), who can
+    //     cancel it by hand before the next charge. Reached only on a
     //     real run, after the refusals and the re-auth proof above. ---
     const bachsSubscriptionId = typeof user.bachs_subscription_id === 'string' ? user.bachs_subscription_id : '';
     if (bachsSubscriptionId && user.billing_mode === 'subscription') {
@@ -3315,7 +3317,7 @@ export const deleteAccount = functions
         await bachsApi(process.env.BACHS_SECRET_KEY || '').cancelSubscriptionAtPeriodEnd(bachsSubscriptionId, `cancel_delete_${bachsSubscriptionId}`);
       } catch (e: any) {
         console.error(`[deleteAccount] could not cancel subscription ${bachsSubscriptionId} for ${uid}:`, e?.message || e);
-        await billingAlertEmail('A deleted account still has a subscription', [bachsSubscriptionId, 'its cancellation failed; cancel it in Bachs']).catch(() => undefined);
+        void billingAlertEmail('A deleted account still has a subscription', [bachsSubscriptionId, 'its cancellation failed; cancel it in Bachs']).catch(() => undefined);
       }
     }
 
@@ -4149,7 +4151,9 @@ const syncSubscriptionById = async (subscriptionId: string, chargedMinor: number
      EXCEPT one that is already on its way out: deleteAccount cancels a deleted account's
      subscription at period end, and Bachs then reports exactly that for an account that no longer
      exists. A subscription that is cancelling (or has ended) is not charging again, so it is
-     ignored — no review, no email, no writes. Only a still-charging orphan is an alarm. */
+     ignored — no review, no email, no writes. Only a still-charging orphan is an alarm — and
+     so is any delivery that CARRIED A CHARGE (`chargedMinor` set: an invoice was paid for an
+     account that is gone), whatever state the subscription is in now. */
   const leaving = snap.cancelAtPeriodEnd === true || snap.status === 'canceled' || snap.status === 'unpaid';
   const orphanKey =`orphan:${snap.id}:${snap.currentPeriodStart ?? 'nostart'}`;
   const orphanWrites = (t: admin.firestore.Transaction, reason: string, forUid: string | null) => {
@@ -4167,7 +4171,7 @@ const syncSubscriptionById = async (subscriptionId: string, chargedMinor: number
     }
   };
   if (!uid) {
-    if (leaving) return 'orphan ignored (cancelled)';
+    if (leaving && chargedMinor === null) return 'orphan ignored (cancelled)';
     const reason = 'subscription with no account';
     const created = await db.runTransaction(async (t: admin.firestore.Transaction) => {
       if ((await t.get(ledgerDoc(orphanKey))).exists) return false;
@@ -4193,7 +4197,7 @@ const syncSubscriptionById = async (subscriptionId: string, chargedMinor: number
     if (!userSnap.exists) {
       /* The uid names an account that was deleted. Nothing is granted; the review and its ledger
          entry are written together, once per period — unless the subscription is leaving anyway. */
-      if (leaving) return 'orphan ignored (cancelled)';
+      if (leaving && chargedMinor === null) return 'orphan ignored (cancelled)';
       if ((await t.get(ledgerDoc(orphanKey))).exists) return 'orphan already reviewed';
       const reason = `subscription is paid for account ${uid}, which no longer exists`;
       state.reviewWhy = reason;
@@ -4450,7 +4454,7 @@ export const bachsWebhook = functions.runWith({ secrets: BACHS_SECRETS }).https.
 });
 
 /** Whether the product shows a way to pay. Bound to the secret so it can see the key. */
-export const billingStatus = functions.runWith({ secrets: BACHS_SECRETS }).https.onRequest((req: any, res: any) => {
+export const billingStatus = functions.runWith({ secrets: ['BACHS_SECRET_KEY'] }).https.onRequest((req: any, res: any) => {
   res.set('Access-Control-Allow-Origin', '*');
   res.status(200).json({ billing_live: bachsBillingLive(process.env), provider: 'bachs' });
 });

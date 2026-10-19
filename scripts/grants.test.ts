@@ -112,7 +112,9 @@ ok(grantHelpersAreInternal(index),
    keep shut. Only the verified webhook, the hourly reconciliation (Task 12; allowed by name now)
    and manageBilling (which syncs FROM Bachs after its own call) may reference them. A helper
    defined between two exports falls inside the preceding export's text, so the helper
-   DEFINITIONS are cut out before the references are counted. */
+   DEFINITIONS (their bodies mention their own names in log lines) are cut out before the
+   references are counted. ANY reference counts, not only a call: `items.map(syncSubscriptionById)`
+   or `const go = applyOneOffPayment` reaches the helper just as surely as `syncSubscriptionById(`. */
 export const GRANT_HELPER_CALLERS: Record<string, string> = {
   bachsWebhook: 'verified Bachs webhook (state synced from Bachs)',
   bachsReconcile: 'hourly reconciliation against Bachs',
@@ -122,9 +124,11 @@ export const helperCallers = (src: string): string[] =>
   src.split(/\nexport const /).slice(1)
     .map((part) => ({
       name: part.slice(0, part.search(/[\s=]/)),
-      body: part.replace(/\r?\nconst (?:applyOneOffPayment|syncSubscriptionById) = async/g, ''),
+      body: part
+        .replace(/\r?\nconst (?:applyOneOffPayment|syncSubscriptionById) = async[^]*?\r?\n\};/g, '')
+        .replace(/\r?\nconst (?:applyOneOffPayment|syncSubscriptionById) = async/g, ''),
     }))
-    .filter((p) => /\b(?:applyOneOffPayment|syncSubscriptionById)\s*\(/.test(p.body))
+    .filter((p) => /\b(?:applyOneOffPayment|syncSubscriptionById)\b/.test(p.body))
     .map((p) => p.name);
 const callers = helperCallers(index);
 const strangers = callers.filter((name) => !(name in GRANT_HELPER_CALLERS));
@@ -135,21 +139,30 @@ ok(callers.includes('bachsWebhook') && callers.includes('manageBilling'),
    account is gone, and the customer cannot cancel what they can no longer sign in to. So, in
    deleteAccount: only on a real run (after the dry-run return), only once the re-auth check has
    passed, before any data is removed, for a dollar subscription, and in a try/catch so Bachs
-   being down never stops the deletion. */
+   being down never stops the deletion. Three more ways to defeat that, each guarded: a catch
+   that RETHROWS (the failure then stops the deletion after all); a catch that AWAITS the founder
+   alert (a hanging mail provider then delays the purge — it is fire-and-forget); and a binding
+   wider than it needs (deleteAccount reads the key, never the webhook secret). */
 export const cancelsBillingBeforePurge = (fn: string): boolean => {
   const cancel = fn.search(/cancelSubscriptionAtPeriodEnd\(/);
   if (cancel < 0) return false;
+  const purge = fn.search(/db\.collection\('deletion_jobs'\)/);
+  if (purge < cancel) return false;
   const after = (re: RegExp) => { const at = fn.search(re); return at >= 0 && at < cancel; };
-  const before = (re: RegExp) => { const at = fn.search(re); return at > cancel; };
   /* Comments are blanked to spaces of the same length, so collapse whitespace before looking back. */
   const lead = fn.slice(0, cancel).replace(/\s+/g, ' ').slice(-700);
-  return after(/if \(dryRun\)/) && after(/REAUTH_WINDOW_S/) && before(/db\.collection\('deletion_jobs'\)/)
+  const between = fn.slice(cancel, purge);
+  const catchAt = between.search(/\bcatch\b/);
+  const head = fn.slice(0, 300);
+  return after(/if \(dryRun\)/) && after(/REAUTH_WINDOW_S/)
     && /bachs_subscription_id/.test(lead) && /billing_mode === 'subscription'/.test(lead)
     && /try \{(?:(?!catch)[^])*$/.test(lead) && /^[^]{0,400}?\}\s*catch/.test(fn.slice(cancel))
-    && /secrets:\s*BACHS_SECRETS/.test(fn.slice(0, 300));
+    && catchAt >= 0 && !/\bthrow\b/.test(between.slice(catchAt))
+    && !/\bawait\s+(?:billingAlertEmail|sendTemplate)\b/.test(between)
+    && /secrets:\s*\['BACHS_SECRET_KEY'\]/.test(head) && !/BACHS_WEBHOOK_SECRET|BACHS_SECRETS/.test(head);
 };
 ok(cancelsBillingBeforePurge(exported(index, 'deleteAccount')),
-  'deleteAccount cancels a dollar subscription (guarded, before the purge) and is bound to the Bachs secrets');
+  'deleteAccount cancels a dollar subscription (guarded, before the purge, never fatal, never waiting on mail) and binds only the Bachs key');
 /* Every payment gets the receipt we already have (spec). A dollar subscription's period is paid
    by the webhook, the hourly sync or manageBilling, all through syncSubscriptionById, so the
    receipt lives in that one helper — and only on a grant, never on a no-op or a refusal. The
@@ -182,13 +195,16 @@ ok(orphansAreRecordedOnce(helperBody(index, 'syncSubscriptionById')),
    alarm: deleteAccount cancels a deleted account's subscription, and Bachs then reports that very
    cancellation for an account that no longer exists — a review and an email every time would be
    noise about something already dealt with. Only a subscription that is STILL CHARGING
-   (active / past_due, not cancelling) is reviewed. So BOTH orphan branches (no account id at all;
-   an account id whose document is gone) must read `cancelAtPeriodEnd` (through `leaving`) and
-   return before they write. Each branch is found from its own opener to its `orphanWrites(t,`
-   call, so one branch's check cannot vouch for the other. */
+   (active / past_due, not cancelling) is reviewed — and so is a cancelling one whose delivery
+   CARRIED A CHARGE (`chargedMinor` set: an invoice was paid for an account that is gone, which is
+   money to chase whatever the subscription's state). So BOTH orphan branches (no account id at
+   all; an account id whose document is gone) must read `cancelAtPeriodEnd` (through `leaving`),
+   and may return before they write only when no charge came with the event. Each branch is found
+   from its own opener to its `orphanWrites(t,` call, so one branch's check cannot vouch for the
+   other. */
 export const orphansSkipWhenLeaving = (body: string): boolean => {
   const defined = /const leaving = [^;]*cancelAtPeriodEnd === true[^;]*'canceled'[^;]*'unpaid'/.test(body);
-  const gate = /if \(leaving\) return 'orphan ignored \(cancelled\)'/;
+  const gate = /if \(leaving && chargedMinor === null\) return 'orphan ignored \(cancelled\)'/;
   const calls = [...body.matchAll(/orphanWrites\(t,/g)].map((m) => m.index as number);
   return defined && calls.length === 2 && calls.every((at) => {
     const opener = Math.max(body.lastIndexOf('if (!uid) {', at), body.lastIndexOf('if (!userSnap.exists) {', at));
@@ -269,17 +285,22 @@ const leavingBody = [
   "  if (!uid) { const q = 1; }",
   "  const leaving = snap.cancelAtPeriodEnd === true || snap.status === 'canceled' || snap.status === 'unpaid';",
   "  const orphanWrites = (t, reason, forUid) => {};",
-  "  if (!uid) { if (leaving) return 'orphan ignored (cancelled)'; await db.runTransaction(async (t) => { orphanWrites(t, 'r', null); }); return 'orphan reviewed'; }",
-  "  await db.runTransaction(async (t) => { if (!userSnap.exists) { if (leaving) return 'orphan ignored (cancelled)'; orphanWrites(t, 'r', uid); return 'orphan reviewed'; } });",
+  "  if (!uid) { if (leaving && chargedMinor === null) return 'orphan ignored (cancelled)'; await db.runTransaction(async (t) => { orphanWrites(t, 'r', null); }); return 'orphan reviewed'; }",
+  "  await db.runTransaction(async (t) => { if (!userSnap.exists) { if (leaving && chargedMinor === null) return 'orphan ignored (cancelled)'; orphanWrites(t, 'r', uid); return 'orphan reviewed'; } });",
   "};",
   "export const next = 1;",
 ].join('\n');
+const quiet = "if (leaving && chargedMinor === null) return 'orphan ignored (cancelled)';";
 ok(orphansSkipWhenLeaving(helperBody(leavingBody, 'syncSubscriptionById')),
-  'a helper whose two orphan branches both skip a cancelling or ended subscription passes');
-ok(!orphansSkipWhenLeaving(helperBody(leavingBody.replace("if (leaving) return 'orphan ignored (cancelled)'; await", 'await'), 'syncSubscriptionById')),
+  'a helper whose two orphan branches both skip a cancelling or ended subscription with no charge passes');
+ok(!orphansSkipWhenLeaving(helperBody(leavingBody.replace(`${quiet} await`, 'await'), 'syncSubscriptionById')),
   'CONTROL: the no-account branch reviewing a cancelling subscription is caught');
-ok(!orphansSkipWhenLeaving(helperBody(leavingBody.replace("if (leaving) return 'orphan ignored (cancelled)'; orphanWrites", 'orphanWrites'), 'syncSubscriptionById')),
+ok(!orphansSkipWhenLeaving(helperBody(leavingBody.replace(`${quiet} orphanWrites`, 'orphanWrites'), 'syncSubscriptionById')),
   'CONTROL: the deleted-account branch reviewing a cancelling subscription is caught');
+ok(!orphansSkipWhenLeaving(helperBody(leavingBody.replace(`${quiet} await`, "if (leaving) return 'orphan ignored (cancelled)'; await"), 'syncSubscriptionById')),
+  'CONTROL: the no-account branch ignoring a cancelling orphan even when a charge came with the event is caught');
+ok(!orphansSkipWhenLeaving(helperBody(leavingBody.replace(`${quiet} orphanWrites`, "if (leaving) return 'orphan ignored (cancelled)'; orphanWrites"), 'syncSubscriptionById')),
+  'CONTROL: the deleted-account branch ignoring a cancelling orphan even when a charge came with the event is caught');
 ok(!orphansSkipWhenLeaving(helperBody(leavingBody.replace('snap.cancelAtPeriodEnd === true || ', ''), 'syncSubscriptionById')),
   'CONTROL: a gate that ignores cancel-at-period-end is caught');
 ok(!orphansSkipWhenLeaving(helperBody(leavingBody.replace(" || snap.status === 'unpaid'", ''), 'syncSubscriptionById')),
@@ -307,13 +328,22 @@ ok(notAllowed(helperCallers(withDefs)).length === 0 && notAllowed(helperCallers(
   'the helper definitions, which sit inside the preceding export\'s text, are not counted as callers (LF and CRLF)');
 ok(helperCallers(blank("x\nexport const createCheckout = f(() => {\n  // applyOneOffPayment(e) is the webhook's job\n});")).length === 0,
   'a comment that names a helper is not a call');
+ok(notAllowed(helperCallers(allowedCallers + "\nexport const sneaky = f(async () => (ids as string[]).map(syncSubscriptionById));")).join() === 'sneaky',
+  'CONTROL: a callable that passes syncSubscriptionById by reference is flagged');
+ok(notAllowed(helperCallers(allowedCallers + "\nexport const aliased = f(async () => { const go = applyOneOffPayment; await go(e, 'webhook'); });")).join() === 'aliased',
+  'CONTROL: a callable that aliases applyOneOffPayment is flagged');
+const withBodies = "x\nexport const resendWebhook = f(() => {});\nconst applyOneOffPayment = async (e: any) => {\n  try { return 1; } catch (err) { console.error('applyOneOffPayment: notification failed:'); }\n};\n"
+  + "const syncSubscriptionById = async (id: string) => {\n  console.error('syncSubscriptionById: orphan alert failed:');\n  return 'x';\n};\nexport const createCheckout = f(() => {});\nexport const manageBilling = f(() => { syncSubscriptionById(a, b, 'manage'); });";
+ok(notAllowed(helperCallers(withBodies)).length === 0 && notAllowed(helperCallers(withBodies.replace(/\n/g, '\r\n'))).length === 0,
+  'the helper BODIES, whose log lines name them, are not counted as references either (LF and CRLF)');
+const catchLine = "    catch (e: any) { console.error(e?.message); void billingAlertEmail('x', []).catch(() => undefined); }";
 const goodDelete = [
-  "export const deleteAccount = functions.runWith({ secrets: BACHS_SECRETS, timeoutSeconds: 300 }).https.onCall(async (data: any, context: any) => {",
+  "export const deleteAccount = functions.runWith({ secrets: ['BACHS_SECRET_KEY'], timeoutSeconds: 300 }).https.onCall(async (data: any, context: any) => {",
   "  if (dryRun) { return 1; }",
   "  if (Date.now() / 1000 - authTime > REAUTH_WINDOW_S) { throw new Error('x'); }",
   "  if (user.bachs_subscription_id && user.billing_mode === 'subscription') {",
   "    try { await bachsApi(process.env.BACHS_SECRET_KEY || '').cancelSubscriptionAtPeriodEnd(id, `cancel_delete_${id}`); }",
-  "    catch (e: any) { console.error(e?.message); }",
+  catchLine,
   "  }",
   "  const jobRef = db.collection('deletion_jobs').doc(uid);",
   "});",
@@ -321,12 +351,24 @@ const goodDelete = [
 ok(cancelsBillingBeforePurge(goodDelete), 'a deleteAccount that cancels a dollar subscription, guarded, before the purge passes');
 ok(!cancelsBillingBeforePurge(goodDelete.replace('.cancelSubscriptionAtPeriodEnd(', '.somethingElse(')),
   'CONTROL: a deleteAccount that never cancels the subscription is caught');
-ok(!cancelsBillingBeforePurge(goodDelete.replace('try { ', '').replace('    catch (e: any) { console.error(e?.message); }', '')),
+ok(!cancelsBillingBeforePurge(goodDelete.replace('try { ', '').replace(`${catchLine}\n`, '')),
   'CONTROL: a cancel that is not in a try/catch (Bachs down would block the deletion) is caught');
+ok(!cancelsBillingBeforePurge(goodDelete.replace(catchLine, '    catch (e) { throw e; }')),
+  'CONTROL: a catch that rethrows (so Bachs being down still blocks the deletion) is caught');
+ok(!cancelsBillingBeforePurge(goodDelete.replace(catchLine, "    catch (e: any) { console.error(e?.message); throw new Error('x'); }")),
+  'CONTROL: a catch that throws something else is caught too');
+ok(!cancelsBillingBeforePurge(goodDelete.replace('void billingAlertEmail', 'await billingAlertEmail')),
+  'CONTROL: a catch that waits on the founder alert (a hanging mail provider would delay the purge) is caught');
+ok(!cancelsBillingBeforePurge(goodDelete.replace('void billingAlertEmail', 'await sendTemplate')),
+  'CONTROL: a catch that waits on any mail is caught');
 ok(!cancelsBillingBeforePurge(goodDelete.replace("user.billing_mode === 'subscription'", 'true')),
   'CONTROL: a cancel that is not limited to a dollar subscription is caught');
-ok(!cancelsBillingBeforePurge(goodDelete.replace('functions.runWith({ secrets: BACHS_SECRETS, timeoutSeconds: 300 })', 'functions.runWith({ timeoutSeconds: 300 })')),
-  'CONTROL: a deleteAccount not bound to the Bachs secrets (so it can never cancel) is caught');
+ok(!cancelsBillingBeforePurge(goodDelete.replace("secrets: ['BACHS_SECRET_KEY'], ", '')),
+  'CONTROL: a deleteAccount not bound to the Bachs key (so it can never cancel) is caught');
+ok(!cancelsBillingBeforePurge(goodDelete.replace("secrets: ['BACHS_SECRET_KEY']", 'secrets: BACHS_SECRETS')),
+  'CONTROL: a deleteAccount bound to both Bachs secrets (it never reads the webhook secret) is caught');
+ok(!cancelsBillingBeforePurge(goodDelete.replace("secrets: ['BACHS_SECRET_KEY']", "secrets: ['BACHS_SECRET_KEY', 'BACHS_WEBHOOK_SECRET']")),
+  'CONTROL: a deleteAccount that lists the webhook secret too is caught');
 ok(!cancelsBillingBeforePurge(goodDelete.replace("user.bachs_subscription_id && ", '')),
   'CONTROL: a cancel that does not check the account has a subscription id is caught');
 ok(!cancelsBillingBeforePurge(goodDelete.replace("  if (dryRun) { return 1; }\n", '').replace("  const jobRef", "  if (dryRun) { return 1; }\n  const jobRef")),
