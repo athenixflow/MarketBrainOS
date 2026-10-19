@@ -27,11 +27,31 @@ export interface BachsApi {
   createProduct(body: Record<string, unknown>, idempotencyKey: string): Promise<{ id: string }>;
 }
 
+/**
+ * A write's response must carry the one field the caller stores or redirects to. Anything else is an
+ * envelope we do not know: throw, rather than store "undefined" as an id or return a bare object.
+ */
+const expectField = <T>(obj: T, field: string, method: string, path: string): T => {
+  const value = (obj as any)?.[field];
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new BachsApiError(`Bachs ${method} ${path} returned no ${field}`, 0, 'UNEXPECTED_SHAPE');
+  }
+  return obj;
+};
+
 export const bachsApi = (key: string, fetchImpl: typeof fetch = fetch): BachsApi => {
   if (!key) throw new BachsApiError('BACHS_SECRET_KEY is not set', 0, 'NO_KEY');
+  // Refused before any header is built: a character outside this set would make the HTTP layer
+  // throw with the key text in its message.
+  if (!/^[A-Za-z0-9_\-]+$/.test(key)) throw new BachsApiError('BACHS_SECRET_KEY is malformed', 0, 'BAD_KEY');
   const base = bachsBaseUrl(key);
+  // The key text never reaches an error: a Bachs error can echo the Authorization header back.
+  const scrub = (text: string): string => text.split(key).join('[redacted]');
 
   const call = async (method: string, path: string, body?: unknown, idempotencyKey?: string): Promise<any> => {
+    if (method !== 'GET' && !(idempotencyKey && idempotencyKey.trim())) {
+      throw new BachsApiError('missing idempotency key', 0, 'NO_IDEMPOTENCY_KEY');
+    }
     const headers: Record<string, string> = { Authorization: `Bearer ${key}`, Accept: 'application/json' };
     if (body !== undefined) headers['Content-Type'] = 'application/json';
     if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
@@ -44,13 +64,15 @@ export const bachsApi = (key: string, fetchImpl: typeof fetch = fetch): BachsApi
     try { json = text ? JSON.parse(text) : null; } catch { json = null; }
     if (!res.ok) {
       const err = json?.error ?? json ?? {};
-      throw new BachsApiError(String(err.message || `Bachs ${method} ${path} → ${res.status}`), res.status, err.code ? String(err.code) : null);
+      const message = scrub(String(err.message || `Bachs ${method} ${path} → ${res.status}`)).slice(0, 300);
+      throw new BachsApiError(message, res.status, err.code ? scrub(String(err.code)) : null);
     }
     return json;
   };
 
   return {
-    createCheckoutSession: (body, idem) => call('POST', '/checkout-sessions', body, idem).then((j) => j?.data ?? j),
+    createCheckoutSession: (body, idem) =>
+      call('POST', '/checkout-sessions', body, idem).then((j) => expectField(j?.data ?? j, 'checkout_url', 'POST', '/checkout-sessions')),
     getCheckoutSession: (id) => call('GET', `/checkout-sessions/${encodeURIComponent(id)}`),
     getSubscription: (id) => call('GET', `/subscriptions/${encodeURIComponent(id)}`),
     changeSubscriptionProduct: (id, productId, idem) =>
@@ -58,12 +80,13 @@ export const bachsApi = (key: string, fetchImpl: typeof fetch = fetch): BachsApi
     cancelSubscriptionAtPeriodEnd: (id, idem) =>
       call('DELETE', `/subscriptions/${encodeURIComponent(id)}`, { cancel_at_period_end: true, reason: 'customer_request' }, idem),
     createPortalSession: (customerId, idem) =>
-      call('POST', `/customers/${encodeURIComponent(customerId)}/portal-sessions`, undefined, idem).then((j) => j?.data ?? j),
+      call('POST', `/customers/${encodeURIComponent(customerId)}/portal-sessions`, undefined, idem)
+        .then((j) => expectField(j?.data ?? j, 'url', 'POST', '/customers/{id}/portal-sessions')),
     listProducts: () => call('GET', '/products').then((j) => {
       if (Array.isArray(j?.items)) return j.items as unknown[];
       if (Array.isArray(j?.data)) return j.data as unknown[];
       throw new BachsApiError('Bachs GET /products returned neither an items nor a data array', 0, 'UNEXPECTED_SHAPE');
     }),
-    createProduct: (body, idem) => call('POST', '/products', body, idem).then((j) => j?.data ?? j),
+    createProduct: (body, idem) => call('POST', '/products', body, idem).then((j) => expectField(j?.data ?? j, 'id', 'POST', '/products')),
   };
 };

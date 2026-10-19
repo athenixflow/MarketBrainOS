@@ -365,6 +365,7 @@ const fakeFetch = (async (url: string, init: any) => {
 const api = bachsApi('sk_sandbox_k', fakeFetch);
 const session = await api.createCheckoutSession({ reference: 'mb_1' }, 'mb_1');
 ok(session.checkout_url === 'https://checkout.bachs.io/c/1', 'a checkout session returns its URL');
+ok(calls[0].url.startsWith('https://sandbox-api.bachs.io/v1/'), 'a sandbox key sends the request to the sandbox host (the wiring, not only the pure helper)');
 ok(calls[0].init.headers.Authorization === 'Bearer sk_sandbox_k' && calls[0].init.headers['Idempotency-Key'] === 'mb_1'
   && calls[0].init.method === 'POST', 'POSTs carry the bearer key and an idempotency key');
 ok(((await api.getSubscription('sub_1')) as any).data.id === 'sub_1', 'a GET returns the parsed body');
@@ -374,6 +375,8 @@ await api.cancelSubscriptionAtPeriodEnd('sub_1', 'cancel_sub_1');
 const cancelCall = calls[calls.length - 1];
 ok(cancelCall.init.method === 'DELETE' && JSON.parse(cancelCall.init.body).cancel_at_period_end === true,
   'cancel always sends cancel_at_period_end: true (an API cancel is otherwise immediate)');
+ok(cancelCall.url.endsWith('/subscriptions/sub_1') && cancelCall.init.headers['Idempotency-Key'] === 'cancel_sub_1',
+  'the cancel targets its subscription path with the idempotency key');
 let shapeErr: any = null; try { await api.listProducts(); } catch (e) { shapeErr = e; }
 ok(shapeErr instanceof BachsApiError && shapeErr.status === 0 && shapeErr.code === 'UNEXPECTED_SHAPE',
   'a products response with no items or data array throws UNEXPECTED_SHAPE, never an empty list (an empty list would make setup create duplicates)');
@@ -383,6 +386,71 @@ ok(Array.isArray(listed) && listed.length === 1 && (listed[0] as any).id === 'p'
 productsBody = { data: [{ id: 'q' }] };
 const listedData = await api.listProducts();
 ok(Array.isArray(listedData) && listedData.length === 1 && (listedData[0] as any).id === 'q', 'a products response with a data array returns that array');
+
+const liveLog: string[] = [];
+const liveFetch = (async (url: string) => {
+  liveLog.push(url);
+  return new Response(JSON.stringify({ checkout_id: 'chk_9', checkout_url: 'https://checkout.bachs.io/c/9' }), { status: 200 });
+}) as unknown as typeof fetch;
+await bachsApi('sk_live_k', liveFetch).createCheckoutSession({ reference: 'mb_9' }, 'mb_9');
+ok(String(liveLog[0]).startsWith('https://api.bachs.io/v1/'), 'a live key sends the request to the live host, never the sandbox');
+
+/* Fake fetch that answers every request with one fixed body; `log` records what was sent. */
+const replyWith = (text: string, status = 200) => {
+  const log: Array<{ url: string; init: any }> = [];
+  const f = (async (url: string, init: any) => {
+    log.push({ url, init });
+    return new Response(text, { status });
+  }) as unknown as typeof fetch;
+  return { log, f };
+};
+/* True only when the call rejected with UNEXPECTED_SHAPE. */
+const rejectsShape = async (p: Promise<unknown>): Promise<boolean> => {
+  try { await p; return false; } catch (e) { return e instanceof BachsApiError && e.status === 0 && e.code === 'UNEXPECTED_SHAPE'; }
+};
+
+const patch = replyWith(JSON.stringify({ data: { id: 'sub_1' } }));
+await bachsApi('sk_sandbox_k', patch.f).changeSubscriptionProduct('sub_1', 'prod_x', 'chg_1');
+const patchBody = JSON.parse(patch.log[0].init.body);
+ok(patch.log[0].init.method === 'PATCH' && patch.log[0].url.endsWith('/subscriptions/sub_1') && patch.log[0].init.headers['Idempotency-Key'] === 'chg_1'
+  && patchBody.product_id === 'prod_x' && patchBody.proration_behavior === 'invoice_now',
+  'a plan change PATCHes its subscription with the new product, invoice_now proration and an idempotency key');
+
+const portal = replyWith(JSON.stringify({ url: 'https://portal.bachs.io/p/1' }));
+const portalSession = await bachsApi('sk_sandbox_k', portal.f).createPortalSession('cust_1', 'portal_1');
+ok(portalSession.url === 'https://portal.bachs.io/p/1' && portal.log[0].init.method === 'POST' && portal.log[0].url.endsWith('/customers/cust_1/portal-sessions')
+  && portal.log[0].init.headers['Idempotency-Key'] === 'portal_1', 'a portal session POSTs to its customer with an idempotency key and returns its url');
+
+const created = replyWith(JSON.stringify({ id: 'p1' }));
+const product = await bachsApi('sk_sandbox_k', created.f).createProduct({ name: 'Pro' }, 'prod_key_1');
+ok(product.id === 'p1' && created.log[0].init.method === 'POST' && created.log[0].url.endsWith('/v1/products') && created.log[0].init.headers['Idempotency-Key'] === 'prod_key_1',
+  'createProduct POSTs with an idempotency key and returns the product id');
+const wrapped = replyWith(JSON.stringify({ data: { id: 'p2' } }));
+ok((await bachsApi('sk_sandbox_k', wrapped.f).createProduct({}, 'prod_key_2')).id === 'p2', 'a product in a data envelope is unwrapped');
+
+ok(await rejectsShape(bachsApi('sk_sandbox_k', replyWith('{}').f).createCheckoutSession({}, 'k_c1')), 'a checkout with no checkout_url is UNEXPECTED_SHAPE, not a session');
+ok(await rejectsShape(bachsApi('sk_sandbox_k', replyWith('').f).createCheckoutSession({}, 'k_c2')), 'a checkout with an empty body is UNEXPECTED_SHAPE');
+ok(await rejectsShape(bachsApi('sk_sandbox_k', replyWith('<html>gateway</html>').f).createCheckoutSession({}, 'k_c3')), 'a checkout with an HTML body is UNEXPECTED_SHAPE');
+ok(await rejectsShape(bachsApi('sk_sandbox_k', replyWith(JSON.stringify({ checkout: { checkout_url: 'https://x' } })).f).createCheckoutSession({}, 'k_c4')), 'a checkout in a wrong envelope is UNEXPECTED_SHAPE');
+ok(await rejectsShape(bachsApi('sk_sandbox_k', replyWith('{}').f).createPortalSession('cust_1', 'k_p1')), 'a portal session with no url is UNEXPECTED_SHAPE');
+ok(await rejectsShape(bachsApi('sk_sandbox_k', replyWith('').f).createPortalSession('cust_1', 'k_p2')), 'a portal session with an empty body is UNEXPECTED_SHAPE');
+ok(await rejectsShape(bachsApi('sk_sandbox_k', replyWith(JSON.stringify({ product: { id: 'p1' } })).f).createProduct({}, 'k_pr1')), 'a product in a wrong envelope is UNEXPECTED_SHAPE, never the id "undefined"');
+ok(await rejectsShape(bachsApi('sk_sandbox_k', replyWith('null').f).createProduct({}, 'k_pr2')), 'a product with a null body is UNEXPECTED_SHAPE');
+ok(await rejectsShape(bachsApi('sk_sandbox_k', replyWith('{}').f).createProduct({}, 'k_pr3')), 'a product with no id is UNEXPECTED_SHAPE');
+
+const noKey = replyWith('{}');
+let keyErr: any = null; try { await bachsApi('sk_sandbox_k', noKey.f).changeSubscriptionProduct('sub_1', 'prod_x', ''); } catch (e) { keyErr = e; }
+ok(keyErr instanceof BachsApiError && keyErr.code === 'NO_IDEMPOTENCY_KEY' && noKey.log.length === 0, 'a write with an empty idempotency key is refused before any request is sent');
+
+let badKey: any = null; try { bachsApi('sk_sandbox_QZ9 part', fakeFetch); } catch (e) { badKey = e; }
+ok(badKey instanceof BachsApiError && badKey.code === 'BAD_KEY' && !String(badKey.message).includes('QZ9'), 'a malformed key is refused with a generic message that does not echo it');
+const echo = replyWith(JSON.stringify({ error: { code: 'UNAUTHORIZED', message: 'token sk_sandbox_k was rejected' } }), 401);
+let echoErr: any = null; try { await bachsApi('sk_sandbox_k', echo.f).getSubscription('sub_1'); } catch (e) { echoErr = e; }
+ok(echoErr instanceof BachsApiError && echoErr.message === 'token [redacted] was rejected' && echoErr.status === 401,
+  'a Bachs error that echoes the key comes back with the key redacted');
+const longErr = replyWith(JSON.stringify({ error: { code: 'X', message: 'a'.repeat(400) } }), 400);
+let capErr: any = null; try { await bachsApi('sk_sandbox_k', longErr.f).getSubscription('sub_1'); } catch (e) { capErr = e; }
+ok(capErr instanceof BachsApiError && capErr.message.length === 300, 'an error message is capped at 300 characters');
 
 console.log(failures === 0
   ? '\nPASS — Bachs: amounts, signatures, events and every grant rule behave.'
