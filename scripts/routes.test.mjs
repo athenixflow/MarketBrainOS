@@ -154,7 +154,7 @@ if (offenders.length) {
   console.error(`\nFAIL — these modules are imported by build-time tests but need packages the root`);
   console.error(`       package does not install, so the production build cannot resolve them:\n`);
   for (const o of offenders) console.error(`    ${o}`);
-  console.error(`\nEither drop the dependency (prefer node: builtins, as escape.ts and paystack.ts do)`);
+  console.error(`\nEither drop the dependency (prefer node: builtins, as escape.ts and the bachs/ modules do)`);
   console.error(`or add it to the root package.json.\n`);
   process.exit(1);
 }

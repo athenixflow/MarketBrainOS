@@ -10,16 +10,13 @@ import { fetchPageText, looksLikeUrl, PageFetchError } from './fetchPage';
 import { systemInstruction, buildConversionDoctorPrompt } from './prompts';
 import * as crypto from 'crypto';
 import { escapeHtml } from './escape';
-import {
-  PAYSTACK_SIGNATURE_HEADER, billingLive, parsePaystackEvent, tierForPlanCode,
-  verifyPaystackSignature,
-} from './paystack';
 import { sendTemplate } from './email/send';
 import { verifyUnsubToken, unsubToken } from './email/unsubscribe';
 import { verifyResendWebhook, webhookConfigured, EVENT_FIELD, emailStatusFor } from './email/webhook';
 import { catalogItem, toMajorString, TIER_RANK, PAID_TIERS, PaidTier, Kind, Currency } from './bachs/catalog';
 import { billingLive as bachsBillingLive, productForTier, tierForProduct } from './bachs/config';
-import { BachsEvent, parseSubscription } from './bachs/events';
+import { BachsEvent, parseBachsEvent, parseSubscription } from './bachs/events';
+import { BACHS_SIGNATURE_HEADER, verifyBachsSignature } from './bachs/signature';
 import { Account, CheckoutRecord, applyOneOff, checkoutAllowed, syncSubscription } from './bachs/grant';
 import { bachsApi } from './bachs/api';
 
@@ -29,6 +26,12 @@ admin.initializeApp();
 // returns a singleton, so this applies to `db` below and every collection write in this file.
 admin.firestore().settings({ ignoreUndefinedProperties: true });
 const db = admin.firestore();
+
+/* The Secret Manager secrets every function that calls Bachs or verifies its webhook is bound to.
+   Declared up here, not beside the Bachs functions, because `runWith({ secrets })` is evaluated
+   when this module loads: deleteAccount (which cancels a subscription) sits far above that block,
+   and a `const` read before its line has run is a ReferenceError. */
+const BACHS_SECRETS = ['BACHS_SECRET_KEY', 'BACHS_WEBHOOK_SECRET'];
 
 // --- SERVER-SIDE CONFIGURATION ---
 
@@ -3242,7 +3245,7 @@ const containersOwnedBy = async (uid: string) => {
 };
 
 export const deleteAccount = functions
-  .runWith({ timeoutSeconds: 300, memory: '512MB' })
+  .runWith({ secrets: BACHS_SECRETS, timeoutSeconds: 300, memory: '512MB' })
   .https.onCall(async (data: any, context: any) => {
     if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
     const uid: string = context.auth.uid;
@@ -3298,6 +3301,22 @@ export const deleteAccount = functions
     const authTime = Number(context.auth.token.auth_time || 0);
     if (!authTime || Date.now() / 1000 - authTime > REAUTH_WINDOW_S) {
       throw new functions.https.HttpsError('failed-precondition', 'Please sign in again to confirm', { reason: 'reauth-required' });
+    }
+
+    // --- Stop the billing first. A dollar subscription keeps charging a card for an account nobody can
+    //     sign in to, and its owner cannot cancel it once the profile is gone. Cancelled at period end (they
+    //     paid for the period), idempotent under a fixed key so a resumed deletion does not repeat it, and
+    //     NEVER fatal: Bachs being down must not stop somebody erasing their account. A failure is logged
+    //     and sent to the founder, who can cancel it by hand before the next charge. Reached only on a
+    //     real run, after the refusals and the re-auth proof above. ---
+    const bachsSubscriptionId = typeof user.bachs_subscription_id === 'string' ? user.bachs_subscription_id : '';
+    if (bachsSubscriptionId && user.billing_mode === 'subscription') {
+      try {
+        await bachsApi(process.env.BACHS_SECRET_KEY || '').cancelSubscriptionAtPeriodEnd(bachsSubscriptionId, `cancel_delete_${bachsSubscriptionId}`);
+      } catch (e: any) {
+        console.error(`[deleteAccount] could not cancel subscription ${bachsSubscriptionId} for ${uid}:`, e?.message || e);
+        await billingAlertEmail('A deleted account still has a subscription', [bachsSubscriptionId, 'its cancellation failed; cancel it in Bachs']).catch(() => undefined);
+      }
     }
 
     // --- Purge. deletion_jobs/{uid} is the audit record and the resume point after a partial failure. ---
@@ -3996,146 +4015,9 @@ export const resendWebhook = functions.https.onRequest(async (req: any, res: any
 });
 
 /* ============================================================
-   PAYSTACK WEBHOOK (GTM parts 15, 19 §5; DO-NOW #1)
-   ============================================================ */
-
-/**
- * THE ONLY WAY A PLAN BECOMES REAL.
- *
- * `changeSubscription` grants a tier on the caller's say-so — which was correct while
- * billing was simulated and is the security audit's #1 finding the moment it is not. This
- * endpoint is the replacement: Paystack tells us money moved, we verify that it was
- * really Paystack, and only then does anybody's tier change.
- *
- * FOUR THINGS GUARD IT, and each one has a specific failure in mind:
- *
- *   SIGNATURE   HMAC-SHA512 of the RAW body with the secret key. Without it this endpoint
- *               is "POST here to get a free Agency plan", published on the internet.
- *   IDEMPOTENCE Paystack retries until it gets a 200, so the same event arrives more than
- *               once as a matter of course. The reference is the key; a replay is a no-op.
- *   PLAN MAP    an unrecognised plan code grants NOTHING rather than defaulting to a tier.
- *   200 ON ALL  every event we do not act on is acknowledged. A 500 makes Paystack retry,
- *               and an event we will never handle would retry forever.
- *
- * NOT VERIFIED AGAINST PAYSTACK. There are no keys in this project yet, so no real
- * webhook has ever reached this code. The signature algorithm is proved against known
- * vectors in `scripts/paystack.test.ts`; everything downstream of it is unexercised.
- */
-export const paystackWebhook = functions.https.onRequest(async (req: any, res: any) => {
-  if (req.method !== 'POST') { res.status(405).send('Use POST.'); return; }
-
-  /*
-   * THE RAW BODY IS THE THING THAT WAS SIGNED. Firebase parses JSON before a handler
-   * runs, and re-serialising with JSON.stringify can reorder keys or reformat numbers —
-   * producing a different digest for an honest request. `rawBody` is the received bytes;
-   * if it is ever absent, this refuses rather than falling back to the parsed object,
-   * because the fallback is exactly how signature checks quietly stop checking.
-   */
-  const raw: Buffer | undefined = (req as any).rawBody;
-  if (!raw) {
-    console.error('paystackWebhook: no rawBody — refusing to verify against a re-serialised payload');
-    res.status(400).send('Cannot verify.');
-    return;
-  }
-
-  const secret = process.env.PAYSTACK_SECRET_KEY;
-  if (!verifyPaystackSignature(raw, req.headers[PAYSTACK_SIGNATURE_HEADER], secret)) {
-    /* No detail in the response: an attacker probing this should learn nothing about
-       whether a key is configured or what was wrong with their attempt. */
-    res.status(401).send('Unauthorized');
-    return;
-  }
-
-  const event = parsePaystackEvent(req.body);
-  if (!event) { res.status(200).send('Ignored'); return; }
-
-  try {
-    /* THE REFERENCE IS THE IDEMPOTENCE KEY. Paystack retries on anything but a 200, so
-       arriving twice is normal rather than exceptional. */
-    const eventId = event.reference || `${event.type}_${event.uid}_${event.amountMinor}`;
-    const seenRef = db.collection('payment_events').doc(
-      crypto.createHash('sha256').update(eventId).digest('hex').slice(0, 32));
-    const alreadySeen = await db.runTransaction(async (t: admin.firestore.Transaction) => {
-      const snap = await t.get(seenRef);
-      if (snap.exists) return true;
-      t.set(seenRef, {
-        type: event.type, reference: event.reference, uid: event.uid,
-        amount_minor: event.amountMinor, currency: event.currency,
-        created_at: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      return false;
-    });
-    if (alreadySeen) { res.status(200).send('Already handled'); return; }
-
-    if (!event.uid) {
-      /* No uid in the metadata means we cannot know whose plan this is. Recorded for a
-         human rather than guessed at from the email — two accounts can share one. */
-      console.error('paystackWebhook: event without a uid in metadata', event.reference);
-      res.status(200).send('Acknowledged');
-      return;
-    }
-
-    const tier = tierForPlanCode(event.planCode, process.env);
-
-    if (event.type === 'charge.success' && tier) {
-      const cfg = await getPricingConfig();
-      const monthly = cfg.plans[tier]?.monthlyTokens ?? 0;
-      const userRef = db.collection('users').doc(event.uid);
-      await db.runTransaction(async (t: admin.firestore.Transaction) => {
-        const snap = await t.get(userRef);
-        if (!snap.exists) return;
-        const { purchased } = readBalances(snap.data()!);
-        t.update(userRef, {
-          tier,
-          subscription_status: 'active',
-          plan_renews_at: new Date(Date.now() + RENEWAL_DAYS * 24 * 60 * 60 * 1000).toISOString(),
-          subscription_started_at: snap.data()!.subscription_started_at || new Date().toISOString(),
-          ...balanceFields(monthly, purchased),
-        });
-      });
-      await db.collection('payments').add({
-        uid: event.uid,
-        payment_reference: event.reference,
-        /* Stored in the MINOR unit Paystack sent, with its currency beside it. Converting
-           to a float here would be the one place a rounding error becomes somebody's
-           money, and a naira amount divided by 100 is not a dollar amount. */
-        amount_minor: event.amountMinor,
-        currency: event.currency,
-        provider: 'paystack',
-        tokens_credited: monthly,
-        status: 'success',
-        created_at: admin.firestore.FieldValue.serverTimestamp(),
-      });
-    } else if (event.type === 'subscription.disable' || event.type === 'subscription.not_renew') {
-      /* Access is NOT revoked here. They paid for the period; cancelling means it does
-         not renew, and taking the remaining days would be taking something bought. */
-      await db.collection('users').doc(event.uid)
-        .set({ subscription_status: 'cancelled' }, { merge: true });
-    } else if (event.type === 'invoice.payment_failed') {
-      await db.collection('users').doc(event.uid)
-        .set({ subscription_status: 'past_due' }, { merge: true });
-    }
-
-    res.status(200).send('OK');
-  } catch (error: any) {
-    /* A 500 asks Paystack to retry, which is right for a transient fault — the event is
-       recorded as seen only inside the transaction above, so a retry re-runs cleanly. */
-    console.error('paystackWebhook failed:', error?.message || error);
-    res.status(500).send('Retry');
-  }
-});
-
-/** Whether the product should show a way to pay at all. Read by the client through /config. */
-export const billingStatus = functions.https.onRequest((req: any, res: any) => {
-  res.set('Access-Control-Allow-Origin', '*');
-  res.status(200).json({ billing_live: billingLive(process.env), provider: 'paystack' });
-});
-
-/* ============================================================
    BACHS PAYMENTS (spec docs/superpowers/specs/2026-10-18-bachs-payments-design.md)
    ============================================================ */
 
-const BACHS_SECRETS = ['BACHS_SECRET_KEY', 'BACHS_WEBHOOK_SECRET'];
 const SITE = 'https://www.marketbrainos.app';
 const bachs = () => bachsApi(process.env.BACHS_SECRET_KEY || '');
 /* EVERY once-only key reaches Firestore through this hash and never raw: a reference or an id
@@ -4247,9 +4129,6 @@ const applyOneOffPayment = async (
   }
   return outcome;
 };
-/* No caller yet: bachsWebhook and bachsReconcile (next tasks) are its callers, and it must stay
-   a plain const so no callable can invoke it directly. Read once so noUnusedLocals is satisfied. */
-void applyOneOffPayment;
 
 /**
  * Sync one subscription to Bachs' CURRENT state (spec §5–6). Called by the webhook for every
@@ -4465,6 +4344,108 @@ export const manageBilling = functions.runWith({ secrets: BACHS_SECRETS }).https
   await bachs().changeSubscriptionProduct(subId, productId, `upgrade_${subId}_${target}`);
   /* The new tier is granted when Bachs reports the prorated invoice paid (webhook or the hourly sync). */
   return { ok: true };
+});
+
+/* ============================================================
+   BACHS WEBHOOK (spec §6) — the only place a payment becomes paid value
+   ============================================================ */
+
+/**
+ * THE ONLY WAY A PLAN BECOMES REAL, together with the hourly reconciliation and manageBilling's
+ * sync (all three go through the same two helpers above, under the same once-only keys).
+ *
+ * SIGNATURE over the RAW bytes, or nothing happens. Firebase parses JSON before a handler runs,
+ * and re-serialising with JSON.stringify can reorder keys or reformat numbers — a different
+ * digest for an honest request. `rawBody` is the received bytes; when it is absent this refuses
+ * rather than falling back to the parsed object, because the fallback is exactly how signature
+ * checks quietly stop checking. The 401 carries no detail: a prober learns nothing about whether
+ * a secret is configured or what was wrong with the attempt.
+ *
+ * Then each event goes to the ONE function that owns it, and that function applies its grant
+ * with its ledger entry in one transaction. This handler grants nothing itself.
+ *
+ * STATUS CODES: 500 only when something transient failed (Bachs retries a 500); everything else
+ * is 200, so an event we will never act on is not re-sent forever.
+ *
+ * NOT VERIFIED AGAINST A LIVE BACHS ACCOUNT until the sandbox run: the signature scheme and the
+ * event parser are proved in `scripts/bachs.test.ts`; the field names Bachs really sends are
+ * confirmed there.
+ */
+export const bachsWebhook = functions.runWith({ secrets: BACHS_SECRETS }).https.onRequest(async (req: any, res: any) => {
+  if (req.method !== 'POST') { res.status(405).send('Use POST.'); return; }
+  const raw: Buffer | undefined = (req as any).rawBody;
+  if (!raw) { console.error('bachsWebhook: no rawBody'); res.status(400).send('Cannot verify.'); return; }
+  if (!verifyBachsSignature(raw, req.headers[BACHS_SIGNATURE_HEADER], process.env.BACHS_WEBHOOK_SECRET)) {
+    res.status(401).send('Unauthorized');
+    return;
+  }
+  const event = parseBachsEvent(req.body);
+  if (!event) { res.status(200).send('Ignored'); return; }
+  try {
+    if (event.kind === 'one_off_paid') {
+      res.status(200).send(await applyOneOffPayment(event, 'webhook'));
+      return;
+    }
+    if (event.kind === 'subscription_linked') {
+      /* The customer finished a subscription checkout. Our checkout record is marked paid, then
+         the subscription is synced from Bachs — and the sync alone finds the account (from the
+         metadata we put on the subscription) and adopts the subscription and customer ids under
+         its own current-subscription rules. Writing the ids onto the user here first would
+         bypass those rules, so this does not. A reference we did not issue grants nothing. */
+      const ref = event.reference && /^[A-Za-z0-9_-]{1,128}$/.test(event.reference)
+        ? db.collection('checkouts').doc(event.reference) : null;
+      if (ref && event.subscriptionId && (await ref.get()).exists) {
+        await ref.update({ status: 'paid', settled_at: new Date().toISOString() });
+        res.status(200).send(await syncSubscriptionById(event.subscriptionId, event.amountMinor, 'webhook'));
+        return;
+      }
+      res.status(200).send('Ignored');
+      return;
+    }
+    if (event.kind === 'subscription_changed' && event.subscriptionId) {
+      /* Only a paid invoice carries a charge to grant against; the other subscription events just
+         bring our copy of the state (status, period, cancel-at-period-end) up to date. */
+      const charged = event.type === 'invoice.paid' ? event.amountMinor : null;
+      res.status(200).send(await syncSubscriptionById(event.subscriptionId, charged, 'webhook'));
+      return;
+    }
+    if (event.kind === 'review') {
+      /* Refunds and disputes are never automated: one review and one alert per event, however many
+         times Bachs delivers it. The ledger entry and the review are written together. */
+      const key = `event:${event.id}`;
+      const ref = ledgerDoc(key);
+      const first = await db.runTransaction(async (t: admin.firestore.Transaction) => {
+        if ((await t.get(ref)).exists) return false;
+        t.set(ref, { key, source: 'webhook', outcome: 'review', created_at: admin.firestore.FieldValue.serverTimestamp() });
+        t.set(db.collection('billing_reviews').doc(), {
+          reason: event.type, key, event_id: event.id, reference: event.reference,
+          amount_minor: event.amountMinor, currency: event.currency, source: 'webhook',
+          created_at: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return true;
+      });
+      if (first) {
+        /* Best effort, after the commit: a mail failure must not 500 an event that is recorded. */
+        try {
+          await billingAlertEmail(`Bachs: ${event.type}`, [`event ${event.id}`, `reference ${event.reference ?? 'none'}`]);
+        } catch (e: any) {
+          console.error('bachsWebhook: review alert failed:', e?.message || e);
+        }
+      }
+      res.status(200).send('Recorded');
+      return;
+    }
+    res.status(200).send('Ignored');
+  } catch (error: any) {
+    console.error('bachsWebhook failed:', error?.message || error);
+    res.status(500).send('Retry');
+  }
+});
+
+/** Whether the product shows a way to pay. Bound to the secret so it can see the key. */
+export const billingStatus = functions.runWith({ secrets: BACHS_SECRETS }).https.onRequest((req: any, res: any) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.status(200).json({ billing_live: bachsBillingLive(process.env), provider: 'bachs' });
 });
 
 /* ============================================================

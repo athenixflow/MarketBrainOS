@@ -90,7 +90,6 @@ export const ALLOWED_TIER_WRITERS: Record<string, string> = {
   adminManageSubscription: 'admin only (assertAdmin)',
   adminBulkAction: 'admin only (assertAdmin)',
   adminCreateUser: 'admin only (assertAdmin)',
-  paystackWebhook: 'verified payment webhook (replaced by bachsWebhook)',
   lifecycleEmails: 'reads tier into email data; writes no user tier',
   growthDaily: 'reads tier to price revenue; writes no user tier',
 };
@@ -107,6 +106,50 @@ export const grantHelpersAreInternal = (src: string) =>
   /\r?\nconst applyOneOffPayment = async/.test(src) && /\r?\nconst syncSubscriptionById = async/.test(src);
 ok(grantHelpersAreInternal(index),
   'the two grant helpers exist and are not exported (no callable can invoke them directly)');
+/* WHO MAY CALL THE HELPERS. Keeping them un-exported stops a callable BEING one; it does not stop a
+   callable CALLING one. A signed-in user's callable that reached either helper could settle a
+   checkout or sync a subscription on the caller's say-so, which is the hole this file exists to
+   keep shut. Only the verified webhook, the hourly reconciliation (Task 12; allowed by name now)
+   and manageBilling (which syncs FROM Bachs after its own call) may reference them. A helper
+   defined between two exports falls inside the preceding export's text, so the helper
+   DEFINITIONS are cut out before the references are counted. */
+export const GRANT_HELPER_CALLERS: Record<string, string> = {
+  bachsWebhook: 'verified Bachs webhook (state synced from Bachs)',
+  bachsReconcile: 'hourly reconciliation against Bachs',
+  manageBilling: 'syncs the subscription from Bachs after cancelling it',
+};
+export const helperCallers = (src: string): string[] =>
+  src.split(/\nexport const /).slice(1)
+    .map((part) => ({
+      name: part.slice(0, part.search(/[\s=]/)),
+      body: part.replace(/\r?\nconst (?:applyOneOffPayment|syncSubscriptionById) = async/g, ''),
+    }))
+    .filter((p) => /\b(?:applyOneOffPayment|syncSubscriptionById)\s*\(/.test(p.body))
+    .map((p) => p.name);
+const callers = helperCallers(index);
+const strangers = callers.filter((name) => !(name in GRANT_HELPER_CALLERS));
+ok(strangers.length === 0, 'only the webhook, reconciliation and manageBilling reference the two grant helpers', strangers.join(', '));
+ok(callers.includes('bachsWebhook') && callers.includes('manageBilling'),
+  'and the webhook and manageBilling really do (so the scan above is not vacuous)');
+/* Deleting an account must stop its subscription. Bachs keeps charging a card for a product whose
+   account is gone, and the customer cannot cancel what they can no longer sign in to. So, in
+   deleteAccount: only on a real run (after the dry-run return), only once the re-auth check has
+   passed, before any data is removed, for a dollar subscription, and in a try/catch so Bachs
+   being down never stops the deletion. */
+export const cancelsBillingBeforePurge = (fn: string): boolean => {
+  const cancel = fn.search(/cancelSubscriptionAtPeriodEnd\(/);
+  if (cancel < 0) return false;
+  const after = (re: RegExp) => { const at = fn.search(re); return at >= 0 && at < cancel; };
+  const before = (re: RegExp) => { const at = fn.search(re); return at > cancel; };
+  /* Comments are blanked to spaces of the same length, so collapse whitespace before looking back. */
+  const lead = fn.slice(0, cancel).replace(/\s+/g, ' ').slice(-700);
+  return after(/if \(dryRun\)/) && after(/REAUTH_WINDOW_S/) && before(/db\.collection\('deletion_jobs'\)/)
+    && /bachs_subscription_id/.test(lead) && /billing_mode === 'subscription'/.test(lead)
+    && /try \{(?:(?!catch)[^])*$/.test(lead) && /^[^]{0,400}?\}\s*catch/.test(fn.slice(cancel))
+    && /secrets:\s*BACHS_SECRETS/.test(fn.slice(0, 300));
+};
+ok(cancelsBillingBeforePurge(exported(index, 'deleteAccount')),
+  'deleteAccount cancels a dollar subscription (guarded, before the purge) and is bound to the Bachs secrets');
 /* Every payment gets the receipt we already have (spec). A dollar subscription's period is paid
    by the webhook, the hourly sync or manageBilling, all through syncSubscriptionById, so the
    receipt lives in that one helper — and only on a grant, never on a no-op or a refusal. The
@@ -210,6 +253,49 @@ ok(tierWriters("x\nexport const createCheckout = f(() => { t.update(userRef, { t
   'CONTROL: a createCheckout that writes a tier is flagged');
 ok(downgradeIsOnce("} else if (action === 'downgrade') { if (userData.tier === 'free') throw new functions.https.HttpsError('failed-precondition', 'x'); t.update(userRef, { tier: 'free' }); "),
   'a downgrade that refuses free accounts first passes');
+const notAllowed = (names: string[]) => names.filter((n) => !(n in GRANT_HELPER_CALLERS));
+const allowedCallers = "x\nexport const bachsWebhook = f(() => { applyOneOffPayment(e, 'webhook'); syncSubscriptionById(a, b, 'webhook'); });\nexport const manageBilling = f(() => { syncSubscriptionById(a, b, 'manage'); });";
+ok(notAllowed(helperCallers(allowedCallers)).length === 0 && helperCallers(allowedCallers).length === 2,
+  'the webhook and manageBilling calling the helpers are allowed');
+ok(notAllowed(helperCallers(allowedCallers + "\nexport const createCheckout = f(async () => { await applyOneOffPayment(e, 'webhook'); });")).join() === 'createCheckout',
+  'CONTROL: a callable that calls applyOneOffPayment( is flagged');
+ok(notAllowed(helperCallers(allowedCallers + "\nexport const confirmTopUp = f(async () => { await syncSubscriptionById(id, null, 'manage'); });")).join() === 'confirmTopUp',
+  'CONTROL: a callable that calls syncSubscriptionById( is flagged');
+const withDefs = "x\nexport const createCheckout = f(() => {});\nconst applyOneOffPayment = async (e: any) => 'x';\nconst syncSubscriptionById = async (id: string) => 'y';\nexport const manageBilling = f(() => { syncSubscriptionById(a, b, 'manage'); });";
+ok(notAllowed(helperCallers(withDefs)).length === 0 && notAllowed(helperCallers(withDefs.replace(/\n/g, '\r\n'))).length === 0,
+  'the helper definitions, which sit inside the preceding export\'s text, are not counted as callers (LF and CRLF)');
+ok(helperCallers(blank("x\nexport const createCheckout = f(() => {\n  // applyOneOffPayment(e) is the webhook's job\n});")).length === 0,
+  'a comment that names a helper is not a call');
+const goodDelete = [
+  "export const deleteAccount = functions.runWith({ secrets: BACHS_SECRETS, timeoutSeconds: 300 }).https.onCall(async (data: any, context: any) => {",
+  "  if (dryRun) { return 1; }",
+  "  if (Date.now() / 1000 - authTime > REAUTH_WINDOW_S) { throw new Error('x'); }",
+  "  if (user.bachs_subscription_id && user.billing_mode === 'subscription') {",
+  "    try { await bachsApi(process.env.BACHS_SECRET_KEY || '').cancelSubscriptionAtPeriodEnd(id, `cancel_delete_${id}`); }",
+  "    catch (e: any) { console.error(e?.message); }",
+  "  }",
+  "  const jobRef = db.collection('deletion_jobs').doc(uid);",
+  "});",
+].join('\n');
+ok(cancelsBillingBeforePurge(goodDelete), 'a deleteAccount that cancels a dollar subscription, guarded, before the purge passes');
+ok(!cancelsBillingBeforePurge(goodDelete.replace('.cancelSubscriptionAtPeriodEnd(', '.somethingElse(')),
+  'CONTROL: a deleteAccount that never cancels the subscription is caught');
+ok(!cancelsBillingBeforePurge(goodDelete.replace('try { ', '').replace('    catch (e: any) { console.error(e?.message); }', '')),
+  'CONTROL: a cancel that is not in a try/catch (Bachs down would block the deletion) is caught');
+ok(!cancelsBillingBeforePurge(goodDelete.replace("user.billing_mode === 'subscription'", 'true')),
+  'CONTROL: a cancel that is not limited to a dollar subscription is caught');
+ok(!cancelsBillingBeforePurge(goodDelete.replace('functions.runWith({ secrets: BACHS_SECRETS, timeoutSeconds: 300 })', 'functions.runWith({ timeoutSeconds: 300 })')),
+  'CONTROL: a deleteAccount not bound to the Bachs secrets (so it can never cancel) is caught');
+ok(!cancelsBillingBeforePurge(goodDelete.replace("user.bachs_subscription_id && ", '')),
+  'CONTROL: a cancel that does not check the account has a subscription id is caught');
+ok(!cancelsBillingBeforePurge(goodDelete.replace("  if (dryRun) { return 1; }\n", '').replace("  const jobRef", "  if (dryRun) { return 1; }\n  const jobRef")),
+  'CONTROL: a cancel that would also run on a dry run is caught');
+ok(!cancelsBillingBeforePurge(goodDelete.replace("  if (Date.now() / 1000 - authTime > REAUTH_WINDOW_S) { throw new Error('x'); }\n", '')),
+  'CONTROL: a cancel before the re-authentication check is caught');
+const purgeFirst = goodDelete.split('\n');
+const jobLine = purgeFirst.splice(7, 1)[0]!;
+purgeFirst.splice(3, 0, jobLine);
+ok(!cancelsBillingBeforePurge(purgeFirst.join('\n')), 'CONTROL: a cancel that comes after the purge has started is caught');
 
 console.log(failures === 0
   ? '\nPASS — no signed-in user can grant themselves a plan, a token pack or a refill.'

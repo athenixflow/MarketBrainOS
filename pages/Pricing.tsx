@@ -63,7 +63,7 @@ const Pricing: React.FC = () => {
        *
        * `changeSubscription('upgrade')` grants the tier and takes no money, so this
        * button currently hands out a paid plan for free while implying a charge. Until
-       * Paystack is live it sends people to support instead, which is the honest version
+       * billing is live it sends people to support instead, which is the honest version
        * of the same intent and keeps the Founding-50 conversations the plan wants anyway.
        * The server still decides tiers; this only stops the product offering it.
        */

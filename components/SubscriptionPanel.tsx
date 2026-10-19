@@ -44,7 +44,7 @@ const SubscriptionPanel: React.FC = () => {
   /*
    * NO PAY BUTTON UNTIL THERE IS A WAY TO PAY (GTM part 19 §5 step 3).
    *
-   * Until Paystack is wired, "Upgrade to Pro, $19/mo" takes no money AND grants the plan.
+   * Until billing is live, "Upgrade to Pro, $19/mo" takes no money AND grants the plan.
    * That is a promise of a charge that never arrives sitting on top of a paid tier given
    * away — and the first person to notice the second half tells everybody. The control
    * says what is actually true instead, and the server keeps deciding tiers.
@@ -64,8 +64,8 @@ const SubscriptionPanel: React.FC = () => {
 
   const run = async (action: 'upgrade' | 'cancel' | 'downgrade' | 'renew', successMsg: string, notif: string) => {
     if (!user) return;
-    /* See the note above: upgrading grants a paid tier and charges nothing until Paystack
-       is wired. Cancelling and downgrading stay available — those take nothing away that
+    /* See the note above: upgrading grants a paid tier and charges nothing until billing
+       is live. Cancelling and downgrading stay available — those take nothing away that
        was paid for, and blocking them would trap somebody in a plan. */
     if ((action === 'upgrade' || action === 'renew') && billingLive === false) {
       setMsgErr(true);

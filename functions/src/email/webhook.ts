@@ -9,7 +9,7 @@
  *
  * THE RAW BYTES, NEVER A RE-SERIALISED OBJECT. `JSON.stringify(req.body)` reorders keys and
  * changes whitespace, so it produces a different digest for an honest request and the
- * endpoint rejects everything. This is the same trap the Paystack webhook documents, for
+ * endpoint rejects everything. This is the same trap the Bachs webhook documents, for
  * the same reason.
  *
  * Kept in its own module so the guard can import and exercise the shipped function rather
@@ -50,7 +50,7 @@ const TOLERANCE_MS = 5 * 60 * 1000;
  * imports this module so it can exercise the SHIPPED verifier rather than a copy of it,
  * and the site build runs from the ROOT package, where `functions/node_modules` does not
  * exist. Importing `resend` here therefore passed locally and broke the production build —
- * every other module that `scripts/` reaches into (`escape.ts`, `paystack.ts`) is
+ * every other module that `scripts/` reaches into (`escape.ts`, `bachs/signature.ts`) is
  * dependency-free for exactly this reason, and this one now is too.
  *
  * The scheme is Svix's, which Resend uses: HMAC-SHA256 over `id.timestamp.body`, base64,

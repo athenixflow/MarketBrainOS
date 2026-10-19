@@ -5,7 +5,7 @@ import { functionsBaseUrl } from './firebase';
  *
  * The plan's sequence ends with "`billing_live` flips the lifecycle emails and the in-app
  * upgrade buttons". This is the client half of that switch, and the reason it exists is
- * uncomfortable: until Paystack is wired, pressing Upgrade grants a paid tier and takes no
+ * uncomfortable: until payments are wired, pressing Upgrade grants a paid tier and takes no
  * money. So the button promises a charge that never happens AND hands out the plan — two
  * false statements at once, in the one place a customer is most attentive.
  *

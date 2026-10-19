@@ -110,7 +110,7 @@ ok(unsubUrl(A).includes(`u=${A}`) && unsubUrl(A).includes('t='), 'the URL carrie
 
 console.log('\nTHE ENDPOINT:');
 
-const endpoint = code.slice(code.indexOf('export const unsubscribe'), code.indexOf('export const paystackWebhook'));
+const endpoint = code.slice(code.indexOf('export const unsubscribe'), code.indexOf('export const onActionLogged'));
 ok(endpoint.length > 0, 'the endpoint was located');
 ok(/verifyUnsubToken\(uid, token\)/.test(endpoint), 'it checks the signature before doing anything');
 /*

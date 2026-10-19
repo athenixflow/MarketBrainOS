@@ -6,6 +6,9 @@
 //
 // Runs in `npm run build`. `npm run test:bachs` runs it alone.
 
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { DEFAULT_PRICING_CONFIG as CFG } from '../config/pricingConfig';
 import { catalogItem, toMajorString, toMinor } from '../functions/src/bachs/catalog';
 import { billingLive, productForTier, tierForProduct } from '../functions/src/bachs/config';
@@ -485,6 +488,43 @@ ok(!mail('billingAlert', { title: '<b>x</b> & y', lines: [] }).html.includes('<b
 for (const key of ['passReminder', 'passExpired', 'billingAlert']) {
   ok(key in EMAIL_TEMPLATES && !(MARKETING_KEYS as Set<string>).has(key), `${key} is a transactional template (no unsubscribe rule)`);
 }
+
+console.log('\nTHE SWITCH REACHES THE BUTTONS:');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const src = (p: string) => fs.readFileSync(path.join(root, p), 'utf8');
+/* Comments blanked, so prose that mentions a name cannot satisfy a check about code. */
+const code = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+const idx = src('functions/src/index.ts');
+const webhookAt = idx.indexOf('export const bachsWebhook');
+const webhook = code(webhookAt < 0 ? '' : idx.slice(webhookAt, idx.indexOf('export const billingStatus', webhookAt)));
+/* The retired provider's name is spelled with a character class so that this file, like the rest of
+   the source tree, never contains it (the cleanup is checked by grepping for the name). */
+ok(/export const bachsWebhook = /.test(idx) && !/export const pay[s]tackWebhook = /.test(idx), 'bachsWebhook is the payment webhook; the old provider\'s webhook is gone');
+const statusAt = idx.indexOf('export const billingStatus');
+ok(statusAt >= 0 && /provider: 'bachs'/.test(idx.slice(statusAt, statusAt + 500)), 'billingStatus reports provider bachs');
+ok(/billingStatus = functions\.runWith\(\{ secrets: BACHS_SECRETS \}\)/.test(idx),
+  'billingStatus is bound to the secret (otherwise it can never see the key and always says "not live")');
+ok(/rawBody/.test(idx.slice(idx.indexOf('export const bachsWebhook'))), 'the webhook verifies the raw body');
+ok(/fetchBillingStatus\(\)/.test(src('pages/Pricing.tsx')) && /fetchBillingStatus\(\)/.test(src('components/SubscriptionPanel.tsx')),
+  'the pricing page and the plan panel read billing status');
+const billingSvc = code(src('services/billing.ts'));
+ok(/billingStatus/.test(billingSvc) && !/billing_live:\s*true/.test(billingSvc) && (billingSvc.match(/billing_live: false/g) || []).length >= 2,
+  'the client fails CLOSED: no path answers "live" except a confirmed one, and both error paths answer "not live"');
+
+console.log('\nTHE WEBHOOK:');
+ok(webhook.length > 0 && /functions\.runWith\(\{ secrets: BACHS_SECRETS \}\)\.https\.onRequest/.test(webhook),
+  'the webhook is bound to the secrets it verifies with');
+ok(webhook.indexOf('verifyBachsSignature(') > 0 && webhook.indexOf('verifyBachsSignature(') < webhook.indexOf('parseBachsEvent('),
+  'the signature is checked before the body is read as an event');
+ok(/applyOneOffPayment\(event, 'webhook'\)/.test(webhook), 'a paid one-off goes to the one-off grant helper');
+ok(/syncSubscriptionById\(event\.subscriptionId, event\.amountMinor, 'webhook'\)/.test(webhook),
+  'a linked subscription is synced from Bachs (the sync finds the account by the subscription metadata)');
+ok(webhook.length > 0 && !/bachs_subscription_id|bachs_customer_id/.test(webhook),
+  'the webhook pre-writes no subscription or customer id (the sync adopts them under its current-subscription rules)');
+ok(webhook.length > 0 && !/\btier\s*:|balanceFields\(/.test(webhook), 'the webhook writes no tier and no allowance itself');
+ok(/res\.status\(500\)\.send\('Retry'\)/.test(webhook) && /res\.status\(401\)/.test(webhook),
+  'a transient failure answers 500 (Bachs retries) and a bad signature answers 401');
+ok(!/void applyOneOffPayment/.test(idx), 'the "no caller yet" placeholder is gone now the helper has one');
 
 console.log(failures === 0
   ? '\nPASS — Bachs: amounts, signatures, events and every grant rule behave.'
