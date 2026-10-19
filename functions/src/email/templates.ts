@@ -7,7 +7,11 @@ import {
 } from './layout';
 
 export interface RenderedEmail { subject: string; html: string; }
-const money = (n: number) => `$${(Number(n) || 0).toFixed(2)}`;
+/* Amounts are MAJOR units here (19, 9900). Naira is shown whole, as Nigerians read prices. */
+const money = (n: number, currency = 'USD') =>
+  String(currency).toUpperCase() === 'NGN'
+    ? `₦${Math.round(Number(n) || 0).toLocaleString('en-US')}`
+    : `$${(Number(n) || 0).toFixed(2)}`;
 const span = (t: string) => `<span style="color:#ff5a5a;">${esc(t)}</span>`;
 
 /** The footer every lifecycle email carries. One place, so none of them can forget it. */
@@ -143,7 +147,7 @@ const memberAdded = (d: { containerName: string; tempPassword: string; roleLabel
   }),
 });
 
-const tokenReceipt = (d: { packLabel: string; tokens: number; amount: number; newBalance: number; reference: string; date: string }): RenderedEmail => ({
+const tokenReceipt = (d: { packLabel: string; tokens: number; amount: number; currency?: string; newBalance: number; reference: string; date: string }): RenderedEmail => ({
   subject: `Receipt — ${d.tokens} tokens added to MarketBrain OS`,
   html: renderEmail({
     preheader: `Receipt — ${d.tokens} tokens added, new balance ${d.newBalance}.`,
@@ -157,7 +161,7 @@ const tokenReceipt = (d: { packLabel: string; tokens: number; amount: number; ne
         { k: 'Tokens added', v: `+${d.tokens}` },
         { k: 'Date', v: d.date },
         { k: 'Reference', v: d.reference },
-        { k: 'Amount paid', v: money(d.amount), total: true },
+        { k: 'Amount paid', v: money(d.amount, d.currency), total: true },
       ]) +
       balanceCard('New token balance', `${d.newBalance} tokens`) +
       sectionHeading('What your tokens unlock') +
@@ -192,10 +196,10 @@ const subscriptionUpgraded = (d: { planName: string; monthlyTokens: number; pric
   }),
 });
 
-const paymentReceipt = (d: { description: string; amount: number; reference: string; date: string }): RenderedEmail => ({
+const paymentReceipt = (d: { description: string; amount: number; currency?: string; reference: string; date: string }): RenderedEmail => ({
   subject: 'Your MarketBrain OS receipt',
   html: renderEmail({
-    preheader: `Receipt — ${money(d.amount)} for ${d.description}.`,
+    preheader: `Receipt — ${money(d.amount, d.currency)} for ${d.description}.`,
     tag: 'Receipt',
     heading: 'Thanks — here’s your receipt.',
     heroSubtext: 'A confirmation of your recent payment on MarketBrain OS.',
@@ -204,7 +208,7 @@ const paymentReceipt = (d: { description: string; amount: number; reference: str
         { k: 'Item', v: d.description },
         { k: 'Date', v: d.date },
         { k: 'Reference', v: d.reference },
-        { k: 'Amount paid', v: money(d.amount), total: true },
+        { k: 'Amount paid', v: money(d.amount, d.currency), total: true },
       ]) +
       button('View billing →', `${SITE_URL}/billing`),
     footerLinks: [{ label: 'Billing', href: `${SITE_URL}/billing` }, { label: 'Support', href: `${SITE_URL}/support` }],
@@ -291,13 +295,13 @@ const subscriptionRenewed = (d: { planName: string; monthlyTokens: number; amoun
   }),
 });
 
-const paymentFailed = (d: { planName: string; amount: number }): RenderedEmail => ({
+const paymentFailed = (d: { planName: string; amount: number; currency?: string }): RenderedEmail => ({
   subject: 'Action needed: your payment failed',
   html: renderEmail({
     preheader: 'We couldn’t process your payment.',
     tag: 'Billing',
     heading: 'We couldn’t process your payment.',
-    heroSubtext: `Your ${d.planName} payment of ${money(d.amount)} didn't go through. Update your payment method to avoid losing access.`,
+    heroSubtext: `Your ${d.planName} payment of ${money(d.amount, d.currency)} didn't go through. Update your payment method to avoid losing access.`,
     body:
       paragraph('This can happen if a card expired or a bank declined the charge. Updating your details usually fixes it in seconds.') +
       button('Update payment method →', `${SITE_URL}/billing`) +
@@ -911,9 +915,54 @@ const npsAsk = (d: { firstName?: string; npsUrls?: string[]; unsubUrl?: string }
   };
 };
 
+const passReminder = (d: { planName: string; expiresAt: string; daysLeft: number; amount: number; currency: string }): RenderedEmail => ({
+  subject: `Your ${d.planName} pass ends in ${d.daysLeft} day${d.daysLeft === 1 ? '' : 's'}`,
+  html: renderEmail({
+    preheader: `${d.planName} ends on ${d.expiresAt}. Renew for ${money(d.amount, d.currency)} to keep going.`,
+    tag: 'Billing',
+    heading: `Your ${span(d.planName)} pass ends soon.`,
+    heroSubtext: `It ends on ${d.expiresAt}. Your pass does not renew by itself — renewing now adds 30 days to the end, so you lose nothing by doing it early.`,
+    body: metaTable([
+      { k: 'Plan', v: d.planName },
+      { k: 'Ends', v: d.expiresAt },
+      { k: 'Renewal', v: money(d.amount, d.currency), total: true },
+    ]) + button('Renew my pass →', `${SITE_URL}/billing`),
+    footerLinks: [{ label: 'Billing', href: `${SITE_URL}/billing` }, { label: 'Support', href: `${SITE_URL}/support` }],
+    footerNote: 'You received this because your plan is about to end.',
+  }),
+});
+
+const passExpired = (d: { planName: string }): RenderedEmail => ({
+  subject: `Your ${d.planName} pass has ended`,
+  html: renderEmail({
+    preheader: `Your account is on Free now. Purchased tokens are kept.`,
+    tag: 'Billing',
+    heading: `Your ${span(d.planName)} pass has ended.`,
+    heroSubtext: 'Your account is on the Free plan now. Tokens you bought are still yours, and buying a new pass restores everything straight away.',
+    body: button('Buy a new pass →', `${SITE_URL}/billing`),
+    footerLinks: [{ label: 'Billing', href: `${SITE_URL}/billing` }, { label: 'Support', href: `${SITE_URL}/support` }],
+    footerNote: 'You received this because your plan ended.',
+  }),
+});
+
+/* To the founder, not a customer: a payment that was taken but not granted, or webhooks missed. */
+const billingAlert = (d: { title: string; lines: string[] }): RenderedEmail => ({
+  subject: `[Billing] ${d.title}`,
+  html: renderEmail({
+    preheader: d.title,
+    tag: 'Billing alert',
+    heading: esc(d.title), // heading is raw HTML in the layout; the title may carry an email or plan name
+    heroSubtext: 'Nothing was granted automatically for the items below. Check them in Firestore (billing_reviews) and the Bachs dashboard.',
+    body: metaTable((d.lines || []).map((line, i) => ({ k: String(i + 1), v: line }))),
+    footerLinks: [],
+    footerNote: 'Sent by the MarketBrain OS billing checks.',
+  }),
+});
+
 export const EMAIL_TEMPLATES = {
   welcome, verifyEmail, passwordReset, passwordChanged, memberInvite, memberAdded,
   tokenReceipt, subscriptionUpgraded, paymentReceipt,
+  passReminder, passExpired, billingAlert,
   lowBalance, outOfTokens, renewalReminder, subscriptionRenewed, paymentFailed,
   subscriptionCancelled, expansionPurchased, refundIssued, newSignIn,
   memberBudgetExhausted, ownershipTransferred, briefingReady, accountSuspended, accountReinstated,

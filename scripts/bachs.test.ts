@@ -13,6 +13,7 @@ import { signPayload, verifyBachsSignature } from '../functions/src/bachs/signat
 import { parseBachsEvent, parseCheckoutSession, parseSubscription } from '../functions/src/bachs/events';
 import { applyOneOff, checkoutAllowed, expirePass, reminderDue, syncSubscription, PASS_DAYS } from '../functions/src/bachs/grant';
 import { bachsApi, bachsBaseUrl, BachsApiError } from '../functions/src/bachs/api';
+import { EMAIL_TEMPLATES, MARKETING_KEYS } from '../functions/src/email/templates';
 
 let failures = 0;
 const ok = (cond: boolean, label: string, detail = '') => {
@@ -451,6 +452,37 @@ ok(echoErr instanceof BachsApiError && echoErr.message === 'token [redacted] was
 const longErr = replyWith(JSON.stringify({ error: { code: 'X', message: 'a'.repeat(400) } }), 400);
 let capErr: any = null; try { await bachsApi('sk_sandbox_k', longErr.f).getSubscription('sub_1'); } catch (e) { capErr = e; }
 ok(capErr instanceof BachsApiError && capErr.message.length === 300, 'an error message is capped at 300 characters');
+
+console.log('EMAILS:');
+/* templates.ts imports only the local layout helpers, so it renders here with no Firebase or Resend.
+   money() is not exported; the rendered subject and html are what a customer actually reads. */
+const mail = (key: string, data: any): { subject: string; html: string } => {
+  try { return (EMAIL_TEMPLATES as any)[key](data); } catch (e: any) { return { subject: `RENDER_FAILED: ${e?.message || e}`, html: '' }; }
+};
+const receiptBase = { packLabel: 'Starter', tokens: 100, newBalance: 120, reference: 'ref_1', date: '1 Nov 2026', description: 'Pro pass', planName: 'Pro' };
+ok(mail('tokenReceipt', { ...receiptBase, amount: 10, currency: 'USD' }).html.includes('$10.00'), 'a dollar token receipt shows $10.00');
+ok(mail('tokenReceipt', { ...receiptBase, amount: 10 }).html.includes('$10.00'), 'a receipt with no currency is still dollars');
+const ngnReceipt = mail('tokenReceipt', { ...receiptBase, amount: 5000, currency: 'NGN' }).html;
+ok(ngnReceipt.includes('₦5,000') && !ngnReceipt.includes('$5000.00'), 'a naira token receipt shows ₦5,000, whole, not $5000.00');
+ok(mail('paymentReceipt', { ...receiptBase, amount: 9900, currency: 'NGN' }).html.includes('₦9,900'), 'a naira payment receipt shows ₦9,900');
+ok(mail('paymentReceipt', { ...receiptBase, amount: 19, currency: 'USD' }).html.includes('$19.00'), 'a dollar payment receipt shows $19.00');
+ok(mail('paymentFailed', { planName: 'Pro', amount: 9900, currency: 'NGN' }).html.includes('₦9,900'), 'a naira failed-payment notice shows ₦9,900');
+ok(mail('paymentFailed', { planName: 'Pro', amount: 19 }).html.includes('$19.00'), 'a failed-payment notice with no currency shows $19.00');
+
+const reminder = mail('passReminder', { planName: 'Pro', expiresAt: '5 Nov 2026', daysLeft: 3, amount: 9900, currency: 'NGN' });
+ok(reminder.subject === 'Your Pro pass ends in 3 days', 'passReminder subject names the plan and the days left', reminder.subject);
+ok(reminder.html.includes('₦9,900') && reminder.html.includes('5 Nov 2026'), 'passReminder shows the naira renewal price and the end date');
+ok(mail('passReminder', { planName: 'Pro', expiresAt: 'x', daysLeft: 1, amount: 9900, currency: 'NGN' }).subject === 'Your Pro pass ends in 1 day', 'passReminder says "1 day", not "1 days"');
+const expired = mail('passExpired', { planName: 'Team' });
+ok(expired.subject === 'Your Team pass has ended' && expired.html.includes('Buy a new pass'), 'passExpired names the plan and offers a new pass', expired.subject);
+const alertMail = mail('billingAlert', { title: '2 payments need review', lines: ['order o_1: amount mismatch', 'order o_2: unknown account'] });
+ok(alertMail.subject === '[Billing] 2 payments need review', 'billingAlert subject carries the [Billing] prefix', alertMail.subject);
+ok(alertMail.html.includes('order o_1: amount mismatch') && alertMail.html.includes('order o_2: unknown account'), 'billingAlert lists every line');
+ok(!mail('billingAlert', { title: 'No lines' }).subject.startsWith('RENDER_FAILED'), 'billingAlert with no lines still renders (an alert that throws is silence)');
+ok(!mail('billingAlert', { title: '<b>x</b> & y', lines: [] }).html.includes('<b>x</b>'), 'billingAlert escapes its title (the layout heading is raw HTML)');
+for (const key of ['passReminder', 'passExpired', 'billingAlert']) {
+  ok(key in EMAIL_TEMPLATES && !(MARKETING_KEYS as Set<string>).has(key), `${key} is a transactional template (no unsubscribe rule)`);
+}
 
 console.log(failures === 0
   ? '\nPASS — Bachs: amounts, signatures, events and every grant rule behave.'
