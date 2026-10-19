@@ -45,3 +45,6 @@ docs/gtm/
 # The 100-page study's private data: the URL list and raw audits name every company in the sample.
 # Only scripts/study/aggregate.ts output (config/research, public/research) is publishable.
 study-data/
+
+# Claude Code worktrees (isolated workspaces; never part of the project)
+.claude/worktrees/
