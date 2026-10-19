@@ -34,6 +34,9 @@ console.log('\nAMOUNTS:');
 ok(toMajorString(1900) === '19.00' && toMajorString(990000) === '9900.00' && toMajorString(5) === '0.05', 'minor → Bachs decimal string');
 ok(toMinor('19.00') === 1900 && toMinor('9900') === 990000 && toMinor('9900.5') === 990050, 'exact strings parse to minor units');
 ok(toMinor(19) === 1900, 'a number is read as major units');
+ok(toMinor(19.99) === 1999, 'a number with two decimals is exact (float noise accepted)');
+ok(toMinor(19.999) === null && toMinor(1.005) === null, 'a number with three decimals goes to review, never rounded');
+ok(toMinor(-1) === null && toMinor(NaN) === null && toMinor(Infinity) === null, 'a negative, NaN or infinite number is not an amount');
 ok(toMinor('9,900.00') === null && toMinor('-5.00') === null && toMinor('1.234') === null && toMinor(undefined) === null,
   'commas, negatives, three decimals and missing values parse to null (review, never a guess)');
 let threw = false; try { toMajorString(19.5); } catch { threw = true; }

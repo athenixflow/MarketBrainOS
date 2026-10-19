@@ -69,9 +69,17 @@ export const toMajorString = (amountMinor: number): string => {
   return `${Math.floor(amountMinor / 100)}.${String(amountMinor % 100).padStart(2, '0')}`;
 };
 
-/** "19.00" / "9900" / 19 → minor units; anything else (commas, negatives, 3 decimals) → null. */
+/**
+ * "19.00" / "9900" / 19 / 19.99 → minor units. A number follows the same two-decimal rule as a
+ * string: 19.999, 1.005, negatives, NaN and Infinity → null (review, never a guess). The check
+ * allows float noise (19.99 is stored as 19.989999…) and nothing more, so nothing is rounded.
+ */
 export const toMinor = (v: unknown): number | null => {
-  if (typeof v === 'number') return Number.isFinite(v) && v >= 0 ? Math.round(v * 100) : null;
+  if (typeof v === 'number') {
+    if (!Number.isFinite(v) || v < 0) return null;
+    const minor = Math.round(v * 100);
+    return Math.abs(v * 100 - minor) < 1e-6 ? minor : null;
+  }
   if (typeof v !== 'string') return null;
   const m = v.trim().match(/^(\d+)(?:\.(\d{1,2}))?$/);
   if (!m) return null;
