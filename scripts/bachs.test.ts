@@ -103,6 +103,32 @@ const chk = parseCheckoutSession({ checkout_id: 'chk_1', reference: 'mb_1', stat
 ok(chk?.paid === true && chk.amountMinor === 990000 && chk.reference === 'mb_1', 'a paid checkout session parses');
 ok(parseCheckoutSession({ id: 'chk_1', status: 'expired' })?.expired === true, 'an expired session parses');
 
+console.log('\nHOSTILE INPUT:');
+const THREW = 'THREW' as const;
+const attempt = <T>(f: () => T): T | typeof THREW => { try { return f(); } catch { return THREW; } };
+const objMeta = { a: { toString: 1 } };
+const objStatus = { toString: 1 };
+const hostileEvent = attempt(() => parseBachsEvent(ev('collection.succeeded', { reference: 'mb_1', status: 'SUCCEEDED', amount: '19.00', metadata: objMeta })));
+ok(hostileEvent !== THREW, 'an object metadata value on an event does not throw', 'it threw');
+ok(hostileEvent !== THREW && hostileEvent?.metadata.a === undefined, 'an object metadata value is dropped, not stringified');
+const hostileSub = attempt(() => parseSubscription({ id: 'sub_9', status: 'active', metadata: objMeta }));
+ok(hostileSub !== THREW, 'an object metadata value on a subscription does not throw', 'it threw');
+const nullMeta = parseBachsEvent(ev('collection.succeeded', { reference: 'mb_1', status: 'SUCCEEDED', amount: '19.00', metadata: { uid: null, n: 3, t: true } }));
+ok(nullMeta !== null && !('uid' in nullMeta.metadata) && nullMeta.metadata.n === '3' && nullMeta.metadata.t === 'true',
+  'null metadata is dropped; numbers and booleans are kept as strings');
+const objStatusEvent = attempt(() => parseBachsEvent(ev('collection.succeeded', { reference: 'mb_1', status: objStatus, amount: '19.00' })));
+ok(objStatusEvent !== THREW, 'an object status on a collection does not throw', 'it threw');
+ok(objStatusEvent === null, 'an object status on a collection grants nothing');
+const objStatusSub = attempt(() => parseSubscription({ id: 'sub_9', status: objStatus }));
+ok(objStatusSub !== THREW, 'an object status on a subscription does not throw', 'it threw');
+const objStatusChk = attempt(() => parseCheckoutSession({ id: 'chk_1', status: objStatus }));
+ok(objStatusChk !== THREW && objStatusChk?.paid === false, 'an object status on a checkout does not throw and is not paid', 'it threw or parsed as paid');
+
+console.log('\nCHECKOUT PAYMENT STATE:');
+ok(parseCheckoutSession({ id: 'chk_5', status: 'completed', payment_status: 'unpaid', amount: '9900.00' })?.paid === false, 'a completed session with payment_status unpaid is not paid');
+ok(parseCheckoutSession({ id: 'chk_6', status: 'completed', payment_status: 'failed' })?.paid === false, 'a completed session with payment_status failed is not paid');
+ok(parseCheckoutSession({ id: 'chk_7', status: 'completed' })?.paid === true, 'with no payment_status, a completed session still reads as paid');
+
 console.log(failures === 0
   ? '\nPASS — Bachs: amounts, signatures, events and every grant rule behave.'
   : `\nFAILED — ${failures} assertion(s).`);

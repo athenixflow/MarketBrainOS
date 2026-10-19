@@ -57,9 +57,15 @@ const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 
 const idOf = (v: unknown): string | null =>
   str(v) ?? (v && typeof v === 'object' ? str((v as Record<string, unknown>).id) : null);
 const upper = (v: unknown): string | null => str(v)?.toUpperCase() ?? null;
+/* Only scalars survive: an object, an array or a null is dropped, never stringified (String() on an
+ * object can throw, and a null would otherwise read as the text "null"). */
 const meta = (v: unknown): Record<string, string> =>
   v && typeof v === 'object'
-    ? Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([k, x]) => [k, String(x)]))
+    ? Object.fromEntries(
+        Object.entries(v as Record<string, unknown>)
+          .filter(([, x]) => typeof x === 'string' || typeof x === 'number' || typeof x === 'boolean')
+          .map(([k, x]) => [k, String(x)]),
+      )
     : {};
 const unwrap = (raw: unknown): Record<string, any> | null => {
   if (!raw || typeof raw !== 'object') return null;
@@ -97,7 +103,7 @@ export const parseBachsEvent = (body: unknown): BachsEvent | null => {
   if (type === 'collection.succeeded') {
     /* A renewal's collection carries no checkout reference; invoice.paid → subscription sync covers it. */
     if (!base.reference) return null;
-    return ['SUCCEEDED', 'ACCEPTED', 'OVERPAID'].includes(String(d.status).toUpperCase())
+    return ['SUCCEEDED', 'ACCEPTED', 'OVERPAID'].includes((str(d.status) ?? '').toUpperCase())
       ? { ...base, kind: 'one_off_paid' } : null;
   }
   if (type === 'invoice.paid' || type === 'invoice.payment_failed' || type.startsWith('customer.subscription.')) {
@@ -114,7 +120,7 @@ export const parseSubscription = (raw: unknown): SubscriptionSnapshot | null => 
   if (!id) return null;
   return {
     id,
-    status: String(s.status || '').toLowerCase(),
+    status: (str(s.status) ?? '').toLowerCase(),
     productId: str(s.product_id) ?? idOf(s.product) ?? str(s.items?.[0]?.product_id),
     customerId: idOf(s.customer) ?? str(s.customer_id),
     currency: upper(s.currency ?? s.price?.currency),
@@ -131,11 +137,16 @@ export const parseCheckoutSession = (raw: unknown): CheckoutSnapshot | null => {
   if (!c) return null;
   const id = str(c.checkout_id) ?? str(c.id);
   if (!id) return null;
-  const status = String(c.status || '').toLowerCase();
+  const status = (str(c.status) ?? '').toLowerCase();
+  /* A stated payment_status is authoritative: "completed" with payment_status "unpaid" or "failed"
+   * is not money received. The status is only trusted when payment_status is absent. */
+  const paid = c.payment_status === undefined || c.payment_status === null
+    ? ['completed', 'complete', 'paid'].includes(status)
+    : c.payment_status === 'paid';
   return {
     id,
     reference: str(c.reference),
-    paid: c.payment_status === 'paid' || ['completed', 'complete', 'paid'].includes(status),
+    paid,
     expired: status === 'expired',
     mode: str(c.mode),
     amountMinor: toMinor(c.amount ?? c.pricing?.amount ?? c.amount_total),
