@@ -203,19 +203,26 @@ export const syncSubscription = (
   chargedMinor: number | null,
 ): SyncResult => {
   const { purchased } = balances(account);
-  const ids = { bachs_subscription_id: snap.id, bachs_customer_id: snap.customerId, billing_currency: 'USD' };
-  /* The account's state follows ONE subscription: the first it stored. A snapshot of a different
-     one (a duplicate checkout) never re-points "current" — it writes no state at all — so the
-     first stays current deterministically, however the syncs interleave; the duplicate is
-     surfaced by the review on its grant, and ending it is reviewed, not acted on. */
-  const isCurrent = !account.bachs_subscription_id || account.bachs_subscription_id === snap.id;
+  /* Ids only. billing_currency is NOT here: it is a grant field (set with the tier), so a
+     snapshot that grants nothing can never stamp 'USD' onto, say, a naira pass holder. */
+  const ids = { bachs_subscription_id: snap.id, bachs_customer_id: snap.customerId };
+  /* While the account is on a live subscription its state follows ONE subscription: the one it
+     stored. A snapshot of a different one (a duplicate checkout) never re-points "current" — it
+     writes no state at all — so the first stays current however the syncs interleave; the
+     duplicate is surfaced by the review on its grant, and ending it is reviewed, not acted on.
+     But a stored id only means "current" once a subscription was actually GRANTED (the account is
+     then on billing_mode 'subscription'). The no-start and non-active branches store ids without
+     granting; if that were final, the sub that is really paid next could never become current,
+     and the dead one ending would drop a paying customer to Free. */
+  const isCurrent = !account.bachs_subscription_id || account.bachs_subscription_id === snap.id || !activeSubscription(account);
   const state = (fields: Record<string, unknown>): Record<string, unknown> => (isCurrent ? fields : {});
 
   if (snap.status === 'canceled' || snap.status === 'unpaid') {
-    /* Only the account's CURRENT subscription ending may drop it to Free. Another subscription
-       ending (a duplicate checkout, or one that went to review and was never stored) must not
-       strip a customer who is still paying elsewhere, or a pass holder. */
-    if (account.bachs_subscription_id !== snap.id) {
+    /* Only the account's CURRENT subscription ending may drop it to Free: the stored one, on an
+       account that is actually on a subscription. Another subscription ending (a duplicate
+       checkout, or one that never granted) must not strip a customer who is still paying
+       elsewhere, or a pass holder who merely has its id stored. */
+    if (account.bachs_subscription_id !== snap.id || account.billing_mode !== 'subscription') {
       return {
         stateUpdate: {},
         grant: { ...NONE, ledgerKey: `end:${snap.id}`, review: "ended subscription is not the account's current one; account left unchanged" },
@@ -277,11 +284,11 @@ export const syncSubscription = (
       review: overlapsPass
         ? `dollar subscription started while a ${account.tier ?? 'paid'} naira pass was still active (pass_expires_at ${account.pass_expires_at}); refund the unused pass days`
         : otherSub
-          ? `second live subscription: ${snap.id} was paid while ${otherSub} is still live; refund one of them`
+          ? `second live subscription ${snap.id} — refund and cancel ${snap.id} (duplicate); ${otherSub} is the account's current subscription`
           : null,
       checkoutStatus: null,
       userUpdate: {
-        tier, billing_mode: 'subscription', ...balanceFields(item.tokens, purchased),
+        tier, billing_mode: 'subscription', billing_currency: 'USD', ...balanceFields(item.tokens, purchased),
         ...(overlapsPass ? { pass_expires_at: null, pass_reminded: [] } : {}),
       },
       payment: {
