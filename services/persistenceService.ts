@@ -1,6 +1,6 @@
 import { db, isFirebaseInitialized, functions } from './firebase';
 import { angleResult, testlabResult, doctorResult, workflowResult } from './bespokeMappers';
-import { DEFAULT_PRICING_CONFIG, PricingConfig } from '../config/pricingConfig';
+import { DEFAULT_PRICING_CONFIG, PricingConfig, mergeLivePricing } from '../config/pricingConfig';
 import { isPaidTier } from '../config/access';
 import { toMillis } from './time';
 import { httpsCallable } from 'firebase/functions';
@@ -234,7 +234,7 @@ export const getLivePricingConfig = async (): Promise<PricingConfig> => {
   if (!isFirebaseInitialized) return DEFAULT_PRICING_CONFIG;
   try {
     const snap = await getDoc(doc(db, 'pricing_config', 'global'));
-    return snap.exists() ? ({ ...DEFAULT_PRICING_CONFIG, ...(snap.data() as any) } as PricingConfig) : DEFAULT_PRICING_CONFIG;
+    return snap.exists() ? mergeLivePricing(DEFAULT_PRICING_CONFIG, snap.data()) : DEFAULT_PRICING_CONFIG;
   } catch { return DEFAULT_PRICING_CONFIG; }
 };
 

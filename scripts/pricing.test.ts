@@ -16,7 +16,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
-import { DEFAULT_PRICING_CONFIG as CLIENT } from '../config/pricingConfig';
+import { DEFAULT_PRICING_CONFIG as CLIENT, mergeLivePricing } from '../config/pricingConfig';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
@@ -239,6 +239,53 @@ if (merge) {
   ok(merge(CLIENT, { ngnPerUsd: 1500 }).ngnPerUsd === 1500, 'a stored exchange rate is honoured');
   ok([0, -5, '1450', null].every((bad) => merge!(CLIENT, { ngnPerUsd: bad }).ngnPerUsd === 1450),
     'a zero, negative or non-numeric stored exchange rate falls back to the default');
+}
+
+/*
+ * THE CLIENT READER HAS THE SAME JOB. `getLivePricingConfig` used to spread the stored doc over
+ * the defaults one level deep, so a stored `plans` object or `tokenPacks` array replaced the
+ * defaults wholesale and dropped every naira price whenever the live doc predated them. The
+ * stored doc below is the shape that doc actually has: today's defaults with no naira fields.
+ */
+const preNaira = JSON.parse(JSON.stringify(CLIENT));
+for (const p of Object.values<any>(preNaira.plans)) delete p.priceNgn;
+for (const p of preNaira.tokenPacks) delete p.priceNgn;
+delete preNaira.ngnPerUsd;
+
+const live = mergeLivePricing(CLIENT, preNaira);
+ok(Object.entries(NGN_PLANS).every(([tier, ngn]) => (live.plans as any)[tier]?.priceNgn === ngn),
+  'a stored plans object without naira prices keeps the default plan naira prices',
+  JSON.stringify(Object.keys(NGN_PLANS).map((t) => (live.plans as any)[t]?.priceNgn)));
+ok(Object.entries(NGN_PACKS).every(([id, ngn]) => live.tokenPacks.find((p) => p.id === id)?.priceNgn === ngn),
+  'stored packs without naira prices take the default\'s by id',
+  JSON.stringify(live.tokenPacks.map((p) => p.priceNgn)));
+ok(live.ngnPerUsd === 1450, 'a stored doc without an exchange rate keeps the default one');
+
+const mixed = mergeLivePricing(CLIENT, { plans: { pro: { priceNgn: 8800 } }, tokenPacks: [
+  { id: 'starter', label: 'Starter Pack', tokens: 100, price: 10, priceNgn: 4500 },
+  { id: 'growth', label: 'Growth Pack', tokens: 500, price: 40 },
+  { id: 'custom', label: 'Custom Pack', tokens: 1, price: 1 },
+] });
+ok(mixed.plans.pro.priceNgn === 8800 && mixed.plans.pro.monthlyTokens === 300,
+  'a stored plan naira price wins and the rest of that plan still comes from the default');
+ok(mixed.tokenPacks.find((p) => p.id === 'starter')?.priceNgn === 4500, 'a stored pack naira price wins over the default');
+ok(mixed.tokenPacks.find((p) => p.id === 'growth')?.priceNgn === 20000, 'a pack missing its naira price still takes the default\'s beside one that has it');
+ok(mixed.tokenPacks.find((p) => p.id === 'custom')?.priceNgn === undefined, 'a stored pack with an id no default has gets no naira price');
+ok([0, -5, '1450', null].every((bad) => mergeLivePricing(CLIENT, { ngnPerUsd: bad }).ngnPerUsd === 1450)
+  && mergeLivePricing(CLIENT, { ngnPerUsd: 1500 }).ngnPerUsd === 1500,
+  'a stored exchange rate is taken only when it is a positive number');
+ok(mergeLivePricing(CLIENT, undefined) === CLIENT && mergeLivePricing(CLIENT, 'nope') === CLIENT,
+  'no stored doc, or one that is not an object, leaves the defaults as they are');
+
+/* Two implementations of one rule are the same drift this file exists to catch, so the client
+   merge is held to the server's on every input above. */
+if (merge) {
+  const inputs: unknown[] = [undefined, {}, preNaira, { ngnPerUsd: 0 }, { ngnPerUsd: 1500 },
+    { plans: { pro: { priceNgn: 8800 } }, tokenPacks: [{ id: 'growth', label: 'G', tokens: 500, price: 40 }, { id: 'x', label: 'X', tokens: 1, price: 1 }] },
+    { tokenPacks: [] }, { expansion: { member: 15 }, renewalDays: 31 }];
+  const drift = inputs.filter((i) => JSON.stringify(mergeLivePricing(CLIENT, i)) !== JSON.stringify(merge!(CLIENT, i)));
+  ok(drift.length === 0, 'the client merge and the server merge agree on every stored shape',
+    drift.map((i) => JSON.stringify(i).slice(0, 80)).join('\n        '));
 }
 
 console.log(failures === 0

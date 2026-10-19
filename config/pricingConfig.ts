@@ -79,6 +79,39 @@ export const DEFAULT_PRICING_CONFIG: PricingConfig = {
   ngnPerUsd: 1450,
 };
 
+/**
+ * Lay the stored `pricing_config/global` doc over the defaults. This is the client twin of the
+ * server's `mergePricingConfig` and must behave the same (scripts/pricing.test.ts runs both on
+ * the same inputs). A one-level spread is not enough: a stored `plans` object or `tokenPacks`
+ * array would replace the defaults wholesale, and a doc saved before naira prices existed would
+ * drop every one of them. So plans merge per tier, and a stored pack with no `priceNgn` takes the
+ * default pack's of the same id (a stored value wins; an id with no default stays without one).
+ */
+export const mergeLivePricing = (base: PricingConfig, stored: unknown): PricingConfig => {
+  if (!stored || typeof stored !== 'object') return base;
+  const over = stored as any;
+  const plans = { ...base.plans };
+  if (over.plans && typeof over.plans === 'object') {
+    (Object.keys(plans) as Tier[]).forEach((t) => {
+      if (over.plans[t] && typeof over.plans[t] === 'object') plans[t] = { ...plans[t], ...over.plans[t] };
+    });
+  }
+  return {
+    plans,
+    expansion: { ...base.expansion, ...(over.expansion || {}) },
+    tokenPacks: Array.isArray(over.tokenPacks) && over.tokenPacks.length
+      ? over.tokenPacks.map((p: any) => {
+          const def = base.tokenPacks.find((d) => d.id === p?.id);
+          return typeof p?.priceNgn === 'number' || typeof def?.priceNgn !== 'number' ? p : { ...p, priceNgn: def.priceNgn };
+        })
+      : base.tokenPacks,
+    toolCosts: { ...base.toolCosts, ...(over.toolCosts || {}) },
+    analysisTiers: { ...base.analysisTiers, ...(over.analysisTiers || {}) },
+    renewalDays: typeof over.renewalDays === 'number' ? over.renewalDays : base.renewalDays,
+    ngnPerUsd: typeof over.ngnPerUsd === 'number' && over.ngnPerUsd > 0 ? over.ngnPerUsd : base.ngnPerUsd,
+  };
+};
+
 // Presentation metadata for the 5-plan pricing page (capacity blurbs + feature bullets).
 export const PLAN_META: Record<Tier, { name: string; tagline: string; capacity: string[]; features: string[] }> = {
   free: {
