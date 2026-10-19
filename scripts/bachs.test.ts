@@ -9,6 +9,7 @@
 import { DEFAULT_PRICING_CONFIG as CFG } from '../config/pricingConfig';
 import { catalogItem, toMajorString, toMinor } from '../functions/src/bachs/catalog';
 import { billingLive, productForTier, tierForProduct } from '../functions/src/bachs/config';
+import { signPayload, verifyBachsSignature } from '../functions/src/bachs/signature';
 
 let failures = 0;
 const ok = (cond: boolean, label: string, detail = '') => {
@@ -49,6 +50,28 @@ ok(billingLive({ ...env, BACHS_SECRET_KEY: '' }) === false, 'no key = not live, 
 ok(billingLive({ ...env, BILLING_LIVE: 'yes' }) === false, 'only the exact string "true" switches it on');
 ok(productForTier('team', env) === 'prod_t' && tierForProduct('prod_a', env) === 'agency', 'tier ↔ product both ways');
 ok(tierForProduct('prod_unknown', env) === null && tierForProduct(null, env) === null, 'an unknown product grants no tier');
+
+console.log('\nSIGNATURE:');
+const SECRET = 'whsec_test';
+const BODY = '{"id":"evt_1","type":"collection.succeeded","data":{"amount":"19.00"}}';
+const NOW = 1_760_000_000;
+const header = (t: number | string, ...sigs: string[]) => `t=${t},${sigs.map((s) => `v1=${s}`).join(',')}`;
+const good = signPayload(SECRET, String(NOW), BODY);
+ok(verifyBachsSignature(BODY, header(NOW, good), SECRET, NOW), 'a correct signature verifies');
+ok(verifyBachsSignature(Buffer.from(BODY), header(NOW, good), SECRET, NOW), 'raw bytes verify the same as the string');
+ok(!verifyBachsSignature(BODY.replace('19.00', '1.00'), header(NOW, good), SECRET, NOW), 'a tampered body fails');
+ok(!verifyBachsSignature(BODY, header(NOW, good), 'whsec_other', NOW), 'the wrong secret fails');
+ok(!verifyBachsSignature(BODY, header(NOW, good), SECRET, NOW + 301), 'a signature older than 300s fails (replay)');
+ok(!verifyBachsSignature(BODY, header(NOW, good), SECRET, NOW - 301), 'a signature from the future fails');
+ok(!verifyBachsSignature(BODY, undefined, SECRET, NOW) && !verifyBachsSignature(BODY, header(NOW, good), undefined, NOW),
+  'a missing header or a missing secret fails closed');
+ok(verifyBachsSignature(BODY, header(NOW, 'ab'.repeat(32), good), SECRET, NOW), 'during rotation any one valid v1 verifies');
+const msT = NOW * 1000;
+ok(verifyBachsSignature(BODY, header(msT, signPayload(SECRET, String(msT), BODY)), SECRET, NOW),
+  'a millisecond timestamp is accepted when fresh (Review Focus 1)');
+ok(!verifyBachsSignature(BODY, header(msT, signPayload(SECRET, String(msT), BODY)), SECRET, NOW + 400),
+  'and rejected when stale');
+ok(!verifyBachsSignature(BODY, 'garbage', SECRET, NOW) && !verifyBachsSignature(BODY, `t=${NOW}`, SECRET, NOW), 'a malformed header fails');
 
 console.log(failures === 0
   ? '\nPASS — Bachs: amounts, signatures, events and every grant rule behave.'
