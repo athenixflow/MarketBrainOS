@@ -2,9 +2,9 @@
 // seats/workspaces/agencies. Effective cap = plan base + purchased extras. Reused by the
 // Agency Hub, Team Workspace and Enterprise Suite.
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, PrimaryButton, Badge, SuccessMessage, ErrorMessage } from './UI';
-import { fetchBillingStatus } from '../services/billing';
 
 export interface CapacityRow {
   label: string;
@@ -19,14 +19,8 @@ const CapacityPanel: React.FC<{ title?: string; rows: CapacityRow[] }> = ({ titl
   const [msg, setMsg] = useState('');
   // Tone of `msg` is tracked here rather than inferred from the text.
   const [msgErr, setMsgErr] = useState(false);
-  /* purchaseExpansion refuses until a real checkout exists, so no Buy button is shown before then. */
-  const [billingLive, setBillingLive] = useState<boolean | null>(null);
-  useEffect(() => {
-    let alive = true;
-    void fetchBillingStatus().then((s) => { if (alive) setBillingLive(s.billing_live); });
-    return () => { alive = false; };
-  }, []);
-  const canBuy = billingLive === true;
+  /* Expansions have no checkout yet (purchaseExpansion always refuses), so there is no Buy button, live or not. */
+  const canBuy = false;
 
   const buy = async (i: number, fn: () => Promise<void>) => {
     setBusy(i); setMsg(''); setMsgErr(false);
@@ -61,7 +55,9 @@ const CapacityPanel: React.FC<{ title?: string; rows: CapacityRow[] }> = ({ titl
         })}
       </div>
       {!canBuy && rows.some((r) => r.onBuy) && (
-        <p className="mt-6 text-sm text-gray-500 font-medium">Extra capacity can be bought once payments go live.</p>
+        <p className="mt-6 text-sm text-gray-500 font-medium">
+          Need more capacity? <Link to="/support" className="font-bold text-[#0B0B0B] hover:text-[#FF0000] transition-colors">Contact us.</Link>
+        </p>
       )}
       {msg && (msgErr ? <ErrorMessage message={msg} className="mt-6" /> : <SuccessMessage message={msg} className="mt-6" />)}
     </Card>

@@ -334,8 +334,14 @@ const store = blank(fs.readFileSync(path.join(root, 'components', 'TokenStore.ts
 ok(/fetchBillingStatus\(\)/.test(store) && /startCheckout\('pack'/.test(store), 'components/TokenStore.tsx buys packs through checkout, gated on billing status');
 ok(!/callConfirmTopUp\(/.test(store), 'and never calls the refused confirmTopUp');
 const capacity = blank(fs.readFileSync(path.join(root, 'components', 'CapacityPanel.tsx'), 'utf8'));
-ok(/fetchBillingStatus\(\)/.test(capacity) && /canBuy && r\.onBuy/.test(capacity),
-  'components/CapacityPanel.tsx shows no Buy button until billing is live');
+/* Expansions have no checkout (purchaseExpansion always refuses), so the Buy button must not appear at
+   go-live either: canBuy is the constant false, not the billing switch, and the panel points to support. */
+export const expansionBuyIsOff = (panel: string): boolean =>
+  /const canBuy = false;/.test(panel) && !/const canBuy = [^;]*billing/i.test(panel) && /canBuy && r\.onBuy/.test(panel)
+  && /Need more capacity\?/.test(panel) && /to="\/support"/.test(panel);
+ok(expansionBuyIsOff(capacity), 'components/CapacityPanel.tsx never shows an expansion Buy button (no checkout exists) and sends the owner to support');
+ok(!expansionBuyIsOff(capacity.replace('const canBuy = false;', 'const canBuy = billingLive === true;')),
+  'CONTROL: a Buy button that appears when billing goes live (and can never work) is caught');
 
 /* THE RETURN FROM A CHECKOUT IS ACKNOWLEDGED WHERE THE CUSTOMER LANDS. The server sends people back
    to /billing?checkout=success|cancelled; the plan panel that used to read the parameter lives in
