@@ -127,7 +127,13 @@ export const applyOneOff = (
   if (activeSubscription(account)) return review('naira pass paid while a dollar subscription is active');
   const passOn = activePass(account, nowMs);
   if (passOn && rank(account.tier) > rank(checkout.item)) return review('lower pass paid while a higher pass is active');
-  const from = passOn && account.tier === checkout.item ? Date.parse(account.pass_expires_at as string) : nowMs;
+  /* A payment STACKS onto an active pass of the same tier: 30 more days from its expiry, and the
+     new month's allowance is ADDED to what is left (monthlyTokenRefresh skips pass accounts, so
+     replacing it would drop the second month of two payments, or throw away the tokens left on an
+     early renewal). A first pass, a pass that has ended, or an upgrade to a higher tier starts 30
+     days from now with a fresh allowance of the new tier; the old pass is not refunded. */
+  const stacks = passOn && account.tier === checkout.item;
+  const from = stacks ? Date.parse(account.pass_expires_at as string) : nowMs;
   const expires = new Date(from + PASS_DAYS * DAY_MS).toISOString();
   return {
     ledgerKey, payment, review: null, checkoutStatus: 'paid',
@@ -139,7 +145,7 @@ export const applyOneOff = (
       pass_expires_at: expires,
       plan_renews_at: expires,
       pass_reminded: [],
-      ...balanceFields(item.tokens, purchased),
+      ...balanceFields(stacks ? monthly + item.tokens : item.tokens, purchased),
     },
   };
 };

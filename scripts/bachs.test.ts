@@ -148,10 +148,14 @@ ok(first.payment?.amount_minor === 990000 && first.payment?.currency === 'NGN', 
 
 const early = applyOneOff(proPass(day(5)), checkout('pass', 'pro', 'NGN', 990000), pay(990000), CFG, T0);
 ok(early.userUpdate?.pass_expires_at === day(35), 'renewing the same tier with 5 days left gives 35 days');
+ok(early.userUpdate?.monthly_tokens === 350 && early.userUpdate?.purchased_tokens === 7,
+  'an early renewal ADDS the new 300 allowance to the 50 left (350), so no paid token is thrown away');
 const twoTabs = applyOneOff(proPass(day(30)), checkout('pass', 'pro', 'NGN', 990000), pay(990000), CFG, T0);
 ok(twoTabs.userUpdate?.pass_expires_at === day(60), 'two payments for the same pass stack to 60 days (Review Focus 5)');
+ok(twoTabs.userUpdate?.monthly_tokens === 350, 'two payments for the same pass stack their allowances too (50 + 300), not one month of tokens for two');
 const up = applyOneOff(proPass(day(20)), checkout('pass', 'team', 'NGN', 3900000), pay(3900000), CFG, T0);
 ok(up.userUpdate?.tier === 'team' && up.userUpdate?.pass_expires_at === day(30), 'an upgrade mid-pass starts a fresh 30 days of the new tier');
+ok(up.userUpdate?.monthly_tokens === 600, 'an upgrade starts a fresh allowance of exactly the new tier (the old 50 is not carried over)');
 const down = applyOneOff({ ...proPass(day(20)), tier: 'agency' }, checkout('pass', 'pro', 'NGN', 990000), pay(990000), CFG, T0);
 ok(down.review !== null && down.userUpdate === null && down.ledgerKey === 'checkout:mb_1', 'a lower pass paid during a higher one goes to review, recorded once');
 ok(applyOneOff(usdSub, checkout('pass', 'pro', 'NGN', 990000), pay(990000), CFG, T0).review !== null, 'a pass paid on top of a USD subscription goes to review');
@@ -202,6 +206,8 @@ const exp = expirePass(proPass(day(-0.1)), T0);
 ok(exp?.tier === 'free' && exp?.monthly_tokens === 0 && exp?.purchased_tokens === 7 && exp?.subscription_status === 'expired',
   'an ended pass → Free, allowance 0, purchased tokens kept');
 ok(expirePass(proPass(day(1)), T0) === null && expirePass(usdSub, T0) === null, 'an active pass or a subscription is not expired');
+ok(expirePass({ ...usdSub, pass_expires_at: day(-0.1) }, T0) === null, 'a USD subscriber with a leftover expired pass date is NOT dropped to Free');
+ok(reminderDue({ ...usdSub, pass_expires_at: day(0.5) }, T0) === null, 'a USD subscriber with a leftover pass date gets no pass reminder');
 
 console.log(failures === 0
   ? '\nPASS — Bachs: amounts, signatures, events and every grant rule behave.'
