@@ -1,5 +1,6 @@
 import { httpsCallable } from 'firebase/functions';
 import { functions, functionsBaseUrl } from './firebase';
+import type { Currency } from './planActions';
 
 /**
  * IS THERE A WAY TO PAY? (GTM part 19 §5 step 3.)
@@ -38,7 +39,9 @@ export const fetchBillingStatus = async (): Promise<BillingStatus> => {
   }
 };
 
-export type Currency = 'USD' | 'NGN';
+/* The pure rules (and formatPrice) live in services/planActions.ts so the build-time tests can load them. */
+export type { Currency } from './planActions';
+export { formatPrice } from './planActions';
 
 /** ₦ for visitors whose browser says Nigeria; anyone can switch (spec §2). */
 export const defaultCurrency = (): Currency => {
@@ -51,9 +54,6 @@ export const defaultCurrency = (): Currency => {
 
 /** The currency the account itself pays in (`billing_currency`, stamped by its last paid grant), if it has one. */
 export const accountCurrency = (v: unknown): Currency | null => (v === 'USD' || v === 'NGN' ? v : null);
-
-export const formatPrice = (major: number, currency: Currency): string =>
-  currency === 'NGN' ? `₦${Math.round(major).toLocaleString('en-US')}` : `$${major}`;
 
 /** Super-admins see checkout before launch; the server refuses everyone else (createCheckout). */
 export const canPay = (status: BillingStatus | null, role?: string): boolean =>

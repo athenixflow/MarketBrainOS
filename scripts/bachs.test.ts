@@ -18,6 +18,7 @@ import { applyOneOff, checkoutAllowed, expirePass, invoicePayment, manageOwnersh
 import { bachsApi, bachsBaseUrl, BachsApiError } from '../functions/src/bachs/api';
 import { EMAIL_TEMPLATES, MARKETING_KEYS } from '../functions/src/email/templates';
 import { formatMinor, parseMajor, paymentCsvRows, paymentView, sumByCurrency } from '../services/payments';
+import { isPassRenewal, renewPassLabel } from '../services/planActions';
 
 let failures = 0;
 const ok = (cond: boolean, label: string, detail = '') => {
@@ -841,6 +842,41 @@ ok(!editorPricesReadOnly("const PRICES_NOTE = 'Prices are fixed in code while Ba
 ok(!editorPricesReadOnly("const PRICES_NOTE = 'Prices are fixed in code while Bachs products are pinned.'; <NumInput value={pk.price} onChange={(v) => setPack(i, 'price', v)} />"),
   'CONTROL: an editor that still lets a pack price be typed is caught');
 ok(!readsPinnedPrices('const cfg = await getBillingConfig(); const live = await getPricingConfig();'), 'CONTROL: a path that also reads the runtime config is caught');
+
+/* THE RENEWAL EMAIL LANDS WHERE A PASS CAN BE RENEWED (final review I2). passReminder and passExpired link to
+   /billing, which offered only "Change plan" → /pricing, where the holder's own tier was a disabled
+   "Current plan". Now /billing shows "Renew pass (+30 days) · ₦9,900" to a pass holder, and in naira
+   the pricing card of the holder's own tier reads "Renew (+30 days)" and is enabled — both through
+   the same naira pass checkout the plan panel uses. A dollar subscriber's own tier stays "Current plan". */
+console.log('\nA PASS CAN BE RENEWED WHERE THE EMAIL LANDS:');
+const passHolder = { tier: 'pro', billing_mode: 'pass', pass_expires_at: day(3) };
+ok(isPassRenewal(passHolder, 'pro', 'NGN'), 'a pass holder looking at their own tier in naira is offered a renewal');
+ok(!isPassRenewal(passHolder, 'pro', 'USD'), 'not in dollars (a pass is naira only)');
+ok(!isPassRenewal(passHolder, 'team', 'NGN'), 'not on another tier (that is an upgrade, not a renewal)');
+ok(!isPassRenewal({ tier: 'pro', billing_mode: 'subscription' }, 'pro', 'NGN') && !isPassRenewal({ tier: 'pro', billing_mode: 'subscription' }, 'pro', 'USD'),
+  'a dollar subscriber\'s own tier is never a pass renewal (it stays "Current plan")');
+ok(!isPassRenewal({ tier: 'free' }, 'free', 'NGN') && !isPassRenewal({ tier: 'enterprise', billing_mode: 'pass' }, 'enterprise', 'NGN') && !isPassRenewal(null, 'pro', 'NGN'),
+  'nor Free, nor a tier with no naira price, nor a signed-out visitor');
+ok(renewPassLabel('pro') === 'Renew pass (+30 days) · ₦9,900' && renewPassLabel('agency') === 'Renew pass (+30 days) · ₦120,000',
+  'the renew button names its price');
+const pricingPage = code(src('pages/Pricing.tsx'));
+export const pricingOffersRenewal = (page: string): boolean =>
+  /const renewable = \(tier: Tier\) => payable && isPassRenewal\(profile, tier, currency\);/.test(page)
+  && /if \(currentTier === tier\) return renewable\(tier\) \? 'Renew \(\+30 days\)' : 'Current plan';/.test(page)
+  && /\(currentTier === tier && !renewable\(tier\)\)/.test(page);
+ok(pricingOffersRenewal(pricingPage), 'pages/Pricing.tsx: in naira the holder\'s own tier reads "Renew (+30 days)" and is enabled');
+ok(!pricingOffersRenewal(pricingPage.replace("renewable(tier) ? 'Renew (+30 days)' : 'Current plan'", "'Current plan'")),
+  'CONTROL: a pricing page whose own-tier button is always "Current plan" is caught');
+ok(!pricingOffersRenewal(pricingPage.replace('(currentTier === tier && !renewable(tier))', '(currentTier === tier)')),
+  'CONTROL: a renewal label on a button that stays disabled is caught');
+const billingCenter = code(src('pages/BillingCenter.tsx'));
+export const billingOffersRenewal = (page: string): boolean =>
+  /startCheckout\('pass', tier, 'NGN'\)/.test(page) && /: renewPassLabel\(tier\)\}/.test(page)
+  && /isPassRenewal\(profile, tier, 'NGN'\) && canPay\(billing, profile\.role\)/.test(page) && /fetchBillingStatus\(\)/.test(page);
+ok(billingOffersRenewal(billingCenter), 'pages/BillingCenter.tsx offers "Renew pass (+30 days) · ₦…" to a pass holder, through the naira pass checkout, once payments are live');
+ok(!billingOffersRenewal(billingCenter.replace("startCheckout('pass', tier, 'NGN')", "navigate('/pricing')")), 'CONTROL: a renew button that only sends the holder to /pricing is caught');
+ok(/startCheckout\('pass', String\(profile!\.tier\), 'NGN'\)/.test(code(src('components/SubscriptionPanel.tsx'))) && /renewPassLabel\(/.test(code(src('components/SubscriptionPanel.tsx'))),
+  'components/SubscriptionPanel.tsx renews through the same checkout, and its button names the price too');
 
 /* A naira refund is mailed in naira (final review M2): adminRefund records the currency and the email uses it. */
 const ngnRefundMail = mail('refundIssued', { amount: 9900, currency: 'NGN', reference: 'refund_1', date: '1 Nov 2026' });

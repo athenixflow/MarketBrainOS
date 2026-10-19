@@ -9,6 +9,7 @@ import { MARKETING_SEO, SITE_URL, SITE_NAME } from '../config/seo';
 import { track } from '../services/analytics';
 import { fetchBillingStatus, BillingStatus, Currency, formatPrice, canPay, startCheckout, callManageBilling } from '../services/billing';
 import { useCurrency } from '../components/useCurrency';
+import { isPassRenewal } from '../services/planActions';
 
 // Product + per-plan Offer structured data (generated from the live pricing config).
 const PRICING_JSONLD = {
@@ -83,9 +84,12 @@ const Pricing: React.FC = () => {
     } catch (e: any) { setMsg(e.message || 'Upgrade failed.'); } finally { setBusy(null); }
   };
 
+  /* A naira pass holder's own tier, in naira, is a way to pay again: the pass reminder emails land
+     here. It goes through the same pass checkout as any other pass (select → startCheckout). */
+  const renewable = (tier: Tier) => payable && isPassRenewal(profile, tier, currency);
   const ctaLabel = (tier: Tier, idx: number) => {
     if (!user) return tier === 'free' ? 'Start free' : 'Get started';
-    if (currentTier === tier) return 'Current plan';
+    if (currentTier === tier) return renewable(tier) ? 'Renew (+30 days)' : 'Current plan';
     if (currentIdx >= 0 && idx < currentIdx) return 'Included';
     /* Until there is a way to pay, the button does not offer to take money. */
     if (!payable && tier !== 'free') return 'Talk to us';
@@ -94,7 +98,7 @@ const Pricing: React.FC = () => {
     return currency === 'NGN' && CFG.plans[tier].priceNgn ? `Get ${PLAN_META[tier].name} — 30 days` : `Upgrade to ${PLAN_META[tier].name}`;
   };
   const ctaDisabled = (tier: Tier, idx: number) =>
-    busy !== null || (!!user && (currentTier === tier || (currentIdx >= 0 && idx < currentIdx)));
+    busy !== null || (!!user && ((currentTier === tier && !renewable(tier)) || (currentIdx >= 0 && idx < currentIdx)));
 
   const expansionLine = (tier: Tier): string | null => {
     if (tier === 'team') return `Extra seats $${CFG.expansion.member}/mo`;

@@ -7,6 +7,7 @@ import { DEFAULT_PRICING_CONFIG, PLAN_META } from '../config/pricingConfig';
 import { track } from '../services/analytics';
 import { fetchBillingStatus, BillingStatus, Currency, formatPrice, canPay, startCheckout, callManageBilling } from '../services/billing';
 import { useCurrency } from './useCurrency';
+import { renewPassLabel } from '../services/planActions';
 
 // Derived, never hardcoded: plan copy must track the pricing config or it drifts (it previously
 // advertised 200 tokens while the config granted 100).
@@ -133,7 +134,7 @@ const SubscriptionPanel: React.FC = () => {
         )}
         {payable && isPass && (
           <PrimaryButton size="md" onClick={() => act('renew-pass')} disabled={!!busy}>
-            {busy === 'renew-pass' ? 'Opening checkout…' : 'Renew pass (+30 days)'}
+            {busy === 'renew-pass' ? 'Opening checkout…' : renewPassLabel(String(profile.tier))}
           </PrimaryButton>
         )}
         {isSub && (

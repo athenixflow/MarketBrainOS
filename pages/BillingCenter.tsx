@@ -9,8 +9,10 @@ import { getUserPaymentHistory } from '../services/persistenceService';
 import { downloadAsCSV, paymentsToCSV } from '../services/exportService';
 import { PaymentRecord } from '../types';
 import { PLAN_META, DEFAULT_PRICING_CONFIG, Tier } from '../config/pricingConfig';
-import { formatPrice } from '../services/billing';
+import { BillingStatus, canPay, fetchBillingStatus, formatPrice, startCheckout } from '../services/billing';
 import { paymentView } from '../services/payments';
+import { isPassRenewal, renewPassLabel } from '../services/planActions';
+import { track } from '../services/analytics';
 
 const LOAD_ERROR = 'We could not load your billing history. Please try again.';
 
@@ -21,6 +23,16 @@ const BillingCenter: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   // Where a Bachs checkout lands the customer (?checkout=success|cancelled): say what happened.
   const [returned, setReturned] = useState<'success' | 'cancelled' | null>(null);
+  /* The pass reminder and expiry emails link here, so a pass is renewed from this page (the same
+     naira pass checkout as the plan panel), once payments are live. */
+  const [billing, setBilling] = useState<BillingStatus | null>(null);
+  const [renewing, setRenewing] = useState(false);
+  const [renewError, setRenewError] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void fetchBillingStatus().then((s) => { if (alive) setBilling(s); });
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get('checkout');
@@ -67,6 +79,17 @@ const BillingCenter: React.FC = () => {
   const price = DEFAULT_PRICING_CONFIG.plans[tier]?.price ?? 0;
   const priceNgn = DEFAULT_PRICING_CONFIG.plans[tier]?.priceNgn;
   const priceLabel = isFree ? '$0' : isPass && priceNgn ? `${formatPrice(priceNgn, 'NGN')}/30 days` : `$${price}/mo`;
+  const canRenew = isPassRenewal(profile, tier, 'NGN') && canPay(billing, profile.role);
+  const renew = async () => {
+    setRenewing(true); setRenewError(null);
+    try {
+      track('upgrade_clicked', { plan: tier, surface: 'billing_center', signed_in: true });
+      await startCheckout('pass', tier, 'NGN');
+    } catch (e: any) {
+      // The callable writes its refusals for customers: shown as they are.
+      setRenewError(e?.message || 'Checkout could not be started.');
+    } finally { setRenewing(false); }
+  };
   const views = payments.map((p) => ({ p, v: paymentView(p) }));
   const expansions = views.filter(({ v }) => v.kind === 'expansion');
 
@@ -83,8 +106,14 @@ const BillingCenter: React.FC = () => {
               <Stat label="Price" value={priceLabel} />
               <Stat label={isPass ? 'Ends' : 'Renews'} value={renews} />
             </div>
-            <Link to="/pricing"><PrimaryButton>Change plan</PrimaryButton></Link>
+            <div className="flex flex-wrap items-center gap-3">
+              {canRenew && (
+                <PrimaryButton onClick={renew} disabled={renewing}>{renewing ? 'Opening checkout…' : renewPassLabel(tier)}</PrimaryButton>
+              )}
+              <Link to="/pricing"><PrimaryButton>Change plan</PrimaryButton></Link>
+            </div>
           </div>
+          {renewError && <ErrorMessage message={renewError} className="mt-6" />}
         </Card>
 
         <Card title="Token balance">
