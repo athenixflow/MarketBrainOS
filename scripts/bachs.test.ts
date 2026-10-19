@@ -539,6 +539,32 @@ ok(!prerenderPinsDollars(pinnedGood.replace(/await page\.emulateTimezone\('UTC'\
 ok(!prerenderPinsDollars(pinnedGood.replace("'language', { get: () => 'en-US' }", "'language', { get: () => 'en-NG' }")), 'CONTROL: a prerender that leaves the locale to the machine is caught');
 ok(!prerenderPinsDollars("// await page.emulateTimezone('UTC');\n" + pinnedGood.split('\n')[1]), 'CONTROL: a pin that only appears in a comment is caught');
 
+/* THE CLIENT PROFILE CARRIES THE BILLING FIELDS THE SERVER WRITES. `getUserProfile` builds the profile from an
+   explicit field list, not a spread of the document, so a field that is not named there never reaches any
+   component: the billing page, the plan panel and the pricing page all read `billing_mode` and `billing_currency`
+   and silently saw `undefined` (a naira pass holder was shown a dollar price and a renewal date). The balance
+   split (`monthly_tokens`, `purchased_tokens`) is read by the billing page for the same reason. */
+export const BILLING_PROFILE_FIELDS = ['billing_mode', 'billing_currency', 'pass_expires_at', 'bachs_customer_id', 'monthly_tokens', 'purchased_tokens'];
+export const unmappedProfileFields = (persistence: string): string[] => {
+  const c = code(persistence);
+  const start = c.indexOf('export const getUserProfile =');
+  const end = start < 0 ? -1 : c.indexOf('\nexport const ', start + 10);
+  const body = start < 0 ? '' : c.slice(start, end < 0 ? undefined : end);
+  return BILLING_PROFILE_FIELDS.filter((f) => !new RegExp(`\\b${f}: data\\.${f}\\b`).test(body));
+};
+console.log('\nTHE CLIENT PROFILE CARRIES THE BILLING FIELDS:');
+const persistenceSrc = src('services/persistenceService.ts');
+const unmapped = unmappedProfileFields(persistenceSrc);
+ok(unmapped.length === 0, 'getUserProfile maps billing_mode, billing_currency, pass_expires_at, bachs_customer_id, monthly_tokens and purchased_tokens', `unmapped: ${unmapped.join(', ')}`);
+for (const f of BILLING_PROFILE_FIELDS) {
+  const without = persistenceSrc.replace(new RegExp(`^.*\\b${f}: data\\.${f},?\\s*$`, 'm'), '');
+  ok(without !== persistenceSrc && unmappedProfileFields(without).join() === f, `CONTROL: getUserProfile without its ${f} line is caught`);
+}
+ok(unmappedProfileFields(persistenceSrc.replace(/^(\s*)billing_mode: data\.billing_mode,/m, '$1// billing_mode: data.billing_mode,')).join() === 'billing_mode',
+  'CONTROL: a mapping that is only commented out is caught');
+ok(unmappedProfileFields('export const somethingElse = () => ({ billing_mode: data.billing_mode });').length === BILLING_PROFILE_FIELDS.length,
+  'CONTROL: the same mapping in some other function does not count');
+
 /* THE CURRENCY A BILLING SURFACE STARTS IN FOLLOWS THE ACCOUNT. A naira pass holder who opens Pricing
    from a laptop set to a US timezone must not be shown dollars, so the account's own `billing_currency`
    comes first and the browser's guess is only the fallback. One hook does it for all three surfaces

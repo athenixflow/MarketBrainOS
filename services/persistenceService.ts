@@ -291,6 +291,9 @@ export const getUserProfile = async (userId: string): Promise<UserProfile | null
       id: userId,
       email: data.email,
       tokens: data.tokens,
+      // The balance split: `tokens` is only their sum, and the billing page shows both halves.
+      monthly_tokens: data.monthly_tokens,
+      purchased_tokens: data.purchased_tokens,
       tier: data.tier,
       role: data.role || 'user',
       session_started: data.session_started || new Date().toISOString(),
@@ -305,6 +308,12 @@ export const getUserProfile = async (userId: string): Promise<UserProfile | null
       subscription_status: data.subscription_status || (isPaidTier(data.tier) ? 'active' : 'free'),
       plan_renews_at: data.plan_renews_at,
       subscription_started_at: data.subscription_started_at,
+      // Bachs billing, written by the server only. This list is explicit (not a spread of the document), so a
+      // field left out never reaches a component. pass_expires_at is an ISO string, or null once a pass ends.
+      billing_mode: data.billing_mode,
+      billing_currency: data.billing_currency,
+      pass_expires_at: data.pass_expires_at,
+      bachs_customer_id: data.bachs_customer_id,
       // Profile / account fields (client-editable via Settings)
       first_name: data.first_name,
       last_name: data.last_name,
