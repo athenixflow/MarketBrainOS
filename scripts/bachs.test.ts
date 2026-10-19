@@ -14,11 +14,11 @@ import { catalogItem, toMajorString, toMinor, withPinnedPrices } from '../functi
 import { billingLive, productForTier, tierForProduct } from '../functions/src/bachs/config';
 import { signPayload, verifyBachsSignature } from '../functions/src/bachs/signature';
 import { parseBachsEvent, parseCheckoutSession, parseSubscription } from '../functions/src/bachs/events';
-import { applyOneOff, checkoutAllowed, expirePass, invoicePayment, manageOwnership, reminderDue, syncSubscription, PASS_DAYS } from '../functions/src/bachs/grant';
+import { applyOneOff, checkoutAllowed, expirePass, invoicePayment, manageOwnership, reminderDue, syncSubscription, upgradeRefusal, PASS_DAYS } from '../functions/src/bachs/grant';
 import { bachsApi, bachsBaseUrl, BachsApiError } from '../functions/src/bachs/api';
 import { EMAIL_TEMPLATES, MARKETING_KEYS } from '../functions/src/email/templates';
 import { formatMinor, parseMajor, paymentCsvRows, paymentView, sumByCurrency } from '../services/payments';
-import { isPassRenewal, passReplaceNotice, renewPassLabel } from '../services/planActions';
+import { checkoutReturn, isPassRenewal, passReplaceNotice, renewPassLabel, subscriptionUpgradeBlock } from '../services/planActions';
 
 let failures = 0;
 const ok = (cond: boolean, label: string, detail = '') => {
@@ -545,7 +545,8 @@ ok(!prerenderPinsDollars("// await page.emulateTimezone('UTC');\n" + pinnedGood.
    component: the billing page, the plan panel and the pricing page all read `billing_mode` and `billing_currency`
    and silently saw `undefined` (a naira pass holder was shown a dollar price and a renewal date). The balance
    split (`monthly_tokens`, `purchased_tokens`) is read by the billing page for the same reason. */
-export const BILLING_PROFILE_FIELDS = ['billing_mode', 'billing_currency', 'pass_expires_at', 'bachs_customer_id', 'monthly_tokens', 'purchased_tokens'];
+/* analyses_count joins the list (final review): ToolPage's run_index and AnalyticsBridge's is_activated read it. */
+export const BILLING_PROFILE_FIELDS = ['billing_mode', 'billing_currency', 'pass_expires_at', 'bachs_customer_id', 'monthly_tokens', 'purchased_tokens', 'analyses_count'];
 export const unmappedProfileFields = (persistence: string): string[] => {
   const c = code(persistence);
   const start = c.indexOf('export const getUserProfile =');
@@ -556,7 +557,7 @@ export const unmappedProfileFields = (persistence: string): string[] => {
 console.log('\nTHE CLIENT PROFILE CARRIES THE BILLING FIELDS:');
 const persistenceSrc = src('services/persistenceService.ts');
 const unmapped = unmappedProfileFields(persistenceSrc);
-ok(unmapped.length === 0, 'getUserProfile maps billing_mode, billing_currency, pass_expires_at, bachs_customer_id, monthly_tokens and purchased_tokens', `unmapped: ${unmapped.join(', ')}`);
+ok(unmapped.length === 0, `getUserProfile maps ${BILLING_PROFILE_FIELDS.join(', ')}`, `unmapped: ${unmapped.join(', ')}`);
 for (const f of BILLING_PROFILE_FIELDS) {
   const without = persistenceSrc.replace(new RegExp(`^.*\\b${f}: data\\.${f},?\\s*$`, 'm'), '');
   ok(without !== persistenceSrc && unmappedProfileFields(without).join() === f, `CONTROL: getUserProfile without its ${f} line is caught`);
@@ -904,6 +905,61 @@ export const pricingConfirmsReplacement = (page: string): boolean => {
 ok(pricingConfirmsReplacement(code(src('pages/Pricing.tsx'))), 'pages/Pricing.tsx asks before a higher pass replaces a live one, and continues only on confirm');
 ok(!pricingConfirmsReplacement(code(src('pages/Pricing.tsx')).replace('if (notice && !confirmed) { setReplacing({ tier, notice }); return; }', 'if (notice) setReplacing({ tier, notice });')),
   'CONTROL: a warning that does not stop the checkout is caught');
+
+/* FINAL-REVIEW MINORS. */
+console.log('\nFINAL-REVIEW MINORS:');
+/* M3: an underpaid collection is not money we can match — it is reviewed (spec §5 "else → billing_reviews"). */
+const underpaid = parseBachsEvent(ev('collection.underpaid', { reference: 'mb_1', status: 'UNDERPAID', amount: '5000.00', currency: 'NGN' }));
+ok(underpaid?.kind === 'review' && underpaid.reference === 'mb_1' && underpaid.amountMinor === 500000, 'M3: collection.underpaid goes to review, with its reference and amount');
+/* M4: every Bachs read made while answering the webhook uses the short client; reconciliation keeps the long one. */
+ok(/parseSubscription\(await bachs\(source === 'webhook' \? WEBHOOK_BACHS_TIMEOUT_MS : undefined\)\.getSubscription\(subscriptionId\)\)/.test(bodyOf('syncSubscriptionById')),
+  'M4: the subscription sync reads Bachs on the short client when it runs for the webhook');
+const webhookTimeout = Number((idx.match(/const WEBHOOK_BACHS_TIMEOUT_MS = ([\d_]+);/)?.[1] ?? '').replace(/_/g, ''));
+ok(webhookTimeout > 0 && webhookTimeout <= 6000,
+  'M4: the webhook client\'s timeout is at most 6s (Bachs waits 10s)');
+ok(/bachs\(\)\.getCheckoutSession\(/.test(code(idx.slice(idx.indexOf('export const bachsReconcile')))), 'M4: reconciliation keeps the default (longer) timeout');
+/* M5: Bachs appends "?checkout_id=" to the success URL literally, so "success?checkout_id=…" must still read as success. */
+ok(checkoutReturn('?checkout=success').outcome === 'success' && checkoutReturn('?checkout=cancelled').outcome === 'cancelled', 'M5: the plain return reads');
+ok(checkoutReturn('?checkout=success?checkout_id=chk_1').outcome === 'success' && checkoutReturn('?checkout=cancelled?checkout_id=chk_1').outcome === 'cancelled',
+  'M5: a return with ?checkout_id= appended literally still reads as success / cancelled');
+ok(checkoutReturn('?checkout=success&for=pack?checkout_id=chk_1').kind === 'pack' && checkoutReturn('?checkout=success&for=pass&checkout_id=chk_1').kind === 'pass'
+  && checkoutReturn('?checkout=success&for=plan').kind === 'plan', 'M5: the item kind reads too, with or without the appended id');
+ok(checkoutReturn('?checkout=successful').outcome === null && checkoutReturn('').outcome === null && checkoutReturn('?checkout=success&for=nope').kind === null,
+  'M5: anything else reads as no return, no kind');
+/* M7: a cancelling or past-due subscription cannot be upgraded — the server says why, and the page does not offer it. */
+ok(upgradeRefusal(snap() as any) === null, 'M7: an active subscription can be upgraded');
+ok(/cancel/i.test(String(upgradeRefusal(snap({ cancelAtPeriodEnd: true }) as any))) && /card|payment/i.test(String(upgradeRefusal(snap({ status: 'past_due' }) as any)))
+  && upgradeRefusal(snap({ status: 'trialing' }) as any) !== null, 'M7: a cancelling, past-due or otherwise inactive subscription is refused with a clear reason');
+ok(subscriptionUpgradeBlock({ tier: 'pro', billing_mode: 'subscription', subscription_status: 'cancelled' }) !== null
+  && subscriptionUpgradeBlock({ tier: 'pro', billing_mode: 'subscription', subscription_status: 'past_due' }) !== null
+  && subscriptionUpgradeBlock({ tier: 'pro', billing_mode: 'subscription', subscription_status: 'active' }) === null
+  && subscriptionUpgradeBlock({ tier: 'pro', billing_mode: 'pass', subscription_status: 'active' }) === null && subscriptionUpgradeBlock(null) === null,
+  'M7: the page blocks the upgrade for a cancelling or past-due dollar subscription only');
+ok(/const blocked = upgradeRefusal\(snap as SubscriptionSnapshot\);\s*if \(blocked\) throw new functions\.https\.HttpsError\('failed-precondition', blocked\);/.test(bodyOf('manageBilling'))
+  && bodyOf('manageBilling').indexOf('upgradeRefusal(') < bodyOf('manageBilling').indexOf('changeSubscriptionProduct('),
+  'M7: manageBilling refuses the upgrade before it asks Bachs to change the product');
+ok(/const upgradeBlock = subscriptionUpgradeBlock\(profile\);/.test(pricingPage) && /upgradeBlocked\(tier, idx\)/.test(pricingPage),
+  'M7: pages/Pricing.tsx disables the dollar upgrade for a cancelling or past-due subscription');
+/* M10: the success copy after a token pack says tokens, not "your plan updates…". */
+const billingSrc = code(src('pages/BillingCenter.tsx'));
+ok(/checkoutReturn\(window\.location\.search\)/.test(billingSrc) && /your tokens arrive within a minute/.test(billingSrc) && /returnedFor === 'pack'/.test(billingSrc),
+  'M10: /billing thanks a token-pack buyer with "your tokens arrive within a minute", not the plan copy');
+ok(/success_url: `\$\{SITE\}\/billing\?checkout=success&for=\$\{kind\}`/.test(idx), 'M10: the success URL says what was bought');
+const settingsSrc = code(src('pages/Settings.tsx'));
+ok(/profile\.billing_mode === 'subscription' && \(/.test(settingsSrc) && /won't be charged again/.test(settingsSrc),
+  'M10: the delete-account notice tells a dollar subscriber the subscription is cancelled and billing stops');
+/* Planted-bug controls for the textual checks above: each old shape is caught. */
+const syncShort = (body: string) => /parseSubscription\(await bachs\(source === 'webhook' \? WEBHOOK_BACHS_TIMEOUT_MS : undefined\)\.getSubscription\(subscriptionId\)\)/.test(body);
+ok(!syncShort(bodyOf('syncSubscriptionById').replace("bachs(source === 'webhook' ? WEBHOOK_BACHS_TIMEOUT_MS : undefined)", 'bachs()')),
+  'CONTROL (M4): a webhook sync on the 20s client is caught');
+const refusesUpgrade = (body: string) => /const blocked = upgradeRefusal\(snap as SubscriptionSnapshot\);\s*if \(blocked\) throw new functions\.https\.HttpsError\('failed-precondition', blocked\);/.test(body);
+ok(!refusesUpgrade(bodyOf('manageBilling').replace('if (blocked) throw', 'if (blocked) console.warn(blocked); if (false) throw')),
+  'CONTROL (M7): a refusal that does not stop the upgrade is caught');
+ok(!/upgradeBlocked\(tier, idx\)/.test(pricingPage.replace(/upgradeBlocked\(tier, idx\)/g, 'false')), 'CONTROL (M7): a pricing page that never blocks the upgrade is caught');
+const packCopy = (page: string) => /your tokens arrive within a minute/.test(page) && /returnedFor === 'pack'/.test(page);
+ok(!packCopy("<SuccessMessage message=\"Payment received — your plan updates within a minute.\" />"), 'CONTROL (M10): the plan copy shown after a token pack is caught');
+ok(!/success_url: `\$\{SITE\}\/billing\?checkout=success&for=\$\{kind\}`/.test("success_url: `${SITE}/billing?checkout=success`,"), 'CONTROL (M10): a success URL that does not say what was bought is caught');
+ok(!/won't be charged again/.test(settingsSrc.replace("so you won't be charged again", '')), 'CONTROL (M10): a delete notice silent on billing is caught');
 
 /* A naira refund is mailed in naira (final review M2): adminRefund records the currency and the email uses it. */
 const ngnRefundMail = mail('refundIssued', { amount: 9900, currency: 'NGN', reference: 'refund_1', date: '1 Nov 2026' });

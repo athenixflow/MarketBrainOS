@@ -15,9 +15,9 @@ import { verifyUnsubToken, unsubToken } from './email/unsubscribe';
 import { verifyResendWebhook, webhookConfigured, EVENT_FIELD, emailStatusFor } from './email/webhook';
 import { catalogItem, toMajorString, withPinnedPrices, TIER_RANK, PAID_TIERS, PaidTier, Kind, Currency } from './bachs/catalog';
 import { billingLive as bachsBillingLive, productForTier, tierForProduct } from './bachs/config';
-import { BachsEvent, parseBachsEvent, parseCheckoutSession, parseSubscription } from './bachs/events';
+import { BachsEvent, SubscriptionSnapshot, parseBachsEvent, parseCheckoutSession, parseSubscription } from './bachs/events';
 import { BACHS_SIGNATURE_HEADER, verifyBachsSignature } from './bachs/signature';
-import { Account, CheckoutRecord, applyOneOff, checkoutAllowed, expirePass, invoicePayment, manageOwnership, reminderDue, syncSubscription } from './bachs/grant';
+import { Account, CheckoutRecord, applyOneOff, checkoutAllowed, expirePass, invoicePayment, manageOwnership, reminderDue, syncSubscription, upgradeRefusal } from './bachs/grant';
 import { bachsApi } from './bachs/api';
 
 admin.initializeApp();
@@ -1630,6 +1630,11 @@ export const changeSubscription = functions.https.onCall(async (data: any, conte
       if (!userDoc.exists) throw new functions.https.HttpsError('not-found', 'User profile not found.');
       const userData = userDoc.data()!;
       if (userData.is_suspended) throw new functions.https.HttpsError('permission-denied', 'Account suspended.');
+      /* A Bachs-billed plan is changed through Bachs (manageBilling, or a pass simply ending). Writing
+         'cancelled' or Free here would leave the card charged, or a paid pass taken away. */
+      if (userData.billing_mode && (action === 'cancel' || action === 'downgrade')) {
+        throw new functions.https.HttpsError('failed-precondition', 'Manage this plan from Billing.');
+      }
 
       const now = new Date();
       const renewsAt = new Date(now.getTime() + RENEWAL_DAYS * 24 * 60 * 60 * 1000).toISOString();
@@ -3163,6 +3168,9 @@ const INVITATION_COLLECTIONS = ['workspace_invitations', 'agency_invitations', '
 // Every field that could name the person is overwritten; `text` fields get the email cut out.
 const RETAINED_ROWS: { collection: string; fields: string[]; scrub: string[]; text?: string[] }[] = [
   { collection: 'payments', fields: ['uid'], scrub: ['email', 'name'] },
+  // What each payment was matched against, and anything a human had to look at: billing records too.
+  { collection: 'checkouts', fields: ['uid'], scrub: [] },
+  { collection: 'billing_reviews', fields: ['uid'], scrub: [], text: ['reason'] },
   { collection: 'action_logs', fields: ['uid', 'user_id'], scrub: ['email', 'name', 'author_name'] },
   { collection: 'security_audit_logs', fields: ['user_id'], scrub: ['email', 'name', 'author_name'] },
   // Other people's threads: the row stays, the author's name/email does not.
@@ -4164,7 +4172,8 @@ const syncSubscriptionById = async (
   paid: Pick<BachsEvent, 'type' | 'invoiceId' | 'amountMinor' | 'currency'> | null,
   source: GrantSource,
 ): Promise<string> => {
-  const snap = parseSubscription(await bachs().getSubscription(subscriptionId));
+  /* Answering a webhook, the read must fit inside Bachs' 10s window; the other callers can wait longer. */
+  const snap = parseSubscription(await bachs(source === 'webhook' ? WEBHOOK_BACHS_TIMEOUT_MS : undefined).getSubscription(subscriptionId));
   if (!snap) throw new Error(`unreadable subscription ${subscriptionId}`);
   /* The delivery carried a charge: an invoice was paid (the orphan alarm below reads this). */
   const chargedMinor = paid?.type === 'invoice.paid' ? paid.amountMinor : null;
@@ -4309,6 +4318,11 @@ export const createCheckout = functions.runWith({ secrets: BACHS_SECRETS }).http
   if (!['plan', 'pass', 'pack'].includes(kind) || !['USD', 'NGN'].includes(currency)) {
     throw new functions.https.HttpsError('invalid-argument', 'Choose something to buy and a currency.');
   }
+  /* Each call records a checkout and opens a Bachs session: a loop must not be able to do that at will.
+     Ten an hour is far above anyone actually paying. */
+  if (!(await underLimit('create_checkout', uid, 10, 60 * 60 * 1000))) {
+    throw new functions.https.HttpsError('resource-exhausted', 'Too many checkouts started. Try again in an hour.');
+  }
   const userSnap = await db.collection('users').doc(uid).get();
   if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User profile not found.');
   const account = userSnap.data() as Account & { role?: string; is_suspended?: boolean; name?: string; displayName?: string };
@@ -4333,7 +4347,8 @@ export const createCheckout = functions.runWith({ secrets: BACHS_SECRETS }).http
   const common = {
     reference,
     metadata: { uid, kind, item, currency },
-    success_url: `${SITE}/billing?checkout=success`,
+    /* `for` lets /billing thank a token-pack buyer for tokens, not a plan (Bachs appends ?checkout_id= after it). */
+    success_url: `${SITE}/billing?checkout=success&for=${kind}`,
     cancel_url: `${SITE}/billing?checkout=cancelled`,
     expires_in_minutes: 60,
     ...(email ? { customer: { email, name } } : {}),
@@ -4387,6 +4402,10 @@ export const manageBilling = functions.runWith({ secrets: BACHS_SECRETS }).https
     await syncSubscriptionById(subId, null, 'manage');
     return { ok: true };
   }
+  /* A cancelling or past-due subscription is not upgraded (bachs/grant.ts upgradeRefusal); ownership above
+     already refused an unreadable snapshot. */
+  const blocked = upgradeRefusal(snap as SubscriptionSnapshot);
+  if (blocked) throw new functions.https.HttpsError('failed-precondition', blocked);
   const requested = String(data?.item || '');
   if (!(PAID_TIERS as readonly string[]).includes(requested)) {
     throw new functions.https.HttpsError('invalid-argument', 'Choose a plan to upgrade to.');

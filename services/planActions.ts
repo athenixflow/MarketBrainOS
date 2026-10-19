@@ -50,6 +50,33 @@ export const passReplaceNotice = (profile: BillingProfile | null | undefined, ti
     + `${planName(tier)} starts today and replaces it; unused days and tokens aren't refunded.`;
 };
 
+/**
+ * Where a Bachs checkout sends the customer back: /billing?checkout=success&for=pack. Bachs appends
+ * "?checkout_id=…" to that URL literally, so a value can arrive as "success?checkout_id=chk_1" or
+ * "pack?checkout_id=chk_1"; only what comes before a "?" is read.
+ */
+export const checkoutReturn = (search: string): { outcome: 'success' | 'cancelled' | null; kind: 'plan' | 'pass' | 'pack' | null } => {
+  const params = new URLSearchParams(search);
+  const read = (name: string) => (params.get(name) || '').split('?')[0];
+  const outcome = read('checkout');
+  const kind = read('for');
+  return {
+    outcome: outcome === 'success' || outcome === 'cancelled' ? outcome : null,
+    kind: kind === 'plan' || kind === 'pass' || kind === 'pack' ? kind : null,
+  };
+};
+
+/**
+ * Why a dollar subscription cannot be upgraded right now, or null — the page's copy of the server's
+ * rule (functions/src/bachs/grant.ts upgradeRefusal), so the button is not offered only to be refused.
+ */
+export const subscriptionUpgradeBlock = (profile: BillingProfile | null | undefined): string | null => {
+  if (!profile || profile.billing_mode !== 'subscription') return null;
+  if (profile.subscription_status === 'cancelled') return 'Your plan is cancelled and ends at the end of this period, so it cannot be upgraded. Upgrade once it has ended, or contact support.';
+  if (profile.subscription_status === 'past_due') return 'Your last payment failed. Update your card from Billing before upgrading.';
+  return null;
+};
+
 /** "Renew pass (+30 days) · ₦9,900" — the button names what it charges. */
 export const renewPassLabel = (tier: string): string => {
   const price = naira(tier);

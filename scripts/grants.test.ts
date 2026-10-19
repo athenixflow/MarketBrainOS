@@ -347,7 +347,8 @@ ok(!expansionBuyIsOff(capacity.replace('const canBuy = false;', 'const canBuy = 
    to /billing?checkout=success|cancelled; the plan panel that used to read the parameter lives in
    Settings and the Dashboard, so on /billing a paid customer saw nothing at all. */
 export const acknowledgesCheckoutReturn = (page: string): boolean =>
-  /URLSearchParams\([^)]*\)\.get\('checkout'\)/.test(page)
+  /* checkoutReturn (services/planActions.ts) reads it even when Bachs appends "?checkout_id=" literally. */
+  /URLSearchParams\([^)]*\)\.get\('checkout'\)|checkoutReturn\(window\.location\.search\)/.test(page)
   && /=== 'success'/.test(page) && /=== 'cancelled'/.test(page) && /refreshProfile\(\)/.test(page)
   /* The webhook lands a few seconds after the redirect, so one immediate refresh shows the old plan:
      it is refreshed again on a timer, and the timers are cleared when the page goes. */
@@ -358,8 +359,8 @@ export const showsPassTerms = (page: string): boolean =>
   && /formatPrice\(/.test(page) && /\/30 days/.test(page);
 console.log('\nTHE CHECKOUT RETURN IS ACKNOWLEDGED:');
 const app = blank(fs.readFileSync(path.join(root, 'App.tsx'), 'utf8'));
-ok(/success_url: `\$\{SITE\}\/billing\?checkout=success`/.test(index) && /cancel_url: `\$\{SITE\}\/billing\?checkout=cancelled`/.test(index),
-  'a checkout sends the customer back to /billing, with the outcome in the query');
+ok(/success_url: `\$\{SITE\}\/billing\?checkout=success&for=\$\{kind\}`/.test(index) && /cancel_url: `\$\{SITE\}\/billing\?checkout=cancelled`/.test(index),
+  'a checkout sends the customer back to /billing, with the outcome (and, on success, what was bought) in the query');
 ok(/path="\/billing" element=\{[^}]*<BillingCenter \/>/.test(app), 'the /billing route renders pages/BillingCenter.tsx');
 ok(acknowledgesCheckoutReturn(blank(fs.readFileSync(path.join(root, 'pages', 'BillingCenter.tsx'), 'utf8'))),
   'pages/BillingCenter.tsx reads the checkout outcome, says so, and refreshes the profile on success');
@@ -797,6 +798,41 @@ ok(readsOldPaymentShape("<span>Ref: {payment.payment_reference || 'N/A'}</span>"
 ok(readsOldPaymentShape("const amt = (p as any)['amount_paid'];"), 'CONTROL: a bracket read of amount_paid is caught');
 ok(!readsOldPaymentShape('// the old shape kept p.amount_paid in dollars'), 'a comment that mentions the old field is not a read');
 ok(!readsOldPaymentShape('export interface LegacyPaymentRecord { amount_paid: number; payment_reference: string; }'), 'a type declaring the old fields is not a read');
+
+console.log('\nFINAL-REVIEW MINORS:');
+/* M1: the legacy changeSubscription cancel/downgrade would write subscription_status / tier on an account Bachs
+   bills, behind Bachs' back (a "cancelled" flag with the card still charged, or Free with a pass still paid).
+   A Bachs-billed account is managed from Billing; the refusal comes before either branch writes. */
+export const legacyChangeRefusesBilled = (fn: string): boolean => {
+  const refuse = fn.search(/if \(userData\.billing_mode && \(action === 'cancel' \|\| action === 'downgrade'\)\) \{\s*throw new functions\.https\.HttpsError\('failed-precondition', 'Manage this plan from Billing\.'\);/);
+  const cancel = fn.indexOf("} else if (action === 'cancel')");
+  return refuse >= 0 && cancel > refuse;
+};
+ok(legacyChangeRefusesBilled(change), "M1: changeSubscription refuses cancel/downgrade for a Bachs-billed account ('Manage this plan from Billing.')");
+const goodChange = "const userData = userDoc.data()!;\n      if (userData.billing_mode && (action === 'cancel' || action === 'downgrade')) {\n        throw new functions.https.HttpsError('failed-precondition', 'Manage this plan from Billing.');\n      }\n      if (action === 'upgrade') { x(); } else if (action === 'cancel') { t.update(userRef, { subscription_status: 'cancelled' }); }";
+ok(legacyChangeRefusesBilled(goodChange), 'a changeSubscription that refuses billed accounts first passes');
+ok(!legacyChangeRefusesBilled(goodChange.replace("userData.billing_mode && ", '')), 'CONTROL: a refusal that is not about billed accounts is caught');
+const lateRefusal = goodChange.split('\n');
+ok(!legacyChangeRefusesBilled([lateRefusal[0], lateRefusal[4], ...lateRefusal.slice(1, 4)].join('\n')), 'CONTROL: a refusal placed after the cancel branch is caught');
+/* M8: deleting an account must account for its checkouts and billing reviews. Both are financial records,
+   so they are RETAINED (like payments) by uid, never left out of the data map. */
+export const retainsBillingRecords = (src: string): boolean => {
+  const block = between(src, 'const RETAINED_ROWS', '\n];');
+  return /\{ collection: 'checkouts', fields: \['uid'\]/.test(block) && /\{ collection: 'billing_reviews', fields: \['uid'\]/.test(block);
+};
+ok(retainsBillingRecords(index), "M8: deleteAccount's data map retains checkouts and billing_reviews by uid");
+ok(!retainsBillingRecords(index.replace(/\{ collection: 'checkouts', fields: \['uid'\][^\n]*\n/, '')), 'CONTROL: a data map without checkouts is caught');
+/* M9: createCheckout writes a checkout record and opens a Bachs session per call, so it is rate limited like the
+   other callables (underLimit), before either happens. */
+export const checkoutIsRateLimited = (fn: string): boolean => {
+  const limit = fn.search(/if \(!\(await underLimit\('create_checkout', uid, \d+, [^)]+\)\)\) \{\s*throw new functions\.https\.HttpsError\('resource-exhausted'/);
+  const write = fn.indexOf('checkoutRef.set(');
+  return limit >= 0 && write > limit;
+};
+ok(checkoutIsRateLimited(exported(index, 'createCheckout')), 'M9: createCheckout is rate limited (underLimit) before it records a checkout or calls Bachs');
+ok(!checkoutIsRateLimited("export const createCheckout = f(async () => { await checkoutRef.set({}); if (!(await underLimit('create_checkout', uid, 10, 60 * 60 * 1000))) { throw new functions.https.HttpsError('resource-exhausted', 'x'); } });"),
+  'CONTROL: a limit checked only after the checkout is written is caught');
+ok(!checkoutIsRateLimited("export const createCheckout = f(async () => { await checkoutRef.set({}); });"), 'CONTROL: a createCheckout with no limit is caught');
 
 console.log(failures === 0
   ? '\nPASS — no signed-in user can grant themselves a plan, a token pack or a refill.'

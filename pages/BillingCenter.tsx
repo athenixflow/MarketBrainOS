@@ -11,7 +11,7 @@ import { PaymentRecord } from '../types';
 import { PLAN_META, DEFAULT_PRICING_CONFIG, Tier } from '../config/pricingConfig';
 import { BillingStatus, canPay, fetchBillingStatus, formatPrice, startCheckout } from '../services/billing';
 import { paymentView } from '../services/payments';
-import { isPassRenewal, renewPassLabel } from '../services/planActions';
+import { checkoutReturn, isPassRenewal, renewPassLabel } from '../services/planActions';
 import { track } from '../services/analytics';
 
 const LOAD_ERROR = 'We could not load your billing history. Please try again.';
@@ -21,8 +21,9 @@ const BillingCenter: React.FC = () => {
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // Where a Bachs checkout lands the customer (?checkout=success|cancelled): say what happened.
+  // Where a Bachs checkout lands the customer (?checkout=success|cancelled&for=kind): say what happened.
   const [returned, setReturned] = useState<'success' | 'cancelled' | null>(null);
+  const [returnedFor, setReturnedFor] = useState<'plan' | 'pass' | 'pack' | null>(null);
   /* The pass reminder and expiry emails link here, so a pass is renewed from this page (the same
      naira pass checkout as the plan panel), once payments are live. */
   const [billing, setBilling] = useState<BillingStatus | null>(null);
@@ -35,10 +36,12 @@ const BillingCenter: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const q = new URLSearchParams(window.location.search).get('checkout');
+    /* Bachs appends "?checkout_id=" to the return URL literally; checkoutReturn still reads it. */
+    const { outcome: q, kind } = checkoutReturn(window.location.search);
     const timers: number[] = [];
     if (q === 'success') {
       setReturned('success');
+      setReturnedFor(kind);
       void refreshProfile();
       /* The webhook grants the plan a few seconds after the redirect, so the first refresh can still show
          the old plan: look again at about 5s and 20s. The timers die with the page. */
@@ -97,7 +100,11 @@ const BillingCenter: React.FC = () => {
     <div>
       <PageHeader title="Billing Center" subtitle="Your plan, token balance, purchases, and invoices." />
       <div className="space-y-6">
-        {returned === 'success' && <SuccessMessage message="Payment received — your plan updates within a minute." />}
+        {returned === 'success' && (
+          <SuccessMessage message={returnedFor === 'pack'
+            ? 'Payment received — your tokens arrive within a minute.'
+            : 'Payment received — your plan updates within a minute.'} />
+        )}
         {returned === 'cancelled' && <ErrorMessage message="Checkout was cancelled. Nothing was charged." />}
         <Card title="Current plan">
           <div className="flex flex-wrap items-end justify-between gap-6">

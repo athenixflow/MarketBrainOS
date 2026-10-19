@@ -467,6 +467,9 @@ const Settings: React.FC = () => {
                     {(analyses > 0 || reports > 0) && (
                       <p>{analyses} {analyses === 1 ? 'analysis' : 'analyses'} and {reports} {reports === 1 ? 'report' : 'reports'} you created will be deleted.</p>
                     )}
+                    {profile.billing_mode === 'subscription' && (
+                      <p>Your dollar subscription is cancelled when the account is deleted, so you won't be charged again.</p>
+                    )}
                     {paid && (
                       <p>Your <strong className="text-[#0B0B0B]">{tierLabel}</strong> plan ends immediately. <strong className="text-[#0B0B0B]">{profile.monthly_tokens ?? profile.tokens}</strong> monthly and <strong className="text-[#0B0B0B]">{profile.purchased_tokens ?? 0}</strong> purchased tokens are forfeited — they are not refunded and cannot move to another account. If you want to spend them first, keep your account and come back later.</p>
                     )}

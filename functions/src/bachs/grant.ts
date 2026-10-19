@@ -120,6 +120,18 @@ export const manageOwnership = (uid: string, account: Account, snap: Subscriptio
   return { ok: true };
 };
 
+/**
+ * Why this subscription cannot be upgraded now, or null. A cancelling one ends at the period's end, and
+ * a prorated upgrade would bill a plan that is about to stop; a past-due one has a failed payment that
+ * Bachs is still retrying. services/planActions.ts subscriptionUpgradeBlock is the page's copy.
+ */
+export const upgradeRefusal = (snap: SubscriptionSnapshot): string | null => {
+  if (snap.cancelAtPeriodEnd) return 'Your plan is cancelled and ends at the end of this period, so it cannot be upgraded. Upgrade once it has ended, or contact support.';
+  if (snap.status === 'past_due') return 'Your last payment failed. Update your card from Billing before upgrading.';
+  if (snap.status !== 'active') return 'Only an active subscription can be upgraded.';
+  return null;
+};
+
 export const applyOneOff = (
   account: Account | null,
   checkout: CheckoutRecord | null,

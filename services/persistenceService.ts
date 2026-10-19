@@ -314,6 +314,8 @@ export const getUserProfile = async (userId: string): Promise<UserProfile | null
       billing_currency: data.billing_currency,
       pass_expires_at: data.pass_expires_at,
       bachs_customer_id: data.bachs_customer_id,
+      // Server-counted runs: ToolPage's run_index and AnalyticsBridge's is_activated read it.
+      analyses_count: data.analyses_count,
       // Profile / account fields (client-editable via Settings)
       first_name: data.first_name,
       last_name: data.last_name,

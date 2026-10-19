@@ -113,7 +113,8 @@ export const parseBachsEvent = (body: unknown): BachsEvent | null => {
   if (type === 'invoice.paid' || type === 'invoice.payment_failed' || type.startsWith('customer.subscription.')) {
     return base.subscriptionId ? { ...base, kind: 'subscription_changed' } : null;
   }
-  if (type.startsWith('refund.') || type.startsWith('dispute.')) return { ...base, kind: 'review' };
+  /* An underpaid collection is money we cannot match to a price: a human looks (spec §5). */
+  if (type === 'collection.underpaid' || type.startsWith('refund.') || type.startsWith('dispute.')) return { ...base, kind: 'review' };
   return null;
 };
 

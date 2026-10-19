@@ -7,7 +7,7 @@ import { DEFAULT_PRICING_CONFIG, PLAN_META } from '../config/pricingConfig';
 import { track } from '../services/analytics';
 import { fetchBillingStatus, BillingStatus, Currency, formatPrice, canPay, startCheckout, callManageBilling } from '../services/billing';
 import { useCurrency } from './useCurrency';
-import { renewPassLabel } from '../services/planActions';
+import { checkoutReturn, renewPassLabel } from '../services/planActions';
 
 // Derived, never hardcoded: plan copy must track the pricing config or it drifts (it previously
 // advertised 200 tokens while the config granted 100).
@@ -42,8 +42,11 @@ const SubscriptionPanel: React.FC = () => {
   useEffect(() => {
     let alive = true;
     void fetchBillingStatus().then((s) => { if (alive) setBilling(s); });
-    const q = new URLSearchParams(window.location.search).get('checkout');
-    if (q === 'success') { setMsg('Payment received — your plan updates within a minute.'); void refreshProfile(); }
+    const { outcome: q, kind } = checkoutReturn(window.location.search);
+    if (q === 'success') {
+      setMsg(kind === 'pack' ? 'Payment received — your tokens arrive within a minute.' : 'Payment received — your plan updates within a minute.');
+      void refreshProfile();
+    }
     if (q === 'cancelled') { setMsgErr(true); setMsg('Checkout was cancelled. Nothing was charged.'); }
     return () => { alive = false; };
     /* Runs once on mount. Listing refreshProfile here would loop if it is not memoised:

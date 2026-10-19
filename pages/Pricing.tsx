@@ -9,7 +9,7 @@ import { MARKETING_SEO, SITE_URL, SITE_NAME } from '../config/seo';
 import { track } from '../services/analytics';
 import { fetchBillingStatus, BillingStatus, Currency, formatPrice, canPay, startCheckout, callManageBilling } from '../services/billing';
 import { useCurrency } from '../components/useCurrency';
-import { isPassRenewal, passReplaceNotice } from '../services/planActions';
+import { isPassRenewal, passReplaceNotice, subscriptionUpgradeBlock } from '../services/planActions';
 import { Modal, PrimaryButton, SecondaryButton } from '../components/UI';
 
 // Product + per-plan Offer structured data (generated from the live pricing config).
@@ -95,18 +95,23 @@ const Pricing: React.FC = () => {
   /* A naira pass holder's own tier, in naira, is a way to pay again: the pass reminder emails land
      here. It goes through the same pass checkout as any other pass (select → startCheckout). */
   const renewable = (tier: Tier) => payable && isPassRenewal(profile, tier, currency);
+  /* A cancelling or past-due dollar subscription is not upgraded (the server refuses it too). */
+  const upgradeBlock = subscriptionUpgradeBlock(profile);
+  const upgradeBlocked = (tier: Tier, idx: number) =>
+    !!upgradeBlock && currency === 'USD' && tier !== 'enterprise' && currentIdx >= 0 && idx > currentIdx;
   const ctaLabel = (tier: Tier, idx: number) => {
     if (!user) return tier === 'free' ? 'Start free' : 'Get started';
     if (currentTier === tier) return renewable(tier) ? 'Renew (+30 days)' : 'Current plan';
     if (currentIdx >= 0 && idx < currentIdx) return 'Included';
     /* Until there is a way to pay, the button does not offer to take money. */
     if (!payable && tier !== 'free') return 'Talk to us';
+    if (upgradeBlocked(tier, idx)) return 'Upgrade unavailable';
     if (busy === tier) return 'Processing…';
     /* "— 30 days" only where a naira pass exists: Enterprise has none and keeps its normal label. */
     return currency === 'NGN' && CFG.plans[tier].priceNgn ? `Get ${PLAN_META[tier].name} — 30 days` : `Upgrade to ${PLAN_META[tier].name}`;
   };
   const ctaDisabled = (tier: Tier, idx: number) =>
-    busy !== null || (!!user && ((currentTier === tier && !renewable(tier)) || (currentIdx >= 0 && idx < currentIdx)));
+    busy !== null || (!!user && ((currentTier === tier && !renewable(tier)) || (currentIdx >= 0 && idx < currentIdx) || upgradeBlocked(tier, idx)));
 
   const expansionLine = (tier: Tier): string | null => {
     if (tier === 'team') return `Extra seats $${CFG.expansion.member}/mo`;
@@ -137,6 +142,7 @@ const Pricing: React.FC = () => {
           ))}
         </div>
         {currency === 'NGN' && <p className="text-center text-xs text-gray-500 mb-8">Naira plans are 30-day passes: pay once, no automatic charge. We email you before it ends.</p>}
+        {currency === 'USD' && upgradeBlock && <p className="text-center text-xs text-gray-500 mb-8">{upgradeBlock}</p>}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
           {PLAN_ORDER.map((tier, idx) => {
             const plan = CFG.plans[tier];
