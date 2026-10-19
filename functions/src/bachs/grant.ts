@@ -1,5 +1,5 @@
-import { Currency, Kind, PricingLike, TIER_RANK, catalogItem } from './catalog';
-import { BachsEvent } from './events';
+import { Currency, Kind, PaidTier, PricingLike, TIER_RANK, catalogItem } from './catalog';
+import { BachsEvent, SubscriptionSnapshot } from './events';
 
 /**
  * EVERY RULE THAT GRANTS PAID VALUE (spec §5). Pure: the account, the checkout record and the
@@ -171,5 +171,73 @@ export const expirePass = (a: Account, nowIso: string): Record<string, unknown> 
     subscription_status: 'expired',
     pass_expires_at: null,
     ...balanceFields(0, balances(a).purchased),
+  };
+};
+
+/* ===================================================== USD subscriptions */
+
+export interface SyncResult {
+  /** Always applied: status, renewal date, ids. Idempotent field sets. */
+  stateUpdate: Record<string, unknown>;
+  /** Applied once per ledger key: the paid period, or the end. */
+  grant: GrantResult;
+}
+
+/**
+ * Sync one subscription to the state Bachs reports NOW (spec §5, §6).
+ *
+ * The webhook does not trust an event's copy of the subscription: it fetches the current one
+ * and calls this, and the hourly reconciliation calls the same thing. Delivery order then
+ * cannot matter, and a missed webhook is caught by the next run with the same keys.
+ *
+ * KEYS. A paid period is `period:{sub}:{start}:{product}` — the product is in the key because
+ * an upgrade with proration is a new grant inside the same period. The end is `end:{sub}`.
+ */
+export const syncSubscription = (
+  account: Account,
+  snap: SubscriptionSnapshot,
+  tier: PaidTier | null,
+  cfg: PricingLike,
+  chargedMinor: number | null,
+): SyncResult => {
+  const { purchased } = balances(account);
+  const ids = { bachs_subscription_id: snap.id, bachs_customer_id: snap.customerId, billing_currency: 'USD' };
+
+  if (snap.status === 'canceled' || snap.status === 'unpaid') {
+    return {
+      stateUpdate: {},
+      grant: {
+        ...NONE,
+        ledgerKey: `end:${snap.id}`,
+        userUpdate: {
+          tier: 'free', billing_mode: null, subscription_status: 'free', bachs_subscription_id: null,
+          ...balanceFields(0, purchased),
+        },
+      },
+    };
+  }
+  if (snap.status === 'past_due') return { stateUpdate: { ...ids, subscription_status: 'past_due' }, grant: NONE };
+  if (snap.status !== 'active') return { stateUpdate: ids, grant: NONE };
+
+  const ledgerKey = `period:${snap.id}:${snap.currentPeriodStart}:${snap.productId}`;
+  const stateUpdate = {
+    ...ids,
+    subscription_status: snap.cancelAtPeriodEnd ? 'cancelled' : 'active',
+    plan_renews_at: snap.currentPeriodEnd,
+  };
+  if (!tier) return { stateUpdate: {}, grant: { ...NONE, ledgerKey, review: `subscription on unknown product ${snap.productId}` } };
+  const item = catalogItem(cfg, 'plan', tier, 'USD');
+  if (!item || snap.currency !== 'USD' || snap.amountMinor !== item.amountMinor) {
+    return { stateUpdate: {}, grant: { ...NONE, ledgerKey, review: `subscription bills ${snap.amountMinor} ${snap.currency}, ${tier} is ${item?.amountMinor} USD` } };
+  }
+  return {
+    stateUpdate,
+    grant: {
+      ledgerKey,
+      review: null,
+      checkoutStatus: null,
+      userUpdate: { tier, billing_mode: 'subscription', ...balanceFields(item.tokens, purchased) },
+      payment: { kind: 'plan', item: tier, amount_minor: chargedMinor ?? item.amountMinor, currency: 'USD', tokens_credited: item.tokens },
+    },
   };
 };
