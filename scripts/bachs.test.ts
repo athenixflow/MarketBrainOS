@@ -10,6 +10,7 @@ import { DEFAULT_PRICING_CONFIG as CFG } from '../config/pricingConfig';
 import { catalogItem, toMajorString, toMinor } from '../functions/src/bachs/catalog';
 import { billingLive, productForTier, tierForProduct } from '../functions/src/bachs/config';
 import { signPayload, verifyBachsSignature } from '../functions/src/bachs/signature';
+import { parseBachsEvent, parseCheckoutSession, parseSubscription } from '../functions/src/bachs/events';
 
 let failures = 0;
 const ok = (cond: boolean, label: string, detail = '') => {
@@ -72,6 +73,35 @@ ok(verifyBachsSignature(BODY, header(msT, signPayload(SECRET, String(msT), BODY)
 ok(!verifyBachsSignature(BODY, header(msT, signPayload(SECRET, String(msT), BODY)), SECRET, NOW + 400),
   'and rejected when stale');
 ok(!verifyBachsSignature(BODY, 'garbage', SECRET, NOW) && !verifyBachsSignature(BODY, `t=${NOW}`, SECRET, NOW), 'a malformed header fails');
+
+console.log('\nEVENTS:');
+const ev = (type: string, data: Record<string, unknown>) => ({ id: 'evt_1', type, created_at: '2026-10-20T10:00:00Z', data });
+const paid = parseBachsEvent(ev('collection.succeeded', { reference: 'mb_1', status: 'SUCCEEDED', amount: '9900.00', currency: 'ngn', metadata: { uid: 'u1' }, checkout_id: 'chk_1' }));
+ok(paid?.kind === 'one_off_paid' && paid.amountMinor === 990000 && paid.currency === 'NGN' && paid.metadata.uid === 'u1' && paid.checkoutId === 'chk_1',
+  'collection.succeeded becomes a one-off payment, amount in kobo, currency upper-cased');
+ok(parseBachsEvent(ev('collection.succeeded', { status: 'SUCCEEDED', amount: '19.00' })) === null,
+  'a collection with no reference (a renewal) is left to invoice.paid');
+ok(parseBachsEvent(ev('collection.succeeded', { reference: 'mb_1', status: 'FAILED', amount: '1.00' })) === null, 'a failed collection grants nothing');
+ok(parseBachsEvent(ev('checkout.completed', { id: 'chk_2', mode: 'payment', payment_status: 'paid', reference: 'mb_2', amount: '10.00', currency: 'USD' }))?.kind === 'one_off_paid',
+  'a paid one-off checkout is a one-off payment');
+const linked = parseBachsEvent(ev('checkout.completed', { id: 'chk_3', mode: 'subscription', payment_status: 'paid', reference: 'mb_3', subscription: { id: 'sub_9' }, customer: { id: 'cust_4' } }));
+ok(linked?.kind === 'subscription_linked' && linked.subscriptionId === 'sub_9' && linked.customerId === 'cust_4',
+  'a subscription checkout only links ids (the period grant comes from the subscription)');
+ok(parseBachsEvent(ev('invoice.paid', { subscription: 'sub_9', amount_paid: '19.00' }))?.kind === 'subscription_changed', 'invoice.paid → sync the subscription');
+ok(parseBachsEvent(ev('customer.subscription.deleted', { id: 'sub_9', status: 'canceled' }))?.subscriptionId === 'sub_9', 'a subscription event carries its own id');
+ok(parseBachsEvent(ev('dispute.created', { charge_id: 'ch_1' }))?.kind === 'review', 'a dispute goes to review');
+ok(parseBachsEvent(ev('payout.paid', {})) === null && parseBachsEvent({}) === null && parseBachsEvent(null) === null && parseBachsEvent('x') === null,
+  'unknown and malformed events parse to null, never throw');
+
+const sub = parseSubscription({ id: 'sub_9', status: 'ACTIVE', product_id: 'prod_p', customer: { id: 'cust_4' }, currency: 'usd', amount: '19.00',
+  current_period_start: '2026-10-01T00:00:00Z', current_period_end: '2026-11-01T00:00:00Z', cancel_at_period_end: true, metadata: { uid: 'u1' } });
+ok(sub?.status === 'active' && sub.productId === 'prod_p' && sub.amountMinor === 1900 && sub.cancelAtPeriodEnd && sub.metadata.uid === 'u1',
+  'a subscription parses: status lower-cased, amount in cents, cancel flag, metadata');
+ok(parseSubscription({ data: { id: 'sub_9', status: 'active' } })?.id === 'sub_9', 'a { data } envelope is unwrapped');
+ok(parseSubscription({ status: 'active' }) === null, 'no id → null');
+const chk = parseCheckoutSession({ checkout_id: 'chk_1', reference: 'mb_1', status: 'completed', payment_status: 'paid', amount: '9900.00', currency: 'NGN' });
+ok(chk?.paid === true && chk.amountMinor === 990000 && chk.reference === 'mb_1', 'a paid checkout session parses');
+ok(parseCheckoutSession({ id: 'chk_1', status: 'expired' })?.expired === true, 'an expired session parses');
 
 console.log(failures === 0
   ? '\nPASS — Bachs: amounts, signatures, events and every grant rule behave.'
