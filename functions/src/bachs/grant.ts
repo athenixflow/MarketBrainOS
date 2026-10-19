@@ -149,7 +149,9 @@ export const reminderDue = (a: Account, nowIso: string): 5 | 1 | null => {
   const daysLeft = (Date.parse(a.pass_expires_at) - Date.parse(nowIso)) / DAY_MS;
   const sent = Array.isArray(a.pass_reminded) ? a.pass_reminded : [];
   if (daysLeft <= 0) return null;
-  if (daysLeft <= 1 && !sent.includes(1)) return 1;
+  /* With ≤1 day left only the 1-day reminder can be due: a "5 days left" email must never go
+     out then, even if that reminder was missed (a skipped cron run). */
+  if (daysLeft <= 1) return sent.includes(1) ? null : 1;
   if (daysLeft <= 5 && !sent.includes(5)) return 5;
   return null;
 };

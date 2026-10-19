@@ -195,6 +195,8 @@ ok(attempt(() => !checkoutAllowed(proPass(day(10)), 'pass', '__proto__', T0).ok)
 console.log('\nPASS LIFECYCLE:');
 ok(reminderDue(proPass(day(4.5)), T0) === 5 && reminderDue({ ...proPass(day(4.5)), pass_reminded: [5] }, T0) === null, '5-day reminder once');
 ok(reminderDue({ ...proPass(day(0.5)), pass_reminded: [5] }, T0) === 1, '1-day reminder');
+ok(reminderDue({ ...proPass(day(0.5)), pass_reminded: [1] }, T0) === null, 'with ≤1 day left and the 1-day reminder sent, no 5-day reminder goes out (a missed cron run)');
+ok(reminderDue(proPass(day(0.5)), T0) === 1, 'with ≤1 day left and nothing sent, only the 1-day reminder is due');
 ok(reminderDue(proPass(day(10)), T0) === null && reminderDue(usdSub, T0) === null, 'no reminder early, or for a subscription');
 const exp = expirePass(proPass(day(-0.1)), T0);
 ok(exp?.tier === 'free' && exp?.monthly_tokens === 0 && exp?.purchased_tokens === 7 && exp?.subscription_status === 'expired',
