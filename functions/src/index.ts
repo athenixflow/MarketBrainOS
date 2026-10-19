@@ -4388,8 +4388,13 @@ export const manageBilling = functions.runWith({ secrets: BACHS_SECRETS }).https
   const snap = parseSubscription(await bachs().getSubscription(subId));
   const owned = manageOwnership(uid, account, snap, action);
   if (!owned.ok) {
-    try { await billingAlertEmail('A billing action was refused', [owned.alert]); }
-    catch (e: any) { console.error('manageBilling: ownership alert failed:', e?.message || e); }
+    /* One alert per uid per day, not one per click: the alert follows the CREATION of the day's
+       marker, and create() fails when it exists. Best effort — the refusal is thrown regardless. */
+    try {
+      const day = new Date().toISOString().slice(0, 10);
+      await ledgerDoc(`ownership-alert:${uid}:${day}`).create({ key: `ownership-alert:${uid}:${day}`, outcome: 'alert', created_at: admin.firestore.FieldValue.serverTimestamp() });
+      await billingAlertEmail('A billing action was refused', [owned.alert]);
+    } catch (e: any) { console.error('manageBilling: ownership alert skipped:', e?.message || e); }
     throw new functions.https.HttpsError('permission-denied', owned.reason);
   }
 
@@ -4460,9 +4465,11 @@ export const bachsWebhook = functions.runWith({ secrets: BACHS_SECRETS }).https.
     if (event.kind === 'one_off_paid') {
       /* Bachs fulfils on whichever of collection.succeeded and checkout.completed arrives first, and
          the documented checkout.completed names no top-level amount. An unreadable amount is looked
-         up on the session — exactly as reconciliation reads it — and when that fails or still reads
-         nothing the event is deferred: 200, nothing written, the checkout left open, so the other
-         event or the hourly run settles it. */
+         up on the session — exactly as reconciliation reads it, and only a PAID session counts — and
+         when that fails, the session is unpaid, or it still reads nothing, the event is deferred: 200,
+         nothing written, the checkout left open, so the other event or the hourly run settles it.
+         A SUCCEEDED/ACCEPTED/OVERPAID collection whose amount is unreadable (say "9,900.00") is settled
+         from the session's price — the one we set — rather than reviewed (Review Focus 2, as ruled). */
       let paid: Pick<BachsEvent, 'id' | 'reference' | 'amountMinor' | 'currency' | 'checkoutId'> = event;
       if (event.amountMinor === null || event.currency === null) {
         const checkoutRef = event.reference && /^[A-Za-z0-9_-]{1,128}$/.test(event.reference)
@@ -4474,7 +4481,7 @@ export const bachsWebhook = functions.runWith({ secrets: BACHS_SECRETS }).https.
           try { s = parseCheckoutSession(await bachs(WEBHOOK_BACHS_TIMEOUT_MS).getCheckoutSession(sessionId)); }
           catch (e: any) { console.error('bachsWebhook: session lookup failed:', e?.message || e); }
         }
-        if (!s || s.amountMinor === null || s.currency === null) { res.status(200).send('deferred'); return; }
+        if (!s || !s.paid || s.amountMinor === null || s.currency === null) { res.status(200).send('deferred'); return; }
         paid = { ...event, amountMinor: s.amountMinor, currency: s.currency, checkoutId: event.checkoutId ?? s.id };
       }
       res.status(200).send(await applyOneOffPayment(paid, 'webhook'));

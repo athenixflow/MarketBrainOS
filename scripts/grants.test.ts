@@ -274,9 +274,13 @@ export const receiptsOnlyFromInvoices = (body: string): boolean => {
   const writes = [...body.matchAll(/db\.collection\('payments'\)/g)].map((m) => m.index as number);
   const gate = body.search(/const receipt = state\.receipt;\s*if \(receipt\) \{/);
   const invoiceGate = body.search(/if \(invoice && invoiceRef && !invoiceSeen\) \{/);
+  /* Above both early returns, or a state-granted period's or an ended subscription's invoice is never recorded. */
+  const alreadyEnded = body.indexOf("return 'already ended'");
+  const stateSynced = body.indexOf("return 'state synced'");
   return sends.length === 1 && writes.length === 1
     && gate >= 0 && gate < sends[0] && !/outcome ===/.test(body.slice(gate, sends[0]))
     && invoiceGate >= 0 && invoiceGate < writes[0] && writes[0] - invoiceGate < 200
+    && alreadyEnded > invoiceGate && stateSynced > invoiceGate
     && body.indexOf('invoicePayment(') >= 0 && body.indexOf('invoicePayment(') < invoiceGate
     && !/r\.grant\.payment/.test(body);
 };
@@ -403,6 +407,8 @@ const receiptBody = [
   "      t.set(db.collection('payments').doc(), { uid, amount_minor: invoice.amountMinor });",
   "      state.receipt = { invoiceId: invoice.invoiceId };",
   "    }",
+  "    if (ended && !isEnd) return 'already ended';",
+  "    if (!grantRef || recorded) return 'state synced';",
   "    if (r.grant.userUpdate) t.update(userRef, r.grant.userUpdate);",
   "  });",
   "  const receipt = state.receipt;",
@@ -423,6 +429,18 @@ ok(!receiptsOnlyFromInvoices(helperBody(receiptBody.replace('if (invoice && invo
   'CONTROL: an invoice recorded without its once-only ledger check (a redelivery would record it twice) is caught');
 ok(!receiptsOnlyFromInvoices(helperBody(receiptBody.replace("'paymentReceipt'", "'billingAlert'"), 'syncSubscriptionById')),
   'CONTROL: a helper that sends no paymentReceipt at all is caught');
+/* The invoice block must sit ABOVE the early returns: below them, an invoice for a period a state event
+   already granted ('state synced') or for an ended subscription ('already ended') is never recorded. */
+const invoiceBlock = [
+  "    if (invoice && invoiceRef && !invoiceSeen) {",
+  "      t.set(db.collection('payments').doc(), { uid, amount_minor: invoice.amountMinor });",
+  "      state.receipt = { invoiceId: invoice.invoiceId };",
+  "    }",
+  "",
+].join('\n');
+const blockBelow = receiptBody.replace(invoiceBlock, '').replace('    if (r.grant.userUpdate)', `${invoiceBlock}    if (r.grant.userUpdate)`);
+ok(blockBelow !== receiptBody && !receiptsOnlyFromInvoices(helperBody(blockBelow, 'syncSubscriptionById')),
+  "CONTROL: an invoice block below 'already ended' / 'state synced' (the invoice is then never recorded) is caught");
 const elsewhere = "\nconst syncSubscriptionById = async () => { return 'x'; };\nexport const other = () => { const receipt = state.receipt; if (receipt) { sendTemplate(a, 'paymentReceipt', {}); } };";
 ok(!receiptsOnlyFromInvoices(helperBody(elsewhere, 'syncSubscriptionById')),
   'CONTROL: a receipt sent by a different function does not count');
@@ -652,8 +670,9 @@ ok(between('a X b Y c', 'X', 'Y') === 'X b ' && between('a X b', 'X', 'Y') === '
    checkout.completed carries no top-level amount, and it can arrive before collection.succeeded. So the
    webhook's one_off_paid branch, when the amount or the currency is null, fetches the checkout session
    (stored bachs_checkout_id, else the event's) on the short webhook client, reads it with
-   parseCheckoutSession — all BEFORE the grant helper — and when the lookup fails or still reads nothing
-   it answers 200 'deferred' (the fetch is in a try/catch, so a Bachs failure is a deferral, not a 500). */
+   parseCheckoutSession — all BEFORE the grant helper — and when the lookup fails, the session is not PAID
+   (reconciliation applies a session only when it is), or it still reads nothing, it answers 200
+   'deferred' (the fetch is in a try/catch, so a Bachs failure is a deferral, not a 500). */
 export const oneOffLooksUpUnreadAmount = (b: string): boolean => {
   const check = b.search(/if \(event\.amountMinor === null \|\| event\.currency === null\)/);
   const fetchAt = b.search(/bachs\(WEBHOOK_BACHS_TIMEOUT_MS\)\.getCheckoutSession\(/);
@@ -662,7 +681,7 @@ export const oneOffLooksUpUnreadAmount = (b: string): boolean => {
   return check >= 0 && fetchAt > check && parse > check && grant > fetchAt && grant > parse
     && /bachs_checkout_id/.test(b.slice(check, fetchAt))
     && /\bcatch\b/.test(b.slice(fetchAt, grant))
-    && /res\.status\(200\)\.send\('deferred'\);\s*return;/.test(b.slice(check, grant));
+    && /if \(!s \|\| !s\.paid \|\| s\.amountMinor === null \|\| s\.currency === null\) \{ res\.status\(200\)\.send\('deferred'\); return; \}/.test(b.slice(check, grant));
 };
 console.log('\nA ONE-OFF WITH NO READABLE AMOUNT IS LOOKED UP:');
 const oneOffBranch = between(exported(index, 'bachsWebhook'), "event.kind === 'one_off_paid'", "event.kind === 'subscription_linked'");
@@ -675,7 +694,7 @@ const goodOneOff = [
   "    const sessionId = String(stored?.bachs_checkout_id || event.checkoutId || '');",
   "    let s = null;",
   "    try { s = parseCheckoutSession(await bachs(WEBHOOK_BACHS_TIMEOUT_MS).getCheckoutSession(sessionId)); } catch (e) { console.error(e); }",
-  "    if (!s || s.amountMinor === null) { res.status(200).send('deferred'); return; }",
+  "    if (!s || !s.paid || s.amountMinor === null || s.currency === null) { res.status(200).send('deferred'); return; }",
   "    paid = { ...event, amountMinor: s.amountMinor, currency: s.currency };",
   "  }",
   "  res.status(200).send(await applyOneOffPayment(paid, 'webhook'));",
@@ -692,6 +711,8 @@ ok(!oneOffLooksUpUnreadAmount(goodOneOff.replace("res.status(200).send('deferred
   'CONTROL: a lookup that still reads nothing and does not defer is caught');
 ok(!oneOffLooksUpUnreadAmount(goodOneOff.replace("stored?.bachs_checkout_id || ", '')),
   'CONTROL: a lookup that ignores the stored session id is caught');
+ok(!oneOffLooksUpUnreadAmount(goodOneOff.replace('!s || !s.paid || ', '!s || ')),
+  'CONTROL: a lookup that takes an UNPAID session\'s amount (reconcile would not) is caught');
 
 /* A SELF-CREATED PROFILE SEEDS NO BILLING FIELD (final review I5). The users create rule pinned only
    tier, tokens and role, so a new account could arrive already holding a billing_mode, a pass expiry,
@@ -748,7 +769,8 @@ export const manageChecksOwnership = (fn: string): boolean => {
   const decide = fn.indexOf('manageOwnership(uid, account, ');
   const acts = ['cancelSubscriptionAtPeriodEnd(', 'changeSubscriptionProduct(', 'createPortalSession(', 'syncSubscriptionById(']
     .map((a) => fn.indexOf(a));
-  const refuse = fn.slice(decide).search(/if \(!owned\.ok\)[^]{0,400}?throw new functions\.https\.HttpsError\('permission-denied', owned\.reason\)/);
+  /* 800: the refusal carries the once-a-day alert marker (and its comment, blanked to spaces) before the throw. */
+  const refuse = fn.slice(decide).search(/if \(!owned\.ok\)[^]{0,800}?throw new functions\.https\.HttpsError\('permission-denied', owned\.reason\)/);
   return fetchAt >= 0 && decide > fetchAt && refuse >= 0 && acts.every((at) => at < 0 || at > decide + refuse)
     && acts.filter((at) => at >= 0).length >= 3;
 };
@@ -772,6 +794,37 @@ ok(!manageChecksOwnership(goodManage.replace("throw new functions.https.HttpsErr
 const portalFirst = goodManage.split('\n');
 portalFirst.splice(1, 0, portalFirst.splice(4, 1)[0]!);
 ok(!manageChecksOwnership(portalFirst.join('\n')), 'CONTROL: a portal opened before the ownership check is caught');
+/* AN OWNERSHIP REFUSAL ALERTS THE FOUNDER AT MOST ONCE PER UID PER DAY (residual 4). Each refused click used
+   to send a billingAlert. The alert now follows the CREATION of a once-per-day marker (ledgerDoc
+   `ownership-alert:{uid}:{yyyy-mm-dd}`, `create()` fails when it exists), inside a try/catch, so a marker
+   that already exists, or cannot be written, sends nothing and never stops the permission-denied throw. */
+export const ownershipAlertOncePerDay = (fn: string): boolean => {
+  const refused = fn.indexOf('if (!owned.ok) {');
+  if (refused < 0) return false;
+  const tryAt = fn.indexOf('try {', refused);
+  const marker = fn.slice(refused).search(/await ledgerDoc\(`ownership-alert:\$\{uid\}:\$\{[^}]+\}`\)\.create\(/);
+  const alert = fn.indexOf('billingAlertEmail(', refused);
+  const catchAt = fn.indexOf('catch', refused);
+  const thrown = fn.indexOf("throw new functions.https.HttpsError('permission-denied', owned.reason)", refused);
+  return tryAt > refused && marker >= 0 && refused + marker > tryAt && alert > refused + marker
+    && catchAt > alert && thrown > catchAt;
+};
+ok(ownershipAlertOncePerDay(manage), 'manageBilling alerts on an ownership refusal at most once per uid per day, and the refusal is thrown whatever the marker does');
+const goodOnce = [
+  "  if (!owned.ok) {",
+  "    try {",
+  "      await ledgerDoc(`ownership-alert:${uid}:${new Date().toISOString().slice(0, 10)}`).create({ key: 'k' });",
+  "      await billingAlertEmail('A billing action was refused', [owned.alert]);",
+  "    } catch (e: any) { console.error('skipped', e?.message || e); }",
+  "    throw new functions.https.HttpsError('permission-denied', owned.reason);",
+  "  }",
+].join('\n');
+ok(ownershipAlertOncePerDay(goodOnce), 'a refusal that alerts only after creating the day\'s marker passes');
+ok(!ownershipAlertOncePerDay(goodOnce.replace(').create({', ').set({')), 'CONTROL: a marker written with set() (never fails, so it alerts on every click) is caught');
+ok(!ownershipAlertOncePerDay(goodOnce.replace("      await ledgerDoc(`ownership-alert:${uid}:${new Date().toISOString().slice(0, 10)}`).create({ key: 'k' });\n", '')),
+  'CONTROL: an alert with no marker at all (the old behaviour) is caught');
+ok(!ownershipAlertOncePerDay(goodOnce.replace('    try {\n', '').replace("    } catch (e: any) { console.error('skipped', e?.message || e); }\n", '')),
+  'CONTROL: a marker outside a try/catch (an existing marker would throw past the refusal) is caught');
 
 /* NO PAGE READS THE OLD PAYMENT SHAPE ITSELF (final review I1). Every reader of `payments` used the retired
    provider's fields (amount_paid in dollars, payment_reference), so Bachs documents — minor units with

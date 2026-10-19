@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  PageHeader, Card, PrimaryButton, Stat, Skeleton, EmptyState, LedgerRow, ErrorMessage, SuccessMessage, LoadingState,
+  PageHeader, Card, PrimaryButton, SecondaryButton, Stat, Skeleton, EmptyState, LedgerRow, ErrorMessage, SuccessMessage, LoadingState,
 } from '../components/UI';
 import { TokenStore } from '../components/TokenStore';
 import { useAuth } from '../context/AuthContext';
@@ -9,7 +9,7 @@ import { getUserPaymentHistory } from '../services/persistenceService';
 import { downloadAsCSV, paymentsToCSV } from '../services/exportService';
 import { PaymentRecord } from '../types';
 import { PLAN_META, DEFAULT_PRICING_CONFIG, Tier } from '../config/pricingConfig';
-import { BillingStatus, canPay, fetchBillingStatus, formatPrice, startCheckout } from '../services/billing';
+import { BillingStatus, callManageBilling, canPay, fetchBillingStatus, formatPrice, startCheckout } from '../services/billing';
 import { paymentView } from '../services/payments';
 import { checkoutReturn, isPassRenewal, renewPassLabel } from '../services/planActions';
 import { track } from '../services/analytics';
@@ -28,6 +28,7 @@ const BillingCenter: React.FC = () => {
      naira pass checkout as the plan panel), once payments are live. */
   const [billing, setBilling] = useState<BillingStatus | null>(null);
   const [renewing, setRenewing] = useState(false);
+  const [openingPortal, setOpeningPortal] = useState(false);
   const [renewError, setRenewError] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
@@ -93,6 +94,18 @@ const BillingCenter: React.FC = () => {
       setRenewError(e?.message || 'Checkout could not be started.');
     } finally { setRenewing(false); }
   };
+  /* A failed dollar payment is told "Update your card from Billing": this is that action, the same
+     manageBilling portal the plan panel opens. */
+  const isSub = !isFree && profile.billing_mode === 'subscription';
+  const updateCard = async () => {
+    setOpeningPortal(true); setRenewError(null);
+    try {
+      const r = await callManageBilling('portal');
+      if (r.url) window.location.assign(r.url);
+    } catch (e: any) {
+      setRenewError(e?.message || 'The card page could not be opened.');
+    } finally { setOpeningPortal(false); }
+  };
   const views = payments.map((p) => ({ p, v: paymentView(p) }));
   const expansions = views.filter(({ v }) => v.kind === 'expansion');
 
@@ -116,6 +129,9 @@ const BillingCenter: React.FC = () => {
             <div className="flex flex-wrap items-center gap-3">
               {canRenew && (
                 <PrimaryButton onClick={renew} disabled={renewing}>{renewing ? 'Opening checkout…' : renewPassLabel(tier)}</PrimaryButton>
+              )}
+              {isSub && (
+                <SecondaryButton onClick={updateCard} disabled={openingPortal}>{openingPortal ? 'Opening…' : 'Update card'}</SecondaryButton>
               )}
               <Link to="/pricing"><PrimaryButton>Change plan</PrimaryButton></Link>
             </div>

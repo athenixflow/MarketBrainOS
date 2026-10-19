@@ -876,6 +876,13 @@ export const billingOffersRenewal = (page: string): boolean =>
   && /isPassRenewal\(profile, tier, 'NGN'\) && canPay\(billing, profile\.role\)/.test(page) && /fetchBillingStatus\(\)/.test(page);
 ok(billingOffersRenewal(billingCenter), 'pages/BillingCenter.tsx offers "Renew pass (+30 days) · ₦…" to a pass holder, through the naira pass checkout, once payments are live');
 ok(!billingOffersRenewal(billingCenter.replace("startCheckout('pass', tier, 'NGN')", "navigate('/pricing')")), 'CONTROL: a renew button that only sends the holder to /pricing is caught');
+/* The past-due copy (M7) says "Update your card from Billing", so /billing must have that action for a dollar
+   subscriber: the same manageBilling portal call the plan panel's "Update card" makes. */
+export const billingOffersCardUpdate = (page: string): boolean =>
+  /const isSub = !isFree && profile\.billing_mode === 'subscription';/.test(page)
+  && /\{isSub && \(/.test(page) && /callManageBilling\('portal'\)/.test(page) && /window\.location\.assign\(r\.url\)/.test(page) && /'Update card'/.test(page);
+ok(billingOffersCardUpdate(billingCenter), 'pages/BillingCenter.tsx gives a dollar subscriber "Update card" (the manageBilling portal), where the past-due copy sends them');
+ok(!billingOffersCardUpdate(billingCenter.replace("callManageBilling('portal')", "Promise.resolve({ url: '' })")), 'CONTROL: an "Update card" that never opens the portal is caught');
 ok(/startCheckout\('pass', String\(profile!\.tier\), 'NGN'\)/.test(code(src('components/SubscriptionPanel.tsx'))) && /renewPassLabel\(/.test(code(src('components/SubscriptionPanel.tsx'))),
   'components/SubscriptionPanel.tsx renews through the same checkout, and its button names the price too');
 
