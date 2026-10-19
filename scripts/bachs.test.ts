@@ -12,6 +12,7 @@ import { billingLive, productForTier, tierForProduct } from '../functions/src/ba
 import { signPayload, verifyBachsSignature } from '../functions/src/bachs/signature';
 import { parseBachsEvent, parseCheckoutSession, parseSubscription } from '../functions/src/bachs/events';
 import { applyOneOff, checkoutAllowed, expirePass, reminderDue, syncSubscription, PASS_DAYS } from '../functions/src/bachs/grant';
+import { bachsApi, bachsBaseUrl, BachsApiError } from '../functions/src/bachs/api';
 
 let failures = 0;
 const ok = (cond: boolean, label: string, detail = '') => {
@@ -348,6 +349,29 @@ for (const [label, firstSnap] of [['no period start', { currentPeriodStart: null
 /* The payment record says whether its amount was charged or is only the list price. */
 ok(s1.grant.payment?.amount_source === 'invoice' && upgraded.grant.payment?.amount_source === 'invoice', 'a payment recorded from an invoice says so');
 ok(recon.grant.payment?.amount_source === 'plan_price', 'a payment recorded without an invoice says it is the plan price');
+
+console.log('\nAPI WRAPPER:');
+ok(bachsBaseUrl('sk_live_x') === 'https://api.bachs.io/v1' && bachsBaseUrl('sk_sandbox_x') === 'https://sandbox-api.bachs.io/v1',
+  'the key decides the environment (a sandbox key can never reach live)');
+const calls: Array<{ url: string; init: any }> = [];
+const fakeFetch = (async (url: string, init: any) => {
+  calls.push({ url, init });
+  if (url.endsWith('/v1/checkout-sessions')) return new Response(JSON.stringify({ checkout_id: 'chk_1', checkout_url: 'https://checkout.bachs.io/c/1' }), { status: 200 });
+  if (url.includes('/subscriptions/sub_404')) return new Response(JSON.stringify({ error: { code: 'NOT_FOUND', message: 'no' } }), { status: 404 });
+  return new Response(JSON.stringify({ data: { id: 'sub_1', status: 'active' } }), { status: 200 });
+}) as unknown as typeof fetch;
+const api = bachsApi('sk_sandbox_k', fakeFetch);
+const session = await api.createCheckoutSession({ reference: 'mb_1' }, 'mb_1');
+ok(session.checkout_url === 'https://checkout.bachs.io/c/1', 'a checkout session returns its URL');
+ok(calls[0].init.headers.Authorization === 'Bearer sk_sandbox_k' && calls[0].init.headers['Idempotency-Key'] === 'mb_1'
+  && calls[0].init.method === 'POST', 'POSTs carry the bearer key and an idempotency key');
+ok(((await api.getSubscription('sub_1')) as any).data.id === 'sub_1', 'a GET returns the parsed body');
+let apiErr: any = null; try { await api.getSubscription('sub_404'); } catch (e) { apiErr = e; }
+ok(apiErr instanceof BachsApiError && apiErr.status === 404 && apiErr.code === 'NOT_FOUND', 'an error response throws BachsApiError with status and code');
+await api.cancelSubscriptionAtPeriodEnd('sub_1', 'cancel_sub_1');
+const cancelCall = calls[calls.length - 1];
+ok(cancelCall.init.method === 'DELETE' && JSON.parse(cancelCall.init.body).cancel_at_period_end === true,
+  'cancel always sends cancel_at_period_end: true (an API cancel is otherwise immediate)');
 
 console.log(failures === 0
   ? '\nPASS — Bachs: amounts, signatures, events and every grant rule behave.'
