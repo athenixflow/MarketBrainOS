@@ -215,6 +215,11 @@ service cloud.firestore {
       allow write: if false; // confirmTopUp / changeSubscription only (Admin SDK)
     }
 
+    // Bachs billing (server-only; Admin SDK writes). The client never reads or writes these.
+    match /checkouts/{id}       { allow read, write: if false; }
+    match /payment_events/{id}  { allow read, write: if false; }
+    match /billing_reviews/{id} { allow read: if isPlatformAdmin(); allow write: if false; }
+
     // ---------- platform settings / security ledgers ----------
     // System lockdown state. Every signed-in client reads this on each access/login check
     // (securityEngine.isSystemLocked); platform admins toggle emergency lockdown from the

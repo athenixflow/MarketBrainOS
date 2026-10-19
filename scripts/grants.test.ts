@@ -91,6 +91,8 @@ export const ALLOWED_TIER_WRITERS: Record<string, string> = {
   adminBulkAction: 'admin only (assertAdmin)',
   adminCreateUser: 'admin only (assertAdmin)',
   paystackWebhook: 'verified payment webhook (replaced by bachsWebhook)',
+  createCheckout: 'writes a checkout record and the requested item; grants nothing',
+  manageBilling: 'calls Bachs, then the shared subscription sync (verified state only)',
   lifecycleEmails: 'reads tier into email data; writes no user tier',
   growthDaily: 'reads tier to price revenue; writes no user tier',
 };
@@ -100,6 +102,13 @@ export const tierWriters = (src: string): string[] =>
     .map((part) => part.slice(0, part.search(/[\s=]/)));
 const unexpected = tierWriters(index).filter((name) => !(name in ALLOWED_TIER_WRITERS));
 ok(unexpected.length === 0, 'no exported function outside the allowlist writes a paid tier', unexpected.join(', '));
+/* The two Bachs grant helpers are plain consts, never exports: the allowlist above can only see
+   exported functions, so a helper that became a callable would grant outside it. The leading
+   \r? lets the check hold on a CRLF checkout. */
+export const grantHelpersAreInternal = (src: string) =>
+  /\r?\nconst applyOneOffPayment = async/.test(src) && /\r?\nconst syncSubscriptionById = async/.test(src);
+ok(grantHelpersAreInternal(index),
+  'the two grant helpers exist and are not exported (no callable can invoke them directly)');
 for (const name of ['manageWorkspace', 'manageAgency', 'manageEnterprise']) {
   const fn = exported(index, name);
   ok(fn.length > 0 && REFUSES.test(fn), `${name} refuses to create a container above the account's plan`);
@@ -132,6 +141,13 @@ ok(tierWriters("x\nexport const sneaky = f(() => { t.update(ref, { tier: 'enterp
   'CONTROL: an unknown function writing a paid tier is found, and a free-tier write is not');
 ok(tierWriters("x\nexport const shorthand = f(() => { t.update(ref, {\n  tier,\n}); });").join() === 'shorthand',
   'CONTROL: the `tier,` shorthand is found too');
+const helpers = "x\nconst applyOneOffPayment = async () => {};\nconst syncSubscriptionById = async () => {};";
+ok(grantHelpersAreInternal(helpers) && grantHelpersAreInternal(helpers.replace(/\n/g, '\r\n')),
+  'the helper check holds on LF and CRLF checkouts');
+ok(!grantHelpersAreInternal(helpers.replace('\nconst applyOneOffPayment', '\nexport const applyOneOffPayment')),
+  'CONTROL: an exported applyOneOffPayment is caught');
+ok(!grantHelpersAreInternal(helpers.replace('\nconst syncSubscriptionById', '\nexport const syncSubscriptionById')),
+  'CONTROL: an exported syncSubscriptionById is caught');
 ok(downgradeIsOnce("} else if (action === 'downgrade') { if (userData.tier === 'free') throw new functions.https.HttpsError('failed-precondition', 'x'); t.update(userRef, { tier: 'free' }); "),
   'a downgrade that refuses free accounts first passes');
 

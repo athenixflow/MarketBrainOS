@@ -17,6 +17,11 @@ import {
 import { sendTemplate } from './email/send';
 import { verifyUnsubToken, unsubToken } from './email/unsubscribe';
 import { verifyResendWebhook, webhookConfigured, EVENT_FIELD, emailStatusFor } from './email/webhook';
+import { catalogItem, toMajorString, TIER_RANK, PAID_TIERS, PaidTier, Kind, Currency } from './bachs/catalog';
+import { billingLive as bachsBillingLive, productForTier, tierForProduct } from './bachs/config';
+import { BachsEvent, parseSubscription } from './bachs/events';
+import { Account, CheckoutRecord, applyOneOff, checkoutAllowed, syncSubscription } from './bachs/grant';
+import { bachsApi } from './bachs/api';
 
 admin.initializeApp();
 // Drop undefined fields on every server-side write instead of throwing (Firestore rejects
@@ -4124,6 +4129,291 @@ export const paystackWebhook = functions.https.onRequest(async (req: any, res: a
 export const billingStatus = functions.https.onRequest((req: any, res: any) => {
   res.set('Access-Control-Allow-Origin', '*');
   res.status(200).json({ billing_live: billingLive(process.env), provider: 'paystack' });
+});
+
+/* ============================================================
+   BACHS PAYMENTS (spec docs/superpowers/specs/2026-10-18-bachs-payments-design.md)
+   ============================================================ */
+
+const BACHS_SECRETS = ['BACHS_SECRET_KEY', 'BACHS_WEBHOOK_SECRET'];
+const SITE = 'https://www.marketbrainos.app';
+const bachs = () => bachsApi(process.env.BACHS_SECRET_KEY || '');
+/* EVERY once-only key reaches Firestore through this hash and never raw: a reference or an id
+   arrives from outside, and a raw one could hold a "/" or collide with a reserved document id. */
+const ledgerDoc = (key: string) =>
+  db.collection('payment_events').doc(crypto.createHash('sha256').update(key).digest('hex').slice(0, 40));
+type GrantSource = 'webhook' | 'reconcile' | 'manage';
+type GrantOutcome = 'granted' | 'granted+review' | 'review';
+/* What the ledger entry says happened: a grant that is ALSO flagged (an overlapping pass, a
+   second live subscription) was applied AND needs a human, and the entry must say both. */
+const grantOutcome = (g: { userUpdate: unknown; review: string | null }): GrantOutcome =>
+  g.review ? (g.userUpdate ? 'granted+review' : 'review') : 'granted';
+
+const billingAlertEmail = async (title: string, lines: string[]) =>
+  sendTemplate(process.env.BILLING_ALERT_EMAIL || 'support@marketbrainos.app', 'billingAlert', { title, lines });
+
+/**
+ * A one-off payment (pass or pack), applied exactly once with its ledger entry in ONE
+ * transaction: if anything fails both roll back and Bachs' retry re-applies cleanly. The
+ * checkout record — written by us — says who and what; the event only says money moved.
+ */
+const applyOneOffPayment = async (
+  event: Pick<BachsEvent, 'id' | 'reference' | 'amountMinor' | 'currency' | 'checkoutId'>,
+  source: GrantSource,
+): Promise<'ignored' | 'already handled' | GrantOutcome> => {
+  if (!event.reference) return 'ignored';
+  const reference = event.reference;
+  const cfg = await getPricingConfig();
+  const nowIso = new Date().toISOString();
+  /* A reference we issued is `mb_` + hex. Anything else cannot name a checkout document (a "/"
+     would throw and Bachs would retry forever), so it is read as "no checkout" and reviewed. */
+  const checkoutRef = /^[A-Za-z0-9_-]{1,128}$/.test(reference) ? db.collection('checkouts').doc(reference) : null;
+  const key = `checkout:${reference}`;
+  /* Written by the transaction body, read after it. A holder object, not a bare `let`, so the
+     compiler does not narrow it to its initial null. */
+  const after: {
+    notice: { uid: string; kind: string; item: string; currency: string; amountMinor: number; tokens: number } | null;
+    reviewWhy: string | null;
+  } = { notice: null, reviewWhy: null };
+
+  const outcome = await db.runTransaction(async (t: admin.firestore.Transaction) => {
+    after.notice = null; after.reviewWhy = null; // a retried attempt starts clean
+    const ledgerRef = ledgerDoc(key);
+    if ((await t.get(ledgerRef)).exists) return 'already handled' as const;
+    const checkoutSnap = checkoutRef ? await t.get(checkoutRef) : null;
+    const checkout = checkoutSnap && checkoutSnap.exists ? (checkoutSnap.data() as CheckoutRecord) : null;
+    const userRef = checkout ? db.collection('users').doc(checkout.uid) : null;
+    const userSnap = userRef ? await t.get(userRef) : null;
+    const account = userSnap && userSnap.exists ? (userSnap.data() as Account) : null;
+
+    const r = applyOneOff(account, checkout, event, cfg, nowIso);
+    if (!r.ledgerKey) return 'ignored' as const;
+    if (r.userUpdate && userRef && account) t.update(userRef, r.userUpdate);
+    if (r.payment && checkout) {
+      t.set(db.collection('payments').doc(), {
+        uid: checkout.uid, provider: 'bachs', ...r.payment, bachs_reference: reference,
+        bachs_checkout_id: event.checkoutId ?? null, source, status: 'success',
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      after.notice = {
+        uid: checkout.uid, kind: r.payment.kind, item: r.payment.item, currency: r.payment.currency,
+        amountMinor: r.payment.amount_minor, tokens: r.payment.tokens_credited,
+      };
+    }
+    if (r.checkoutStatus && checkoutRef && checkoutSnap && checkoutSnap.exists) {
+      t.update(checkoutRef, { status: r.checkoutStatus, settled_at: nowIso });
+    }
+    if (r.review) {
+      after.reviewWhy = r.review;
+      t.set(db.collection('billing_reviews').doc(), {
+        reason: r.review, key, event_id: event.id, uid: checkout?.uid ?? null,
+        amount_minor: event.amountMinor, currency: event.currency, source,
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+    const result = grantOutcome(r);
+    t.set(ledgerRef, { key, source, event_id: event.id, outcome: result, created_at: admin.firestore.FieldValue.serverTimestamp() });
+    return result;
+  });
+
+  /* Mail is best effort and happens after the commit: a failure here must not turn a granted
+     payment into a 500 (Bachs would retry an event that is already handled). */
+  try {
+    const n = after.notice;
+    if ((outcome === 'granted' || outcome === 'granted+review') && n) {
+      const user = (await db.collection('users').doc(n.uid).get()).data() || {};
+      if (user.email) {
+        const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        if (n.kind === 'pack') {
+          const bal = readBalances(user);
+          await sendTemplate(user.email, 'tokenReceipt', {
+            packLabel: catalogItem(cfg, 'pack', n.item, n.currency as Currency)?.label ?? n.item,
+            tokens: n.tokens, amount: n.amountMinor / 100, currency: n.currency,
+            newBalance: bal.monthly + bal.purchased, reference, date,
+          });
+        } else {
+          await sendTemplate(user.email, 'paymentReceipt', {
+            description: `${n.item.charAt(0).toUpperCase()}${n.item.slice(1)} plan, 30 days`,
+            amount: n.amountMinor / 100, currency: n.currency, reference, date,
+          });
+        }
+      }
+    }
+    if (outcome === 'review' || outcome === 'granted+review') {
+      await billingAlertEmail('A payment needs review', [`${key}: ${after.reviewWhy}`]);
+    }
+  } catch (e: any) {
+    console.error('applyOneOffPayment: notification failed:', e?.message || e);
+  }
+  return outcome;
+};
+/* No caller yet: bachsWebhook and bachsReconcile (next tasks) are its callers, and it must stay
+   a plain const so no callable can invoke it directly. Read once so noUnusedLocals is satisfied. */
+void applyOneOffPayment;
+
+/**
+ * Sync one subscription to Bachs' CURRENT state (spec §5–6). Called by the webhook for every
+ * subscription event, by manageBilling after a change, and hourly by reconciliation — the same
+ * keys everywhere, so whichever path sees a paid period first grants it and the rest no-op.
+ */
+const syncSubscriptionById = async (subscriptionId: string, chargedMinor: number | null, source: GrantSource): Promise<string> => {
+  const snap = parseSubscription(await bachs().getSubscription(subscriptionId));
+  if (!snap) throw new Error(`unreadable subscription ${subscriptionId}`);
+  let uid = snap.metadata.uid || null;
+  if (!uid) {
+    const q = await db.collection('users').where('bachs_subscription_id', '==', subscriptionId).limit(1).get();
+    uid = q.empty ? null : q.docs[0]!.id;
+  }
+  if (!uid) {
+    await db.collection('billing_reviews').add({ reason: 'subscription with no account', key: `sub:${subscriptionId}`, source, created_at: admin.firestore.FieldValue.serverTimestamp() });
+    await billingAlertEmail('A subscription has no account', [subscriptionId]);
+    return 'review';
+  }
+  const cfg = await getPricingConfig();
+  const paidTier: PaidTier | null = tierForProduct(snap.productId, process.env);
+  const userRef = db.collection('users').doc(uid);
+  const endKey = `end:${snap.id}`;
+  const state: { reviewWhy: string | null } = { reviewWhy: null };
+
+  const outcome = await db.runTransaction(async (t: admin.firestore.Transaction) => {
+    state.reviewWhy = null; // a retried attempt starts clean
+    /* Firestore wants every read before the first write, so all of them are here. */
+    const userSnap = await t.get(userRef);
+    if (!userSnap.exists) return 'no account';
+    const account = userSnap.data() as Account;
+    const r = syncSubscription(account, snap, paidTier, cfg, chargedMinor);
+    const isEnd = r.grant.ledgerKey === endKey;
+    const endRef = ledgerDoc(endKey);
+    const ended = (await t.get(endRef)).exists;
+    const grantRef = !r.grant.ledgerKey ? null : isEnd ? endRef : ledgerDoc(r.grant.ledgerKey);
+    const recorded = !grantRef ? true : isEnd ? ended : (await t.get(grantRef)).exists;
+
+    /* A subscription that has ended stays ended. A stale snapshot ("active", fetched before the
+       cancellation, committing after it) must not bring back a period or a status, so once the
+       end is recorded only the end's own entry can still be looked at. */
+    if (ended && !isEnd) return 'already ended';
+    if (Object.keys(r.stateUpdate).length) t.update(userRef, r.stateUpdate);
+    if (!grantRef || recorded) return 'state synced';
+    if (r.grant.userUpdate) t.update(userRef, r.grant.userUpdate);
+    if (r.grant.payment) {
+      t.set(db.collection('payments').doc(), {
+        uid, provider: 'bachs', ...r.grant.payment, bachs_subscription_id: snap.id, source, status: 'success',
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+    if (r.grant.review) {
+      state.reviewWhy = r.grant.review;
+      t.set(db.collection('billing_reviews').doc(), {
+        reason: r.grant.review, key: r.grant.ledgerKey, uid, subscription_id: snap.id,
+        granted: Boolean(r.grant.userUpdate), source, created_at: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+    const result = grantOutcome(r.grant);
+    t.set(grantRef, { key: r.grant.ledgerKey, source, outcome: result, created_at: admin.firestore.FieldValue.serverTimestamp() });
+    return result;
+  });
+  if (outcome === 'review' || outcome === 'granted+review') {
+    try {
+      await billingAlertEmail('A subscription needs review', [`${subscriptionId}: ${state.reviewWhy}`]);
+    } catch (e: any) {
+      console.error('syncSubscriptionById: alert failed:', e?.message || e);
+    }
+  }
+  return outcome;
+};
+
+/** Starts a Bachs hosted checkout for one item (spec §3). Grants nothing. */
+export const createCheckout = functions.runWith({ secrets: BACHS_SECRETS }).https.onCall(async (data: any, context: any) => {
+  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
+  const uid = context.auth.uid;
+  const email = String(context.auth.token.email || '');
+  const kind = data?.kind as Kind;
+  const item = String(data?.item || '');
+  const currency = data?.currency as Currency;
+  if (!['plan', 'pass', 'pack'].includes(kind) || !['USD', 'NGN'].includes(currency)) {
+    throw new functions.https.HttpsError('invalid-argument', 'Choose something to buy and a currency.');
+  }
+  const userSnap = await db.collection('users').doc(uid).get();
+  if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User profile not found.');
+  const account = userSnap.data() as Account & { role?: string; is_suspended?: boolean; name?: string; displayName?: string };
+  /* The server half of "super-admins can test before launch": everyone else is refused here,
+     whatever the client shows. */
+  if (!bachsBillingLive(process.env) && account.role !== 'super_admin') {
+    throw new functions.https.HttpsError('failed-precondition', 'Payments are not live yet.');
+  }
+  if (account.is_suspended) throw new functions.https.HttpsError('permission-denied', 'Account suspended.');
+  const nowIso = new Date().toISOString();
+  const allowed = checkoutAllowed(account, kind, item, nowIso);
+  if (!allowed.ok) throw new functions.https.HttpsError('failed-precondition', allowed.reason);
+  const ci = catalogItem(await getPricingConfig(), kind, item, currency);
+  if (!ci) throw new functions.https.HttpsError('invalid-argument', 'That is not for sale in that currency.');
+  const productId = kind === 'plan' ? productForTier(ci.tier as PaidTier, process.env) : null;
+  if (kind === 'plan' && !productId) throw new functions.https.HttpsError('failed-precondition', 'Plans are not set up yet.');
+
+  const reference = `mb_${crypto.randomBytes(12).toString('hex')}`;
+  const checkoutRef = db.collection('checkouts').doc(reference);
+  await checkoutRef.set({ uid, kind, item, currency, amount_minor: ci.amountMinor, status: 'open', created_at: nowIso });
+  const name = account.name || account.displayName || email;
+  const common = {
+    reference,
+    metadata: { uid, kind, item, currency },
+    success_url: `${SITE}/billing?checkout=success`,
+    cancel_url: `${SITE}/billing?checkout=cancelled`,
+    expires_in_minutes: 60,
+    ...(email ? { customer: { email, name } } : {}),
+  };
+  const body = kind === 'plan'
+    ? { ...common, product_cart: [{ product_id: productId, quantity: 1 }] }
+    : { ...common, pricing: { currency, amount: toMajorString(ci.amountMinor) } };
+  const session = await bachs().createCheckoutSession(body, reference);
+  /* Reconciliation finds a session by bachs_checkout_id. A response without one cannot be
+     reconciled, so the record is flagged for a human rather than left looking healthy. */
+  const checkoutId = typeof session?.checkout_id === 'string' ? session.checkout_id : '';
+  if (!checkoutId) {
+    await checkoutRef.update({ status: 'review' });
+    console.error(`createCheckout: Bachs returned no checkout_id for ${reference}`);
+    throw new functions.https.HttpsError('internal', 'Checkout could not be started.');
+  }
+  await checkoutRef.update({ bachs_checkout_id: checkoutId });
+  return { url: session.checkout_url };
+});
+
+/** Cancel at period end, upgrade, or open the card portal — USD subscriptions only (spec §3). */
+export const manageBilling = functions.runWith({ secrets: BACHS_SECRETS }).https.onCall(async (data: any, context: any) => {
+  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
+  const uid = context.auth.uid;
+  const action = data?.action as 'cancel' | 'upgrade' | 'portal';
+  if (!['cancel', 'upgrade', 'portal'].includes(action)) throw new functions.https.HttpsError('invalid-argument', 'Unknown billing action.');
+  const account = (await db.collection('users').doc(uid).get()).data() as Account | undefined;
+  if (!account) throw new functions.https.HttpsError('not-found', 'User profile not found.');
+
+  if (action === 'portal') {
+    if (!account.bachs_customer_id) throw new functions.https.HttpsError('failed-precondition', 'There is no card on file.');
+    const s = await bachs().createPortalSession(account.bachs_customer_id, `portal_${uid}_${Date.now()}`);
+    return { url: s.url };
+  }
+  const subId = account.bachs_subscription_id;
+  if (account.billing_mode !== 'subscription' || !subId) {
+    throw new functions.https.HttpsError('failed-precondition', 'There is no dollar subscription to change.');
+  }
+  if (action === 'cancel') {
+    await bachs().cancelSubscriptionAtPeriodEnd(subId, `cancel_${subId}`);
+    await syncSubscriptionById(subId, null, 'manage');
+    return { ok: true };
+  }
+  const requested = String(data?.item || '');
+  if (!(PAID_TIERS as readonly string[]).includes(requested)) {
+    throw new functions.https.HttpsError('invalid-argument', 'Choose a plan to upgrade to.');
+  }
+  const target = requested as PaidTier;
+  if ((TIER_RANK[target] ?? 0) <= (TIER_RANK[account.tier || 'free'] ?? 0)) {
+    throw new functions.https.HttpsError('failed-precondition', 'Choose a higher plan to upgrade to.');
+  }
+  const productId = productForTier(target, process.env);
+  if (!productId) throw new functions.https.HttpsError('failed-precondition', 'That plan is not set up yet.');
+  await bachs().changeSubscriptionProduct(subId, productId, `upgrade_${subId}_${target}`);
+  /* The new tier is granted when Bachs reports the prorated invoice paid (webhook or the hourly sync). */
+  return { ok: true };
 });
 
 /* ============================================================
