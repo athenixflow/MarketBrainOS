@@ -769,7 +769,7 @@ ok(paymentView({ id: 'p4', uid: 'u1', kind: 'pack', item: 'mystery', amount_mino
 const refundView = paymentView({ id: 'r1', uid: 'u1', provider: 'admin_refund', kind: 'refund', amount_minor: -990000, currency: 'NGN', reference: 'refund_1', status: 'refunded' });
 ok(refundView.kind === 'refund' && refundView.amountMinor === -990000 && refundView.display === '−₦9,900' && refundView.reference === 'refund_1' && refundView.label === 'Refund',
   'a refund recorded in the new shape is negative, in its own currency', JSON.stringify(refundView));
-const legacyTopUp = paymentView({ id: 'l1', uid: 'u1', payment_reference: 'ps_1', amount_paid: 7, tokens_credited: 100, provider: 'paystack' });
+const legacyTopUp = paymentView({ id: 'l1', uid: 'u1', payment_reference: 'ps_1', amount_paid: 7, tokens_credited: 100, provider: 'legacy' });
 ok(legacyTopUp.label === 'Token top-up' && legacyTopUp.amountMinor === 700 && legacyTopUp.currency === 'USD' && legacyTopUp.display === '$7.00'
   && legacyTopUp.reference === 'ps_1' && legacyTopUp.kind === 'pack' && legacyTopUp.status === 'completed',
   'an old document (amount_paid dollars, payment_reference) still renders as before', JSON.stringify(legacyTopUp));
@@ -786,7 +786,7 @@ ok(formatMinor(990050, 'NGN') === '₦9,900.50' && formatMinor(0, 'USD') === '$0
   'amounts format from minor units: whole naira unless there are kobo, dollars to the cent');
 ok(parseMajor('19.99') === 1999 && parseMajor('9900') === 990000 && parseMajor(' 5.5 ') === 550 && parseMajor('19.999') === null && parseMajor('-1') === null && parseMajor('x') === null,
   'a typed amount parses to minor units exactly, or not at all');
-const csv = paymentCsvRows([passDoc, planDoc, { id: 'l1', uid: 'u1', payment_reference: 'ps_1', amount_paid: 7, tokens_credited: 100, provider: 'paystack' }]);
+const csv = paymentCsvRows([passDoc, planDoc, { id: 'l1', uid: 'u1', payment_reference: 'ps_1', amount_paid: 7, tokens_credited: 100, provider: 'legacy' }]);
 ok(csv[0].includes('Currency') && csv[0].includes('Amount') && !csv[0].some((h) => /USD/.test(String(h))), 'the CSV has a Currency column (the Amount header no longer claims USD)');
 const amountCol = csv[0].indexOf('Amount');
 const currencyCol = csv[0].indexOf('Currency');
