@@ -203,6 +203,11 @@ const cheapestUsdPack = Math.min(...CLIENT.tokenPacks.map((p) => p.price / p.tok
 ok(cheapestPack / proNgnPerToken >= (cheapestUsdPack / proUsdPerToken) * 0.95,
   'naira packs keep the same pack-to-plan ratio as dollar packs (within 5%)',
   `naira ${(cheapestPack / proNgnPerToken).toFixed(3)} vs dollar ${(cheapestUsdPack / proUsdPerToken).toFixed(3)}`);
+/* Revenue is reported in the currency charged (spec §2): the growth report keeps naira and dollars
+   apart and writes the one combined figure beside the rate that produced it, so a later reader can
+   rebuild it. The rate is used in this one place and nowhere else. */
+ok(/mrr_combined_at_ngn_per_usd:\s*DEFAULT_PRICING_CONFIG\.ngnPerUsd/.test(serverSrc) && /mrr_ngn: mrrNgn/.test(serverSrc),
+  'the growth report keeps naira and dollar revenue as charged, and labels the combined figure with its rate');
 
 /*
  * A STORED CONFIG MUST NOT DROP NAIRA PRICES. `mergePricingConfig` takes a stored doc's

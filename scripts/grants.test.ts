@@ -135,6 +135,33 @@ const strangers = callers.filter((name) => !(name in GRANT_HELPER_CALLERS));
 ok(strangers.length === 0, 'only the webhook, reconciliation and manageBilling reference the two grant helpers', strangers.join(', '));
 ok(callers.includes('bachsWebhook') && callers.includes('manageBilling'),
   'and the webhook and manageBilling really do (so the scan above is not vacuous)');
+/* A Bachs-billed account's allowance resets only when money arrives (an invoice, a pass), never on
+   a date: the daily refresh would hand a lapsed, unpaid dollar subscription — or a pass past its
+   expiry — a fresh month. So its `due` filter must skip both billing modes. */
+export const refreshSkipsBilled = (fn: string): boolean =>
+  /billing_mode === 'subscription' \|\| u\.billing_mode === 'pass'/.test(fn);
+const refresh = exported(index, 'monthlyTokenRefresh');
+ok(refresh.length > 0 && refreshSkipsBilled(refresh),
+  'monthlyTokenRefresh skips Bachs-billed accounts (their allowance resets only when money arrives)');
+/* HOW THE THREE SCHEDULED BILLING JOBS RUN. The reconciliation is the only one of them that can
+   grant (through the same two helpers as the webhook), and it must be a SCHEDULED function: an
+   onCall or onRequest version would be a public door to the grant helpers, reachable by whoever
+   finds the URL. It never reads the webhook secret, so it is bound to the API key alone. The pass
+   lifecycle and the daily check call Bachs not at all, so they are bound to no Bachs secret. */
+export const isScheduledOnly = (fn: string): boolean =>
+  fn.length > 0 && /\.pubsub\.schedule\(/.test(fn) && !/\.https\./.test(fn);
+export const bindsOnlyBachsKey = (fn: string): boolean => {
+  const head = fn.slice(0, 300);
+  return /secrets:\s*\['BACHS_SECRET_KEY'\]/.test(head) && !/BACHS_WEBHOOK_SECRET|BACHS_SECRETS/.test(head);
+};
+export const bindsNoBachsSecret = (fn: string): boolean => fn.length > 0 && !/BACHS_/.test(fn.slice(0, 300));
+const reconcile = exported(index, 'bachsReconcile');
+ok(isScheduledOnly(reconcile), 'bachsReconcile is a scheduled function (no onCall, no onRequest)');
+ok(bindsOnlyBachsKey(reconcile), 'and it is bound to the Bachs key only, never the webhook secret');
+for (const name of ['passLifecycle', 'billingDailyCheck']) {
+  const fn = exported(index, name);
+  ok(isScheduledOnly(fn) && bindsNoBachsSecret(fn), `${name} is a scheduled function and is bound to no Bachs secret`);
+}
 /* Deleting an account must stop its subscription. Bachs keeps charging a card for a product whose
    account is gone, and the customer cannot cancel what they can no longer sign in to. So, in
    deleteAccount: only on a real run (after the dry-run return), only once the re-auth check has
@@ -379,6 +406,36 @@ const purgeFirst = goodDelete.split('\n');
 const jobLine = purgeFirst.splice(7, 1)[0]!;
 purgeFirst.splice(3, 0, jobLine);
 ok(!cancelsBillingBeforePurge(purgeFirst.join('\n')), 'CONTROL: a cancel that comes after the purge has started is caught');
+const goodRefresh = "export const monthlyTokenRefresh = f(async () => {\n  const due = snap.docs.filter((d) => {\n    if (u.billing_mode === 'subscription' || u.billing_mode === 'pass') return false;\n    return true;\n  });\n});";
+ok(refreshSkipsBilled(goodRefresh), 'a refresh that skips subscription and pass accounts passes');
+ok(!refreshSkipsBilled(goodRefresh.replace("u.billing_mode === 'subscription' || ", '')),
+  'CONTROL: a refresh that skips passes but still refreshes dollar subscriptions is caught');
+ok(!refreshSkipsBilled(goodRefresh.replace(" || u.billing_mode === 'pass'", '')),
+  'CONTROL: a refresh that skips subscriptions but still refreshes naira passes is caught');
+ok(!refreshSkipsBilled(goodRefresh.replace("    if (u.billing_mode === 'subscription' || u.billing_mode === 'pass') return false;\n", '')),
+  'CONTROL: a refresh with no billed-account exclusion is caught');
+const goodReconcile = "export const bachsReconcile = functions.runWith({ secrets: ['BACHS_SECRET_KEY'], timeoutSeconds: 300 })\n  .pubsub.schedule('every 60 minutes').onRun(async () => { await syncSubscriptionById(id, null, 'reconcile'); return null; });";
+ok(isScheduledOnly(goodReconcile) && bindsOnlyBachsKey(goodReconcile) && bindsNoBachsSecret(goodReconcile.replace("secrets: ['BACHS_SECRET_KEY'], ", '')),
+  'a scheduled reconciliation bound to the key alone passes');
+ok(!isScheduledOnly(goodReconcile.replace(".pubsub.schedule('every 60 minutes').onRun(async () =>", '.https.onRequest(async (req, res) =>')),
+  'CONTROL: a reconciliation that became an onRequest endpoint is caught');
+ok(!isScheduledOnly(goodReconcile.replace(".pubsub.schedule('every 60 minutes').onRun(async () =>", '.https.onCall(async (data, context) =>')),
+  'CONTROL: a reconciliation that became a callable is caught');
+ok(!isScheduledOnly(goodReconcile.replace(".pubsub.schedule('every 60 minutes')", '')),
+  'CONTROL: a reconciliation that is no longer scheduled is caught');
+ok(!isScheduledOnly(goodReconcile.replace('return null;', 'return functions.https.onRequest(h);')),
+  'CONTROL: a scheduled reconciliation that also exposes an https handler is caught');
+ok(!isScheduledOnly(''), 'CONTROL: a missing reconciliation is not "scheduled"');
+ok(!bindsOnlyBachsKey(goodReconcile.replace("secrets: ['BACHS_SECRET_KEY']", 'secrets: BACHS_SECRETS')),
+  'CONTROL: a reconciliation bound to both Bachs secrets is caught');
+ok(!bindsOnlyBachsKey(goodReconcile.replace("secrets: ['BACHS_SECRET_KEY']", "secrets: ['BACHS_SECRET_KEY', 'BACHS_WEBHOOK_SECRET']")),
+  'CONTROL: a reconciliation that lists the webhook secret too is caught');
+ok(!bindsOnlyBachsKey(goodReconcile.replace("secrets: ['BACHS_SECRET_KEY'], ", '')),
+  'CONTROL: a reconciliation bound to nothing (it could never call Bachs) is caught');
+const goodLifecycle = "export const passLifecycle = functions.pubsub.schedule('0 7 * * *').timeZone('Africa/Lagos').onRun(async () => null);";
+ok(isScheduledOnly(goodLifecycle) && bindsNoBachsSecret(goodLifecycle), 'a scheduled job bound to no Bachs secret passes');
+ok(!bindsNoBachsSecret(goodLifecycle.replace('functions.pubsub', "functions.runWith({ secrets: BACHS_SECRETS }).pubsub")),
+  'CONTROL: a pass lifecycle that binds a Bachs secret it never reads is caught');
 
 console.log(failures === 0
   ? '\nPASS — no signed-in user can grant themselves a plan, a token pack or a refill.'

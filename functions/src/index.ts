@@ -15,9 +15,9 @@ import { verifyUnsubToken, unsubToken } from './email/unsubscribe';
 import { verifyResendWebhook, webhookConfigured, EVENT_FIELD, emailStatusFor } from './email/webhook';
 import { catalogItem, toMajorString, TIER_RANK, PAID_TIERS, PaidTier, Kind, Currency } from './bachs/catalog';
 import { billingLive as bachsBillingLive, productForTier, tierForProduct } from './bachs/config';
-import { BachsEvent, parseBachsEvent, parseSubscription } from './bachs/events';
+import { BachsEvent, parseBachsEvent, parseCheckoutSession, parseSubscription } from './bachs/events';
 import { BACHS_SIGNATURE_HEADER, verifyBachsSignature } from './bachs/signature';
-import { Account, CheckoutRecord, applyOneOff, checkoutAllowed, syncSubscription } from './bachs/grant';
+import { Account, CheckoutRecord, applyOneOff, checkoutAllowed, expirePass, reminderDue, syncSubscription } from './bachs/grant';
 import { bachsApi } from './bachs/api';
 
 admin.initializeApp();
@@ -1693,10 +1693,14 @@ export const monthlyTokenRefresh = functions.pubsub
 
     const snap = await db.collection('users').where('plan_renews_at', '<=', nowIso).get();
     // Renew paid plans only: 'expired' subscriptions don't renew, and free accounts never replenish
-    // (their allowance is one-time). Everything else (active/cancelled/undefined on a paid tier) does.
+    // (their allowance is one-time), and neither do Bachs-billed accounts (a dollar subscription or a
+    // naira pass): theirs resets only when money arrives. Everything else (active/cancelled/undefined
+    // on a paid tier, e.g. a pre-Bachs account) does.
     const due = snap.docs.filter((d: admin.firestore.QueryDocumentSnapshot) => {
       const u = d.data();
       if (u.subscription_status === 'expired') return false;
+      /* Bachs-billed plans refresh when money arrives (invoice.paid / a pass), never on a date. */
+      if (u.billing_mode === 'subscription' || u.billing_mode === 'pass') return false;
       if (((u.tier as string) || 'free') === 'free') return false;
       return true;
     });
@@ -4460,6 +4464,129 @@ export const billingStatus = functions.runWith({ secrets: ['BACHS_SECRET_KEY'] }
 });
 
 /* ============================================================
+   BACHS SCHEDULED JOBS (spec §6–7) — three crons, no endpoints
+   ============================================================ */
+
+/**
+ * Hourly: whatever the webhook missed (Bachs retries for about 80 minutes, then stops).
+ *
+ * A SCHEDULED function, never onCall/onRequest (scripts/grants.test.ts pins that): it reaches the
+ * two grant helpers, so it must have no URL. It reads the Bachs API and never the webhook secret,
+ * so it is bound to the key alone.
+ *
+ * It decides nothing itself. Every outcome the helpers return is "handled" — they record their own
+ * reviews and send their own alerts, so this job never alerts; it only logs what it could not
+ * finish, one item at a time, and carries on with the rest. In particular it does NOT write a
+ * subscription or customer id onto an account for a paid subscription checkout: the sync finds the
+ * account from the metadata we put on the subscription and adopts the ids under its own
+ * current-subscription rules, and a write here would bypass them.
+ */
+export const bachsReconcile = functions.runWith({ secrets: ['BACHS_SECRET_KEY'], timeoutSeconds: 300 })
+  .pubsub.schedule('every 60 minutes').onRun(async () => {
+    if (!process.env.BACHS_SECRET_KEY) return null;
+    const now = Date.now();
+    const open = await db.collection('checkouts').where('status', '==', 'open').limit(200).get();
+    for (const doc of open.docs) {
+      const c = doc.data();
+      const age = now - Date.parse(String(c.created_at));
+      if (age < 10 * 60_000) continue;
+      try {
+        if (!c.bachs_checkout_id) {
+          /* createCheckout writes the record before it calls Bachs, so a Bachs outage leaves an open
+             record with nothing to look up. It cannot be paid (there is no session), and left open it
+             would crowd real checkouts out of the 200 read above. */
+          if (age > 24 * 3_600_000) await doc.ref.update({ status: 'expired' });
+          continue;
+        }
+        const s = parseCheckoutSession(await bachs().getCheckoutSession(String(c.bachs_checkout_id)));
+        if (s?.paid && c.kind === 'plan' && s.subscriptionId) {
+          /* The sync first, the mark after: if Bachs is unreachable the checkout stays open and the
+             next run tries again, instead of looking settled while nothing was granted. */
+          await syncSubscriptionById(s.subscriptionId, null, 'reconcile');
+          await doc.ref.update({ status: 'paid', settled_at: new Date().toISOString() });
+        } else if (s?.paid) {
+          await applyOneOffPayment({ id: `reconcile:${doc.id}`, reference: doc.id, amountMinor: s.amountMinor, currency: s.currency, checkoutId: s.id }, 'reconcile');
+        } else if (s?.expired || age > 24 * 3_600_000) {
+          await doc.ref.update({ status: 'expired' });
+        }
+      } catch (e: any) { console.error('reconcile checkout', doc.id, e?.message || e); }
+    }
+    const subs = await db.collection('users').where('billing_mode', '==', 'subscription').limit(500).get();
+    for (const u of subs.docs) {
+      const id = u.data().bachs_subscription_id;
+      if (!id) continue;
+      try { await syncSubscriptionById(String(id), null, 'reconcile'); }
+      catch (e: any) { console.error('reconcile subscription', id, e?.message || e); }
+    }
+    return null;
+  });
+
+/**
+ * Daily: naira pass reminders (5 days, 1 day) and expiry. A pass is a one-off payment, so nothing
+ * renews it and nothing else ends it: this is what returns a lapsed account to Free. It calls
+ * Bachs not at all, so it binds no Bachs secret.
+ *
+ * One account failing must not stop the rest, and the expiry re-reads the account INSIDE a
+ * transaction: a customer who renews at 07:00 must not have their fresh pass overwritten by an
+ * expiry computed from the copy this query read a moment earlier.
+ */
+export const passLifecycle = functions.pubsub.schedule('0 7 * * *').timeZone('Africa/Lagos').onRun(async () => {
+  const cfg = await getPricingConfig();
+  const nowIso = new Date().toISOString();
+  const passes = await db.collection('users').where('billing_mode', '==', 'pass').get();
+  for (const doc of passes.docs) {
+    try {
+      const outcome = await db.runTransaction(async (t: admin.firestore.Transaction) => {
+        const fresh = await t.get(doc.ref);
+        if (!fresh.exists) return null;
+        const a = fresh.data() as Account & { email?: string };
+        const expired = expirePass(a, nowIso);
+        if (expired) t.update(doc.ref, expired);
+        return { a, expired };
+      });
+      if (!outcome) continue;
+      const { a, expired } = outcome;
+      const planName = String(a.tier || 'pro').charAt(0).toUpperCase() + String(a.tier || 'pro').slice(1);
+      if (expired) {
+        if (a.email) await sendTemplate(a.email, 'passExpired', { planName });
+        continue;
+      }
+      const due = reminderDue(a, nowIso);
+      if (due && a.email) {
+        /* Marked first, mailed second: sendTemplate never throws, so the reverse order could only
+           ever send twice (mail out, mark fails, tomorrow's run sends it again). */
+        await doc.ref.update({ pass_reminded: admin.firestore.FieldValue.arrayUnion(due) });
+        const price = cfg.plans[(a.tier as Tier) || 'pro']?.priceNgn ?? 0;
+        await sendTemplate(a.email, 'passReminder', {
+          planName, daysLeft: due, amount: price, currency: 'NGN',
+          expiresAt: new Date(String(a.pass_expires_at)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+        });
+      }
+    } catch (e: any) { console.error('passLifecycle', doc.id, e?.message || e); }
+  }
+  return null;
+});
+
+/**
+ * Daily: if reconciliation had to grant anything, the webhook is not reaching us — say so. The
+ * founder hears about it here, not from the hourly job (which never alerts).
+ */
+export const billingDailyCheck = functions.pubsub.schedule('0 8 * * *').timeZone('Africa/Lagos').onRun(async () => {
+  const since = Date.now() - 24 * 3_600_000;
+  const recon = await db.collection('payment_events').where('source', '==', 'reconcile').limit(500).get();
+  const missed = recon.docs.filter((d: admin.firestore.QueryDocumentSnapshot) => (d.data().created_at?.toMillis?.() ?? 0) >= since);
+  const reviews = await db.collection('billing_reviews').limit(500).get();
+  const newReviews = reviews.docs.filter((d: admin.firestore.QueryDocumentSnapshot) => (d.data().created_at?.toMillis?.() ?? 0) >= since);
+  if (missed.length || newReviews.length) {
+    await billingAlertEmail('Daily billing check', [
+      `${missed.length} payment(s) granted by reconciliation in the last 24h — the webhook missed them; check the endpoint in the Bachs dashboard (it is disabled after 72h of failures).`,
+      `${newReviews.length} new item(s) in billing_reviews.`,
+    ]);
+  }
+  return null;
+});
+
+/* ============================================================
    THE PUBLIC LANDING PAGE SCORE (GTM part 10, DO-NEXT #10)
    ============================================================ */
 
@@ -4965,9 +5092,14 @@ export const growthDaily = functions.pubsub
     const activatedEver = profiles.filter((u: any) => !!u.activated_at);
     const planPrice = (tier: string): number =>
       Number((DEFAULT_PRICING_CONFIG.plans as any)[tier]?.price ?? 0);
-    const mrr = paying
-      .filter((u: any) => u.subscription_status === 'active')
+    const activePaying = paying.filter((u: any) => u.subscription_status === 'active');
+    /* As charged: naira passes in naira, everything else in dollars. */
+    const mrrUsd = activePaying.filter((u: any) => u.billing_currency !== 'NGN')
       .reduce((sum: number, u: any) => sum + planPrice(String(u.tier)), 0);
+    const mrrNgn = activePaying.filter((u: any) => u.billing_currency === 'NGN')
+      .reduce((sum: number, u: any) => sum + Number((DEFAULT_PRICING_CONFIG.plans as any)[u.tier]?.priceNgn ?? 0), 0);
+    /* The ONE place the exchange rate is used: a single combined figure, stored beside the rate. */
+    const mrr = Math.round((mrrUsd + mrrNgn / DEFAULT_PRICING_CONFIG.ngnPerUsd) * 100) / 100;
 
     /* ---- what the model cost us that day, for gross margin (§7.2). */
     const tokensThatDay = succeeded
@@ -5003,7 +5135,12 @@ export const growthDaily = functions.pubsub
       tokens_spent: tokensThatDay,
 
       paying_accounts: paying.filter((u: any) => u.subscription_status === 'active').length,
-      mrr_usd: mrr,
+      /* Revenue as charged, each in its own currency; `mrr_usd` used to hold the combined figure
+         and now holds dollars only. The combined one is its own field, beside the rate behind it. */
+      mrr_usd: mrrUsd,
+      mrr_ngn: mrrNgn,
+      mrr_combined_usd: mrr,
+      mrr_combined_at_ngn_per_usd: DEFAULT_PRICING_CONFIG.ngnPerUsd,
       activated_total: activatedEver.length,
       free_to_paid: ratio(paying.filter((u: any) => u.subscription_status === 'active').length, activatedEver.length),
 
