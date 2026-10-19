@@ -9,7 +9,8 @@ import { MARKETING_SEO, SITE_URL, SITE_NAME } from '../config/seo';
 import { track } from '../services/analytics';
 import { fetchBillingStatus, BillingStatus, Currency, formatPrice, canPay, startCheckout, callManageBilling } from '../services/billing';
 import { useCurrency } from '../components/useCurrency';
-import { isPassRenewal } from '../services/planActions';
+import { isPassRenewal, passReplaceNotice } from '../services/planActions';
+import { Modal, PrimaryButton, SecondaryButton } from '../components/UI';
 
 // Product + per-plan Offer structured data (generated from the live pricing config).
 const PRICING_JSONLD = {
@@ -53,10 +54,13 @@ const Pricing: React.FC = () => {
   }, []);
   const payable = canPay(billing, profile?.role);
 
-  const select = async (tier: Tier) => {
+  /* A higher naira pass replaces the live one from today, unrefunded (spec §5): the buyer agrees first. */
+  const [replacing, setReplacing] = useState<{ tier: Tier; notice: string } | null>(null);
+
+  const select = async (tier: Tier, confirmed = false) => {
     /* Intent, captured before the branch that sends a signed-out visitor to /auth — so a
        tier chosen by somebody without an account still counts as interest in that tier. */
-    track('upgrade_clicked', { plan: tier, surface: 'pricing_page', signed_in: !!user });
+    if (!confirmed) track('upgrade_clicked', { plan: tier, surface: 'pricing_page', signed_in: !!user });
     if (!user) { navigate('/auth'); return; }
     setMsg('');
     try {
@@ -74,6 +78,10 @@ const Pricing: React.FC = () => {
         return;
       }
       if (tier === 'enterprise') { navigate('/enterprise'); return; }
+      if (currency === 'NGN') {
+        const notice = passReplaceNotice(profile, tier, new Date());
+        if (notice && !confirmed) { setReplacing({ tier, notice }); return; }
+      }
       setBusy(tier);
       if (currency === 'USD' && profile?.billing_mode === 'subscription') {
         await callManageBilling('upgrade', tier);
@@ -177,6 +185,17 @@ const Pricing: React.FC = () => {
         </div>
 
         {msg && <p className="text-center text-sm text-white font-semibold mt-8">{msg}</p>}
+        {replacing && (
+          <Modal title="Replace your pass?" size="sm" onClose={() => setReplacing(null)}
+            footer={
+              <div className="flex flex-wrap justify-end gap-3">
+                <SecondaryButton onClick={() => setReplacing(null)}>Keep my pass</SecondaryButton>
+                <PrimaryButton onClick={() => { const t = replacing.tier; setReplacing(null); void select(t, true); }}>Continue to checkout</PrimaryButton>
+              </div>
+            }>
+            <p className="text-sm text-gray-600 font-medium leading-relaxed">{replacing.notice}</p>
+          </Modal>
+        )}
         <p className="text-center text-xs text-gray-600 mt-10 max-w-2xl mx-auto leading-relaxed">
           On paid plans monthly tokens reset each billing cycle; the Free allowance is one-time. Purchased
           token packs never expire. Tokens are only charged when an analysis completes, and failed runs are

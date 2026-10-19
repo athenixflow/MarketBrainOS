@@ -18,7 +18,7 @@ import { applyOneOff, checkoutAllowed, expirePass, invoicePayment, manageOwnersh
 import { bachsApi, bachsBaseUrl, BachsApiError } from '../functions/src/bachs/api';
 import { EMAIL_TEMPLATES, MARKETING_KEYS } from '../functions/src/email/templates';
 import { formatMinor, parseMajor, paymentCsvRows, paymentView, sumByCurrency } from '../services/payments';
-import { isPassRenewal, renewPassLabel } from '../services/planActions';
+import { isPassRenewal, passReplaceNotice, renewPassLabel } from '../services/planActions';
 
 let failures = 0;
 const ok = (cond: boolean, label: string, detail = '') => {
@@ -877,6 +877,33 @@ ok(billingOffersRenewal(billingCenter), 'pages/BillingCenter.tsx offers "Renew p
 ok(!billingOffersRenewal(billingCenter.replace("startCheckout('pass', tier, 'NGN')", "navigate('/pricing')")), 'CONTROL: a renew button that only sends the holder to /pricing is caught');
 ok(/startCheckout\('pass', String\(profile!\.tier\), 'NGN'\)/.test(code(src('components/SubscriptionPanel.tsx'))) && /renewPassLabel\(/.test(code(src('components/SubscriptionPanel.tsx'))),
   'components/SubscriptionPanel.tsx renews through the same checkout, and its button names the price too');
+
+/* A HIGHER PASS BOUGHT MID-PASS REPLACES THE OLD ONE, AND THE BUYER IS TOLD FIRST (final review I3, spec §5).
+   applyOneOff starts the higher tier fresh from today; the old pass's days and tokens are not refunded.
+   No surface said so. passReplaceNotice is the text the buyer confirms before the checkout opens. */
+console.log('\nREPLACING A PASS IS CONFIRMED FIRST:');
+const nowAt = new Date(T0);
+const proLeft = (days: number) => ({ tier: 'pro', billing_mode: 'pass', pass_expires_at: day(days) });
+ok(passReplaceNotice(proLeft(10.4), 'team', nowAt) === "Your Pro pass has 11 days left. Team Workspace starts today and replaces it; unused days and tokens aren't refunded.",
+  'a Pro pass holder choosing a Team pass is told what is lost', String(passReplaceNotice(proLeft(10.4), 'team', nowAt)));
+ok(passReplaceNotice(proLeft(0.5), 'agency', nowAt) === "Your Pro pass has 1 day left. Agency starts today and replaces it; unused days and tokens aren't refunded.",
+  'with under a day left it says "1 day"');
+ok(passReplaceNotice(proLeft(10), 'pro', nowAt) === null, 'renewing the same tier needs no warning (it stacks)');
+ok(passReplaceNotice({ ...proLeft(10), tier: 'agency' }, 'team', nowAt) === null, 'a lower tier is not a replacement (the server refuses it)');
+ok(passReplaceNotice(proLeft(-1), 'team', nowAt) === null, 'a pass that has already ended is not replaced');
+ok(passReplaceNotice({ tier: 'pro', billing_mode: 'subscription', pass_expires_at: day(10) }, 'team', nowAt) === null && passReplaceNotice({ tier: 'free' }, 'team', nowAt) === null
+  && passReplaceNotice(null, 'team', nowAt) === null, 'no pass, no warning');
+ok(passReplaceNotice(proLeft(10), 'enterprise', nowAt) === null, 'a tier with no naira pass (Enterprise) is not a pass replacement');
+export const pricingConfirmsReplacement = (page: string): boolean => {
+  const notice = page.indexOf("passReplaceNotice(profile, tier, new Date())");
+  const ask = page.indexOf('setReplacing({ tier, notice })', notice);
+  const pay = page.indexOf('await startCheckout(', notice);
+  return notice >= 0 && ask > notice && pay > ask && /if \(notice && !confirmed\) \{ setReplacing\(\{ tier, notice \}\); return; \}/.test(page)
+    && /<Modal[^>]*onClose=\{\(\) => setReplacing\(null\)\}/.test(page) && /void select\(t, true\)/.test(page);
+};
+ok(pricingConfirmsReplacement(code(src('pages/Pricing.tsx'))), 'pages/Pricing.tsx asks before a higher pass replaces a live one, and continues only on confirm');
+ok(!pricingConfirmsReplacement(code(src('pages/Pricing.tsx')).replace('if (notice && !confirmed) { setReplacing({ tier, notice }); return; }', 'if (notice) setReplacing({ tier, notice });')),
+  'CONTROL: a warning that does not stop the checkout is caught');
 
 /* A naira refund is mailed in naira (final review M2): adminRefund records the currency and the email uses it. */
 const ngnRefundMail = mail('refundIssued', { amount: 9900, currency: 'NGN', reference: 'refund_1', date: '1 Nov 2026' });

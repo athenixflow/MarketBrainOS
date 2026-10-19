@@ -1,4 +1,4 @@
-import { DEFAULT_PRICING_CONFIG, Tier } from '../config/pricingConfig';
+import { DEFAULT_PRICING_CONFIG, PLAN_META, PLAN_ORDER, Tier } from '../config/pricingConfig';
 
 /**
  * What the billing surfaces offer, decided in one pure place (no Firebase, so scripts/bachs.test.ts
@@ -30,6 +30,25 @@ const naira = (tier: string): number | undefined =>
  */
 export const isPassRenewal = (profile: BillingProfile | null | undefined, tier: string, currency: Currency): boolean =>
   !!profile && currency === 'NGN' && profile.billing_mode === 'pass' && profile.tier === tier && Number(naira(tier)) > 0;
+
+const DAY_MS = 86_400_000;
+const rank = (tier: string | undefined): number => PLAN_ORDER.indexOf((tier || 'free') as Tier);
+const planName = (tier: string | undefined): string => PLAN_META[(tier || 'free') as Tier]?.name || String(tier);
+
+/**
+ * What a buyer must agree to before a HIGHER naira pass replaces the one still running (spec §5): the
+ * new tier starts today with a fresh allowance, and the old pass's days and tokens are not refunded
+ * (bachs/grant.ts applyOneOff). Null when nothing is replaced: no live pass, the same tier (that
+ * stacks), a lower tier (the server refuses it), or a tier with no naira pass.
+ */
+export const passReplaceNotice = (profile: BillingProfile | null | undefined, tier: string, now: Date): string | null => {
+  if (!profile || profile.billing_mode !== 'pass' || !profile.pass_expires_at) return null;
+  const left = Date.parse(profile.pass_expires_at) - now.getTime();
+  if (!(left > 0) || rank(tier) <= rank(profile.tier) || !(Number(naira(tier)) > 0)) return null;
+  const days = Math.ceil(left / DAY_MS);
+  return `Your ${planName(profile.tier)} pass has ${days} ${days === 1 ? 'day' : 'days'} left. `
+    + `${planName(tier)} starts today and replaces it; unused days and tokens aren't refunded.`;
+};
 
 /** "Renew pass (+30 days) · ₦9,900" — the button names what it charges. */
 export const renewPassLabel = (tier: string): string => {
