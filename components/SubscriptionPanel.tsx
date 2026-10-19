@@ -5,7 +5,8 @@ import { isPaidTier } from '../config/access';
 import { SubscriptionStatus } from '../types';
 import { DEFAULT_PRICING_CONFIG, PLAN_META } from '../config/pricingConfig';
 import { track } from '../services/analytics';
-import { fetchBillingStatus, BillingStatus, Currency, defaultCurrency, formatPrice, canPay, startCheckout, callManageBilling } from '../services/billing';
+import { fetchBillingStatus, BillingStatus, Currency, formatPrice, canPay, startCheckout, callManageBilling } from '../services/billing';
+import { useCurrency } from './useCurrency';
 
 // Derived, never hardcoded: plan copy must track the pricing config or it drifts (it previously
 // advertised 200 tokens while the config granted 100).
@@ -35,7 +36,7 @@ const SubscriptionPanel: React.FC = () => {
   // Tone of `msg` is tracked here rather than inferred from the text.
   const [msgErr, setMsgErr] = useState(false);
   const [billing, setBilling] = useState<BillingStatus | null>(null);
-  const [currency, setCurrency] = useState<Currency>(defaultCurrency());
+  const [currency, setCurrency] = useCurrency(profile?.billing_currency);
 
   useEffect(() => {
     let alive = true;
@@ -119,7 +120,7 @@ const SubscriptionPanel: React.FC = () => {
           <>
             <div className="flex" role="group" aria-label="Currency">
               {(['NGN', 'USD'] as Currency[]).map((c) => (
-                <button key={c} type="button" onClick={() => setCurrency(c)} aria-pressed={currency === c}
+                <button key={c} type="button" onClick={() => setCurrency(c)} aria-pressed={currency === c} aria-label={c === 'NGN' ? 'Naira' : 'US dollars'}
                   className={`px-3 py-2 text-[10px] font-bold uppercase tracking-widest border border-gray-200 first:rounded-l-lg last:rounded-r-lg ${currency === c ? 'bg-[#0B0B0B] text-white' : 'text-gray-500'}`}>
                   {c === 'NGN' ? '₦' : '$'}
                 </button>

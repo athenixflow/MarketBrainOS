@@ -328,7 +328,14 @@ ok(/fetchBillingStatus\(\)/.test(capacity) && /canBuy && r\.onBuy/.test(capacity
    Settings and the Dashboard, so on /billing a paid customer saw nothing at all. */
 export const acknowledgesCheckoutReturn = (page: string): boolean =>
   /URLSearchParams\([^)]*\)\.get\('checkout'\)/.test(page)
-  && /=== 'success'/.test(page) && /=== 'cancelled'/.test(page) && /refreshProfile\(\)/.test(page);
+  && /=== 'success'/.test(page) && /=== 'cancelled'/.test(page) && /refreshProfile\(\)/.test(page)
+  /* The webhook lands a few seconds after the redirect, so one immediate refresh shows the old plan:
+     it is refreshed again on a timer, and the timers are cleared when the page goes. */
+  && /setTimeout\(/.test(page) && /clearTimeout\(/.test(page);
+/** A naira pass has an END, not a renewal, and is priced in naira: the billing page must say so. */
+export const showsPassTerms = (page: string): boolean =>
+  /billing_mode === 'pass'/.test(page) && /pass_expires_at/.test(page) && /'Ends'/.test(page)
+  && /formatPrice\(/.test(page) && /\/30 days/.test(page);
 console.log('\nTHE CHECKOUT RETURN IS ACKNOWLEDGED:');
 const app = blank(fs.readFileSync(path.join(root, 'App.tsx'), 'utf8'));
 ok(/success_url: `\$\{SITE\}\/billing\?checkout=success`/.test(index) && /cancel_url: `\$\{SITE\}\/billing\?checkout=cancelled`/.test(index),
@@ -336,6 +343,12 @@ ok(/success_url: `\$\{SITE\}\/billing\?checkout=success`/.test(index) && /cancel
 ok(/path="\/billing" element=\{[^}]*<BillingCenter \/>/.test(app), 'the /billing route renders pages/BillingCenter.tsx');
 ok(acknowledgesCheckoutReturn(blank(fs.readFileSync(path.join(root, 'pages', 'BillingCenter.tsx'), 'utf8'))),
   'pages/BillingCenter.tsx reads the checkout outcome, says so, and refreshes the profile on success');
+const billingPage = blank(fs.readFileSync(path.join(root, 'pages', 'BillingCenter.tsx'), 'utf8'));
+ok(showsPassTerms(billingPage), 'pages/BillingCenter.tsx shows a naira pass as ₦ per 30 days that ENDS (not a dollar price that renews)');
+ok(!showsPassTerms("const renews = profile.plan_renews_at ? new Date(profile.plan_renews_at).toLocaleDateString() : 'Not set'; <Stat label=\"Renews\" value={renews} /> <Stat label=\"Price\" value={`$${price}/mo`} />"),
+  'CONTROL: a billing page that gives a pass holder a dollar price and a renewal date is caught');
+ok(!acknowledgesCheckoutReturn("const q = new URLSearchParams(window.location.search).get('checkout'); if (q === 'success') { void refreshProfile(); } if (q === 'cancelled') setReturned('cancelled');"),
+  'CONTROL: a page that refreshes only once (no timers) is caught');
 ok(!acknowledgesCheckoutReturn("const BillingCenter = () => { const { profile } = useAuth(); return <TokenStore />; };"),
   'CONTROL: a billing page that ignores the checkout outcome is caught');
 ok(!acknowledgesCheckoutReturn("const q = new URLSearchParams(window.location.search).get('checkout'); if (q === 'success') { void refreshProfile(); }"),

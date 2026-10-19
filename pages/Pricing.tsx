@@ -7,7 +7,8 @@ import { DEFAULT_PRICING_CONFIG as CFG, PLAN_META, PLAN_ORDER, Tier } from '../c
 import Seo from '../components/Seo';
 import { MARKETING_SEO, SITE_URL, SITE_NAME } from '../config/seo';
 import { track } from '../services/analytics';
-import { fetchBillingStatus, BillingStatus, Currency, defaultCurrency, formatPrice, canPay, startCheckout, callManageBilling } from '../services/billing';
+import { fetchBillingStatus, BillingStatus, Currency, formatPrice, canPay, startCheckout, callManageBilling } from '../services/billing';
+import { useCurrency } from '../components/useCurrency';
 
 // Product + per-plan Offer structured data (generated from the live pricing config).
 const PRICING_JSONLD = {
@@ -43,7 +44,7 @@ const Pricing: React.FC = () => {
   /* The same switch as the in-app panel: a pricing page that starts a checkout which
      cannot charge is the worst place in the product to be wrong about this. */
   const [billing, setBilling] = useState<BillingStatus | null>(null);
-  const [currency, setCurrency] = useState<Currency>(defaultCurrency());
+  const [currency, setCurrency] = useCurrency(profile?.billing_currency);
   useEffect(() => {
     let alive = true;
     void fetchBillingStatus().then((s) => { if (alive) setBilling(s); });
@@ -89,7 +90,8 @@ const Pricing: React.FC = () => {
     /* Until there is a way to pay, the button does not offer to take money. */
     if (!payable && tier !== 'free') return 'Talk to us';
     if (busy === tier) return 'Processing…';
-    return currency === 'NGN' ? `Get ${PLAN_META[tier].name} — 30 days` : `Upgrade to ${PLAN_META[tier].name}`;
+    /* "— 30 days" only where a naira pass exists: Enterprise has none and keeps its normal label. */
+    return currency === 'NGN' && CFG.plans[tier].priceNgn ? `Get ${PLAN_META[tier].name} — 30 days` : `Upgrade to ${PLAN_META[tier].name}`;
   };
   const ctaDisabled = (tier: Tier, idx: number) =>
     busy !== null || (!!user && (currentTier === tier || (currentIdx >= 0 && idx < currentIdx)));

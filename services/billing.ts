@@ -49,7 +49,10 @@ export const defaultCurrency = (): Currency => {
   } catch { return 'USD'; }
 };
 
-export const formatPrice = (major: number, currency: Currency): string =>
+/** The currency the account itself pays in (`billing_currency`, stamped by its last paid grant), if it has one. */
+export const accountCurrency = (v: unknown): Currency | null => (v === 'USD' || v === 'NGN' ? v : null);
+
+export const formatPrice =(major: number, currency: Currency): string =>
   currency === 'NGN' ? `₦${Math.round(major).toLocaleString('en-US')}` : `$${major}`;
 
 /** Super-admins see checkout before launch; the server refuses everyone else (createCheckout). */

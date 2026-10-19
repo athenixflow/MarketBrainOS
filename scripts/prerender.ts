@@ -130,6 +130,16 @@ async function main() {
       // Components can read this flag to skip prerender-only chrome (the consent banner does), so a
       // snapshot never bakes in UI that only makes sense for a live visitor.
       await page.evaluateOnNewDocument(() => { (window as any).__MBOS_PRERENDER = true; });
+      /* Pin the page's timezone and locale, so the snapshot never depends on the build machine. The
+         pricing page picks naira for a Lagos timezone or an -NG locale; unpinned, a build run from
+         Nigeria would bake naira prices into the static HTML every visitor and crawler gets. The
+         currency toggle still defaults per visitor at runtime. (scripts/bachs.test.ts pins this.) */
+      await page.emulateTimezone('UTC');
+      await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US' });
+      await page.evaluateOnNewDocument(() => {
+        Object.defineProperty(navigator, 'languages', { get: () => ['en-US'] });
+        Object.defineProperty(navigator, 'language', { get: () => 'en-US' });
+      });
       await page.goto(`${ORIGIN}${route}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
       // Wait until the app mounted and react-helmet-async applied per-route head tags.
       await page.waitForFunction(

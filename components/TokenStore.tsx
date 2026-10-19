@@ -7,7 +7,8 @@ import { Link } from 'react-router-dom';
 import { Card, Badge, PrimaryButton, SuccessMessage, ErrorMessage } from './UI';
 import { useAuth } from '../context/AuthContext';
 import { DEFAULT_PRICING_CONFIG } from '../config/pricingConfig';
-import { fetchBillingStatus, BillingStatus, Currency, defaultCurrency, formatPrice, canPay, startCheckout } from '../services/billing';
+import { fetchBillingStatus, BillingStatus, Currency, formatPrice, canPay, startCheckout } from '../services/billing';
+import { useCurrency } from './useCurrency';
 import { track } from '../services/analytics';
 
 // The pack with the most tokens per dollar gets the "Best value" badge. Derived from config so it
@@ -27,7 +28,7 @@ export const TokenStore: React.FC<{ onPurchased?: () => void; compact?: boolean 
      store offers nothing the server would refuse — the same switch as the plan panel. Packs are
      credited by the webhook once Bachs confirms the payment, never from here. */
   const [billing, setBilling] = useState<BillingStatus | null>(null);
-  const [currency, setCurrency] = useState<Currency>(defaultCurrency());
+  const [currency, setCurrency] = useCurrency(profile?.billing_currency);
   useEffect(() => {
     let alive = true;
     void fetchBillingStatus().then((s) => { if (alive) setBilling(s); });
@@ -50,7 +51,7 @@ export const TokenStore: React.FC<{ onPurchased?: () => void; compact?: boolean 
     <div>
       <div className="flex mb-4" role="group" aria-label="Currency">
         {(['NGN', 'USD'] as Currency[]).map((c) => (
-          <button key={c} type="button" onClick={() => setCurrency(c)} aria-pressed={currency === c}
+          <button key={c} type="button" onClick={() => setCurrency(c)} aria-pressed={currency === c} aria-label={c === 'NGN' ? 'Naira' : 'US dollars'}
             className={`px-3 py-2 text-[10px] font-bold uppercase tracking-widest border border-gray-200 first:rounded-l-lg last:rounded-r-lg ${currency === c ? 'bg-[#0B0B0B] text-white' : 'text-gray-500'}`}>
             {c === 'NGN' ? '₦' : '$'}
           </button>

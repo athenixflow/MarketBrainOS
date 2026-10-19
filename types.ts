@@ -484,6 +484,7 @@ export interface UserProfile {
   subscription_started_at?: string;
   // Bachs billing (server-authoritative): 'subscription' = USD plan, 'pass' = 30-day naira pass.
   billing_mode?: 'subscription' | 'pass' | null;
+  billing_currency?: 'USD' | 'NGN' | null;  // stamped by the grant that set the tier
   pass_expires_at?: string | null;
   bachs_customer_id?: string | null;
   // Profile / account (client-editable via Settings — NOT economy/authority fields).

@@ -518,6 +518,51 @@ const billingSvc = code(src('services/billing.ts'));
 ok(/billingStatus/.test(billingSvc) && !/billing_live:\s*true/.test(billingSvc) && (billingSvc.match(/billing_live: false/g) || []).length >= 2,
   'the client fails CLOSED: no path answers "live" except a confirmed one, and both error paths answer "not live"');
 
+/* THE PRERENDERED PRICING PAGE IS ALWAYS DOLLARS. Pricing picks its first currency from the browser
+   (timezone Africa/Lagos or an -NG locale means naira), and the prerender runs that same code in a
+   headless browser — so a build on a machine whose zone or locale says Nigeria would bake naira
+   prices and the pass note into the static HTML every visitor and crawler receives. The prerender
+   pins its pages to UTC and en-US; the toggle still defaults per visitor at runtime. */
+export const prerenderPinsDollars = (text: string): boolean => {
+  const c = code(text);
+  return /page\.emulateTimezone\('UTC'\)/.test(c)
+    && /Object\.defineProperty\(navigator, 'languages', \{ get: \(\) => \['en-US'\] \}\)/.test(c)
+    && /Object\.defineProperty\(navigator, 'language', \{ get: \(\) => 'en-US' \}\)/.test(c);
+};
+console.log('\nTHE PRERENDERED PRICING IS ALWAYS DOLLARS:');
+const prerenderSrc = src('scripts/prerender.ts');
+ok(prerenderPinsDollars(prerenderSrc), 'scripts/prerender.ts pins every prerendered page to the UTC timezone and the en-US locale');
+const pinnedGood = "await page.emulateTimezone('UTC');\nawait page.evaluateOnNewDocument(() => { Object.defineProperty(navigator, 'languages', { get: () => ['en-US'] }); Object.defineProperty(navigator, 'language', { get: () => 'en-US' }); });";
+ok(prerenderPinsDollars(pinnedGood), 'a correctly pinned prerender passes');
+ok(!prerenderPinsDollars(pinnedGood.replace("emulateTimezone('UTC')", "emulateTimezone('Africa/Lagos')")), 'CONTROL: a prerender pinned to another timezone is caught');
+ok(!prerenderPinsDollars(pinnedGood.replace(/await page\.emulateTimezone\('UTC'\);\n/, '')), 'CONTROL: a prerender with no timezone pin is caught');
+ok(!prerenderPinsDollars(pinnedGood.replace("'language', { get: () => 'en-US' }", "'language', { get: () => 'en-NG' }")), 'CONTROL: a prerender that leaves the locale to the machine is caught');
+ok(!prerenderPinsDollars("// await page.emulateTimezone('UTC');\n" + pinnedGood.split('\n')[1]), 'CONTROL: a pin that only appears in a comment is caught');
+
+/* THE CURRENCY A BILLING SURFACE STARTS IN FOLLOWS THE ACCOUNT. A naira pass holder who opens Pricing
+   from a laptop set to a US timezone must not be shown dollars, so the account's own `billing_currency`
+   comes first and the browser's guess is only the fallback. One hook does it for all three surfaces
+   (lazy initialiser; adopts the account's currency once if the profile arrives after first render). */
+export const usesAccountCurrency = (surface: string): boolean =>
+  /useCurrency\(profile\??\.billing_currency\)/.test(surface) && !/useState<Currency>/.test(surface);
+console.log('\nTHE CURRENCY FOLLOWS THE ACCOUNT:');
+const hookSrc = fs.existsSync(path.join(root, 'components', 'useCurrency.ts')) ? code(src('components/useCurrency.ts')) : '';
+ok(/useState<Currency>\(\(\) => /.test(hookSrc) && /accountCurrency\(/.test(hookSrc) && /defaultCurrency\(\)/.test(hookSrc) && /useEffect\(/.test(hookSrc),
+  'the currency hook starts from the account (lazy initialiser), falls back to the browser, and adopts a late profile');
+for (const f of ['pages/Pricing.tsx', 'components/SubscriptionPanel.tsx', 'components/TokenStore.tsx']) {
+  ok(usesAccountCurrency(code(src(f))), `${f} starts in the account's currency`);
+}
+ok(!usesAccountCurrency("const [currency, setCurrency] = useState<Currency>(defaultCurrency());"), 'CONTROL: a surface that starts from the browser alone is caught');
+for (const f of ['components/SubscriptionPanel.tsx', 'components/TokenStore.tsx']) {
+  const t = code(src(f));
+  ok(/aria-label=\{c === 'NGN' \? 'Naira' : 'US dollars'\}/.test(t), `${f}: the compact ₦ / $ buttons are named for a screen reader`);
+}
+/* No Enterprise pass exists, so in naira mode its button must not promise "30 days": the "— 30 days" label
+   is for plans that have a naira price in the pricing config. */
+const pricingSrc = code(src('pages/Pricing.tsx'));
+ok(/CFG\.plans\[tier\]\.priceNgn\s*\?\s*`Get \$\{PLAN_META\[tier\]\.name\} — 30 days`/.test(pricingSrc),
+  'pages/Pricing.tsx offers "— 30 days" only to plans that have a naira price (not Enterprise)');
+
 console.log('\nTHE WEBHOOK:');
 ok(webhook.length > 0 && /functions\.runWith\(\{ secrets: BACHS_SECRETS \}\)\.https\.onRequest/.test(webhook),
   'the webhook is bound to the secrets it verifies with');

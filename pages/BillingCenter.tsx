@@ -9,6 +9,7 @@ import { getUserPaymentHistory } from '../services/persistenceService';
 import { downloadAsCSV, paymentsToCSV } from '../services/exportService';
 import { PaymentRecord } from '../types';
 import { PLAN_META, DEFAULT_PRICING_CONFIG, Tier } from '../config/pricingConfig';
+import { formatPrice } from '../services/billing';
 
 const toDate = (v: any): Date | null => {
   if (!v) return null;
@@ -35,8 +36,16 @@ const BillingCenter: React.FC = () => {
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get('checkout');
-    if (q === 'success') { setReturned('success'); void refreshProfile(); }
+    const timers: number[] = [];
+    if (q === 'success') {
+      setReturned('success');
+      void refreshProfile();
+      /* The webhook grants the plan a few seconds after the redirect, so the first refresh can still show
+         the old plan: look again at about 5s and 20s. The timers die with the page. */
+      for (const ms of [5000, 20000]) timers.push(window.setTimeout(() => { void refreshProfile(); }, ms));
+    }
     if (q === 'cancelled') setReturned('cancelled');
+    return () => { timers.forEach((t) => window.clearTimeout(t)); };
     /* Runs once on mount. Listing refreshProfile here would loop if it is not memoised:
        refresh → new profile → new function → effect → refresh. */
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -58,12 +67,18 @@ const BillingCenter: React.FC = () => {
   const isFree = tier === 'free';
   const monthly = profile.monthly_tokens ?? profile.tokens ?? 0;
   const purchased = profile.purchased_tokens ?? 0;
+  // A naira pass is a one-off 30-day purchase: it has an end date and a naira price, and it does not renew.
+  const isPass = !isFree && profile.billing_mode === 'pass';
   // The Free plan never renews: its allowance is a one-time balance.
   const renews = isFree
     ? 'Never'
-    : profile.plan_renews_at ? new Date(profile.plan_renews_at).toLocaleDateString() : 'Not set';
+    : isPass
+      ? (profile.pass_expires_at ? new Date(profile.pass_expires_at).toLocaleDateString() : 'Not set')
+      : profile.plan_renews_at ? new Date(profile.plan_renews_at).toLocaleDateString() : 'Not set';
   const planName = PLAN_META[tier]?.name || tier;
   const price = DEFAULT_PRICING_CONFIG.plans[tier]?.price ?? 0;
+  const priceNgn = DEFAULT_PRICING_CONFIG.plans[tier]?.priceNgn;
+  const priceLabel = isFree ? '$0' : isPass && priceNgn ? `${formatPrice(priceNgn, 'NGN')}/30 days` : `$${price}/mo`;
   const expansions = payments.filter((p) => (p as any).type === 'expansion');
 
   return (
@@ -76,8 +91,8 @@ const BillingCenter: React.FC = () => {
           <div className="flex flex-wrap items-end justify-between gap-6">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 flex-1 min-w-0">
               <Stat label="Plan" value={planName} />
-              <Stat label="Price" value={isFree ? '$0' : `$${price}/mo`} />
-              <Stat label="Renews" value={renews} />
+              <Stat label="Price" value={priceLabel} />
+              <Stat label={isPass ? 'Ends' : 'Renews'} value={renews} />
             </div>
             <Link to="/pricing"><PrimaryButton>Change plan</PrimaryButton></Link>
           </div>
