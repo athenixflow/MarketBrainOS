@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  PageHeader, Card, PrimaryButton, Stat, Skeleton, EmptyState, LedgerRow, ErrorMessage, LoadingState,
+  PageHeader, Card, PrimaryButton, Stat, Skeleton, EmptyState, LedgerRow, ErrorMessage, SuccessMessage, LoadingState,
 } from '../components/UI';
 import { TokenStore } from '../components/TokenStore';
 import { useAuth } from '../context/AuthContext';
@@ -26,10 +26,21 @@ const payLabel = (p: PaymentRecord): string => {
 const LOAD_ERROR = 'We could not load your billing history. Please try again.';
 
 const BillingCenter: React.FC = () => {
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Where a Bachs checkout lands the customer (?checkout=success|cancelled): say what happened.
+  const [returned, setReturned] = useState<'success' | 'cancelled' | null>(null);
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get('checkout');
+    if (q === 'success') { setReturned('success'); void refreshProfile(); }
+    if (q === 'cancelled') setReturned('cancelled');
+    /* Runs once on mount. Listing refreshProfile here would loop if it is not memoised:
+       refresh → new profile → new function → effect → refresh. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const load = () => {
     if (!user) return;
@@ -59,6 +70,8 @@ const BillingCenter: React.FC = () => {
     <div>
       <PageHeader title="Billing Center" subtitle="Your plan, token balance, purchases, and invoices." />
       <div className="space-y-6">
+        {returned === 'success' && <SuccessMessage message="Payment received — your plan updates within a minute." />}
+        {returned === 'cancelled' && <ErrorMessage message="Checkout was cancelled. Nothing was charged." />}
         <Card title="Current plan">
           <div className="flex flex-wrap items-end justify-between gap-6">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 flex-1 min-w-0">

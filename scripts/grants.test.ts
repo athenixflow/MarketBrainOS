@@ -323,6 +323,24 @@ const capacity = blank(fs.readFileSync(path.join(root, 'components', 'CapacityPa
 ok(/fetchBillingStatus\(\)/.test(capacity) && /canBuy && r\.onBuy/.test(capacity),
   'components/CapacityPanel.tsx shows no Buy button until billing is live');
 
+/* THE RETURN FROM A CHECKOUT IS ACKNOWLEDGED WHERE THE CUSTOMER LANDS. The server sends people back
+   to /billing?checkout=success|cancelled; the plan panel that used to read the parameter lives in
+   Settings and the Dashboard, so on /billing a paid customer saw nothing at all. */
+export const acknowledgesCheckoutReturn = (page: string): boolean =>
+  /URLSearchParams\([^)]*\)\.get\('checkout'\)/.test(page)
+  && /=== 'success'/.test(page) && /=== 'cancelled'/.test(page) && /refreshProfile\(\)/.test(page);
+console.log('\nTHE CHECKOUT RETURN IS ACKNOWLEDGED:');
+const app = blank(fs.readFileSync(path.join(root, 'App.tsx'), 'utf8'));
+ok(/success_url: `\$\{SITE\}\/billing\?checkout=success`/.test(index) && /cancel_url: `\$\{SITE\}\/billing\?checkout=cancelled`/.test(index),
+  'a checkout sends the customer back to /billing, with the outcome in the query');
+ok(/path="\/billing" element=\{[^}]*<BillingCenter \/>/.test(app), 'the /billing route renders pages/BillingCenter.tsx');
+ok(acknowledgesCheckoutReturn(blank(fs.readFileSync(path.join(root, 'pages', 'BillingCenter.tsx'), 'utf8'))),
+  'pages/BillingCenter.tsx reads the checkout outcome, says so, and refreshes the profile on success');
+ok(!acknowledgesCheckoutReturn("const BillingCenter = () => { const { profile } = useAuth(); return <TokenStore />; };"),
+  'CONTROL: a billing page that ignores the checkout outcome is caught');
+ok(!acknowledgesCheckoutReturn("const q = new URLSearchParams(window.location.search).get('checkout'); if (q === 'success') { void refreshProfile(); }"),
+  'CONTROL: a page that never speaks to a cancelled checkout is caught');
+
 console.log('\nCONTROLS:');
 const leakyTopUp = "export const confirmTopUp = x(async () => { t.update(userRef, { ...balanceFields(monthly, purchased + pack.tokens) }); });";
 ok(!topUpIsClosed(leakyTopUp), 'CONTROL: a top-up that credits tokens is caught');

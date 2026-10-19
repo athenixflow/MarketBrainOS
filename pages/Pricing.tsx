@@ -129,6 +129,8 @@ const Pricing: React.FC = () => {
             const meta = PLAN_META[tier];
             const popular = tier === 'pro';
             const exp = expansionLine(tier);
+            /* Naira shows ₦0 on Free too; Enterprise has no naira price (sales-led) and stays in dollars. */
+            const ngnPrice = currency === 'NGN' ? (plan.price === 0 ? 0 : plan.priceNgn) : undefined;
             return (
               <div key={tier} className={`relative p-7 rounded-2xl flex flex-col ${popular ? 'border-2 border-[#FF0000]/40 bg-[#111] shadow-2xl shadow-red-900/10' : 'border border-gray-800 bg-[#0B0B0B]'}`}>
                 {/* absolute so the badge does not push this card's content down relative to its row siblings */}
@@ -136,10 +138,10 @@ const Pricing: React.FC = () => {
                 <h3 className="text-xl font-bold text-white">{meta.name}</h3>
                 <p className="text-gray-500 text-xs mb-5 mt-1">{meta.tagline}</p>
                 <div className="text-3xl font-black text-white mb-1">
-                  {currency === 'NGN' && plan.priceNgn ? formatPrice(plan.priceNgn, 'NGN') : formatPrice(plan.price, 'USD')}
+                  {ngnPrice !== undefined ? formatPrice(ngnPrice, 'NGN') : formatPrice(plan.price, 'USD')}
                   {/* In naira the suffix sits on its own line on every card: "/30 days" does not fit beside ₦120,000 at five
                       columns, and a wrap on some cards only would push their token line out of line with the rest of the row. */}
-                  <span className={`text-base font-medium text-gray-600 ${currency === 'NGN' ? 'block' : ''}`}>{currency === 'NGN' && plan.priceNgn ? '/30 days' : '/mo'}</span>
+                  <span className={`text-base font-medium text-gray-600 ${currency === 'NGN' ? 'block' : ''}`}>{ngnPrice ? '/30 days' : '/mo'}</span>
                 </div>
                 <p className="text-[#FF0000] text-xs font-bold uppercase tracking-widest mb-5">
                   {plan.monthlyTokens.toLocaleString()} tokens {tier === 'free' ? 'one-time' : '/ mo'}
