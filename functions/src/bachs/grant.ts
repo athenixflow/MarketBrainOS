@@ -38,6 +38,8 @@ export interface PaymentRecord {
   amount_minor: number;
   currency: string;
   tokens_credited: number;
+  /** Subscription payments only: 'invoice' = the amount Bachs charged; 'plan_price' = the list price, recorded when no invoice was at hand. */
+  amount_source?: 'invoice' | 'plan_price';
 }
 
 export interface GrantResult {
@@ -204,6 +206,15 @@ export const syncSubscription = (
   const ids = { bachs_subscription_id: snap.id, bachs_customer_id: snap.customerId, billing_currency: 'USD' };
 
   if (snap.status === 'canceled' || snap.status === 'unpaid') {
+    /* Only the account's CURRENT subscription ending may drop it to Free. Another subscription
+       ending (a duplicate checkout, or one that went to review and was never stored) must not
+       strip a customer who is still paying elsewhere, or a pass holder. */
+    if (account.bachs_subscription_id !== snap.id) {
+      return {
+        stateUpdate: {},
+        grant: { ...NONE, ledgerKey: `end:${snap.id}`, review: "ended subscription is not the account's current one; account left unchanged" },
+      };
+    }
     return {
       stateUpdate: {},
       grant: {
@@ -219,6 +230,16 @@ export const syncSubscription = (
   if (snap.status === 'past_due') return { stateUpdate: { ...ids, subscription_status: 'past_due' }, grant: NONE };
   if (snap.status !== 'active') return { stateUpdate: ids, grant: NONE };
 
+  /* A period is keyed by its start. Without a readable one every sync would share one key: the
+     first would consume it and no renewal would ever grant again. Review it instead, under a key
+     that no real period can collide with. */
+  const startMs = Date.parse(snap.currentPeriodStart ?? '');
+  if (Number.isNaN(startMs)) {
+    return {
+      stateUpdate: ids,
+      grant: { ...NONE, ledgerKey: `period:${snap.id}:nostart:${snap.productId}`, review: 'active subscription with no readable period start' },
+    };
+  }
   const ledgerKey = `period:${snap.id}:${snap.currentPeriodStart}:${snap.productId}`;
   const stateUpdate = {
     ...ids,
@@ -236,23 +257,31 @@ export const syncSubscription = (
      for the subscription, so it is granted; but its tier, allowance and mode replace the pass, so
      the unused pass days are paid-for value we cannot honour. Clear the pass (the expiry job must
      never drop a subscriber to Free) and flag it, so the founder can refund those days.
-     "Live" is judged at the moment the paid period began — pure, no clock — falling back to now
-     only when Bachs sent no period start. */
-  const startMs = Date.parse(snap.currentPeriodStart ?? '');
-  const overlapsPass = activePass(account, Number.isNaN(startMs) ? Date.now() : startMs);
+     "Live" is judged at the moment the paid period began — pure, no clock. */
+  const overlapsPass = activePass(account, startMs);
+  /* The same customer paying for a SECOND live subscription (two checkouts, two tabs) is also
+     granted, and flagged naming both so one can be refunded. A pass and a subscription are never
+     both the account's mode, so at most one of these reviews applies. */
+  const otherSub = activeSubscription(account) && !!account.bachs_subscription_id && account.bachs_subscription_id !== snap.id
+    ? account.bachs_subscription_id : null;
   return {
     stateUpdate,
     grant: {
       ledgerKey,
       review: overlapsPass
         ? `dollar subscription started while a ${account.tier ?? 'paid'} naira pass was still active (pass_expires_at ${account.pass_expires_at}); refund the unused pass days`
-        : null,
+        : otherSub
+          ? `second live subscription: ${snap.id} was paid while ${otherSub} is still live; refund one of them`
+          : null,
       checkoutStatus: null,
       userUpdate: {
         tier, billing_mode: 'subscription', ...balanceFields(item.tokens, purchased),
         ...(overlapsPass ? { pass_expires_at: null, pass_reminded: [] } : {}),
       },
-      payment: { kind: 'plan', item: tier, amount_minor: chargedMinor ?? item.amountMinor, currency: 'USD', tokens_credited: item.tokens },
+      payment: {
+        kind: 'plan', item: tier, amount_minor: chargedMinor ?? item.amountMinor, currency: 'USD', tokens_credited: item.tokens,
+        amount_source: typeof chargedMinor === 'number' ? 'invoice' : 'plan_price',
+      },
     },
   };
 };
