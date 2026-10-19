@@ -4273,10 +4273,12 @@ const syncSubscriptionById = async (subscriptionId: string, chargedMinor: number
   const paidTier: PaidTier | null = tierForProduct(snap.productId, process.env);
   const userRef = db.collection('users').doc(uid);
   const endKey = `end:${snap.id}`;
-  const state: { reviewWhy: string | null } = { reviewWhy: null };
+  /* Written by the transaction body, read after it (see applyOneOffPayment). */
+  const state: { reviewWhy: string | null; notice: { item: string; amountMinor: number; currency: string } | null } =
+    { reviewWhy: null, notice: null };
 
   const outcome = await db.runTransaction(async (t: admin.firestore.Transaction) => {
-    state.reviewWhy = null; // a retried attempt starts clean
+    state.reviewWhy = null; state.notice = null; // a retried attempt starts clean
     /* Firestore wants every read before the first write, so all of them are here. */
     const userSnap = await t.get(userRef);
     if (!userSnap.exists) return 'no account';
@@ -4300,6 +4302,7 @@ const syncSubscriptionById = async (subscriptionId: string, chargedMinor: number
         uid, provider: 'bachs', ...r.grant.payment, bachs_subscription_id: snap.id, source, status: 'success',
         created_at: admin.firestore.FieldValue.serverTimestamp(),
       });
+      state.notice = { item: r.grant.payment.item, amountMinor: r.grant.payment.amount_minor, currency: r.grant.payment.currency };
     }
     if (r.grant.review) {
       state.reviewWhy = r.grant.review;
@@ -4312,12 +4315,27 @@ const syncSubscriptionById = async (subscriptionId: string, chargedMinor: number
     t.set(grantRef, { key: r.grant.ledgerKey, source, outcome: result, created_at: admin.firestore.FieldValue.serverTimestamp() });
     return result;
   });
-  if (outcome === 'review' || outcome === 'granted+review') {
-    try {
-      await billingAlertEmail('A subscription needs review', [`${subscriptionId}: ${state.reviewWhy}`]);
-    } catch (e: any) {
-      console.error('syncSubscriptionById: alert failed:', e?.message || e);
+  /* Mail is best effort and happens after the commit, exactly as in applyOneOffPayment. The
+     receipt goes out only when THIS call granted a paid period: not on 'state synced',
+     'already ended', 'no account' or a bare 'review'. A grant that was also flagged
+     ('granted+review') was paid and applied, so its customer still gets the receipt. */
+  try {
+    const n = state.notice;
+    if ((outcome === 'granted' || outcome === 'granted+review') && n) {
+      const user = (await userRef.get()).data() || {};
+      if (user.email) {
+        const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        await sendTemplate(user.email, 'paymentReceipt', {
+          description: `${n.item.charAt(0).toUpperCase()}${n.item.slice(1)} plan, monthly`,
+          amount: n.amountMinor / 100, currency: n.currency, reference: snap.id, date,
+        });
+      }
     }
+    if (outcome === 'review' || outcome === 'granted+review') {
+      await billingAlertEmail('A subscription needs review', [`${subscriptionId}: ${state.reviewWhy}`]);
+    }
+  } catch (e: any) {
+    console.error('syncSubscriptionById: notification failed:', e?.message || e);
   }
   return outcome;
 };

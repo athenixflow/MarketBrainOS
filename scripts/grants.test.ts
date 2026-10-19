@@ -109,6 +109,20 @@ export const grantHelpersAreInternal = (src: string) =>
   /\r?\nconst applyOneOffPayment = async/.test(src) && /\r?\nconst syncSubscriptionById = async/.test(src);
 ok(grantHelpersAreInternal(index),
   'the two grant helpers exist and are not exported (no callable can invoke them directly)');
+/* Every payment gets the receipt we already have (spec). A dollar subscription's period is paid
+   by the webhook, the hourly sync or manageBilling, all through syncSubscriptionById, so the
+   receipt lives in that one helper — and only on a grant, never on a no-op or a refusal. The
+   body is cut from the helper to the next export; comments are already blanked. */
+export const helperBody = (src: string, name: string): string => {
+  const start = src.search(new RegExp(`\\r?\\nconst ${name} = async`));
+  if (start < 0) return '';
+  const next = src.indexOf('\nexport const ', start + 10);
+  return src.slice(start, next < 0 ? undefined : next);
+};
+export const sendsPaymentReceiptOnGrant = (body: string) =>
+  /sendTemplate\(\s*[^,]+,\s*'paymentReceipt'/.test(body) && /outcome === 'granted'/.test(body) && /outcome === 'granted\+review'/.test(body);
+ok(sendsPaymentReceiptOnGrant(helperBody(index, 'syncSubscriptionById')),
+  'syncSubscriptionById sends the paymentReceipt on a granted subscription period');
 for (const name of ['manageWorkspace', 'manageAgency', 'manageEnterprise']) {
   const fn = exported(index, name);
   ok(fn.length > 0 && REFUSES.test(fn), `${name} refuses to create a container above the account's plan`);
@@ -148,6 +162,16 @@ ok(!grantHelpersAreInternal(helpers.replace('\nconst applyOneOffPayment', '\nexp
   'CONTROL: an exported applyOneOffPayment is caught');
 ok(!grantHelpersAreInternal(helpers.replace('\nconst syncSubscriptionById', '\nexport const syncSubscriptionById')),
   'CONTROL: an exported syncSubscriptionById is caught');
+const receiptBody = "\nconst h = async () => { if (outcome === 'granted' || outcome === 'granted+review') { await sendTemplate(user.email, 'paymentReceipt', {}); } };\nexport const next = 1;";
+ok(sendsPaymentReceiptOnGrant(helperBody(receiptBody.replace('const h', 'const syncSubscriptionById'), 'syncSubscriptionById')),
+  'a helper that mails the receipt on granted and granted+review passes');
+ok(!sendsPaymentReceiptOnGrant(helperBody(receiptBody.replace('const h', 'const syncSubscriptionById').replace("'paymentReceipt'", "'billingAlert'"), 'syncSubscriptionById')),
+  'CONTROL: a helper that sends no paymentReceipt is caught');
+ok(!sendsPaymentReceiptOnGrant(helperBody(receiptBody.replace('const h', 'const syncSubscriptionById').replace(" || outcome === 'granted+review'", ''), 'syncSubscriptionById')),
+  'CONTROL: a receipt that skips granted+review (grant applied and flagged) is caught');
+const elsewhere = "\nconst syncSubscriptionById = async () => { return 'x'; };\nexport const other = () => { if (outcome === 'granted' || outcome === 'granted+review') sendTemplate(a, 'paymentReceipt', {}); };";
+ok(!sendsPaymentReceiptOnGrant(helperBody(elsewhere, 'syncSubscriptionById')),
+  'CONTROL: a receipt sent by a different function does not count');
 ok(downgradeIsOnce("} else if (action === 'downgrade') { if (userData.tier === 'free') throw new functions.https.HttpsError('failed-precondition', 'x'); t.update(userRef, { tier: 'free' }); "),
   'a downgrade that refuses free accounts first passes');
 
