@@ -14,7 +14,7 @@ import { catalogItem, toMajorString, toMinor } from '../functions/src/bachs/cata
 import { billingLive, productForTier, tierForProduct } from '../functions/src/bachs/config';
 import { signPayload, verifyBachsSignature } from '../functions/src/bachs/signature';
 import { parseBachsEvent, parseCheckoutSession, parseSubscription } from '../functions/src/bachs/events';
-import { applyOneOff, checkoutAllowed, expirePass, manageOwnership, reminderDue, syncSubscription, PASS_DAYS } from '../functions/src/bachs/grant';
+import { applyOneOff, checkoutAllowed, expirePass, invoicePayment, manageOwnership, reminderDue, syncSubscription, PASS_DAYS } from '../functions/src/bachs/grant';
 import { bachsApi, bachsBaseUrl, BachsApiError } from '../functions/src/bachs/api';
 import { EMAIL_TEMPLATES, MARKETING_KEYS } from '../functions/src/email/templates';
 
@@ -221,37 +221,38 @@ const snap = (over: Record<string, unknown> = {}) => ({
   id: 'sub_1', status: 'active', productId: 'prod_p', customerId: 'cust_1', currency: 'USD', amountMinor: 1900,
   currentPeriodStart: '2026-10-01T00:00:00Z', currentPeriodEnd: '2026-11-01T00:00:00Z', cancelAtPeriodEnd: false, metadata: { uid: 'u1' }, ...over,
 });
-const s1 = syncSubscription({ tier: 'free', purchased_tokens: 3 }, snap() as any, 'pro', CFG, 1900);
+const s1 = syncSubscription({ tier: 'free', purchased_tokens: 3 }, snap() as any, 'pro', CFG);
 ok(s1.grant.ledgerKey === 'period:sub_1:2026-10-01T00:00:00Z:prod_p' && s1.grant.userUpdate?.tier === 'pro'
   && s1.grant.userUpdate?.monthly_tokens === 300 && s1.grant.userUpdate?.purchased_tokens === 3, 'an active paid period grants Pro + 300, keyed by period and product');
 ok(s1.stateUpdate.subscription_status === 'active' && s1.stateUpdate.plan_renews_at === '2026-11-01T00:00:00Z' && s1.stateUpdate.bachs_subscription_id === 'sub_1',
   'and the always-applied state carries status, renewal date and ids');
-ok(s1.grant.payment?.amount_minor === 1900 && s1.grant.payment.currency === 'USD', 'payment recorded as charged');
-const renew = syncSubscription({ tier: 'pro' }, snap({ currentPeriodStart: '2026-11-01T00:00:00Z' }) as any, 'pro', CFG, 1900);
+ok(s1.grant.payment === null, 'a period grant records no payment (only a paid invoice is a payment: final review I6)');
+const renew = syncSubscription({ tier: 'pro' }, snap({ currentPeriodStart: '2026-11-01T00:00:00Z' }) as any, 'pro', CFG);
 ok(renew.grant.ledgerKey === 'period:sub_1:2026-11-01T00:00:00Z:prod_p', 'a new period is a new key (the renewal grants once)');
-const upgraded = syncSubscription({ tier: 'pro' }, snap({ productId: 'prod_t', amountMinor: 7900 }) as any, 'team', CFG, 6000);
-ok(upgraded.grant.ledgerKey?.endsWith(':prod_t') === true && upgraded.grant.userUpdate?.tier === 'team' && upgraded.grant.payment?.amount_minor === 6000,
-  'an upgrade in the same period is a new key; the prorated charge is recorded as charged');
-const recon = syncSubscription({ tier: 'pro' }, snap() as any, 'pro', CFG, null);
-ok(recon.grant.payment?.amount_minor === 1900, 'reconciliation without an invoice records the plan price');
-const cancelling = syncSubscription({ tier: 'pro' }, snap({ cancelAtPeriodEnd: true }) as any, 'pro', CFG, null);
+const upgraded = syncSubscription({ tier: 'pro' }, snap({ productId: 'prod_t', amountMinor: 7900 }) as any, 'team', CFG);
+ok(upgraded.grant.ledgerKey?.endsWith(':prod_t') === true && upgraded.grant.userUpdate?.tier === 'team',
+  'an upgrade in the same period is a new key');
+const recon = syncSubscription({ tier: 'pro' }, snap() as any, 'pro', CFG);
+ok(recon.grant.userUpdate?.tier === 'pro' && recon.grant.payment === null,
+  'reconciliation grants the period from state, but records no payment at list price');
+const cancelling = syncSubscription({ tier: 'pro' }, snap({ cancelAtPeriodEnd: true }) as any, 'pro', CFG);
 ok(cancelling.stateUpdate.subscription_status === 'cancelled', 'cancel at period end → cancelled, access kept');
-const pastDue = syncSubscription({ tier: 'pro' }, snap({ status: 'past_due' }) as any, 'pro', CFG, null);
+const pastDue = syncSubscription({ tier: 'pro' }, snap({ status: 'past_due' }) as any, 'pro', CFG);
 ok(pastDue.stateUpdate.subscription_status === 'past_due' && pastDue.grant.ledgerKey === null, 'past due changes status only');
-const ended = syncSubscription({ tier: 'pro', purchased_tokens: 9, billing_mode: 'subscription', bachs_subscription_id: 'sub_1' }, snap({ status: 'canceled' }) as any, 'pro', CFG, null);
+const ended = syncSubscription({ tier: 'pro', purchased_tokens: 9, billing_mode: 'subscription', bachs_subscription_id: 'sub_1' }, snap({ status: 'canceled' }) as any, 'pro', CFG);
 ok(ended.grant.ledgerKey === 'end:sub_1' && ended.grant.userUpdate?.tier === 'free' && ended.grant.userUpdate?.monthly_tokens === 0
   && ended.grant.userUpdate?.purchased_tokens === 9 && ended.grant.userUpdate?.billing_mode === null, 'ended → Free once, purchased tokens kept');
-const unpaid = syncSubscription({ tier: 'pro', billing_mode: 'subscription', bachs_subscription_id: 'sub_1' }, snap({ status: 'unpaid' }) as any, 'pro', CFG, null);
+const unpaid = syncSubscription({ tier: 'pro', billing_mode: 'subscription', bachs_subscription_id: 'sub_1' }, snap({ status: 'unpaid' }) as any, 'pro', CFG);
 ok(unpaid.grant.ledgerKey === 'end:sub_1' && unpaid.grant.userUpdate?.tier === 'free', 'unpaid ends it too');
-ok(syncSubscription({}, snap() as any, null, CFG, 1900).grant.review !== null, 'an unknown product goes to review');
-ok(syncSubscription({}, snap({ amountMinor: 100 }) as any, 'pro', CFG, 100).grant.review !== null, 'a product billing the wrong amount goes to review');
-ok(syncSubscription({}, snap({ status: 'trialing' }) as any, 'pro', CFG, null).grant.ledgerKey === null, 'a trial grants nothing (trials are not sold)');
+ok(syncSubscription({}, snap() as any, null, CFG).grant.review !== null, 'an unknown product goes to review');
+ok(syncSubscription({}, snap({ amountMinor: 100 }) as any, 'pro', CFG).grant.review !== null, 'a product billing the wrong amount goes to review');
+ok(syncSubscription({}, snap({ status: 'trialing' }) as any, 'pro', CFG).grant.ledgerKey === null, 'a trial grants nothing (trials are not sold)');
 ok(s1.grant.review === null && !('pass_expires_at' in (s1.grant.userUpdate ?? {})), 'with no pass in the way a period grants cleanly: no review, no pass fields touched');
 
 /* Two checkouts opened in two tabs: a naira pass is paid, then a USD subscription activates while it runs. */
 const overlapPass = { tier: 'pro', billing_mode: 'pass' as const, pass_expires_at: '2026-10-20T00:00:00.000Z', pass_reminded: [5], monthly_tokens: 50, purchased_tokens: 7, subscription_status: 'active' };
-const overlap = syncSubscription(overlapPass, snap({ productId: 'prod_t', amountMinor: 7900 }) as any, 'team', CFG, 7900);
-ok(overlap.grant.userUpdate?.tier === 'team' && overlap.grant.userUpdate?.billing_mode === 'subscription' && overlap.grant.payment?.amount_minor === 7900,
+const overlap = syncSubscription(overlapPass, snap({ productId: 'prod_t', amountMinor: 7900 }) as any, 'team', CFG);
+ok(overlap.grant.userUpdate?.tier === 'team' && overlap.grant.userUpdate?.billing_mode === 'subscription',
   'a USD period activating over a live pass is still granted (the customer paid for it)');
 ok(overlap.grant.userUpdate?.pass_expires_at === null && Array.isArray(overlap.grant.userUpdate?.pass_reminded) && (overlap.grant.userUpdate?.pass_reminded as unknown[]).length === 0,
   'and the pass fields are cleared so the pass-expiry job cannot later drop the subscriber to Free');
@@ -259,44 +260,44 @@ ok(overlap.grant.review !== null && overlap.grant.review.includes('2026-10-20T00
   'and it is flagged for review, naming the overlapping pass and its expiry, so the unused pass days can be refunded');
 ok(overlap.grant.userUpdate?.purchased_tokens === 7 && overlap.grant.ledgerKey === 'period:sub_1:2026-10-01T00:00:00Z:prod_t',
   'purchased tokens survive, and the ledger key is unchanged by the overlap');
-const lateSync = syncSubscription({ ...overlapPass, pass_expires_at: '2026-10-10T00:00:00.000Z' }, snap() as any, 'pro', CFG, 1900);
+const lateSync = syncSubscription({ ...overlapPass, pass_expires_at: '2026-10-10T00:00:00.000Z' }, snap() as any, 'pro', CFG);
 ok(lateSync.grant.review !== null, 'liveness is judged at the period start, not the clock: a pass live on 1 Oct is an overlap however late the sync runs');
-const lapsed = syncSubscription({ ...overlapPass, pass_expires_at: '2026-09-20T00:00:00.000Z' }, snap() as any, 'pro', CFG, 1900);
+const lapsed = syncSubscription({ ...overlapPass, pass_expires_at: '2026-09-20T00:00:00.000Z' }, snap() as any, 'pro', CFG);
 ok(lapsed.grant.review === null && !('pass_expires_at' in (lapsed.grant.userUpdate ?? {})), 'a pass that ended before the period started is not an overlap');
-ok(syncSubscription({ ...usdSub, pass_expires_at: '2099-01-01T00:00:00.000Z' }, snap() as any, 'pro', CFG, 1900).grant.review === null,
+ok(syncSubscription({ ...usdSub, pass_expires_at: '2099-01-01T00:00:00.000Z' }, snap() as any, 'pro', CFG).grant.review === null,
   'a subscriber with a leftover pass date (not a live pass) renews without a review');
 
 /* An active snapshot with no readable period start cannot be keyed: a shared `…:null:…` key would
    be consumed by the first sync and make every renewal look already-granted. It is reviewed, not granted. */
 const noStartAcct = { ...overlapPass, pass_expires_at: '2099-01-01T00:00:00.000Z' };
-const noStart = syncSubscription(noStartAcct, snap({ currentPeriodStart: null }) as any, 'pro', CFG, 1900);
+const noStart = syncSubscription(noStartAcct, snap({ currentPeriodStart: null }) as any, 'pro', CFG);
 ok(noStart.grant.review === 'active subscription with no readable period start' && noStart.grant.userUpdate === null && noStart.grant.payment === null,
   'an active subscription with no period start is reviewed, not granted (no userUpdate, no payment)');
 ok(noStart.grant.ledgerKey === 'period:sub_1:nostart:prod_p' && !('subscription_status' in noStart.stateUpdate) && !('plan_renews_at' in noStart.stateUpdate)
   && noStart.stateUpdate.bachs_subscription_id === 'sub_1', 'it is keyed apart from any real period, and only the ids are stored (no status or renewal change)');
-ok(JSON.stringify(syncSubscription(noStartAcct, snap({ currentPeriodStart: null }) as any, 'pro', CFG, 1900)) === JSON.stringify(noStart),
+ok(JSON.stringify(syncSubscription(noStartAcct, snap({ currentPeriodStart: null }) as any, 'pro', CFG)) === JSON.stringify(noStart),
   'and the result does not depend on the clock: the same input gives the same output');
-const badStart = syncSubscription(noStartAcct, snap({ currentPeriodStart: 'not a date' }) as any, 'pro', CFG, 1900);
+const badStart = syncSubscription(noStartAcct, snap({ currentPeriodStart: 'not a date' }) as any, 'pro', CFG);
 ok(badStart.grant.userUpdate === null && badStart.grant.review !== null, 'an unparseable period start is treated the same way');
-const afterNoStart = syncSubscription({ tier: 'free', bachs_subscription_id: 'sub_1' }, snap() as any, 'pro', CFG, 1900);
+const afterNoStart = syncSubscription({ tier: 'free', bachs_subscription_id: 'sub_1' }, snap() as any, 'pro', CFG);
 ok(afterNoStart.grant.userUpdate?.tier === 'pro' && afterNoStart.grant.review === null, 'once Bachs sends a real period start the subscription grants normally');
 
 /* The sync must only act on the account's CURRENT subscription. */
 const liveSub = { tier: 'pro', billing_mode: 'subscription' as const, subscription_status: 'active', bachs_subscription_id: 'sub_1', monthly_tokens: 200, purchased_tokens: 9 };
-const endOther = syncSubscription({ ...liveSub, bachs_subscription_id: 'sub_2' }, snap({ status: 'canceled' }) as any, 'pro', CFG, null);
+const endOther = syncSubscription({ ...liveSub, bachs_subscription_id: 'sub_2' }, snap({ status: 'canceled' }) as any, 'pro', CFG);
 ok(endOther.grant.userUpdate === null && Object.keys(endOther.stateUpdate).length === 0 && endOther.grant.review !== null && endOther.grant.ledgerKey === 'end:sub_1',
   'a subscription that ends but is not the account\'s current one leaves the account unchanged and is reviewed (once)');
-const endCurrent = syncSubscription(liveSub, snap({ status: 'canceled' }) as any, 'pro', CFG, null);
+const endCurrent = syncSubscription(liveSub, snap({ status: 'canceled' }) as any, 'pro', CFG);
 ok(endCurrent.grant.userUpdate?.tier === 'free' && endCurrent.grant.review === null && endCurrent.grant.userUpdate?.bachs_subscription_id === null,
   'the account\'s own subscription ending still drops it to Free');
-const endOnPass = syncSubscription(proPass(day(10)), snap({ status: 'canceled' }) as any, 'pro', CFG, null);
+const endOnPass = syncSubscription(proPass(day(10)), snap({ status: 'canceled' }) as any, 'pro', CFG);
 ok(endOnPass.grant.userUpdate === null && endOnPass.grant.review !== null,
   'a subscription that ended while the account holds a pass and stores no subscription id does not drop the pass holder to Free');
-const second = syncSubscription({ ...liveSub, bachs_subscription_id: 'sub_0' }, snap({ id: 'sub_2' }) as any, 'pro', CFG, 1900);
-ok(second.grant.userUpdate?.tier === 'pro' && second.grant.payment !== null && second.grant.review !== null
+const second = syncSubscription({ ...liveSub, bachs_subscription_id: 'sub_0' }, snap({ id: 'sub_2' }) as any, 'pro', CFG);
+ok(second.grant.userUpdate?.tier === 'pro' && second.grant.review !== null
   && second.grant.review.includes('sub_0') && second.grant.review.includes('sub_2'),
   'a second live subscription is still granted (the customer paid) and flagged, naming both ids, so one can be refunded');
-ok(syncSubscription(liveSub, snap({ currentPeriodStart: '2026-11-01T00:00:00Z' }) as any, 'pro', CFG, 1900).grant.review === null,
+ok(syncSubscription(liveSub, snap({ currentPeriodStart: '2026-11-01T00:00:00Z' }) as any, 'pro', CFG).grant.review === null,
   'renewing the account\'s own subscription is not flagged');
 
 /* A second subscription never re-points "current": the first stays current, deterministically. */
@@ -304,57 +305,53 @@ ok(Object.keys(second.stateUpdate).length === 0, 'a second subscription writes n
 let acct: any = { ...liveSub };
 const stateOf2: Record<string, unknown>[] = [];
 for (const id of ['sub_1', 'sub_2', 'sub_1', 'sub_2']) {
-  const r = syncSubscription(acct, snap({ id }) as any, 'pro', CFG, 1900);
+  const r = syncSubscription(acct, snap({ id }) as any, 'pro', CFG);
   if (id === 'sub_2') stateOf2.push(r.stateUpdate);
   acct = { ...acct, ...r.stateUpdate };
 }
 ok(acct.bachs_subscription_id === 'sub_1' && stateOf2.every((s) => Object.keys(s).length === 0),
   'syncing sub_1 and sub_2 alternately leaves the stored id on sub_1 every time (sub_2\'s state is always empty)');
-const pastDue2 = syncSubscription(liveSub, snap({ id: 'sub_2', status: 'past_due' }) as any, 'pro', CFG, null);
+const pastDue2 = syncSubscription(liveSub, snap({ id: 'sub_2', status: 'past_due' }) as any, 'pro', CFG);
 ok(Object.keys(pastDue2.stateUpdate).length === 0 && pastDue2.grant.ledgerKey === null, 'a non-current subscription going past due changes nothing on the account');
-const trial2 = syncSubscription(liveSub, snap({ id: 'sub_2', status: 'trialing' }) as any, 'pro', CFG, null);
+const trial2 = syncSubscription(liveSub, snap({ id: 'sub_2', status: 'trialing' }) as any, 'pro', CFG);
 ok(Object.keys(trial2.stateUpdate).length === 0, 'nor does any other status update from a non-current subscription');
-const end2 = syncSubscription(acct, snap({ id: 'sub_2', status: 'canceled' }) as any, 'pro', CFG, null);
+const end2 = syncSubscription(acct, snap({ id: 'sub_2', status: 'canceled' }) as any, 'pro', CFG);
 ok(end2.grant.userUpdate === null && Object.keys(end2.stateUpdate).length === 0 && end2.grant.review !== null && acct.bachs_subscription_id === 'sub_1',
   'so ending sub_2 afterwards leaves the account on sub_1 unchanged, with a review');
-const end1 = syncSubscription(acct, snap({ id: 'sub_1', status: 'canceled' }) as any, 'pro', CFG, null);
+const end1 = syncSubscription(acct, snap({ id: 'sub_1', status: 'canceled' }) as any, 'pro', CFG);
 ok(end1.grant.userUpdate?.tier === 'free', 'and ending sub_1 (the current one) downgrades');
-const noId = syncSubscription({ tier: 'free' }, snap({ id: 'sub_2' }) as any, 'pro', CFG, 1900);
+const noId = syncSubscription({ tier: 'free' }, snap({ id: 'sub_2' }) as any, 'pro', CFG);
 ok(noId.stateUpdate.bachs_subscription_id === 'sub_2' && noId.stateUpdate.subscription_status === 'active', 'an account with no stored subscription id adopts the first one it sees');
 ok(second.grant.review !== null && second.grant.review.includes('refund and cancel sub_2 (duplicate)') && second.grant.review.includes("sub_0 is the account's current subscription"),
   'the duplicate review says which one to refund and cancel, and which one is current');
 
 /* A stored id that was never GRANTED (no-start or non-active snapshot) must not stay "current" for good. */
-const noStartPass = syncSubscription(proPass(day(10)), snap({ currentPeriodStart: null }) as any, 'pro', CFG, null);
+const noStartPass = syncSubscription(proPass(day(10)), snap({ currentPeriodStart: null }) as any, 'pro', CFG);
 ok(noStartPass.stateUpdate.bachs_subscription_id === 'sub_1' && !('billing_currency' in noStartPass.stateUpdate),
   'a subscription with no period start stores its ids on a pass holder but does not stamp billing_currency');
-ok(!('billing_currency' in syncSubscription({}, snap({ status: 'trialing' }) as any, 'pro', CFG, null).stateUpdate)
-  && !('billing_currency' in syncSubscription({}, snap({ status: 'past_due' }) as any, 'pro', CFG, null).stateUpdate),
+ok(!('billing_currency' in syncSubscription({}, snap({ status: 'trialing' }) as any, 'pro', CFG).stateUpdate)
+  && !('billing_currency' in syncSubscription({}, snap({ status: 'past_due' }) as any, 'pro', CFG).stateUpdate),
   'nor does a trialing or past-due snapshot');
 ok(s1.grant.userUpdate?.billing_currency === 'USD' && !('billing_currency' in s1.stateUpdate), 'billing_currency USD is set only by the granting period');
 const passAfterNoStart = { ...proPass(day(10)), ...noStartPass.stateUpdate };
-const endNoStart = syncSubscription(passAfterNoStart, snap({ status: 'canceled' }) as any, 'pro', CFG, null);
+const endNoStart = syncSubscription(passAfterNoStart, snap({ status: 'canceled' }) as any, 'pro', CFG);
 ok(endNoStart.grant.userUpdate === null && Object.keys(endNoStart.stateUpdate).length === 0 && endNoStart.grant.review !== null && endNoStart.grant.ledgerKey === 'end:sub_1',
   'trace 1: ending that never-granted subscription leaves the pass holder on their pass, with a review');
 
 const applySync = (a: any, r: { stateUpdate: Record<string, unknown>; grant: { userUpdate: Record<string, unknown> | null } }) => ({ ...a, ...r.stateUpdate, ...(r.grant.userUpdate ?? {}) });
 for (const [label, firstSnap] of [['no period start', { currentPeriodStart: null }], ['incomplete', { status: 'incomplete' }]] as const) {
-  const stored1 = applySync({ tier: 'free', purchased_tokens: 3 }, syncSubscription({ tier: 'free', purchased_tokens: 3 }, snap(firstSnap) as any, 'pro', CFG, null));
-  const paid2 = syncSubscription(stored1, snap({ id: 'sub_2' }) as any, 'pro', CFG, 1900);
+  const stored1 = applySync({ tier: 'free', purchased_tokens: 3 }, syncSubscription({ tier: 'free', purchased_tokens: 3 }, snap(firstSnap) as any, 'pro', CFG));
+  const paid2 = syncSubscription(stored1, snap({ id: 'sub_2' }) as any, 'pro', CFG);
   ok(stored1.bachs_subscription_id === 'sub_1' && paid2.stateUpdate.bachs_subscription_id === 'sub_2' && paid2.stateUpdate.subscription_status === 'active'
     && paid2.stateUpdate.plan_renews_at === '2026-11-01T00:00:00Z' && paid2.grant.userUpdate?.tier === 'pro',
     `trace 2 (${label}): sub_1 was stored without a grant, so the subscription that is actually paid (sub_2) becomes current and is granted`);
   const acct2 = applySync(stored1, paid2);
-  const endSub1 = syncSubscription(acct2, snap({ status: 'canceled' }) as any, 'pro', CFG, null);
+  const endSub1 = syncSubscription(acct2, snap({ status: 'canceled' }) as any, 'pro', CFG);
   ok(endSub1.grant.userUpdate === null && endSub1.grant.review !== null && acct2.tier === 'pro' && acct2.bachs_subscription_id === 'sub_2',
     `trace 2 (${label}): sub_1 ending does not drop the account paying through sub_2`);
-  ok(syncSubscription(acct2, snap({ id: 'sub_2', status: 'canceled' }) as any, 'pro', CFG, null).grant.userUpdate?.tier === 'free',
+  ok(syncSubscription(acct2, snap({ id: 'sub_2', status: 'canceled' }) as any, 'pro', CFG).grant.userUpdate?.tier === 'free',
     `trace 2 (${label}): sub_2 ending (the current one) downgrades`);
 }
-
-/* The payment record says whether its amount was charged or is only the list price. */
-ok(s1.grant.payment?.amount_source === 'invoice' && upgraded.grant.payment?.amount_source === 'invoice', 'a payment recorded from an invoice says so');
-ok(recon.grant.payment?.amount_source === 'plan_price', 'a payment recorded without an invoice says it is the plan price');
 
 console.log('\nAPI WRAPPER:');
 ok(bachsBaseUrl('sk_live_x') === 'https://api.bachs.io/v1' && bachsBaseUrl('sk_sandbox_x') === 'https://sandbox-api.bachs.io/v1',
@@ -597,7 +594,7 @@ ok(webhook.length > 0 && /functions\.runWith\(\{ secrets: BACHS_SECRETS \}\)\.ht
 ok(webhook.indexOf('verifyBachsSignature(') > 0 && webhook.indexOf('verifyBachsSignature(') < webhook.indexOf('parseBachsEvent('),
   'the signature is checked before the body is read as an event');
 ok(/applyOneOffPayment\((?:event|paid), 'webhook'\)/.test(webhook), 'a paid one-off goes to the one-off grant helper');
-ok(/syncSubscriptionById\(event\.subscriptionId, event\.amountMinor, 'webhook'\)/.test(webhook),
+ok(/syncSubscriptionById\(event\.subscriptionId, null, 'webhook'\)/.test(webhook),
   'a linked subscription is synced from Bachs (the sync finds the account by the subscription metadata)');
 ok(webhook.length > 0 && !/bachs_subscription_id|bachs_customer_id/.test(webhook),
   'the webhook pre-writes no subscription or customer id (the sync adopts them under its current-subscription rules)');
@@ -717,6 +714,34 @@ ok(!manageOwnership('u1', { ...owner, bachs_customer_id: 'cust_9' }, ownedSnap, 
 ok(!manageOwnership('u1', { ...owner, bachs_customer_id: null }, ownedSnap, 'portal').ok, 'and when no customer is stored');
 ok(manageOwnership('u1', { ...owner, bachs_customer_id: 'cust_9' }, ownedSnap, 'cancel').ok,
   'the customer match is a portal rule only (a cancel is checked by the subscription\'s uid)');
+
+/* A SUBSCRIPTION PAYMENT IS A PAID INVOICE, NOTHING ELSE (final review I6). State-only events (customer.subscription.*,
+   invoice.payment_failed), manageBilling and reconciliation all synced with no charge, and a new period
+   then wrote a `payments` doc 'success' at list price and mailed a receipt — money nobody had seen. Now
+   the period grant (from state) records nothing, and a payment and its receipt come only from an
+   invoice.paid carrying its invoice id and a readable amount, keyed `invoice:{id}` apart from the
+   period, so it is recorded even when an earlier state event already granted the period. */
+console.log('\nA SUBSCRIPTION PAYMENT IS A PAID INVOICE:');
+const invoicePaid = parseBachsEvent(ev('invoice.paid', { id: 'in_1', subscription: 'sub_1', amount_paid: '19.00', currency: 'usd' }));
+ok(invoicePaid?.invoiceId === 'in_1' && invoicePaid.subscriptionId === 'sub_1', 'invoice.paid carries its invoice id (data.id)');
+ok(parseBachsEvent(ev('customer.subscription.updated', { id: 'sub_1', status: 'active' }))?.invoiceId === null,
+  'a subscription event has no invoice id (its data.id is the subscription)');
+const recorded = invoicePayment(invoicePaid!, 'USD');
+ok(recorded?.ledgerKey === 'invoice:in_1' && recorded.amountMinor === 1900 && recorded.currency === 'USD' && recorded.invoiceId === 'in_1',
+  'a paid invoice with an id and a readable amount is recorded once, keyed invoice:{id}, in cents as charged');
+ok(invoicePayment(parseBachsEvent(ev('invoice.paid', { id: 'in_2', subscription: 'sub_1', total: '60.00' }))!, 'USD')?.currency === 'USD',
+  'an invoice that names no currency takes the subscription\'s');
+ok(invoicePayment(parseBachsEvent(ev('invoice.paid', { id: 'in_2', subscription: 'sub_1', total: '60.00' }))!, null) === null,
+  'and with no currency anywhere it records nothing (never a guessed currency)');
+ok(invoicePayment(parseBachsEvent(ev('invoice.paid', { subscription: 'sub_1', amount_paid: '19.00' }))!, 'USD') === null, 'an invoice.paid with no invoice id records nothing');
+ok(invoicePayment(parseBachsEvent(ev('invoice.paid', { id: 'in_3', subscription: 'sub_1', amount_paid: 'n/a' }))!, 'USD') === null, 'an invoice.paid with an unreadable amount records nothing');
+ok(invoicePayment(parseBachsEvent(ev('invoice.paid', { id: 'in_4', subscription: 'sub_1', amount_paid: '0.00' }))!, 'USD') === null, 'a zero invoice is not a payment');
+ok(invoicePayment(parseBachsEvent(ev('invoice.payment_failed', { id: 'in_5', subscription: 'sub_1', amount_paid: '19.00' }))!, 'USD') === null,
+  'a failed invoice records nothing');
+ok(invoicePayment(parseBachsEvent(ev('customer.subscription.updated', { id: 'sub_1', status: 'active', amount: '19.00' }))!, 'USD') === null,
+  'a state event records nothing, whatever amount it carries');
+ok([s1, renew, upgraded, recon, overlap, second].every((r) => r.grant.payment === null),
+  'no period grant (first, renewal, upgrade, reconciliation, over a pass, duplicate) carries a payment record');
 
 /* The webhook's Bachs reads must answer inside Bachs' 10s delivery window (final review M4). */
 const hang = (async (_url: string, init: any) => new Promise((_resolve, reject) => {

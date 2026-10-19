@@ -17,7 +17,7 @@ import { catalogItem, toMajorString, TIER_RANK, PAID_TIERS, PaidTier, Kind, Curr
 import { billingLive as bachsBillingLive, productForTier, tierForProduct } from './bachs/config';
 import { BachsEvent, parseBachsEvent, parseCheckoutSession, parseSubscription } from './bachs/events';
 import { BACHS_SIGNATURE_HEADER, verifyBachsSignature } from './bachs/signature';
-import { Account, CheckoutRecord, applyOneOff, checkoutAllowed, expirePass, manageOwnership, reminderDue, syncSubscription } from './bachs/grant';
+import { Account, CheckoutRecord, applyOneOff, checkoutAllowed, expirePass, invoicePayment, manageOwnership, reminderDue, syncSubscription } from './bachs/grant';
 import { bachsApi } from './bachs/api';
 
 admin.initializeApp();
@@ -4145,10 +4145,21 @@ const applyOneOffPayment = async (
  * Sync one subscription to Bachs' CURRENT state (spec §5–6). Called by the webhook for every
  * subscription event, by manageBilling after a change, and hourly by reconciliation — the same
  * keys everywhere, so whichever path sees a paid period first grants it and the rest no-op.
+ *
+ * `paid` is the delivering event, when there is one. Only an invoice.paid with its invoice id and an
+ * amount becomes a `payments` doc and a receipt (bachs/grant.ts invoicePayment), once per invoice
+ * under its own `invoice:` key; the period grant itself records no payment.
  */
-const syncSubscriptionById = async (subscriptionId: string, chargedMinor: number | null, source: GrantSource): Promise<string> => {
+const syncSubscriptionById = async (
+  subscriptionId: string,
+  paid: Pick<BachsEvent, 'type' | 'invoiceId' | 'amountMinor' | 'currency'> | null,
+  source: GrantSource,
+): Promise<string> => {
   const snap = parseSubscription(await bachs().getSubscription(subscriptionId));
   if (!snap) throw new Error(`unreadable subscription ${subscriptionId}`);
+  /* The delivery carried a charge: an invoice was paid (the orphan alarm below reads this). */
+  const chargedMinor = paid?.type === 'invoice.paid' ? paid.amountMinor : null;
+  const invoice = paid ? invoicePayment(paid, snap.currency) : null;
   let uid = snap.metadata.uid || null;
   if (!uid) {
     const q = await db.collection('users').where('bachs_subscription_id', '==', subscriptionId).limit(1).get();
@@ -4196,11 +4207,11 @@ const syncSubscriptionById = async (subscriptionId: string, chargedMinor: number
   const userRef = db.collection('users').doc(uid);
   const endKey = `end:${snap.id}`;
   /* Written by the transaction body, read after it (see applyOneOffPayment). */
-  const state: { reviewWhy: string | null; notice: { item: string; amountMinor: number; currency: string } | null } =
-    { reviewWhy: null, notice: null };
+  const state: { reviewWhy: string | null; receipt: { item: string | null; amountMinor: number; currency: string; invoiceId: string } | null } =
+    { reviewWhy: null, receipt: null };
 
   const outcome = await db.runTransaction(async (t: admin.firestore.Transaction) => {
-    state.reviewWhy = null; state.notice = null; // a retried attempt starts clean
+    state.reviewWhy = null; state.receipt = null; // a retried attempt starts clean
     /* Firestore wants every read before the first write, so all of them are here. */
     const userSnap = await t.get(userRef);
     if (!userSnap.exists) {
@@ -4214,13 +4225,27 @@ const syncSubscriptionById = async (subscriptionId: string, chargedMinor: number
       return 'orphan reviewed';
     }
     const account = userSnap.data() as Account;
-    const r = syncSubscription(account, snap, paidTier, cfg, chargedMinor);
+    const r = syncSubscription(account, snap, paidTier, cfg);
     const isEnd = r.grant.ledgerKey === endKey;
     const endRef = ledgerDoc(endKey);
     const ended = (await t.get(endRef)).exists;
     const grantRef = !r.grant.ledgerKey ? null : isEnd ? endRef : ledgerDoc(r.grant.ledgerKey);
     const recorded = !grantRef ? true : isEnd ? ended : (await t.get(grantRef)).exists;
+    const invoiceRef = invoice ? ledgerDoc(invoice.ledgerKey) : null;
+    const invoiceSeen = invoiceRef ? (await t.get(invoiceRef)).exists : true;
 
+    /* A paid invoice is money received, recorded once under its own key whatever the period's
+       grant does next: granted now, granted earlier by a state event, already ended, or reviewed. */
+    if (invoice && invoiceRef && !invoiceSeen) {
+      t.set(db.collection('payments').doc(), {
+        uid, provider: 'bachs', kind: 'plan', item: paidTier ?? snap.productId, amount_minor: invoice.amountMinor,
+        currency: invoice.currency, tokens_credited: paidTier ? catalogItem(cfg, 'plan', paidTier, 'USD')?.tokens ?? 0 : 0,
+        bachs_subscription_id: snap.id, bachs_invoice_id: invoice.invoiceId, source, status: 'success',
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      t.set(invoiceRef, { key: invoice.ledgerKey, source, outcome: 'recorded', created_at: admin.firestore.FieldValue.serverTimestamp() });
+      state.receipt = { item: paidTier, amountMinor: invoice.amountMinor, currency: invoice.currency, invoiceId: invoice.invoiceId };
+    }
     /* A subscription that has ended stays ended. A stale snapshot ("active", fetched before the
        cancellation, committing after it) must not bring back a period or a status, so once the
        end is recorded only the end's own entry can still be looked at. */
@@ -4228,13 +4253,6 @@ const syncSubscriptionById = async (subscriptionId: string, chargedMinor: number
     if (Object.keys(r.stateUpdate).length) t.update(userRef, r.stateUpdate);
     if (!grantRef || recorded) return 'state synced';
     if (r.grant.userUpdate) t.update(userRef, r.grant.userUpdate);
-    if (r.grant.payment) {
-      t.set(db.collection('payments').doc(), {
-        uid, provider: 'bachs', ...r.grant.payment, bachs_subscription_id: snap.id, source, status: 'success',
-        created_at: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      state.notice = { item: r.grant.payment.item, amountMinor: r.grant.payment.amount_minor, currency: r.grant.payment.currency };
-    }
     if (r.grant.review) {
       state.reviewWhy = r.grant.review;
       t.set(db.collection('billing_reviews').doc(), {
@@ -4247,18 +4265,17 @@ const syncSubscriptionById = async (subscriptionId: string, chargedMinor: number
     return result;
   });
   /* Mail is best effort and happens after the commit, exactly as in applyOneOffPayment. The
-     receipt goes out only when THIS call granted a paid period: not on 'state synced',
-     'already ended', 'orphan reviewed' or a bare 'review'. A grant that was also flagged
-     ('granted+review') was paid and applied, so its customer still gets the receipt. */
+     receipt goes out only when THIS call recorded a paid invoice — never for a period granted
+     from state — and its reference is the invoice, not the subscription id. */
   try {
-    const n = state.notice;
-    if ((outcome === 'granted' || outcome === 'granted+review') && n) {
+    const receipt = state.receipt;
+    if (receipt) {
       const user = (await userRef.get()).data() || {};
       if (user.email) {
         const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
         await sendTemplate(user.email, 'paymentReceipt', {
-          description: `${n.item.charAt(0).toUpperCase()}${n.item.slice(1)} plan, monthly`,
-          amount: n.amountMinor / 100, currency: n.currency, reference: snap.id, date,
+          description: receipt.item ? `${receipt.item.charAt(0).toUpperCase()}${receipt.item.slice(1)} plan, monthly` : 'Subscription payment',
+          amount: receipt.amountMinor / 100, currency: receipt.currency, reference: receipt.invoiceId, date,
         });
       }
     }
@@ -4448,7 +4465,8 @@ export const bachsWebhook = functions.runWith({ secrets: BACHS_SECRETS }).https.
       const ref = event.reference && /^[A-Za-z0-9_-]{1,128}$/.test(event.reference)
         ? db.collection('checkouts').doc(event.reference) : null;
       if (ref && event.subscriptionId && (await ref.get()).exists) {
-        const outcome = await syncSubscriptionById(event.subscriptionId, event.amountMinor, 'webhook');
+        /* No payment record from here: the subscription's first invoice.paid records it. */
+        const outcome = await syncSubscriptionById(event.subscriptionId, null, 'webhook');
         await ref.update({ status: 'paid', settled_at: new Date().toISOString() });
         res.status(200).send(outcome);
         return;
@@ -4457,10 +4475,9 @@ export const bachsWebhook = functions.runWith({ secrets: BACHS_SECRETS }).https.
       return;
     }
     if (event.kind === 'subscription_changed' && event.subscriptionId) {
-      /* Only a paid invoice carries a charge to grant against; the other subscription events just
-         bring our copy of the state (status, period, cancel-at-period-end) up to date. */
-      const charged = event.type === 'invoice.paid' ? event.amountMinor : null;
-      res.status(200).send(await syncSubscriptionById(event.subscriptionId, charged, 'webhook'));
+      /* Every one of these syncs the state (status, period, cancel-at-period-end) and grants a period
+         from it; the helper records a payment only when this event is a paid invoice. */
+      res.status(200).send(await syncSubscriptionById(event.subscriptionId, event, 'webhook'));
       return;
     }
     if (event.kind === 'review') {

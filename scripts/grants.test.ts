@@ -254,20 +254,34 @@ export const cancelsBillingBeforePurge = (fn: string): boolean => {
 };
 ok(cancelsBillingBeforePurge(exported(index, 'deleteAccount')),
   'deleteAccount cancels a dollar subscription (guarded, before the purge, never fatal, never waiting on mail) and binds only the Bachs key');
-/* Every payment gets the receipt we already have (spec). A dollar subscription's period is paid
-   by the webhook, the hourly sync or manageBilling, all through syncSubscriptionById, so the
-   receipt lives in that one helper — and only on a grant, never on a no-op or a refusal. The
-   body is cut from the helper to the next export; comments are already blanked. */
+/* Every payment gets the receipt we already have (spec) — and ONLY a payment (final review I6). A
+   dollar subscription is synced by the webhook, the hourly run and manageBilling alike, and a period
+   is granted from state; but state is not money. A period grant that wrote a `payments` doc at list
+   price and mailed a receipt did so for events that carried no charge at all. So in
+   syncSubscriptionById the one `payments` write sits behind the new-invoice check (an invoice.paid
+   with an id and an amount, under its own `invoice:` ledger key), the one receipt is sent from what
+   that write left in `state.receipt` with no grant outcome in its condition, and nothing reads the
+   period grant's payment any more. The body is cut from the helper to the next export; comments are
+   already blanked. */
 export const helperBody = (src: string, name: string): string => {
   const start = src.search(new RegExp(`\\r?\\nconst ${name} = async`));
   if (start < 0) return '';
   const next = src.indexOf('\nexport const ', start + 10);
   return src.slice(start, next < 0 ? undefined : next);
 };
-export const sendsPaymentReceiptOnGrant = (body: string) =>
-  /sendTemplate\(\s*[^,]+,\s*'paymentReceipt'/.test(body) && /outcome === 'granted'/.test(body) && /outcome === 'granted\+review'/.test(body);
-ok(sendsPaymentReceiptOnGrant(helperBody(index, 'syncSubscriptionById')),
-  'syncSubscriptionById sends the paymentReceipt on a granted subscription period');
+export const receiptsOnlyFromInvoices = (body: string): boolean => {
+  const sends = [...body.matchAll(/sendTemplate\(\s*[^,]+,\s*'paymentReceipt'/g)].map((m) => m.index as number);
+  const writes = [...body.matchAll(/db\.collection\('payments'\)/g)].map((m) => m.index as number);
+  const gate = body.search(/const receipt = state\.receipt;\s*if \(receipt\) \{/);
+  const invoiceGate = body.search(/if \(invoice && invoiceRef && !invoiceSeen\) \{/);
+  return sends.length === 1 && writes.length === 1
+    && gate >= 0 && gate < sends[0] && !/outcome ===/.test(body.slice(gate, sends[0]))
+    && invoiceGate >= 0 && invoiceGate < writes[0] && writes[0] - invoiceGate < 200
+    && body.indexOf('invoicePayment(') >= 0 && body.indexOf('invoicePayment(') < invoiceGate
+    && !/r\.grant\.payment/.test(body);
+};
+ok(receiptsOnlyFromInvoices(helperBody(index, 'syncSubscriptionById')),
+  'syncSubscriptionById records a payment and sends the receipt only for a newly seen paid invoice (never from a period grant)');
 /* A paid subscription with no live account (no uid anywhere, or a uid whose user document is
    gone) grants nothing, but the money is still being taken: it must be reviewed ONCE per period
    through the ledger. Two ways to get this wrong, both seen: dropping the case silently, and
@@ -374,15 +388,36 @@ ok(!grantHelpersAreInternal(helpers.replace('\nconst applyOneOffPayment', '\nexp
   'CONTROL: an exported applyOneOffPayment is caught');
 ok(!grantHelpersAreInternal(helpers.replace('\nconst syncSubscriptionById', '\nexport const syncSubscriptionById')),
   'CONTROL: an exported syncSubscriptionById is caught');
-const receiptBody = "\nconst h = async () => { if (outcome === 'granted' || outcome === 'granted+review') { await sendTemplate(user.email, 'paymentReceipt', {}); } };\nexport const next = 1;";
-ok(sendsPaymentReceiptOnGrant(helperBody(receiptBody.replace('const h', 'const syncSubscriptionById'), 'syncSubscriptionById')),
-  'a helper that mails the receipt on granted and granted+review passes');
-ok(!sendsPaymentReceiptOnGrant(helperBody(receiptBody.replace('const h', 'const syncSubscriptionById').replace("'paymentReceipt'", "'billingAlert'"), 'syncSubscriptionById')),
-  'CONTROL: a helper that sends no paymentReceipt is caught');
-ok(!sendsPaymentReceiptOnGrant(helperBody(receiptBody.replace('const h', 'const syncSubscriptionById').replace(" || outcome === 'granted+review'", ''), 'syncSubscriptionById')),
-  'CONTROL: a receipt that skips granted+review (grant applied and flagged) is caught');
-const elsewhere = "\nconst syncSubscriptionById = async () => { return 'x'; };\nexport const other = () => { if (outcome === 'granted' || outcome === 'granted+review') sendTemplate(a, 'paymentReceipt', {}); };";
-ok(!sendsPaymentReceiptOnGrant(helperBody(elsewhere, 'syncSubscriptionById')),
+const receiptBody = [
+  "\nconst syncSubscriptionById = async () => {",
+  "  const invoice = paid ? invoicePayment(paid, snap.currency) : null;",
+  "  await db.runTransaction(async (t) => {",
+  "    if (invoice && invoiceRef && !invoiceSeen) {",
+  "      t.set(db.collection('payments').doc(), { uid, amount_minor: invoice.amountMinor });",
+  "      state.receipt = { invoiceId: invoice.invoiceId };",
+  "    }",
+  "    if (r.grant.userUpdate) t.update(userRef, r.grant.userUpdate);",
+  "  });",
+  "  const receipt = state.receipt;",
+  "  if (receipt) { await sendTemplate(user.email, 'paymentReceipt', {}); }",
+  "  if (outcome === 'review' || outcome === 'granted+review') await billingAlertEmail('x', []);",
+  "};",
+  "export const next = 1;",
+].join('\n');
+ok(receiptsOnlyFromInvoices(helperBody(receiptBody, 'syncSubscriptionById')), 'a helper that records and mails only a new paid invoice passes');
+ok(!receiptsOnlyFromInvoices(helperBody(receiptBody.replace("  if (receipt) { await sendTemplate(user.email, 'paymentReceipt', {}); }\n",
+  "  if (receipt) { }\n  if (outcome === 'granted' || outcome === 'granted+review') { await sendTemplate(user.email, 'paymentReceipt', {}); }\n"), 'syncSubscriptionById')),
+  'CONTROL: the old receipt on a granted period (I6 bug) is caught');
+ok(!receiptsOnlyFromInvoices(helperBody(receiptBody.replace('if (receipt) {', "if (receipt && outcome === 'granted') {"), 'syncSubscriptionById')),
+  'CONTROL: a receipt that also waits on the grant outcome is caught');
+ok(!receiptsOnlyFromInvoices(helperBody(receiptBody.replace('    if (r.grant.userUpdate)', "    if (r.grant.payment) t.set(db.collection('payments').doc(), r.grant.payment);\n    if (r.grant.userUpdate)"), 'syncSubscriptionById')),
+  'CONTROL: a period grant that writes a payments doc again is caught');
+ok(!receiptsOnlyFromInvoices(helperBody(receiptBody.replace('if (invoice && invoiceRef && !invoiceSeen) {', 'if (invoice) {'), 'syncSubscriptionById')),
+  'CONTROL: an invoice recorded without its once-only ledger check (a redelivery would record it twice) is caught');
+ok(!receiptsOnlyFromInvoices(helperBody(receiptBody.replace("'paymentReceipt'", "'billingAlert'"), 'syncSubscriptionById')),
+  'CONTROL: a helper that sends no paymentReceipt at all is caught');
+const elsewhere = "\nconst syncSubscriptionById = async () => { return 'x'; };\nexport const other = () => { const receipt = state.receipt; if (receipt) { sendTemplate(a, 'paymentReceipt', {}); } };";
+ok(!receiptsOnlyFromInvoices(helperBody(elsewhere, 'syncSubscriptionById')),
   'CONTROL: a receipt sent by a different function does not count');
 const orphanBody = [
   "\nconst syncSubscriptionById = async () => {",

@@ -26,6 +26,8 @@ export interface BachsEvent {
   checkoutId: string | null;
   customerId: string | null;
   subscriptionId: string | null;
+  /** invoice.* events only: the invoice's own id, the key a subscription payment is recorded under. */
+  invoiceId: string | null;
 }
 
 export interface SubscriptionSnapshot {
@@ -94,6 +96,7 @@ export const parseBachsEvent = (body: unknown): BachsEvent | null => {
     customerId: idOf(d.customer) ?? str(d.customer_id),
     subscriptionId: str(d.subscription_id) ?? idOf(d.subscription)
       ?? (type.startsWith('customer.subscription.') ? str(d.id) : null),
+    invoiceId: type.startsWith('invoice.') ? str(d.id) ?? str(d.invoice_id) : null,
   };
 
   if (type === 'checkout.completed') {

@@ -38,8 +38,6 @@ export interface PaymentRecord {
   amount_minor: number;
   currency: string;
   tokens_credited: number;
-  /** Subscription payments only: 'invoice' = the amount Bachs charged; 'plan_price' = the list price, recorded when no invoice was at hand. */
-  amount_source?: 'invoice' | 'plan_price';
 }
 
 export interface GrantResult {
@@ -214,6 +212,31 @@ export const expirePass = (a: Account, nowIso: string): Record<string, unknown> 
 
 /* ===================================================== USD subscriptions */
 
+export interface InvoicePayment {
+  /** `invoice:{id}` — apart from the period key, so it is recorded even when the period was granted earlier. */
+  ledgerKey: string;
+  invoiceId: string;
+  amountMinor: number;
+  currency: string;
+}
+
+/**
+ * Should this event record a subscription PAYMENT (a `payments` doc and a receipt)? Only an
+ * invoice.paid that names its invoice and a readable, non-zero amount: money Bachs says it took.
+ * State-only events, manageBilling and reconciliation still grant the period from the
+ * subscription's state, but state is not money — a payment recorded from it was a list price
+ * nobody had charged. The currency is the invoice's, else the subscription's, never a guess.
+ */
+export const invoicePayment = (
+  e: Pick<BachsEvent, 'type' | 'invoiceId' | 'amountMinor' | 'currency'>,
+  subscriptionCurrency: string | null,
+): InvoicePayment | null => {
+  if (e.type !== 'invoice.paid' || !e.invoiceId || e.amountMinor === null || e.amountMinor <= 0) return null;
+  const currency = e.currency ?? subscriptionCurrency;
+  if (!currency) return null;
+  return { ledgerKey: `invoice:${e.invoiceId}`, invoiceId: e.invoiceId, amountMinor: e.amountMinor, currency };
+};
+
 export interface SyncResult {
   /** Always applied: status, renewal date, ids. Idempotent field sets. */
   stateUpdate: Record<string, unknown>;
@@ -230,13 +253,14 @@ export interface SyncResult {
  *
  * KEYS. A paid period is `period:{sub}:{start}:{product}` — the product is in the key because
  * an upgrade with proration is a new grant inside the same period. The end is `end:{sub}`.
+ *
+ * A period grant carries NO payment record: the payment is the paid invoice (invoicePayment).
  */
 export const syncSubscription = (
   account: Account,
   snap: SubscriptionSnapshot,
   tier: PaidTier | null,
   cfg: PricingLike,
-  chargedMinor: number | null,
 ): SyncResult => {
   const { purchased } = balances(account);
   /* Ids only. billing_currency is NOT here: it is a grant field (set with the tier), so a
@@ -327,10 +351,6 @@ export const syncSubscription = (
       userUpdate: {
         tier, billing_mode: 'subscription', billing_currency: 'USD', ...balanceFields(item.tokens, purchased),
         ...(overlapsPass ? { pass_expires_at: null, pass_reminded: [] } : {}),
-      },
-      payment: {
-        kind: 'plan', item: tier, amount_minor: chargedMinor ?? item.amountMinor, currency: 'USD', tokens_credited: item.tokens,
-        amount_source: typeof chargedMinor === 'number' ? 'invoice' : 'plan_price',
       },
     },
   };
