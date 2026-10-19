@@ -598,16 +598,44 @@ export interface ActionLogEntry {
   payment_reference?: string;
 }
 
-export interface PaymentRecord {
+/**
+ * A `payments` document. Two shapes share the collection, so no page reads the amount or the
+ * reference itself: services/payments.ts paymentView does, for both.
+ */
+interface PaymentRecordBase {
   id: string;
   uid: string;
-  payment_reference: string;
-  amount_paid: number;
   tokens_credited: number;
   provider?: string;
-  status?: 'completed' | 'pending' | 'failed';
+  status?: string;
   created_at?: any;
 }
+
+/** What Bachs charged (and the admin refund), in MINOR units with its currency. */
+export interface BachsPaymentRecord extends PaymentRecordBase {
+  kind: 'plan' | 'pass' | 'pack' | 'refund';
+  item?: string;
+  amount_minor: number;
+  currency: 'USD' | 'NGN';
+  bachs_reference?: string;
+  bachs_checkout_id?: string | null;
+  bachs_subscription_id?: string;
+  bachs_invoice_id?: string;
+  /** Refunds: our own reference, and the payment refunded. */
+  reference?: string;
+  original_payment_id?: string | null;
+  source?: string;
+}
+
+/** The retired provider's shape, still in the collection: whole US dollars. */
+export interface LegacyPaymentRecord extends PaymentRecordBase {
+  payment_reference: string;
+  amount_paid: number;
+  type?: string;
+  expansion_type?: string;
+}
+
+export type PaymentRecord = BachsPaymentRecord | LegacyPaymentRecord;
 
 export interface MarketingAngle {
   title: string;

@@ -2,7 +2,7 @@
 import { AngleMinerResults, TestLabResults, AuditResult, ToolAnalysisResult, ResultItem, PaymentRecord } from '../types';
 import { asText, resolveWinner } from './resultItems';
 import { buildResultPdf, buildTextPdf } from './pdfReport';
-import { toDate } from './time';
+import { paymentCsvRows } from './payments';
 
 // Result items are either plain strings (legacy) or structured { insight, evidence, action }.
 // This flattens them for the text/CSV formats. The headline goes through the shared asText() rather
@@ -89,23 +89,8 @@ export const toolResultToCSV = (result: ToolAnalysisResult): (string | number)[]
   return rows;
 };
 
-/** Flatten payment/billing history into CSV rows. */
-export const paymentsToCSV = (records: PaymentRecord[]): (string | number)[][] => {
-  const rows: (string | number)[][] = [['Date', 'Reference', 'Type', 'Amount (USD)', 'Tokens', 'Provider', 'Status']];
-  records.forEach(p => {
-    const date = p.created_at ? toDate(p.created_at).toISOString() : '';
-    rows.push([
-      date,
-      p.payment_reference || '',
-      (p as any).type || 'top_up',
-      p.amount_paid ?? '',
-      p.tokens_credited ?? '',
-      p.provider || '',
-      p.status || 'completed',
-    ]);
-  });
-  return rows;
-};
+/** Flatten payment/billing history into CSV rows: each amount in major units beside its currency (services/payments.ts). */
+export const paymentsToCSV = (records: PaymentRecord[]): (string | number)[][] => paymentCsvRows(records);
 
 /**
  * "Export PDF" builds real PDF bytes (services/pdfReport.ts) and downloads them.

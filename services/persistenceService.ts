@@ -1772,7 +1772,8 @@ export const callAdminManageOrg = async (kind: AdminOrgKind, orgId: string, acti
   catch (e: any) { throw new Error(e.message || 'Organization action failed.'); }
 };
 
-export const callAdminRefund = async (payload: { paymentId?: string; uid?: string; amount?: number; reason?: string }) => {
+/** amountMinor is cents or kobo, in `currency` — the refund is recorded in the currency that was paid. */
+export const callAdminRefund = async (payload: { paymentId?: string; uid?: string; amountMinor: number; currency: 'USD' | 'NGN'; reason?: string }) => {
   if (!isFirebaseInitialized) throw new Error('Connection failed');
   const fn = httpsCallable(functions, 'adminRefund');
   try { return (await fn(payload)).data; }

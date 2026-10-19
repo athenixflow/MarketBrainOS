@@ -1407,29 +1407,35 @@ export const adminManageOrg = functions.https.onCall(async (data: any, context: 
 // --- ADMIN: issue a refund (records a refund entry; simulated provider — no external settlement) ---
 export const adminRefund = functions.https.onCall(async (data: any, context: any) => {
   const caller = await assertAdmin(context);
-  const { paymentId, uid, amount, reason } = data || {};
-  const amt = Math.abs(Number(amount) || 0);
-  if (!uid || amt <= 0) throw new functions.https.HttpsError('invalid-argument', 'uid and a positive amount required');
+  const { paymentId, uid, reason } = data || {};
+  /* Recorded the way Bachs payments are — minor units with the currency that was paid — so a naira
+     refund is never read (or mailed) as dollars. */
+  const amountMinor = Math.abs(Number(data?.amountMinor));
+  const currency = data?.currency === 'NGN' ? 'NGN' : data?.currency === 'USD' ? 'USD' : null;
+  if (!uid || !Number.isInteger(amountMinor) || amountMinor <= 0 || !currency) {
+    throw new functions.https.HttpsError('invalid-argument', 'uid, a positive amountMinor (cents or kobo) and a currency (USD or NGN) required');
+  }
   try {
     const refundRef = `refund_${Date.now()}`;
     const ref = db.collection('payments').doc();
     await ref.set({
       uid,
-      payment_reference: refundRef,
+      kind: 'refund',
+      reference: refundRef,
       original_payment_id: paymentId || null,
-      amount_paid: -amt,
+      amount_minor: -amountMinor,
+      currency,
       tokens_credited: 0,
       provider: 'admin_refund',
       status: 'refunded',
-      type: 'refund',
       reason: (reason || '').toString().slice(0, 280),
       refunded_by: caller.email,
       created_at: admin.firestore.FieldValue.serverTimestamp(),
     });
-    await logAdminAudit(caller.uid, caller.email, 'REFUND_ISSUED', uid, { amount: amt, paymentId: paymentId || null, reason });
+    await logAdminAudit(caller.uid, caller.email, 'REFUND_ISSUED', uid, { amount_minor: amountMinor, currency, paymentId: paymentId || null, reason });
     try {
       const target = await admin.auth().getUser(uid);
-      if (target.email) await sendTemplate(target.email, 'refundIssued', { amount: amt, reference: refundRef, date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) });
+      if (target.email) await sendTemplate(target.email, 'refundIssued', { amount: amountMinor / 100, currency, reference: refundRef, date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) });
     } catch (e) { /* best-effort */ }
     return { success: true };
   } catch (e: any) {

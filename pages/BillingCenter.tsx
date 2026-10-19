@@ -10,19 +10,7 @@ import { downloadAsCSV, paymentsToCSV } from '../services/exportService';
 import { PaymentRecord } from '../types';
 import { PLAN_META, DEFAULT_PRICING_CONFIG, Tier } from '../config/pricingConfig';
 import { formatPrice } from '../services/billing';
-
-const toDate = (v: any): Date | null => {
-  if (!v) return null;
-  try { return new Date(v.toMillis ? v.toMillis() : v); } catch { return null; }
-};
-
-const payLabel = (p: PaymentRecord): string => {
-  const t = (p as any).type;
-  if (t === 'expansion') return `Expansion: ${(p as any).expansion_type || 'capacity'}`;
-  if (t === 'subscription') return 'Subscription';
-  if (t === 'token_pack') return 'Token pack';
-  return 'Token top-up';
-};
+import { paymentView } from '../services/payments';
 
 const LOAD_ERROR = 'We could not load your billing history. Please try again.';
 
@@ -79,7 +67,8 @@ const BillingCenter: React.FC = () => {
   const price = DEFAULT_PRICING_CONFIG.plans[tier]?.price ?? 0;
   const priceNgn = DEFAULT_PRICING_CONFIG.plans[tier]?.priceNgn;
   const priceLabel = isFree ? '$0' : isPass && priceNgn ? `${formatPrice(priceNgn, 'NGN')}/30 days` : `$${price}/mo`;
-  const expansions = payments.filter((p) => (p as any).type === 'expansion');
+  const views = payments.map((p) => ({ p, v: paymentView(p) }));
+  const expansions = views.filter(({ v }) => v.kind === 'expansion');
 
   return (
     <div>
@@ -118,13 +107,13 @@ const BillingCenter: React.FC = () => {
         {expansions.length > 0 && (
           <Card title="Expansion purchases">
             <div className="space-y-3">
-              {expansions.map((p) => (
+              {expansions.map(({ p, v }) => (
                 <LedgerRow
                   key={p.id}
-                  when={toDate(p.created_at) || new Date(0)}
-                  title={`${(p as any).expansion_type || 'capacity'} expansion`}
+                  when={v.date || new Date(0)}
+                  title={v.label}
                   detail="Recurring"
-                  right={<p className="text-sm font-black text-[#0B0B0B]">${p.amount_paid}/mo</p>}
+                  right={<p className="text-sm font-black text-[#0B0B0B]">{v.display}/mo</p>}
                 />
               ))}
             </div>
@@ -145,16 +134,16 @@ const BillingCenter: React.FC = () => {
           ) : (
             <>
               <div className="space-y-3 mb-6">
-                {payments.map((p) => (
+                {views.map(({ p, v }) => (
                   <LedgerRow
                     key={p.id}
-                    when={toDate(p.created_at) || new Date(0)}
-                    title={payLabel(p)}
-                    detail={<span className="font-mono">Ref: {p.payment_reference || 'N/A'}</span>}
+                    when={v.date || new Date(0)}
+                    title={v.label}
+                    detail={<span className="font-mono">Ref: {v.reference || 'N/A'}</span>}
                     right={
                       <div>
                         {p.tokens_credited ? <p className="text-sm font-black text-green-600">+{p.tokens_credited.toLocaleString()} tokens</p> : null}
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">${p.amount_paid}</p>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{v.display}</p>
                       </div>
                     }
                   />

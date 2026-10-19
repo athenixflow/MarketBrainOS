@@ -9,9 +9,11 @@ import { useAdmin } from '../AdminContext';
 import { KpiCard, AdminSectionHeader, Pill, SampledNote } from '../primitives';
 import { LineChart, BarChart, cumulativeByDay, bucketByDay } from '../Charts';
 import { tsToMillis } from '../util';
+import { PayCurrency, formatMinor, formatSums, paymentView, sumByCurrency } from '../../../services/payments';
 import GlobalSearch from '../GlobalSearch';
 
 const money = (n: number) => `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+const chartFormat = (c: PayCurrency) => (major: number) => formatMinor(Math.round(major * 100), c);
 
 const Overview: React.FC = () => {
   const a = useAdmin();
@@ -20,7 +22,9 @@ const Overview: React.FC = () => {
   const derived = useMemo(() => {
     const proUsers = a.users.filter(u => u.tier === 'pro' || (u.subscription_status === 'active'));
     const activePro = a.users.filter(u => u.subscription_status === 'active').length;
-    const revenueTotal = a.payments.reduce((s, p) => s + (Number(p.amount_paid) || 0), 0);
+    /* Per currency, through the payments adapter: ₦ is never added to $. */
+    const views = a.payments.map(paymentView);
+    const revenueTotal = sumByCurrency(views);
     const mrr = activePro * 7; // Pro = $7/mo
     const arr = mrr * 12;
     const newToday = a.users.filter(u => {
@@ -30,21 +34,20 @@ const Overview: React.FC = () => {
 
     // Growth series (last 14 days)
     const userTs = a.users.map(u => tsToMillis((u as any).created_at)).filter(Boolean) as number[];
-    const payTs = a.payments.map(p => tsToMillis(p.created_at)).filter(Boolean) as number[];
     const analysisTs = a.actionLogs.map(l => l.created_at ? l.created_at.toMillis() : new Date(l.timestamp || 0).getTime()).filter(Boolean);
 
     const userGrowth = cumulativeByDay(userTs, 14, Math.max(0, a.users.length - userTs.length));
-    const revenueByDay = (() => {
-      const days = bucketByDay(payTs, 14);
-      // map count→sum is approximate; recompute sums per day
+    // Revenue per day, one series per currency (major units for the chart).
+    const revenueFor = (c: PayCurrency) => {
       const sums: Record<string, number> = {};
-      a.payments.forEach(p => {
-        const t = tsToMillis(p.created_at); if (!t) return;
-        const d = new Date(t); const key = `${d.getMonth() + 1}/${d.getDate()}`;
-        sums[key] = (sums[key] || 0) + (Number(p.amount_paid) || 0);
+      views.forEach(v => {
+        if (!v.date || v.currency !== c) return;
+        const key = `${v.date.getMonth() + 1}/${v.date.getDate()}`;
+        sums[key] = (sums[key] || 0) + v.amountMinor / 100;
       });
-      return days.map(d => ({ label: d.label, value: sums[d.label] || 0 }));
-    })();
+      return bucketByDay([], 14).map(d => ({ label: d.label, value: sums[d.label] || 0 }));
+    };
+    const revenueByDay = { USD: revenueFor('USD'), NGN: revenueFor('NGN') };
     const analysisGrowth = bucketByDay(analysisTs, 14);
 
     // Most used tool (from action logs)
@@ -58,7 +61,7 @@ const Overview: React.FC = () => {
   const recentActivity = useMemo(() => {
     const items: { kind: string; label: string; ts: number; tone: any }[] = [];
     a.users.slice(0, 8).forEach(u => { const t = tsToMillis((u as any).created_at); if (t) items.push({ kind: 'User', label: u.email, ts: t, tone: 'blue' }); });
-    a.payments.slice(0, 8).forEach(p => items.push({ kind: 'Payment', label: `${money(Number(p.amount_paid) || 0)} • ${p.tokens_credited} tokens`, ts: tsToMillis(p.created_at) || 0, tone: 'green' }));
+    a.payments.slice(0, 8).forEach(p => { const v = paymentView(p); items.push({ kind: 'Payment', label: `${v.display} • ${v.label}`, ts: v.date?.getTime() || 0, tone: 'green' }); });
     a.actionLogs.slice(0, 10).forEach(l => items.push({ kind: 'Analysis', label: l.module || l.action || 'run', ts: l.created_at ? l.created_at.toMillis() : new Date(l.timestamp || 0).getTime(), tone: l.status === 'failed_refunded' ? 'red' : 'gray' }));
     return items.sort((x, y) => y.ts - x.ts).slice(0, 10);
   }, [a.users, a.payments, a.actionLogs]);
@@ -95,7 +98,14 @@ const Overview: React.FC = () => {
       {/* GROWTH CHARTS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card title="User Growth (14d)"><LineChart data={derived.userGrowth} /></Card>
-        <Card title="Revenue (14d)"><LineChart data={derived.revenueByDay} valueFormat={money} /></Card>
+        <Card title="Revenue (14d)">
+          {(['USD', 'NGN'] as PayCurrency[]).map(c => (
+            <div key={c} className="first:mb-6">
+              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-2">{c}</p>
+              <LineChart data={derived.revenueByDay[c]} height={80} valueFormat={chartFormat(c)} />
+            </div>
+          ))}
+        </Card>
         <Card title="Analyses · recent sample"><div className="mb-4"><SampledNote n={a.actionLogs.length} /></div><LineChart data={derived.analysisGrowth} /></Card>
         <Card title="Top Tools · recent sample"><div className="mb-4"><SampledNote n={a.actionLogs.length} /></div><BarChart data={derived.topModules} /></Card>
       </div>
@@ -106,8 +116,10 @@ const Overview: React.FC = () => {
           <div className="space-y-4 text-sm">
             <Insight label="Most used tool" value={derived.topModules[0]?.label || '—'} />
             <Insight label="Conversion (free→paid)" value={`${conv}%`} />
-            <Insight label="Total lifetime revenue" value={money(derived.revenueTotal)} />
-            <Insight label="ARPU" value={a.users.length ? money(derived.revenueTotal / a.users.length) : '$0'} />
+            <Insight label="Total lifetime revenue" value={formatSums(derived.revenueTotal)} />
+            <Insight label="ARPU" value={formatSums(a.users.length
+              ? { USD: derived.revenueTotal.USD / a.users.length, NGN: derived.revenueTotal.NGN / a.users.length }
+              : { USD: 0, NGN: 0 })} />
             <Insight label="Failure rate (24h)" value={`${a.failureRate.toFixed(1)}%`} />
           </div>
         </Card>

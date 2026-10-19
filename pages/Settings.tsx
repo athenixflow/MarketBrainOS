@@ -23,6 +23,7 @@ import {
   callListShareLinks, callRevokeShareLink, ShareLinkRow,
 } from '../services/persistenceService';
 import { downloadAsCSV, paymentsToCSV } from '../services/exportService';
+import { paymentView } from '../services/payments';
 import { PaymentRecord, NotificationPrefs } from '../types';
 import { canSeeFeature, tierAtLeast } from '../config/access';
 import { SecurityEngine } from '../services/securityEngine';
@@ -609,17 +610,17 @@ const Settings: React.FC = () => {
               <>
                 <div className="space-y-3 mb-8">
                   {payments.map(p => {
-                    const date = p.created_at ? new Date(p.created_at.toMillis ? p.created_at.toMillis() : p.created_at) : new Date(0);
+                    const v = paymentView(p);
                     return (
                       <LedgerRow
                         key={p.id}
-                        when={date}
-                        title="Token top-up"
-                        detail={<span className="font-mono">Ref {p.payment_reference || 'N/A'}</span>}
+                        when={v.date || new Date(0)}
+                        title={v.label}
+                        detail={<span className="font-mono">Ref {v.reference || 'N/A'}</span>}
                         right={
                           <div>
-                            <p className="text-sm font-black text-green-600">+{p.tokens_credited} tokens</p>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">${p.amount_paid}.00</p>
+                            {p.tokens_credited ? <p className="text-sm font-black text-green-600">+{p.tokens_credited} tokens</p> : null}
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{v.display}</p>
                           </div>
                         }
                       />

@@ -766,6 +766,32 @@ const portalFirst = goodManage.split('\n');
 portalFirst.splice(1, 0, portalFirst.splice(4, 1)[0]!);
 ok(!manageChecksOwnership(portalFirst.join('\n')), 'CONTROL: a portal opened before the ownership check is caught');
 
+/* NO PAGE READS THE OLD PAYMENT SHAPE ITSELF (final review I1). Every reader of `payments` used the retired
+   provider's fields (amount_paid in dollars, payment_reference), so Bachs documents — minor units with
+   their currency — showed as "$" with no reference and summed to $0. services/payments.ts paymentView is
+   the one place that knows both shapes; any other client file that reads `.amount_paid` or
+   `.payment_reference` (comments blanked) has gone around it. */
+export const PAYMENT_ADAPTER = 'services/payments.ts';
+export const readsOldPaymentShape = (text: string): boolean =>
+  /\.(?:amount_paid|payment_reference)\b|\[\s*['"`](?:amount_paid|payment_reference)['"`]\s*\]/.test(blank(text));
+const walkClient = (dir: string): string[] => fs.readdirSync(path.join(root, dir), { withFileTypes: true })
+  .flatMap((e) => e.isDirectory() ? walkClient(`${dir}/${e.name}`) : /\.tsx?$/.test(e.name) ? [`${dir}/${e.name}`] : []);
+const clientFiles = [...['components', 'pages', 'services', 'context', 'config'].flatMap(walkClient), 'App.tsx', 'index.tsx', 'types.ts']
+  .filter((f) => f !== PAYMENT_ADAPTER);
+console.log('\nPAYMENTS ARE READ THROUGH ONE ADAPTER:');
+const oldShapeReaders = clientFiles.filter((f) => readsOldPaymentShape(fs.readFileSync(path.join(root, f), 'utf8')));
+ok(clientFiles.length > 50 && oldShapeReaders.length === 0,
+  `no client file outside ${PAYMENT_ADAPTER} reads amount_paid or payment_reference itself (${clientFiles.length} files scanned)`, oldShapeReaders.join(', '));
+for (const f of ['pages/BillingCenter.tsx', 'pages/Settings.tsx', 'components/UI.tsx', 'services/exportService.ts', 'components/admin/GlobalSearch.tsx',
+  'components/admin/sections/Revenue.tsx', 'components/admin/sections/Transactions.tsx', 'components/admin/sections/Overview.tsx', 'components/admin/sections/Refunds.tsx']) {
+  ok(/\b(?:paymentView|paymentCsvRows)\(/.test(blank(fs.readFileSync(path.join(root, f), 'utf8'))), `${f} reads payments through the adapter`);
+}
+ok(readsOldPaymentShape('const amt = Number(p.amount_paid) || 0;'), 'CONTROL: a page reading p.amount_paid is caught');
+ok(readsOldPaymentShape("<span>Ref: {payment.payment_reference || 'N/A'}</span>"), 'CONTROL: a page reading payment_reference is caught');
+ok(readsOldPaymentShape("const amt = (p as any)['amount_paid'];"), 'CONTROL: a bracket read of amount_paid is caught');
+ok(!readsOldPaymentShape('// the old shape kept p.amount_paid in dollars'), 'a comment that mentions the old field is not a read');
+ok(!readsOldPaymentShape('export interface LegacyPaymentRecord { amount_paid: number; payment_reference: string; }'), 'a type declaring the old fields is not a read');
+
 console.log(failures === 0
   ? '\nPASS — no signed-in user can grant themselves a plan, a token pack or a refill.'
   : `\nFAILED — ${failures} assertion(s).`);

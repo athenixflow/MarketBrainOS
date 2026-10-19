@@ -4,6 +4,15 @@
 
 import React, { useMemo, useState } from 'react';
 import { Card } from '../UI';
+import { CurrencySums, formatMinor } from '../../services/payments';
+
+/** A money total in each currency: dollars, with naira beneath. The two are never added together. */
+export const CurrencyPair: React.FC<{ sums: CurrencySums }> = ({ sums }) => (
+  <>
+    {formatMinor(sums.USD, 'USD')}
+    <span className="block text-sm font-bold text-gray-400 mt-2">{formatMinor(sums.NGN, 'NGN')}</span>
+  </>
+);
 
 export const KpiCard: React.FC<{ label: string; value: React.ReactNode; hint?: string; accent?: boolean; tone?: 'default' | 'danger' | 'good' }> =
   ({ label, value, hint, accent, tone = 'default' }) => (

@@ -17,6 +17,7 @@ import { parseBachsEvent, parseCheckoutSession, parseSubscription } from '../fun
 import { applyOneOff, checkoutAllowed, expirePass, invoicePayment, manageOwnership, reminderDue, syncSubscription, PASS_DAYS } from '../functions/src/bachs/grant';
 import { bachsApi, bachsBaseUrl, BachsApiError } from '../functions/src/bachs/api';
 import { EMAIL_TEMPLATES, MARKETING_KEYS } from '../functions/src/email/templates';
+import { formatMinor, parseMajor, paymentCsvRows, paymentView, sumByCurrency } from '../services/payments';
 
 let failures = 0;
 const ok = (cond: boolean, label: string, detail = '') => {
@@ -742,6 +743,59 @@ ok(invoicePayment(parseBachsEvent(ev('customer.subscription.updated', { id: 'sub
   'a state event records nothing, whatever amount it carries');
 ok([s1, renew, upgraded, recon, overlap, second].every((r) => r.grant.payment === null),
   'no period grant (first, renewal, upgrade, reconciliation, over a pass, duplicate) carries a payment record');
+
+/* EVERY PAGE READS A PAYMENT THROUGH ONE ADAPTER (final review I1). Bachs writes minor units with their
+   currency (amount_minor, currency, kind, item, bachs_reference / bachs_invoice_id); every reader used the
+   retired provider's shape (amount_paid in dollars, payment_reference, type). A ₦9,900 pass showed on
+   /billing as "Token top-up · Ref: N/A · $", Bachs revenue summed to $0, and the admin Refund button
+   (amount_paid > 0) never appeared. paymentView reads the Bachs shape first, the old one as a fallback. */
+console.log('\nONE PAYMENT ADAPTER:');
+const at = { toMillis: () => Date.parse('2026-10-20T10:00:00Z') };
+const passDoc = { id: 'p1', uid: 'u1', provider: 'bachs', kind: 'pass', item: 'pro', amount_minor: 990000, currency: 'NGN', tokens_credited: 300, bachs_reference: 'mb_1', status: 'success', created_at: at };
+const pv = paymentView(passDoc);
+ok(pv.label === 'Pro pass, 30 days' && pv.amountMinor === 990000 && pv.currency === 'NGN' && pv.display === '₦9,900' && pv.reference === 'mb_1'
+  && pv.kind === 'pass' && pv.status === 'success' && pv.date?.toISOString() === '2026-10-20T10:00:00.000Z',
+  'a Bachs naira pass reads as "Pro pass, 30 days", ₦9,900, its reference, kind pass', JSON.stringify(pv));
+const planDoc = { id: 'p2', uid: 'u1', provider: 'bachs', kind: 'plan', item: 'team', amount_minor: 7900, currency: 'USD', tokens_credited: 600, bachs_invoice_id: 'in_1', bachs_subscription_id: 'sub_1', status: 'success', created_at: at };
+const planView = paymentView(planDoc);
+ok(planView.label === 'Team plan, monthly' && planView.display === '$79.00' && planView.reference === 'in_1' && planView.kind === 'plan',
+  'a Bachs subscription payment reads as "Team plan, monthly", $79.00, referenced by its invoice (not the subscription id)', JSON.stringify(planView));
+const packView = paymentView({ id: 'p3', uid: 'u1', provider: 'bachs', kind: 'pack', item: 'starter', amount_minor: 1000, currency: 'USD', tokens_credited: 100, bachs_reference: 'mb_3' });
+ok(packView.label === 'Starter Pack' && packView.display === '$10.00' && packView.kind === 'pack', 'a Bachs token pack names the pack', JSON.stringify(packView));
+ok(paymentView({ id: 'p4', uid: 'u1', kind: 'pack', item: 'mystery', amount_minor: 100, currency: 'USD', tokens_credited: 1 }).label === 'Token pack: Mystery',
+  'a pack that is no longer in the config is still labelled as a pack');
+const refundView = paymentView({ id: 'r1', uid: 'u1', provider: 'admin_refund', kind: 'refund', amount_minor: -990000, currency: 'NGN', reference: 'refund_1', status: 'refunded' });
+ok(refundView.kind === 'refund' && refundView.amountMinor === -990000 && refundView.display === '−₦9,900' && refundView.reference === 'refund_1' && refundView.label === 'Refund',
+  'a refund recorded in the new shape is negative, in its own currency', JSON.stringify(refundView));
+const legacyTopUp = paymentView({ id: 'l1', uid: 'u1', payment_reference: 'ps_1', amount_paid: 7, tokens_credited: 100, provider: 'paystack' });
+ok(legacyTopUp.label === 'Token top-up' && legacyTopUp.amountMinor === 700 && legacyTopUp.currency === 'USD' && legacyTopUp.display === '$7.00'
+  && legacyTopUp.reference === 'ps_1' && legacyTopUp.kind === 'pack' && legacyTopUp.status === 'completed',
+  'an old document (amount_paid dollars, payment_reference) still renders as before', JSON.stringify(legacyTopUp));
+const legacyRefund = paymentView({ id: 'l2', uid: 'u1', payment_reference: 'refund_9', amount_paid: -7, tokens_credited: 0, type: 'refund', status: 'refunded' });
+ok(legacyRefund.kind === 'refund' && legacyRefund.amountMinor === -700 && legacyRefund.display === '−$7.00', 'an old refund is negative dollars');
+ok(paymentView({ id: 'l3', uid: 'u1', payment_reference: 'x', amount_paid: 19, tokens_credited: 0, type: 'subscription' }).kind === 'plan'
+  && paymentView({ id: 'l4', uid: 'u1', payment_reference: 'x', amount_paid: 5, tokens_credited: 0, type: 'expansion', expansion_type: 'seats' }).label === 'Expansion: seats',
+  'old subscription and expansion documents keep their labels');
+ok(paymentView({ id: 'l5', uid: 'u1' }).amountMinor === 0 && paymentView({ id: 'l5', uid: 'u1' }).reference === '', 'a document with no amount reads as zero with no reference, without throwing');
+const sums = sumByCurrency([pv, planView, legacyTopUp, legacyRefund, refundView]);
+ok(sums.USD === 7900 && sums.NGN === 0, 'sums are kept per currency (₦ is never added to $)', JSON.stringify(sums));
+ok(sumByCurrency([pv]).NGN === 990000 && sumByCurrency([pv]).USD === 0, 'a naira payment adds to the naira sum only');
+ok(formatMinor(990050, 'NGN') === '₦9,900.50' && formatMinor(0, 'USD') === '$0.00' && formatMinor(123456789, 'USD') === '$1,234,567.89',
+  'amounts format from minor units: whole naira unless there are kobo, dollars to the cent');
+ok(parseMajor('19.99') === 1999 && parseMajor('9900') === 990000 && parseMajor(' 5.5 ') === 550 && parseMajor('19.999') === null && parseMajor('-1') === null && parseMajor('x') === null,
+  'a typed amount parses to minor units exactly, or not at all');
+const csv = paymentCsvRows([passDoc, planDoc, { id: 'l1', uid: 'u1', payment_reference: 'ps_1', amount_paid: 7, tokens_credited: 100, provider: 'paystack' }]);
+ok(csv[0].includes('Currency') && csv[0].includes('Amount') && !csv[0].some((h) => /USD/.test(String(h))), 'the CSV has a Currency column (the Amount header no longer claims USD)');
+const amountCol = csv[0].indexOf('Amount');
+const currencyCol = csv[0].indexOf('Currency');
+ok(csv[1][amountCol] === '9900.00' && csv[1][currencyCol] === 'NGN' && csv[2][amountCol] === '79.00' && csv[3][amountCol] === '7.00' && csv[3][currencyCol] === 'USD',
+  'and its amounts are major units converted exactly from minor ones, each with its currency', JSON.stringify(csv));
+
+/* A naira refund is mailed in naira (final review M2): adminRefund records the currency and the email uses it. */
+const ngnRefundMail = mail('refundIssued', { amount: 9900, currency: 'NGN', reference: 'refund_1', date: '1 Nov 2026' });
+ok(ngnRefundMail.html.includes('₦9,900') && !ngnRefundMail.html.includes('$9900.00') && !ngnRefundMail.html.includes('$9,900'),
+  'a naira refund email reads ₦9,900, not $9900.00');
+ok(mail('refundIssued', { amount: 19, reference: 'refund_2', date: '1 Nov 2026' }).html.includes('$19.00'), 'a refund email with no currency is still dollars');
 
 /* The webhook's Bachs reads must answer inside Bachs' 10s delivery window (final review M4). */
 const hang = (async (_url: string, init: any) => new Promise((_resolve, reject) => {

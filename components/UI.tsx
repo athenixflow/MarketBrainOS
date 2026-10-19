@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { UserTier, ActionLogEntry, PaymentRecord } from '../types';
 import { getUserActionLogs, getUserPaymentHistory } from '../services/persistenceService';
 import { downloadAsCSV, paymentsToCSV } from '../services/exportService';
+import { paymentView, topUpLogPrice } from '../services/payments';
 import { toDate } from '../services/time';
 import { DEFAULT_PRICING_CONFIG } from '../config/pricingConfig';
 
@@ -1115,7 +1116,7 @@ const LedgerModal: React.FC<{ kind: 'tokens' | 'payments'; onClose: () => void }
   return (
     <Modal
       onClose={onClose}
-      title={isTokens ? 'Token usage history' : 'Top-up receipts'}
+      title={isTokens ? 'Token usage history' : 'Payment receipts'}
       scrollBody
       footer={
         <div className="text-center">
@@ -1128,7 +1129,7 @@ const LedgerModal: React.FC<{ kind: 'tokens' | 'payments'; onClose: () => void }
             </button>
           )}
           <p className="text-[10px] text-gray-400">
-            {isTokens ? 'All records are server-verified.' : 'Top-ups add extra tokens that never expire.'}
+            {isTokens ? 'All records are server-verified.' : 'Token packs add tokens that never expire.'}
           </p>
         </div>
       }
@@ -1143,7 +1144,7 @@ const LedgerModal: React.FC<{ kind: 'tokens' | 'payments'; onClose: () => void }
         <ErrorMessage message={error} />
       ) : count === 0 ? (
         <div className="py-16 text-center text-gray-400 font-medium">
-          {isTokens ? 'No token usage recorded yet.' : 'You haven’t topped up any tokens yet.'}
+          {isTokens ? 'No token usage recorded yet.' : 'No payments yet.'}
         </div>
       ) : isTokens ? (
         <div className="space-y-3">
@@ -1166,7 +1167,7 @@ const LedgerModal: React.FC<{ kind: 'tokens' | 'payments'; onClose: () => void }
                   ) : isTopUp ? (
                     <div>
                       <p className="text-sm font-black text-green-600">+{log.tokens_added ?? STARTER_PACK.tokens} tokens</p>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">${log.amount_paid ?? STARTER_PACK.price}.00</p>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{topUpLogPrice(log, STARTER_PACK.price)}</p>
                     </div>
                   ) : (
                     <p className="text-sm font-black text-[#0B0B0B]">-{log.tokens_used} tokens</p>
@@ -1179,24 +1180,24 @@ const LedgerModal: React.FC<{ kind: 'tokens' | 'payments'; onClose: () => void }
       ) : (
         <div className="space-y-3">
           {payments.map((payment) => {
-            const date = toDate(payment.created_at);
-            const isFailed = payment.status === 'failed';
+            const v = paymentView(payment);
+            const isFailed = v.status === 'failed';
             return (
               <LedgerRow
                 key={payment.id}
-                when={date}
-                title="Token top-up"
-                detail={<span className="font-mono">Ref: {payment.payment_reference || 'N/A'}</span>}
+                when={v.date || toDate(payment.created_at)}
+                title={v.label}
+                detail={<span className="font-mono">Ref: {v.reference || 'N/A'}</span>}
                 right={
                   isFailed ? (
                     <div>
                       <Badge tone="red" className="mb-1">Failed</Badge>
-                      <p className="text-xs font-bold text-gray-400 line-through">${payment.amount_paid}</p>
+                      <p className="text-xs font-bold text-gray-400 line-through">{v.display}</p>
                     </div>
                   ) : (
                     <div>
-                      <p className="text-sm font-black text-green-600">+{payment.tokens_credited} tokens</p>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">${payment.amount_paid}.00 USD</p>
+                      {payment.tokens_credited ? <p className="text-sm font-black text-green-600">+{payment.tokens_credited} tokens</p> : null}
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{v.display} {v.currency}</p>
                     </div>
                   )
                 }

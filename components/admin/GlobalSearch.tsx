@@ -6,6 +6,7 @@ import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdmin } from './AdminContext';
 import { Pill } from './primitives';
+import { paymentView } from '../../services/payments';
 
 interface Result { type: string; tone: any; label: string; sub?: string; to: string; }
 
@@ -25,7 +26,7 @@ const GlobalSearch: React.FC<{ placeholder?: string }> = ({ placeholder = 'Searc
     a.agencies.forEach(g => { if (hit((g as any).name) || hit(g.id) || hit((g as any).owner_id)) out.push({ type: 'Agency', tone: 'red', label: (g as any).name || 'Agency', sub: `${(g as any).client_count ?? 0} clients`, to: `/admin/agencies/${g.id}` }); });
     a.enterprises.forEach(e => { if (hit((e as any).name) || hit(e.id)) out.push({ type: 'Enterprise', tone: 'yellow', label: (e as any).name || 'Enterprise', to: `/admin/enterprise/${e.id}` }); });
     a.reports.forEach(r => { if (hit(r.title) || hit(r.id || '')) out.push({ type: 'Report', tone: 'green', label: r.title || 'Report', sub: r.report_type, to: `/admin/reports/${r.id}` }); });
-    a.payments.forEach(p => { if (hit(p.uid) || hit(p.payment_reference || '')) out.push({ type: 'Transaction', tone: 'green', label: `$${p.amount_paid} • ${p.tokens_credited} tokens`, sub: p.uid, to: `/admin/transactions` }); });
+    a.payments.forEach(p => { const v = paymentView(p); if (hit(p.uid) || hit(v.reference)) out.push({ type: 'Transaction', tone: 'green', label: `${v.display} • ${v.label}`, sub: p.uid, to: `/admin/transactions` }); });
 
     return out.slice(0, 12);
   }, [q, a.users, a.workspaces, a.agencies, a.enterprises, a.reports, a.payments]);

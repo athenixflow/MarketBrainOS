@@ -339,15 +339,15 @@ const expansionPurchased = (d: { typeLabel: string; containerName: string; price
   }),
 });
 
-const refundIssued = (d: { amount: number; reference: string; date: string }): RenderedEmail => ({
+const refundIssued = (d: { amount: number; currency?: string; reference: string; date: string }): RenderedEmail => ({
   subject: 'Your refund has been issued',
   html: renderEmail({
-    preheader: `A refund of ${money(d.amount)} was issued.`,
+    preheader: `A refund of ${money(d.amount, d.currency)} was issued.`,
     tag: 'Refund',
     heading: 'Your refund has been issued.',
-    heroSubtext: `We've issued a refund of ${money(d.amount)}. It may take a few business days to appear, depending on your bank.`,
+    heroSubtext: `We've issued a refund of ${money(d.amount, d.currency)}. It may take a few business days to appear, depending on your bank.`,
     body:
-      metaTable([{ k: 'Date', v: d.date }, { k: 'Reference', v: d.reference }, { k: 'Amount refunded', v: money(d.amount), total: true }]) +
+      metaTable([{ k: 'Date', v: d.date }, { k: 'Reference', v: d.reference }, { k: 'Amount refunded', v: money(d.amount, d.currency), total: true }]) +
       button('View billing →', `${SITE_URL}/billing`),
     footerLinks: [{ label: 'Billing', href: `${SITE_URL}/billing` }, { label: 'Support', href: `${SITE_URL}/support` }],
   }),
