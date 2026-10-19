@@ -59,7 +59,11 @@ export const bachsApi = (key: string, fetchImpl: typeof fetch = fetch): BachsApi
       call('DELETE', `/subscriptions/${encodeURIComponent(id)}`, { cancel_at_period_end: true, reason: 'customer_request' }, idem),
     createPortalSession: (customerId, idem) =>
       call('POST', `/customers/${encodeURIComponent(customerId)}/portal-sessions`, undefined, idem).then((j) => j?.data ?? j),
-    listProducts: () => call('GET', '/products').then((j) => (Array.isArray(j?.items) ? j.items : Array.isArray(j?.data) ? j.data : [])),
+    listProducts: () => call('GET', '/products').then((j) => {
+      if (Array.isArray(j?.items)) return j.items as unknown[];
+      if (Array.isArray(j?.data)) return j.data as unknown[];
+      throw new BachsApiError('Bachs GET /products returned neither an items nor a data array', 0, 'UNEXPECTED_SHAPE');
+    }),
     createProduct: (body, idem) => call('POST', '/products', body, idem).then((j) => j?.data ?? j),
   };
 };

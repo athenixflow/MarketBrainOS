@@ -354,8 +354,10 @@ console.log('\nAPI WRAPPER:');
 ok(bachsBaseUrl('sk_live_x') === 'https://api.bachs.io/v1' && bachsBaseUrl('sk_sandbox_x') === 'https://sandbox-api.bachs.io/v1',
   'the key decides the environment (a sandbox key can never reach live)');
 const calls: Array<{ url: string; init: any }> = [];
+let productsBody: unknown = { something: 1 };
 const fakeFetch = (async (url: string, init: any) => {
   calls.push({ url, init });
+  if (url.endsWith('/v1/products')) return new Response(JSON.stringify(productsBody), { status: 200 });
   if (url.endsWith('/v1/checkout-sessions')) return new Response(JSON.stringify({ checkout_id: 'chk_1', checkout_url: 'https://checkout.bachs.io/c/1' }), { status: 200 });
   if (url.includes('/subscriptions/sub_404')) return new Response(JSON.stringify({ error: { code: 'NOT_FOUND', message: 'no' } }), { status: 404 });
   return new Response(JSON.stringify({ data: { id: 'sub_1', status: 'active' } }), { status: 200 });
@@ -372,6 +374,15 @@ await api.cancelSubscriptionAtPeriodEnd('sub_1', 'cancel_sub_1');
 const cancelCall = calls[calls.length - 1];
 ok(cancelCall.init.method === 'DELETE' && JSON.parse(cancelCall.init.body).cancel_at_period_end === true,
   'cancel always sends cancel_at_period_end: true (an API cancel is otherwise immediate)');
+let shapeErr: any = null; try { await api.listProducts(); } catch (e) { shapeErr = e; }
+ok(shapeErr instanceof BachsApiError && shapeErr.status === 0 && shapeErr.code === 'UNEXPECTED_SHAPE',
+  'a products response with no items or data array throws UNEXPECTED_SHAPE, never an empty list (an empty list would make setup create duplicates)');
+productsBody = { items: [{ id: 'p' }] };
+const listed = await api.listProducts();
+ok(Array.isArray(listed) && listed.length === 1 && (listed[0] as any).id === 'p', 'a products response with an items array returns that array');
+productsBody = { data: [{ id: 'q' }] };
+const listedData = await api.listProducts();
+ok(Array.isArray(listedData) && listedData.length === 1 && (listedData[0] as any).id === 'q', 'a products response with a data array returns that array');
 
 console.log(failures === 0
   ? '\nPASS — Bachs: amounts, signatures, events and every grant rule behave.'
