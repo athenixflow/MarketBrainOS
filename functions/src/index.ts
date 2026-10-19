@@ -92,6 +92,7 @@ const ACTIVATION_RUNS = 2;
 const ACTIVATION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 interface PlanConfig {
   price: number;
+  priceNgn?: number;        // naira for a 30-day pass (local price, not a conversion)
   monthlyTokens: number;
   membersPerWorkspace?: number;
   workspaces?: number;
@@ -99,7 +100,7 @@ interface PlanConfig {
   workspacesPerAgency?: number;
   maxMembers?: number;
 }
-interface TokenPack { id: string; label: string; tokens: number; price: number; }
+interface TokenPack { id: string; label: string; tokens: number; price: number; priceNgn?: number; }
 interface PricingConfig {
   plans: Record<Tier, PlanConfig>;
   expansion: { member: number; workspace: number; agency: number };
@@ -107,6 +108,8 @@ interface PricingConfig {
   toolCosts: Record<string, number>;
   analysisTiers: { standard: number; premium: number; advanced: number };
   renewalDays: number;
+  /** Used ONLY to combine both currencies into one labelled figure. Prices are never converted. */
+  ngnPerUsd: number;
 }
 
 const DEFAULT_PRICING_CONFIG: PricingConfig = {
@@ -116,22 +119,23 @@ const DEFAULT_PRICING_CONFIG: PricingConfig = {
        is a promise the product quietly does not keep. scripts/pricing.test.ts fails the
        build if they diverge. Reasoning lives in the client copy. */
     free:       { price: 0,   monthlyTokens: 20 },
-    pro:        { price: 19,  monthlyTokens: 300 },
-    team:       { price: 79,  monthlyTokens: 600,   membersPerWorkspace: 5 },
-    agency:     { price: 199, monthlyTokens: 2000,  workspaces: 5,  membersPerWorkspace: 10, maxMembers: 50 },
+    pro:        { price: 19,  priceNgn: 9900,   monthlyTokens: 300 },
+    team:       { price: 79,  priceNgn: 39000,  monthlyTokens: 600,   membersPerWorkspace: 5 },
+    agency:     { price: 199, priceNgn: 120000, monthlyTokens: 2000,  workspaces: 5,  membersPerWorkspace: 10, maxMembers: 50 },
     enterprise: { price: 999, monthlyTokens: 10000, agencies: 5, workspacesPerAgency: 5, membersPerWorkspace: 10, maxMembers: 250 },
   },
   expansion: { member: 12, workspace: 39, agency: 99 },
   tokenPacks: [
-    { id: 'starter',    label: 'Starter Pack',    tokens: 100,   price: 10 },
-    { id: 'growth',     label: 'Growth Pack',     tokens: 500,   price: 40 },
-    { id: 'business',   label: 'Business Pack',   tokens: 1500,  price: 100 },
-    { id: 'agency',     label: 'Agency Pack',     tokens: 5000,  price: 300 },
-    { id: 'enterprise', label: 'Enterprise Pack', tokens: 10000, price: 500 },
+    { id: 'starter',    label: 'Starter Pack',    tokens: 100,   price: 10,  priceNgn: 5000 },
+    { id: 'growth',     label: 'Growth Pack',     tokens: 500,   price: 40,  priceNgn: 20000 },
+    { id: 'business',   label: 'Business Pack',   tokens: 1500,  price: 100, priceNgn: 50000 },
+    { id: 'agency',     label: 'Agency Pack',     tokens: 5000,  price: 300, priceNgn: 150000 },
+    { id: 'enterprise', label: 'Enterprise Pack', tokens: 10000, price: 500, priceNgn: 250000 },
   ],
   toolCosts: { ...COSTS },
   analysisTiers: { standard: 3, premium: 4, advanced: 5 },
   renewalDays: 30,
+  ngnPerUsd: 1450,
 };
 
 // Merge a (possibly partial) stored config over the defaults so missing keys never break the app.
@@ -150,6 +154,7 @@ const mergePricingConfig = (base: PricingConfig, over: any): PricingConfig => {
     toolCosts: { ...base.toolCosts, ...(over.toolCosts || {}) },
     analysisTiers: { ...base.analysisTiers, ...(over.analysisTiers || {}) },
     renewalDays: typeof over.renewalDays === 'number' ? over.renewalDays : base.renewalDays,
+    ngnPerUsd: typeof over.ngnPerUsd === 'number' && over.ngnPerUsd > 0 ? over.ngnPerUsd : base.ngnPerUsd,
   };
 };
 

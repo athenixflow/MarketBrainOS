@@ -179,6 +179,30 @@ for (const f of appFiles) {
 }
 ok(stale.length === 0, 'no screen hardcodes a price or allowance the config decides', stale.join('\n        '));
 
+/* ============================================ naira prices (spec §2) */
+
+console.log('\nNAIRA PRICES:');
+const NGN_PLANS: Record<string, number> = { pro: 9900, team: 39000, agency: 120000 };
+const NGN_PACKS: Record<string, number> = { starter: 5000, growth: 20000, business: 50000, agency: 150000, enterprise: 250000 };
+for (const [tier, ngn] of Object.entries(NGN_PLANS)) {
+  ok((CLIENT.plans as any)[tier]?.priceNgn === ngn, `client ${tier} is ₦${ngn.toLocaleString()}`);
+  ok(new RegExp(`${tier}:\\s*\\{[^}]*priceNgn:\\s*${ngn}\\b`).test(serverSrc), `server ${tier} is ₦${ngn.toLocaleString()}`);
+}
+for (const [id, ngn] of Object.entries(NGN_PACKS)) {
+  ok(CLIENT.tokenPacks.find((p) => p.id === id)?.priceNgn === ngn, `client ${id} pack is ₦${ngn.toLocaleString()}`);
+  ok(new RegExp(`id:\\s*'${id}'[^}]*priceNgn:\\s*${ngn}\\b`).test(serverSrc), `server ${id} pack is ₦${ngn.toLocaleString()}`);
+}
+ok((CLIENT as any).ngnPerUsd === 1450 && /ngnPerUsd:\s*1450\b/.test(serverSrc), 'both copies carry ngnPerUsd: 1450');
+/* The rule that already holds for dollars, in naira: no pack is cheaper per token than the
+   Pro plan's allowance, or a pack would undercut the subscription it sits beside. */
+const proNgnPerToken = NGN_PLANS.pro / CLIENT.plans.pro.monthlyTokens;
+const cheapestPack = Math.min(...CLIENT.tokenPacks.map((p) => (p.priceNgn ?? Infinity) / p.tokens));
+const proUsdPerToken = CLIENT.plans.pro.price / CLIENT.plans.pro.monthlyTokens;
+const cheapestUsdPack = Math.min(...CLIENT.tokenPacks.map((p) => p.price / p.tokens));
+ok(cheapestPack / proNgnPerToken >= (cheapestUsdPack / proUsdPerToken) * 0.95,
+  'naira packs keep the same pack-to-plan ratio as dollar packs (within 5%)',
+  `naira ${(cheapestPack / proNgnPerToken).toFixed(3)} vs dollar ${(cheapestUsdPack / proUsdPerToken).toFixed(3)}`);
+
 console.log(failures === 0
   ? '\nPASS — one ladder, both copies agreeing, and no pack undercutting a plan.'
   : `\nFAILED — ${failures} assertion(s).`);

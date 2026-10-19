@@ -7,6 +7,7 @@ export type Tier = 'free' | 'pro' | 'team' | 'agency' | 'enterprise';
 
 export interface PlanConfig {
   price: number;            // USD / month
+  priceNgn?: number;        // naira for a 30-day pass (local price, not a conversion)
   monthlyTokens: number;    // included tokens that reset each cycle
   membersPerWorkspace?: number;
   workspaces?: number;          // agency: workspaces it may own
@@ -15,7 +16,7 @@ export interface PlanConfig {
   maxMembers?: number;          // total org capacity
 }
 
-export interface TokenPack { id: string; label: string; tokens: number; price: number; }
+export interface TokenPack { id: string; label: string; tokens: number; price: number; priceNgn?: number; }
 
 export interface PricingConfig {
   plans: Record<Tier, PlanConfig>;
@@ -24,6 +25,8 @@ export interface PricingConfig {
   toolCosts: Record<string, number>;
   analysisTiers: { standard: number; premium: number; advanced: number };
   renewalDays: number;
+  /** Used ONLY to combine both currencies into one labelled figure. Prices are never converted. */
+  ngnPerUsd: number;
 }
 
 export const DEFAULT_PRICING_CONFIG: PricingConfig = {
@@ -44,9 +47,9 @@ export const DEFAULT_PRICING_CONFIG: PricingConfig = {
      * lands the fewer people it can ever surprise.
      */
     free:       { price: 0,   monthlyTokens: 20 },
-    pro:        { price: 19,  monthlyTokens: 300 },
-    team:       { price: 79,  monthlyTokens: 600,   membersPerWorkspace: 5 },
-    agency:     { price: 199, monthlyTokens: 2000,  workspaces: 5,  membersPerWorkspace: 10, maxMembers: 50 },
+    pro:        { price: 19,  priceNgn: 9900,   monthlyTokens: 300 },
+    team:       { price: 79,  priceNgn: 39000,  monthlyTokens: 600,   membersPerWorkspace: 5 },
+    agency:     { price: 199, priceNgn: 120000, monthlyTokens: 2000,  workspaces: 5,  membersPerWorkspace: 10, maxMembers: 50 },
     enterprise: { price: 999, monthlyTokens: 10000, agencies: 5, workspacesPerAgency: 5, membersPerWorkspace: 10, maxMembers: 250 },
   },
   /* Seats and workspaces priced against the tier they expand, not as an afterthought:
@@ -59,11 +62,11 @@ export const DEFAULT_PRICING_CONFIG: PricingConfig = {
      * customer stayed on Free and topped up forever. Packs now start at $0.10 a token,
      * above every plan's included rate, and the ladder rewards subscribing.
      */
-    { id: 'starter',    label: 'Starter Pack',    tokens: 100,   price: 10 },
-    { id: 'growth',     label: 'Growth Pack',     tokens: 500,   price: 40 },
-    { id: 'business',   label: 'Business Pack',   tokens: 1500,  price: 100 },
-    { id: 'agency',     label: 'Agency Pack',     tokens: 5000,  price: 300 },
-    { id: 'enterprise', label: 'Enterprise Pack', tokens: 10000, price: 500 },
+    { id: 'starter',    label: 'Starter Pack',    tokens: 100,   price: 10,  priceNgn: 5000 },
+    { id: 'growth',     label: 'Growth Pack',     tokens: 500,   price: 40,  priceNgn: 20000 },
+    { id: 'business',   label: 'Business Pack',   tokens: 1500,  price: 100, priceNgn: 50000 },
+    { id: 'agency',     label: 'Agency Pack',     tokens: 5000,  price: 300, priceNgn: 150000 },
+    { id: 'enterprise', label: 'Enterprise Pack', tokens: 10000, price: 500, priceNgn: 250000 },
   ],
   toolCosts: {
     AngleMiner_Generate: 3, AngleMiner_Improve: 1, ConversionDoctor_Audit: 4, TestLab_Simulation: 5,
@@ -73,6 +76,7 @@ export const DEFAULT_PRICING_CONFIG: PricingConfig = {
   },
   analysisTiers: { standard: 3, premium: 4, advanced: 5 },
   renewalDays: 30,
+  ngnPerUsd: 1450,
 };
 
 // Presentation metadata for the 5-plan pricing page (capacity blurbs + feature bullets).
