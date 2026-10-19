@@ -4145,8 +4145,13 @@ const syncSubscriptionById = async (subscriptionId: string, chargedMinor: number
   }
   /* A subscription with no live account grants nothing, but Bachs keeps charging for it, so it is
      reviewed — ONCE per paid period. The ledger entry under this key is what stops every webhook
-     delivery and every hourly run from adding another review and another email. */
-  const orphanKey = `orphan:${snap.id}:${snap.currentPeriodStart ?? 'nostart'}`;
+     delivery and every hourly run from adding another review and another email.
+     EXCEPT one that is already on its way out: deleteAccount cancels a deleted account's
+     subscription at period end, and Bachs then reports exactly that for an account that no longer
+     exists. A subscription that is cancelling (or has ended) is not charging again, so it is
+     ignored — no review, no email, no writes. Only a still-charging orphan is an alarm. */
+  const leaving = snap.cancelAtPeriodEnd === true || snap.status === 'canceled' || snap.status === 'unpaid';
+  const orphanKey =`orphan:${snap.id}:${snap.currentPeriodStart ?? 'nostart'}`;
   const orphanWrites = (t: admin.firestore.Transaction, reason: string, forUid: string | null) => {
     t.set(ledgerDoc(orphanKey), { key: orphanKey, source, outcome: 'review', created_at: admin.firestore.FieldValue.serverTimestamp() });
     t.set(db.collection('billing_reviews').doc(ledgerDoc(orphanKey).id), {
@@ -4162,6 +4167,7 @@ const syncSubscriptionById = async (subscriptionId: string, chargedMinor: number
     }
   };
   if (!uid) {
+    if (leaving) return 'orphan ignored (cancelled)';
     const reason = 'subscription with no account';
     const created = await db.runTransaction(async (t: admin.firestore.Transaction) => {
       if ((await t.get(ledgerDoc(orphanKey))).exists) return false;
@@ -4186,7 +4192,8 @@ const syncSubscriptionById = async (subscriptionId: string, chargedMinor: number
     const userSnap = await t.get(userRef);
     if (!userSnap.exists) {
       /* The uid names an account that was deleted. Nothing is granted; the review and its ledger
-         entry are written together, once per period. */
+         entry are written together, once per period — unless the subscription is leaving anyway. */
+      if (leaving) return 'orphan ignored (cancelled)';
       if ((await t.get(ledgerDoc(orphanKey))).exists) return 'orphan already reviewed';
       const reason = `subscription is paid for account ${uid}, which no longer exists`;
       state.reviewWhy = reason;

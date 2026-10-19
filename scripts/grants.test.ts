@@ -178,6 +178,25 @@ export const orphansAreRecordedOnce = (body: string) =>
   && /'orphan reviewed'/.test(body);
 ok(orphansAreRecordedOnce(helperBody(index, 'syncSubscriptionById')),
   'syncSubscriptionById records a subscription with no account once per period, through the ledger (both branches)');
+/* A subscription that is already on its way out (cancelled at period end, or ended) is not an
+   alarm: deleteAccount cancels a deleted account's subscription, and Bachs then reports that very
+   cancellation for an account that no longer exists — a review and an email every time would be
+   noise about something already dealt with. Only a subscription that is STILL CHARGING
+   (active / past_due, not cancelling) is reviewed. So BOTH orphan branches (no account id at all;
+   an account id whose document is gone) must read `cancelAtPeriodEnd` (through `leaving`) and
+   return before they write. Each branch is found from its own opener to its `orphanWrites(t,`
+   call, so one branch's check cannot vouch for the other. */
+export const orphansSkipWhenLeaving = (body: string): boolean => {
+  const defined = /const leaving = [^;]*cancelAtPeriodEnd === true[^;]*'canceled'[^;]*'unpaid'/.test(body);
+  const gate = /if \(leaving\) return 'orphan ignored \(cancelled\)'/;
+  const calls = [...body.matchAll(/orphanWrites\(t,/g)].map((m) => m.index as number);
+  return defined && calls.length === 2 && calls.every((at) => {
+    const opener = Math.max(body.lastIndexOf('if (!uid) {', at), body.lastIndexOf('if (!userSnap.exists) {', at));
+    return opener >= 0 && gate.test(body.slice(opener, at));
+  });
+};
+ok(orphansSkipWhenLeaving(helperBody(index, 'syncSubscriptionById')),
+  'syncSubscriptionById skips the orphan review and alert for a subscription that is cancelling or ended (both branches)');
 for (const name of ['manageWorkspace', 'manageAgency', 'manageEnterprise']) {
   const fn = exported(index, name);
   ok(fn.length > 0 && REFUSES.test(fn), `${name} refuses to create a container above the account's plan`);
@@ -245,6 +264,28 @@ ok(!orphansAreRecordedOnce(helperBody(orphanBody.replace("if ((await t.get(ledge
   'CONTROL: the no-uid branch skipping the ledger read is caught');
 ok(!orphansAreRecordedOnce("\nconst syncSubscriptionById = async () => { if (!userSnap.exists) return 'no account'; };\nexport const next = 1;"),
   'CONTROL: the old silent `return \'no account\'` is caught');
+const leavingBody = [
+  "\nconst syncSubscriptionById = async () => {",
+  "  if (!uid) { const q = 1; }",
+  "  const leaving = snap.cancelAtPeriodEnd === true || snap.status === 'canceled' || snap.status === 'unpaid';",
+  "  const orphanWrites = (t, reason, forUid) => {};",
+  "  if (!uid) { if (leaving) return 'orphan ignored (cancelled)'; await db.runTransaction(async (t) => { orphanWrites(t, 'r', null); }); return 'orphan reviewed'; }",
+  "  await db.runTransaction(async (t) => { if (!userSnap.exists) { if (leaving) return 'orphan ignored (cancelled)'; orphanWrites(t, 'r', uid); return 'orphan reviewed'; } });",
+  "};",
+  "export const next = 1;",
+].join('\n');
+ok(orphansSkipWhenLeaving(helperBody(leavingBody, 'syncSubscriptionById')),
+  'a helper whose two orphan branches both skip a cancelling or ended subscription passes');
+ok(!orphansSkipWhenLeaving(helperBody(leavingBody.replace("if (leaving) return 'orphan ignored (cancelled)'; await", 'await'), 'syncSubscriptionById')),
+  'CONTROL: the no-account branch reviewing a cancelling subscription is caught');
+ok(!orphansSkipWhenLeaving(helperBody(leavingBody.replace("if (leaving) return 'orphan ignored (cancelled)'; orphanWrites", 'orphanWrites'), 'syncSubscriptionById')),
+  'CONTROL: the deleted-account branch reviewing a cancelling subscription is caught');
+ok(!orphansSkipWhenLeaving(helperBody(leavingBody.replace('snap.cancelAtPeriodEnd === true || ', ''), 'syncSubscriptionById')),
+  'CONTROL: a gate that ignores cancel-at-period-end is caught');
+ok(!orphansSkipWhenLeaving(helperBody(leavingBody.replace(" || snap.status === 'unpaid'", ''), 'syncSubscriptionById')),
+  'CONTROL: a gate that does not treat an unpaid (ended) subscription as leaving is caught');
+ok(!orphansSkipWhenLeaving("\nconst syncSubscriptionById = async () => { const orphanWrites = 1; if (!uid) { orphanWrites(t, 'r', null); } };\nexport const next = 1;"),
+  'CONTROL: orphan branches with no gate at all are caught');
 /* createCheckout and manageBilling are NOT on the tier-writer allowlist, so a tier write added to
    either one later (an upgrade that "just sets the tier") fails the scan above. */
 ok(tierWriters("x\nexport const manageBilling = f(() => { t.update(userRef, { tier: target }); });").filter((n) => !(n in ALLOWED_TIER_WRITERS)).join() === 'manageBilling',
