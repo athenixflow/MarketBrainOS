@@ -230,13 +230,28 @@ export const syncSubscription = (
   if (!item || snap.currency !== 'USD' || snap.amountMinor !== item.amountMinor) {
     return { stateUpdate: {}, grant: { ...NONE, ledgerKey, review: `subscription bills ${snap.amountMinor} ${snap.currency}, ${tier} is ${item?.amountMinor} USD` } };
   }
+
+  /* A naira pass can still be live when a dollar subscription activates: two checkouts opened in
+     two tabs (checkoutAllowed only blocks them one after the other). The customer chose and paid
+     for the subscription, so it is granted; but its tier, allowance and mode replace the pass, so
+     the unused pass days are paid-for value we cannot honour. Clear the pass (the expiry job must
+     never drop a subscriber to Free) and flag it, so the founder can refund those days.
+     "Live" is judged at the moment the paid period began — pure, no clock — falling back to now
+     only when Bachs sent no period start. */
+  const startMs = Date.parse(snap.currentPeriodStart ?? '');
+  const overlapsPass = activePass(account, Number.isNaN(startMs) ? Date.now() : startMs);
   return {
     stateUpdate,
     grant: {
       ledgerKey,
-      review: null,
+      review: overlapsPass
+        ? `dollar subscription started while a ${account.tier ?? 'paid'} naira pass was still active (pass_expires_at ${account.pass_expires_at}); refund the unused pass days`
+        : null,
       checkoutStatus: null,
-      userUpdate: { tier, billing_mode: 'subscription', ...balanceFields(item.tokens, purchased) },
+      userUpdate: {
+        tier, billing_mode: 'subscription', ...balanceFields(item.tokens, purchased),
+        ...(overlapsPass ? { pass_expires_at: null, pass_reminded: [] } : {}),
+      },
       payment: { kind: 'plan', item: tier, amount_minor: chargedMinor ?? item.amountMinor, currency: 'USD', tokens_credited: item.tokens },
     },
   };

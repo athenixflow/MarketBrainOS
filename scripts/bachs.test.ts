@@ -223,7 +223,7 @@ ok(s1.grant.payment?.amount_minor === 1900 && s1.grant.payment.currency === 'USD
 const renew = syncSubscription({ tier: 'pro' }, snap({ currentPeriodStart: '2026-11-01T00:00:00Z' }) as any, 'pro', CFG, 1900);
 ok(renew.grant.ledgerKey === 'period:sub_1:2026-11-01T00:00:00Z:prod_p', 'a new period is a new key (the renewal grants once)');
 const upgraded = syncSubscription({ tier: 'pro' }, snap({ productId: 'prod_t', amountMinor: 7900 }) as any, 'team', CFG, 6000);
-ok(upgraded.grant.ledgerKey?.endsWith(':prod_t') && upgraded.grant.userUpdate?.tier === 'team' && upgraded.grant.payment?.amount_minor === 6000,
+ok(upgraded.grant.ledgerKey?.endsWith(':prod_t') === true && upgraded.grant.userUpdate?.tier === 'team' && upgraded.grant.payment?.amount_minor === 6000,
   'an upgrade in the same period is a new key; the prorated charge is recorded as charged');
 const recon = syncSubscription({ tier: 'pro' }, snap() as any, 'pro', CFG, null);
 ok(recon.grant.payment?.amount_minor === 1900, 'reconciliation without an invoice records the plan price');
@@ -238,6 +238,27 @@ ok(syncSubscription({ tier: 'pro' }, snap({ status: 'unpaid' }) as any, 'pro', C
 ok(syncSubscription({}, snap() as any, null, CFG, 1900).grant.review !== null, 'an unknown product goes to review');
 ok(syncSubscription({}, snap({ amountMinor: 100 }) as any, 'pro', CFG, 100).grant.review !== null, 'a product billing the wrong amount goes to review');
 ok(syncSubscription({}, snap({ status: 'trialing' }) as any, 'pro', CFG, null).grant.ledgerKey === null, 'a trial grants nothing (trials are not sold)');
+ok(s1.grant.review === null && !('pass_expires_at' in (s1.grant.userUpdate ?? {})), 'with no pass in the way a period grants cleanly: no review, no pass fields touched');
+
+/* Two checkouts opened in two tabs: a naira pass is paid, then a USD subscription activates while it runs. */
+const overlapPass = { tier: 'pro', billing_mode: 'pass' as const, pass_expires_at: '2026-10-20T00:00:00.000Z', pass_reminded: [5], monthly_tokens: 50, purchased_tokens: 7, subscription_status: 'active' };
+const overlap = syncSubscription(overlapPass, snap({ productId: 'prod_t', amountMinor: 7900 }) as any, 'team', CFG, 7900);
+ok(overlap.grant.userUpdate?.tier === 'team' && overlap.grant.userUpdate?.billing_mode === 'subscription' && overlap.grant.payment?.amount_minor === 7900,
+  'a USD period activating over a live pass is still granted (the customer paid for it)');
+ok(overlap.grant.userUpdate?.pass_expires_at === null && Array.isArray(overlap.grant.userUpdate?.pass_reminded) && (overlap.grant.userUpdate?.pass_reminded as unknown[]).length === 0,
+  'and the pass fields are cleared so the pass-expiry job cannot later drop the subscriber to Free');
+ok(overlap.grant.review !== null && overlap.grant.review.includes('2026-10-20T00:00:00.000Z') && /pass/i.test(overlap.grant.review),
+  'and it is flagged for review, naming the overlapping pass and its expiry, so the unused pass days can be refunded');
+ok(overlap.grant.userUpdate?.purchased_tokens === 7 && overlap.grant.ledgerKey === 'period:sub_1:2026-10-01T00:00:00Z:prod_t',
+  'purchased tokens survive, and the ledger key is unchanged by the overlap');
+const lateSync = syncSubscription({ ...overlapPass, pass_expires_at: '2026-10-10T00:00:00.000Z' }, snap() as any, 'pro', CFG, 1900);
+ok(lateSync.grant.review !== null, 'liveness is judged at the period start, not the clock: a pass live on 1 Oct is an overlap however late the sync runs');
+const lapsed = syncSubscription({ ...overlapPass, pass_expires_at: '2026-09-20T00:00:00.000Z' }, snap() as any, 'pro', CFG, 1900);
+ok(lapsed.grant.review === null && !('pass_expires_at' in (lapsed.grant.userUpdate ?? {})), 'a pass that ended before the period started is not an overlap');
+ok(syncSubscription({ ...usdSub, pass_expires_at: '2099-01-01T00:00:00.000Z' }, snap() as any, 'pro', CFG, 1900).grant.review === null,
+  'a subscriber with a leftover pass date (not a live pass) renews without a review');
+const noStart = syncSubscription({ ...overlapPass, pass_expires_at: '2099-01-01T00:00:00.000Z' }, snap({ currentPeriodStart: null }) as any, 'pro', CFG, 1900);
+ok(noStart.grant.review !== null && noStart.grant.userUpdate?.pass_expires_at === null, 'with no period start to compare, the clock decides: a still-future pass is an overlap');
 
 console.log(failures === 0
   ? '\nPASS — Bachs: amounts, signatures, events and every grant rule behave.'
