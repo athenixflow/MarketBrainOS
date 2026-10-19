@@ -292,6 +292,29 @@ ok(second.grant.userUpdate?.tier === 'pro' && second.grant.payment !== null && s
 ok(syncSubscription(liveSub, snap({ currentPeriodStart: '2026-11-01T00:00:00Z' }) as any, 'pro', CFG, 1900).grant.review === null,
   'renewing the account\'s own subscription is not flagged');
 
+/* A second subscription never re-points "current": the first stays current, deterministically. */
+ok(Object.keys(second.stateUpdate).length === 0, 'a second subscription writes no state (no ids, status or renewal date)');
+let acct: any = { ...liveSub };
+const stateOf2: Record<string, unknown>[] = [];
+for (const id of ['sub_1', 'sub_2', 'sub_1', 'sub_2']) {
+  const r = syncSubscription(acct, snap({ id }) as any, 'pro', CFG, 1900);
+  if (id === 'sub_2') stateOf2.push(r.stateUpdate);
+  acct = { ...acct, ...r.stateUpdate };
+}
+ok(acct.bachs_subscription_id === 'sub_1' && stateOf2.every((s) => Object.keys(s).length === 0),
+  'syncing sub_1 and sub_2 alternately leaves the stored id on sub_1 every time (sub_2\'s state is always empty)');
+const pastDue2 = syncSubscription(liveSub, snap({ id: 'sub_2', status: 'past_due' }) as any, 'pro', CFG, null);
+ok(Object.keys(pastDue2.stateUpdate).length === 0 && pastDue2.grant.ledgerKey === null, 'a non-current subscription going past due changes nothing on the account');
+const trial2 = syncSubscription(liveSub, snap({ id: 'sub_2', status: 'trialing' }) as any, 'pro', CFG, null);
+ok(Object.keys(trial2.stateUpdate).length === 0, 'nor does any other status update from a non-current subscription');
+const end2 = syncSubscription(acct, snap({ id: 'sub_2', status: 'canceled' }) as any, 'pro', CFG, null);
+ok(end2.grant.userUpdate === null && Object.keys(end2.stateUpdate).length === 0 && end2.grant.review !== null && acct.bachs_subscription_id === 'sub_1',
+  'so ending sub_2 afterwards leaves the account on sub_1 unchanged, with a review');
+const end1 = syncSubscription(acct, snap({ id: 'sub_1', status: 'canceled' }) as any, 'pro', CFG, null);
+ok(end1.grant.userUpdate?.tier === 'free', 'and ending sub_1 (the current one) downgrades');
+const noId = syncSubscription({ tier: 'free' }, snap({ id: 'sub_2' }) as any, 'pro', CFG, 1900);
+ok(noId.stateUpdate.bachs_subscription_id === 'sub_2' && noId.stateUpdate.subscription_status === 'active', 'an account with no stored subscription id adopts the first one it sees');
+
 /* The payment record says whether its amount was charged or is only the list price. */
 ok(s1.grant.payment?.amount_source === 'invoice' && upgraded.grant.payment?.amount_source === 'invoice', 'a payment recorded from an invoice says so');
 ok(recon.grant.payment?.amount_source === 'plan_price', 'a payment recorded without an invoice says it is the plan price');

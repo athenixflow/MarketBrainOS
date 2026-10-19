@@ -204,6 +204,12 @@ export const syncSubscription = (
 ): SyncResult => {
   const { purchased } = balances(account);
   const ids = { bachs_subscription_id: snap.id, bachs_customer_id: snap.customerId, billing_currency: 'USD' };
+  /* The account's state follows ONE subscription: the first it stored. A snapshot of a different
+     one (a duplicate checkout) never re-points "current" — it writes no state at all — so the
+     first stays current deterministically, however the syncs interleave; the duplicate is
+     surfaced by the review on its grant, and ending it is reviewed, not acted on. */
+  const isCurrent = !account.bachs_subscription_id || account.bachs_subscription_id === snap.id;
+  const state = (fields: Record<string, unknown>): Record<string, unknown> => (isCurrent ? fields : {});
 
   if (snap.status === 'canceled' || snap.status === 'unpaid') {
     /* Only the account's CURRENT subscription ending may drop it to Free. Another subscription
@@ -227,8 +233,8 @@ export const syncSubscription = (
       },
     };
   }
-  if (snap.status === 'past_due') return { stateUpdate: { ...ids, subscription_status: 'past_due' }, grant: NONE };
-  if (snap.status !== 'active') return { stateUpdate: ids, grant: NONE };
+  if (snap.status === 'past_due') return { stateUpdate: state({ ...ids, subscription_status: 'past_due' }), grant: NONE };
+  if (snap.status !== 'active') return { stateUpdate: state(ids), grant: NONE };
 
   /* A period is keyed by its start. Without a readable one every sync would share one key: the
      first would consume it and no renewal would ever grant again. Review it instead, under a key
@@ -236,16 +242,16 @@ export const syncSubscription = (
   const startMs = Date.parse(snap.currentPeriodStart ?? '');
   if (Number.isNaN(startMs)) {
     return {
-      stateUpdate: ids,
+      stateUpdate: state(ids),
       grant: { ...NONE, ledgerKey: `period:${snap.id}:nostart:${snap.productId}`, review: 'active subscription with no readable period start' },
     };
   }
   const ledgerKey = `period:${snap.id}:${snap.currentPeriodStart}:${snap.productId}`;
-  const stateUpdate = {
+  const stateUpdate = state({
     ...ids,
     subscription_status: snap.cancelAtPeriodEnd ? 'cancelled' : 'active',
     plan_renews_at: snap.currentPeriodEnd,
-  };
+  });
   if (!tier) return { stateUpdate: {}, grant: { ...NONE, ledgerKey, review: `subscription on unknown product ${snap.productId}` } };
   const item = catalogItem(cfg, 'plan', tier, 'USD');
   if (!item || snap.currency !== 'USD' || snap.amountMinor !== item.amountMinor) {
