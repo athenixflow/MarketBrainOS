@@ -50,9 +50,11 @@ export interface GrantResult {
   /** Why nothing was granted, for a human. */
   review: string | null;
   checkoutStatus: 'paid' | 'review' | null;
+  /** Not decided YET (the amount could not be read): no key, no review, no status — try again with the amount. */
+  deferred: string | null;
 }
 
-const NONE: GrantResult = { ledgerKey: null, userUpdate: null, payment: null, review: null, checkoutStatus: null };
+const NONE: GrantResult = { ledgerKey: null, userUpdate: null, payment: null, review: null, checkoutStatus: null, deferred: null };
 
 /** Mirrors readBalances in index.ts: a legacy bare `tokens` is the monthly balance. */
 export const balances = (a: Account): { monthly: number; purchased: number } => ({
@@ -110,8 +112,15 @@ export const applyOneOff = (
   if (!account) return review('the account no longer exists');
   const item = catalogItem(cfg, checkout.kind, checkout.item, checkout.currency);
   if (!item) return review(`${checkout.kind} ${checkout.item} ${checkout.currency} is no longer for sale`);
-  if (event.amountMinor !== checkout.amount_minor || (event.currency ?? '') !== checkout.currency) {
-    return review(`paid ${event.amountMinor ?? 'unreadable'} ${event.currency ?? '?'}, expected ${checkout.amount_minor} ${checkout.currency}`);
+  /* An amount or currency we could not READ is not a mismatch. Bachs fulfils on whichever of
+     collection.succeeded and checkout.completed arrives first, and the documented
+     checkout.completed has no top-level amount: reviewed here, it would spend the once-only key and
+     mark the checkout `review`, and the event that does carry the amount would be "already handled"
+     — paid, granted nothing. So it decides nothing; the caller looks the amount up on the session,
+     or leaves the checkout open for the other event or reconciliation. */
+  if (event.amountMinor === null || event.currency === null) return { ...NONE, deferred: 'amount unreadable' };
+  if (event.amountMinor !== checkout.amount_minor || event.currency !== checkout.currency) {
+    return review(`paid ${event.amountMinor} ${event.currency}, expected ${checkout.amount_minor} ${checkout.currency}`);
   }
 
   const { monthly, purchased } = balances(account);
@@ -121,7 +130,7 @@ export const applyOneOff = (
   };
 
   if (checkout.kind === 'pack') {
-    return { ledgerKey, payment, review: null, checkoutStatus: 'paid', userUpdate: balanceFields(monthly, purchased + item.tokens) };
+    return { ...NONE, ledgerKey, payment, checkoutStatus: 'paid', userUpdate: balanceFields(monthly, purchased + item.tokens) };
   }
 
   /* pass */
@@ -138,7 +147,7 @@ export const applyOneOff = (
   const from = stacks ? Date.parse(account.pass_expires_at as string) : nowMs;
   const expires = new Date(from + PASS_DAYS * DAY_MS).toISOString();
   return {
-    ledgerKey, payment, review: null, checkoutStatus: 'paid',
+    ...NONE, ledgerKey, payment, checkoutStatus: 'paid',
     userUpdate: {
       tier: checkout.item,
       billing_mode: 'pass',
@@ -280,6 +289,7 @@ export const syncSubscription = (
   return {
     stateUpdate,
     grant: {
+      ...NONE,
       ledgerKey,
       review: overlapsPass
         ? `dollar subscription started while a ${account.tier ?? 'paid'} naira pass was still active (pass_expires_at ${account.pass_expires_at}); refund the unused pass days`

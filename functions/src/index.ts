@@ -4025,7 +4025,10 @@ export const resendWebhook = functions.https.onRequest(async (req: any, res: any
    ============================================================ */
 
 const SITE = 'https://www.marketbrainos.app';
-const bachs = () => bachsApi(process.env.BACHS_SECRET_KEY || '');
+/* Bachs counts a webhook reply slower than 10s as a failed delivery, so a Bachs read made while
+   answering one gets this much and no more; everything else keeps the client's default. */
+const WEBHOOK_BACHS_TIMEOUT_MS = 5_000;
+const bachs = (timeoutMs?: number) => bachsApi(process.env.BACHS_SECRET_KEY || '', undefined, timeoutMs);
 /* EVERY once-only key reaches Firestore through this hash and never raw: a reference or an id
    arrives from outside, and a raw one could hold a "/" or collide with a reserved document id. */
 const ledgerDoc = (key: string) =>
@@ -4048,7 +4051,7 @@ const billingAlertEmail = async (title: string, lines: string[]) =>
 const applyOneOffPayment = async (
   event: Pick<BachsEvent, 'id' | 'reference' | 'amountMinor' | 'currency' | 'checkoutId'>,
   source: GrantSource,
-): Promise<'ignored' | 'already handled' | GrantOutcome> => {
+): Promise<'ignored' | 'already handled' | 'deferred' | GrantOutcome> => {
   if (!event.reference) return 'ignored';
   const reference = event.reference;
   const cfg = await getPricingConfig();
@@ -4075,6 +4078,8 @@ const applyOneOffPayment = async (
     const account = userSnap && userSnap.exists ? (userSnap.data() as Account) : null;
 
     const r = applyOneOff(account, checkout, event, cfg, nowIso);
+    /* No amount to judge: nothing is written, so the checkout stays open for the event or the run that has one. */
+    if (r.deferred) return 'deferred' as const;
     if (!r.ledgerKey) return 'ignored' as const;
     if (r.userUpdate && userRef && account) t.update(userRef, r.userUpdate);
     if (r.payment && checkout) {
@@ -4398,7 +4403,26 @@ export const bachsWebhook = functions.runWith({ secrets: BACHS_SECRETS }).https.
   if (!event) { res.status(200).send('Ignored'); return; }
   try {
     if (event.kind === 'one_off_paid') {
-      res.status(200).send(await applyOneOffPayment(event, 'webhook'));
+      /* Bachs fulfils on whichever of collection.succeeded and checkout.completed arrives first, and
+         the documented checkout.completed names no top-level amount. An unreadable amount is looked
+         up on the session — exactly as reconciliation reads it — and when that fails or still reads
+         nothing the event is deferred: 200, nothing written, the checkout left open, so the other
+         event or the hourly run settles it. */
+      let paid: Pick<BachsEvent, 'id' | 'reference' | 'amountMinor' | 'currency' | 'checkoutId'> = event;
+      if (event.amountMinor === null || event.currency === null) {
+        const checkoutRef = event.reference && /^[A-Za-z0-9_-]{1,128}$/.test(event.reference)
+          ? db.collection('checkouts').doc(event.reference) : null;
+        const stored = checkoutRef ? (await checkoutRef.get()).data() : undefined;
+        const sessionId = String(stored?.bachs_checkout_id || event.checkoutId || '');
+        let s: ReturnType<typeof parseCheckoutSession> = null;
+        if (sessionId) {
+          try { s = parseCheckoutSession(await bachs(WEBHOOK_BACHS_TIMEOUT_MS).getCheckoutSession(sessionId)); }
+          catch (e: any) { console.error('bachsWebhook: session lookup failed:', e?.message || e); }
+        }
+        if (!s || s.amountMinor === null || s.currency === null) { res.status(200).send('deferred'); return; }
+        paid = { ...event, amountMinor: s.amountMinor, currency: s.currency, checkoutId: event.checkoutId ?? s.id };
+      }
+      res.status(200).send(await applyOneOffPayment(paid, 'webhook'));
       return;
     }
     if (event.kind === 'subscription_linked') {
@@ -4547,7 +4571,9 @@ export const bachsReconcile = functions.runWith({ secrets: ['BACHS_SECRET_KEY'],
             await syncSubscriptionById(s.subscriptionId, null, 'reconcile');
             await doc.ref.update({ status: 'paid', settled_at: new Date().toISOString() });
           } else if (s?.paid) {
-            await applyOneOffPayment({ id: `reconcile:${doc.id}`, reference: doc.id, amountMinor: s.amountMinor, currency: s.currency, checkoutId: s.id }, 'reconcile');
+            const out = await applyOneOffPayment({ id: `reconcile:${doc.id}`, reference: doc.id, amountMinor: s.amountMinor, currency: s.currency, checkoutId: s.id }, 'reconcile');
+            /* Paid, but the session names no amount we can read: it stays open and is retried hourly. */
+            if (out === 'deferred') console.error('reconcile checkout', doc.id, 'paid with no readable amount; left open');
           } else if (s?.expired || age > 24 * 3_600_000) {
             await doc.ref.update({ status: 'expired' });
           }

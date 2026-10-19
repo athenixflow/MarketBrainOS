@@ -174,7 +174,9 @@ ok(pack.userUpdate?.purchased_tokens === 110 && pack.userUpdate?.monthly_tokens 
 
 ok(applyOneOff(free, checkout('pass', 'pro', 'NGN', 990000), pay(100), CFG, T0).review !== null, 'an amount mismatch goes to review');
 ok(applyOneOff(free, checkout('pass', 'pro', 'NGN', 990000), pay(990000, 'USD'), CFG, T0).review !== null, 'a currency mismatch goes to review');
-ok(applyOneOff(free, checkout('pass', 'pro', 'NGN', 990000), pay(null), CFG, T0).review !== null, 'an unparseable amount goes to review (Review Focus 2)');
+const unread = applyOneOff(free, checkout('pass', 'pro', 'NGN', 990000), pay(null), CFG, T0);
+ok(unread.review === null && unread.ledgerKey === null && typeof unread.deferred === 'string',
+  'an unparseable amount decides nothing: deferred, no review and no ledger key (the event that carries the amount settles it)');
 ok(applyOneOff(free, null, pay(990000), CFG, T0).review !== null, 'a reference we never issued goes to review');
 const gone = applyOneOff(null, checkout('pass', 'pro', 'NGN', 990000), pay(990000), CFG, T0);
 ok(gone.review !== null && gone.userUpdate === null && gone.ledgerKey !== null, 'a deleted account is reviewed and recorded, not retried (Review Focus 3)');
@@ -594,7 +596,7 @@ ok(webhook.length > 0 && /functions\.runWith\(\{ secrets: BACHS_SECRETS \}\)\.ht
   'the webhook is bound to the secrets it verifies with');
 ok(webhook.indexOf('verifyBachsSignature(') > 0 && webhook.indexOf('verifyBachsSignature(') < webhook.indexOf('parseBachsEvent('),
   'the signature is checked before the body is read as an event');
-ok(/applyOneOffPayment\(event, 'webhook'\)/.test(webhook), 'a paid one-off goes to the one-off grant helper');
+ok(/applyOneOffPayment\((?:event|paid), 'webhook'\)/.test(webhook), 'a paid one-off goes to the one-off grant helper');
 ok(/syncSubscriptionById\(event\.subscriptionId, event\.amountMinor, 'webhook'\)/.test(webhook),
   'a linked subscription is synced from Bachs (the sync finds the account by the subscription metadata)');
 ok(webhook.length > 0 && !/bachs_subscription_id|bachs_customer_id/.test(webhook),
@@ -644,6 +646,72 @@ ok(!signatureGateHolds(goodGate.replace('process.env.BACHS_WEBHOOK_SECRET', 'pro
   'CONTROL: verifying against the wrong secret is caught');
 ok(!signatureGateHolds(goodGate.replace("  const event = parseBachsEvent(req.body);\n", '').replace('  if (!raw)', "  const event = parseBachsEvent(req.body);\n  if (!raw)")),
   'CONTROL: reading the event before the signature is checked is caught');
+
+/* WHICHEVER ONE-OFF EVENT ARRIVES FIRST (final review C1). Bachs says fulfil on collection.succeeded OR
+   checkout.completed, whichever comes first, and its documented checkout.completed has no top-level
+   amount (a session keeps it under `pricing`). Reviewed as a mismatch, that event spent the once-only
+   key and marked the checkout `review`, so the collection that did carry the amount was "already
+   handled" and reconciliation (open checkouts only) never looked again: paid, granted nothing. An
+   unreadable amount or currency now decides nothing, and the event that carries the amount grants once. */
+console.log('\nWHICHEVER ONE-OFF EVENT ARRIVES FIRST:');
+const passChk = checkout('pass', 'pro', 'NGN', 990000);
+const completedBare = parseBachsEvent(ev('checkout.completed', { id: 'chk_1', mode: 'payment', payment_status: 'paid', reference: 'mb_1', metadata: { uid: 'u1' } }));
+const collectedPaid = parseBachsEvent(ev('collection.succeeded', { reference: 'mb_1', status: 'SUCCEEDED', amount: '9900.00', currency: 'NGN', checkout_id: 'chk_1' }));
+ok(completedBare?.kind === 'one_off_paid' && completedBare.amountMinor === null && completedBare.currency === null && completedBare.checkoutId === 'chk_1',
+  'a paid checkout.completed with no amount is still a one-off payment, amount and currency unread, its session id kept');
+const bareResult = applyOneOff(free, passChk, completedBare!, CFG, T0);
+ok(bareResult.ledgerKey === null && bareResult.review === null && bareResult.checkoutStatus === null
+  && bareResult.userUpdate === null && bareResult.payment === null && bareResult.deferred === 'amount unreadable',
+  'it is deferred: no ledger key, no review, no checkout status, nothing granted');
+ok(applyOneOff(free, passChk, { reference: 'mb_1', amountMinor: 990000, currency: null }, CFG, T0).deferred === 'amount unreadable',
+  'a readable amount with an unreadable currency is deferred too');
+/* The ledger as applyOneOffPayment's transaction uses it: a key already present is "already handled". */
+const settle = (events: Array<ReturnType<typeof parseBachsEvent>>) => {
+  const ledger = new Set<string>();
+  let account: Record<string, unknown> = { ...free };
+  let grants = 0;
+  for (const e of events) {
+    const r = applyOneOff(account as any, passChk, e!, CFG, T0);
+    if (!r.ledgerKey || ledger.has(r.ledgerKey)) continue;
+    ledger.add(r.ledgerKey);
+    if (r.userUpdate) { grants++; account = { ...account, ...r.userUpdate }; }
+  }
+  return { grants, account };
+};
+const bareFirst = settle([completedBare, collectedPaid]);
+ok(bareFirst.grants === 1 && bareFirst.account.tier === 'pro' && bareFirst.account.monthly_tokens === 300,
+  'checkout.completed (no amount) then collection.succeeded (the amount): Pro is granted exactly once');
+const collectedFirst = settle([collectedPaid, completedBare, collectedPaid]);
+ok(collectedFirst.grants === 1 && collectedFirst.account.monthly_tokens === 300,
+  'collection.succeeded first, then checkout.completed and a redelivery: still exactly one grant');
+const priced = parseBachsEvent(ev('checkout.completed', { id: 'chk_8', mode: 'payment', payment_status: 'paid', reference: 'mb_8', pricing: { amount: '5000.00', currency: 'NGN' } }));
+ok(priced?.amountMinor === 500000 && priced.currency === 'NGN', 'a session amount under pricing.amount / pricing.currency ("5000.00", "NGN") reads as 500000 NGN');
+ok(parseBachsEvent(ev('checkout.completed', { id: 'chk_8', mode: 'payment', payment_status: 'paid', reference: 'mb_8', amount: '10.00', currency: 'USD', pricing: { amount: '5000.00', currency: 'NGN' } }))?.amountMinor === 1000,
+  'a top-level amount is still read first');
+ok(attempt(() => parseBachsEvent(ev('checkout.completed', { id: 'chk_8', mode: 'payment', payment_status: 'paid', reference: 'mb_8', pricing: 'x' }))?.amountMinor) === null,
+  'a pricing that is not an object reads as no amount, without throwing');
+const wrongPaid = applyOneOff(free, passChk, pay(100), CFG, T0);
+ok(wrongPaid.review !== null && wrongPaid.ledgerKey === 'checkout:mb_1' && wrongPaid.checkoutStatus === 'review' && !wrongPaid.deferred,
+  'a READABLE amount that is wrong still goes to review, keyed and recorded once');
+ok(applyOneOff(free, null, { reference: 'mb_1', amountMinor: null, currency: null }, CFG, T0).review !== null,
+  'a reference we never issued is reviewed whatever the amount (that decision does not need one)');
+
+/* The webhook's Bachs reads must answer inside Bachs' 10s delivery window (final review M4). */
+const hang = (async (_url: string, init: any) => new Promise((_resolve, reject) => {
+  init.signal.addEventListener('abort', () => reject(new Error('aborted')));
+})) as unknown as typeof fetch;
+const hangStart = Date.now();
+let hangErr: unknown = null;
+/* AbortSignal.timeout's timer does not hold the process open, so a plain await on a hang would just
+   end the run; this ref'd timer keeps it alive and caps the wait at 3s either way. */
+let capTimer: ReturnType<typeof setTimeout> | undefined;
+const cap = new Promise<'capped'>((resolve) => { capTimer = setTimeout(() => resolve('capped'), 3000); });
+const hung = await Promise.race([
+  bachsApi('sk_sandbox_k', hang, 50).getCheckoutSession('chk_1').then(() => 'resolved', (e) => { hangErr = e; return 'rejected'; }),
+  cap,
+]);
+clearTimeout(capTimer);
+ok(hung === 'rejected' && hangErr !== null && Date.now() - hangStart < 2000, 'a client built with a short timeout gives up on a Bachs call that hangs', String(hung));
 
 console.log(failures === 0
   ? '\nPASS — Bachs: amounts, signatures, events and every grant rule behave.'

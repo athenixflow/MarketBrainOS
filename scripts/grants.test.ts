@@ -606,6 +606,51 @@ ok(!syncsBeforeMarkingPaid(''), 'CONTROL: a branch that cannot be found is not "
 ok(between('a X b Y c', 'X', 'Y') === 'X b ' && between('a X b', 'X', 'Y') === '' && between('a b Y', 'X', 'Y') === '',
   'the branch cutter returns the text between two markers, and nothing when either is missing');
 
+/* A ONE-OFF EVENT WITH NO READABLE AMOUNT IS LOOKED UP, NOT DECIDED (final review C1). The documented
+   checkout.completed carries no top-level amount, and it can arrive before collection.succeeded. So the
+   webhook's one_off_paid branch, when the amount or the currency is null, fetches the checkout session
+   (stored bachs_checkout_id, else the event's) on the short webhook client, reads it with
+   parseCheckoutSession — all BEFORE the grant helper — and when the lookup fails or still reads nothing
+   it answers 200 'deferred' (the fetch is in a try/catch, so a Bachs failure is a deferral, not a 500). */
+export const oneOffLooksUpUnreadAmount = (b: string): boolean => {
+  const check = b.search(/if \(event\.amountMinor === null \|\| event\.currency === null\)/);
+  const fetchAt = b.search(/bachs\(WEBHOOK_BACHS_TIMEOUT_MS\)\.getCheckoutSession\(/);
+  const parse = b.indexOf('parseCheckoutSession(');
+  const grant = b.indexOf('applyOneOffPayment(');
+  return check >= 0 && fetchAt > check && parse > check && grant > fetchAt && grant > parse
+    && /bachs_checkout_id/.test(b.slice(check, fetchAt))
+    && /\bcatch\b/.test(b.slice(fetchAt, grant))
+    && /res\.status\(200\)\.send\('deferred'\);\s*return;/.test(b.slice(check, grant));
+};
+console.log('\nA ONE-OFF WITH NO READABLE AMOUNT IS LOOKED UP:');
+const oneOffBranch = between(exported(index, 'bachsWebhook'), "event.kind === 'one_off_paid'", "event.kind === 'subscription_linked'");
+ok(oneOffLooksUpUnreadAmount(oneOffBranch),
+  'the webhook fetches the checkout session for a one-off event with no readable amount, before the grant helper, and defers (200) when it still cannot read one');
+const goodOneOff = [
+  "if (event.kind === 'one_off_paid') {",
+  "  let paid = event;",
+  "  if (event.amountMinor === null || event.currency === null) {",
+  "    const sessionId = String(stored?.bachs_checkout_id || event.checkoutId || '');",
+  "    let s = null;",
+  "    try { s = parseCheckoutSession(await bachs(WEBHOOK_BACHS_TIMEOUT_MS).getCheckoutSession(sessionId)); } catch (e) { console.error(e); }",
+  "    if (!s || s.amountMinor === null) { res.status(200).send('deferred'); return; }",
+  "    paid = { ...event, amountMinor: s.amountMinor, currency: s.currency };",
+  "  }",
+  "  res.status(200).send(await applyOneOffPayment(paid, 'webhook'));",
+  "} else if (event.kind === 'subscription_linked') {",
+].join('\n');
+ok(oneOffLooksUpUnreadAmount(goodOneOff), 'a one-off branch that looks the amount up first passes');
+ok(!oneOffLooksUpUnreadAmount("if (event.kind === 'one_off_paid') { res.status(200).send(await applyOneOffPayment(event, 'webhook')); }"),
+  'CONTROL: a branch that hands an unreadable amount straight to the grant helper (the C1 bug) is caught');
+ok(!oneOffLooksUpUnreadAmount(goodOneOff.replace('bachs(WEBHOOK_BACHS_TIMEOUT_MS)', 'bachs()')),
+  'CONTROL: a lookup on the long-timeout client (it can outlast Bachs\' 10s window) is caught');
+ok(!oneOffLooksUpUnreadAmount(goodOneOff.replace(' catch (e) { console.error(e); }', '')),
+  'CONTROL: a lookup with no catch (a Bachs failure becomes a 500, not a deferral) is caught');
+ok(!oneOffLooksUpUnreadAmount(goodOneOff.replace("res.status(200).send('deferred'); return;", "res.status(500).send('Retry'); return;")),
+  'CONTROL: a lookup that still reads nothing and does not defer is caught');
+ok(!oneOffLooksUpUnreadAmount(goodOneOff.replace("stored?.bachs_checkout_id || ", '')),
+  'CONTROL: a lookup that ignores the stored session id is caught');
+
 console.log(failures === 0
   ? '\nPASS — no signed-in user can grant themselves a plan, a token pack or a refill.'
   : `\nFAILED — ${failures} assertion(s).`);

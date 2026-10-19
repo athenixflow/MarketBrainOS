@@ -87,8 +87,9 @@ export const parseBachsEvent = (body: unknown): BachsEvent | null => {
     createdAt: str(b.created_at) ?? '',
     reference: str(d.reference),
     metadata: meta(d.metadata),
-    amountMinor: toMinor(d.amount ?? d.amount_paid ?? d.total),
-    currency: upper(d.currency),
+    /* A checkout.completed names no top-level amount: a session keeps it under `pricing`. */
+    amountMinor: toMinor(d.amount ?? d.amount_paid ?? d.total ?? d.pricing?.amount),
+    currency: upper(d.currency ?? d.pricing?.currency),
     checkoutId: str(d.checkout_id) ?? (type.startsWith('checkout.') ? str(d.id) : null),
     customerId: idOf(d.customer) ?? str(d.customer_id),
     subscriptionId: str(d.subscription_id) ?? idOf(d.subscription)

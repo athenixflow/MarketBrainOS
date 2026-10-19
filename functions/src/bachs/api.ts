@@ -39,7 +39,9 @@ const expectField = <T>(obj: T, field: string, method: string, path: string): T 
   return obj;
 };
 
-export const bachsApi = (key: string, fetchImpl: typeof fetch = fetch): BachsApi => {
+/* The webhook builds its client with a short timeout: Bachs treats a reply slower than 10s as a
+   failed delivery. Scheduled jobs and callables keep the default. */
+export const bachsApi = (key: string, fetchImpl: typeof fetch = fetch, timeoutMs = 20_000): BachsApi => {
   if (!key) throw new BachsApiError('BACHS_SECRET_KEY is not set', 0, 'NO_KEY');
   // Refused before any header is built: a character outside this set would make the HTTP layer
   // throw with the key text in its message.
@@ -57,7 +59,7 @@ export const bachsApi = (key: string, fetchImpl: typeof fetch = fetch): BachsApi
     if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
     const res = await fetchImpl(`${base}${path}`, {
       method, headers, body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(20_000),
+      signal: AbortSignal.timeout(timeoutMs),
     } as RequestInit);
     const text = await res.text();
     let json: any = null;
