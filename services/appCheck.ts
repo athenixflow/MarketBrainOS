@@ -51,7 +51,10 @@ export const startAppCheck = (): void => {
      * `import.meta.env.DEV` is replaced with `false` and the branch is dropped.
      */
     if (import.meta.env.DEV) {
-      (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+      /* A fixed token (from the gitignored .env.local) registered once in the console lets every
+         device on the LAN — a phone included — attest; without one the SDK mints a random token
+         per browser, which a phone cannot show you to register. */
+      (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = import.meta.env.VITE_APPCHECK_DEBUG_TOKEN || true;
     }
     appCheck = initializeAppCheck(getApp(), {
       provider: new ReCaptchaEnterpriseProvider(SITE_KEY),
