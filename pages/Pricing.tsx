@@ -77,7 +77,8 @@ const Pricing: React.FC = () => {
         setMsg('Card payments are not live yet. Email support and we will set your plan up by hand.');
         return;
       }
-      if (tier === 'enterprise') { navigate('/enterprise'); return; }
+      /* Enterprise is not sold online: it is set up with us, so the button leads to Support. */
+      if (tier === 'enterprise') { navigate('/support'); return; }
       if (currency === 'NGN') {
         const notice = passReplaceNotice(profile, tier, new Date());
         if (notice && !confirmed) { setReplacing({ tier, notice }); return; }
@@ -107,6 +108,7 @@ const Pricing: React.FC = () => {
     if (!payable && tier !== 'free') return 'Talk to us';
     if (upgradeBlocked(tier, idx)) return 'Upgrade unavailable';
     if (busy === tier) return 'Processing…';
+    if (tier === 'enterprise') return 'Contact sales';
     /* "— 30 days" only where a naira pass exists: Enterprise has none and keeps its normal label. */
     return currency === 'NGN' && CFG.plans[tier].priceNgn ? `Get ${PLAN_META[tier].name} — 30 days` : `Upgrade to ${PLAN_META[tier].name}`;
   };

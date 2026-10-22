@@ -163,17 +163,29 @@ const EnterpriseSuite: React.FC = () => {
               ))}</div>
             </Card></AnimatedSection>
           )}
-          <AnimatedSection index={1}><Card title="Create an Enterprise organization">
-            <p className="text-sm text-gray-500 font-medium mb-6 leading-relaxed">
-              The Enterprise layer aggregates intelligence across all your teams and agencies — it never alters underlying work.
-              {profile?.tier !== 'enterprise' ? ' Creating one upgrades you to the Enterprise plan.' : ''}
-            </p>
-            <div className="max-w-xl">
-              <Input label="Organization name" placeholder="e.g. Northwind Holdings" value={name} onChange={(e) => setName(e.target.value)} />
-              <Input label="Description (optional)" placeholder="What your organization does" value={description} onChange={(e) => setDescription(e.target.value)} multiline />
-              <PrimaryButton onClick={create} disabled={busy}>{busy ? 'Creating…' : 'Create Enterprise'}</PrimaryButton>
-            </div>
-          </Card></AnimatedSection>
+          {/* Only an Enterprise-plan account may create one (the server refuses anyone else), and the
+              plan is set up with us rather than bought online — so everyone else sees the way in. */}
+          {profile?.tier === 'enterprise' ? (
+            <AnimatedSection index={1}><Card title="Create an Enterprise organization">
+              <p className="text-sm text-gray-500 font-medium mb-6 leading-relaxed">
+                The Enterprise layer aggregates intelligence across all your teams and agencies — it never alters underlying work.
+              </p>
+              <div className="max-w-xl">
+                <Input label="Organization name" placeholder="e.g. Northwind Holdings" value={name} onChange={(e) => setName(e.target.value)} />
+                <Input label="Description (optional)" placeholder="What your organization does" value={description} onChange={(e) => setDescription(e.target.value)} multiline />
+                <PrimaryButton onClick={create} disabled={busy}>{busy ? 'Creating…' : 'Create Enterprise'}</PrimaryButton>
+              </div>
+            </Card></AnimatedSection>
+          ) : (
+            <AnimatedSection index={1}><Card title="Enterprise is set up with our team">
+              <p className="text-sm text-gray-500 font-medium mb-6 leading-relaxed max-w-xl">
+                The Enterprise layer aggregates intelligence across all your teams and agencies — it never alters underlying work.
+                It isn't sold online: tell us about your organization and we'll set it up with you. If a colleague has already
+                set one up, ask them to invite you.
+              </p>
+              <PrimaryButton onClick={() => { window.location.href = '/support'; }}>Contact sales</PrimaryButton>
+            </Card></AnimatedSection>
+          )}
         </div>
       </div>
     );
