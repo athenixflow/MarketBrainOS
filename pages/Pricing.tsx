@@ -37,7 +37,18 @@ const Pricing: React.FC = () => {
    * the plan's pricing experiments need to tell apart.
    */
   useEffect(() => { track('pricing_viewed', { surface: 'pricing_page' }); }, []);
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
+  /* A pass bought minutes ago lands by webhook, after the profile was read at sign-in. Re-read it on
+     open and whenever the tab regains focus (coming back from checkout), or the page shows the old
+     plan and skips the replace-your-pass warning. */
+  useEffect(() => {
+    if (!user) return;
+    const refresh = () => { refreshProfile().catch(() => {}); };
+    refresh();
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid]);
   const currentTier = profile?.tier as Tier | undefined;
   const currentIdx = currentTier ? PLAN_ORDER.indexOf(currentTier) : -1;
   const [busy, setBusy] = useState<Tier | null>(null);

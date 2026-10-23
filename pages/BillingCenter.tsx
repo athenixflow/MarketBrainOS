@@ -82,7 +82,10 @@ const BillingCenter: React.FC = () => {
   const planName = PLAN_META[tier]?.name || tier;
   const price = DEFAULT_PRICING_CONFIG.plans[tier]?.price ?? 0;
   const priceNgn = DEFAULT_PRICING_CONFIG.plans[tier]?.priceNgn;
-  const priceLabel = isFree ? '$0' : isPass && priceNgn ? `${formatPrice(priceNgn, 'NGN')}/30 days` : `$${price}/mo`;
+  /* Amount and cadence are set apart: "₦120,000/30 days" in stat type is wider than a column and
+     has nowhere to wrap, so the cadence rides small beside the figure. */
+  const priceAmount = isFree ? '$0' : isPass && priceNgn ? formatPrice(priceNgn, 'NGN') : `$${price}`;
+  const priceCadence = isFree ? '' : isPass && priceNgn ? '/30 days' : '/mo';
   const canRenew = isPassRenewal(profile, tier, 'NGN') && canPay(billing, profile.role);
   const renew = async () => {
     setRenewing(true); setRenewError(null);
@@ -120,10 +123,12 @@ const BillingCenter: React.FC = () => {
         )}
         {returned === 'cancelled' && <ErrorMessage message="Checkout was cancelled. Nothing was charged." />}
         <Card title="Current plan">
-          <div className="flex flex-wrap items-end justify-between gap-6">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 flex-1 min-w-0">
+          {/* Figures get the card's full width and the actions sit below them: side by side, the
+              buttons squeezed three large figures into columns too narrow to hold them. */}
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               <Stat label="Plan" value={planName} />
-              <Stat label="Price" value={priceLabel} />
+              <Stat label="Price" value={<>{priceAmount}{priceCadence && <span className="text-sm sm:text-base font-bold text-gray-400 tracking-normal">{priceCadence}</span>}</>} />
               <Stat label={isPass ? 'Ends' : 'Renews'} value={renews} />
             </div>
             <div className="flex flex-wrap items-center gap-3">
