@@ -66,7 +66,12 @@ export const bachsApi = (key: string, fetchImpl: typeof fetch = fetch, timeoutMs
     try { json = text ? JSON.parse(text) : null; } catch { json = null; }
     if (!res.ok) {
       const err = json?.error ?? json ?? {};
-      const message = scrub(String(err.message || `Bachs ${method} ${path} → ${res.status}`)).slice(0, 300);
+      /* Bachs does not always use { error: { message } } (validation errors arrive in other shapes):
+         when there is no message, carry the scrubbed body so the log says WHY, not just the status. */
+      const fallback = err.detail || text || '';
+      const message = err.message
+        ? scrub(String(err.message)).slice(0, 300)
+        : scrub(`Bachs ${method} ${path} → ${res.status}${fallback ? `: ${typeof fallback === 'string' ? fallback : JSON.stringify(fallback)}` : ''}`).slice(0, 600);
       throw new BachsApiError(message, res.status, err.code ? scrub(String(err.code)) : null);
     }
     return json;

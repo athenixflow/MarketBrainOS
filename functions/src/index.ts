@@ -4356,7 +4356,16 @@ export const createCheckout = functions.runWith({ secrets: BACHS_SECRETS }).http
   const body = kind === 'plan'
     ? { ...common, product_cart: [{ product_id: productId, quantity: 1 }] }
     : { ...common, pricing: { currency, amount: toMajorString(ci.amountMinor) } };
-  const session = await bachs().createCheckoutSession(body, reference);
+  let session: any;
+  try {
+    session = await bachs().createCheckoutSession(body, reference);
+  } catch (e: any) {
+    /* Bachs refused to open a session (nothing was charged). Log its reason, close the record so
+       reconciliation does not chase it, and tell the buyer in words rather than "internal". */
+    console.error(`createCheckout: Bachs refused ${kind} ${item} ${currency} (${reference}):`, e?.message || e);
+    await checkoutRef.update({ status: 'failed' }).catch(() => {});
+    throw new functions.https.HttpsError('unavailable', "We couldn't open the payment page just now. Nothing was charged — please try again in a few minutes, or contact support.");
+  }
   /* Reconciliation finds a session by bachs_checkout_id. A response without one cannot be
      reconciled, so the record is flagged for a human rather than left looking healthy. */
   const checkoutId = typeof session?.checkout_id === 'string' ? session.checkout_id : '';
