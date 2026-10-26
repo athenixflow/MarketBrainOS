@@ -48,3 +48,11 @@ study-data/
 
 # Claude Code worktrees (isolated workspaces; never part of the project)
 .claude/worktrees/
+
+# E2E suite local state. THE REPO IS PUBLIC: auth state, test-account credentials and
+# screenshots (which show account emails) must never be committed.
+e2e/.auth/
+e2e/.accounts.local.json
+e2e/artifacts/
+playwright-report/
+test-results/
