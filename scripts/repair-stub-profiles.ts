@@ -20,7 +20,7 @@ import { DEFAULT_PRICING_CONFIG } from '../config/pricingConfig';
 const PROJECT = 'marketbrainosweb';
 const WRITE = process.argv.includes('--write');
 const FS = `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents`;
-const token = execSync('gcloud auth print-access-token', { encoding: 'utf8', shell: true }).trim();
+const token = execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
 const H = { Authorization: `Bearer ${token}`, 'x-goog-user-project': PROJECT, 'Content-Type': 'application/json' };
 
 const mask = (e?: string) => (e ? e.replace(/^(.{2}).*(@.*)$/, '$1***$2') : '(none)');
@@ -78,12 +78,14 @@ async function authRecords(uids: string[]) {
 
   const uidOf = (d: any) => d.name.split('/').pop() as string;
   const auth = await authRecords(stubs.map(uidOf));
-  let fixed = 0, review = 0;
+  let fixed = 0, review = 0, orphans = 0;
 
   for (const d of stubs) {
     const uid = uidOf(d);
     const f = d.fields || {};
     const a = auth.get(uid);
+    // No login behind it: a leftover of a deleted account, not a person. Never grant it tokens.
+    if (!a) { console.log(`  SKIP   ${uid}: no Firebase Auth user (deleted account) - left untouched`); orphans++; continue; }
     const set: Record<string, unknown> = {};
     if (!f.email && a?.email) set.email = a.email;
     if (!f.created_at && a?.createdAt) set.created_at = new Date(Number(a.createdAt)).toISOString();
@@ -101,7 +103,6 @@ async function authRecords(uids: string[]) {
       console.log(`  REVIEW ${uid} ${mask(a?.email)}: tier ${tier} but no token fields; not guessing`);
       review++;
     }
-    if (!a) console.log(`  NOTE   ${uid}: no Firebase Auth user (deleted account?) - email/created_at left empty`);
     if (!Object.keys(set).length) continue;
     set.profile_repaired_at = new Date().toISOString();
 
@@ -116,6 +117,6 @@ async function authRecords(uids: string[]) {
     }
     fixed++;
   }
-  console.log(`\n${WRITE ? 'Repaired' : 'Would repair'} ${fixed} profile(s); ${review} need a manual look.`);
+  console.log(`\n${WRITE ? 'Repaired' : 'Would repair'} ${fixed} profile(s); ${review} need a manual look; ${orphans} deleted-account leftover(s) skipped.`);
   if (!WRITE) console.log('Run again with --write to apply.');
 })().catch((e) => { console.error(String(e?.message || e)); process.exit(1); });
