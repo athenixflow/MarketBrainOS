@@ -13,6 +13,7 @@ import { escapeHtml } from './escape';
 import { sendTemplate } from './email/send';
 import { verifyUnsubToken, unsubToken } from './email/unsubscribe';
 import { verifyResendWebhook, webhookConfigured, EVENT_FIELD, emailStatusFor } from './email/webhook';
+import { claimWelcome, releaseWelcome } from './email/welcome';
 import { catalogItem, toMajorString, withPinnedPrices, TIER_RANK, PAID_TIERS, PaidTier, Kind, Currency } from './bachs/catalog';
 import { billingLive as bachsBillingLive, productForTier, tierForProduct } from './bachs/config';
 import { BachsEvent, SubscriptionSnapshot, parseBachsEvent, parseCheckoutSession, parseSubscription } from './bachs/events';
@@ -3050,19 +3051,21 @@ function brandActionLink(link: string): string {
 // Welcome email on signup. Fires for EVERY new auth user, so we skip members provisioned via
 // createWorkspace/Agency/EnterpriseMember (they get the "you've been added" email instead) by
 // checking a short-lived marker those functions write just before admin.auth().createUser().
-// Sends the welcome email once (idempotent via users/{uid}.welcome_sent). Adds a verification link
-// for unverified (password) accounts.
+// Sends the welcome email once (idempotent via email_flags/{uid}; see email/welcome.ts for why the
+// flag must never be written into the profile). Adds a verification link for unverified accounts.
 async function sendWelcomeOnce(uid: string, email: string, name: string | undefined, emailVerified: boolean): Promise<void> {
-  const userRef = db.collection('users').doc(uid);
-  const snap = await userRef.get();
-  if (snap.exists && snap.data()!.welcome_sent) return;
-  let verifyUrl: string | undefined;
-  if (!emailVerified) {
-    try { verifyUrl = brandActionLink(await admin.auth().generateEmailVerificationLink(email, { url: 'https://www.marketbrainos.app/auth?verified=1' })); }
-    catch (e: any) { console.error('[email] verification link failed:', e?.message || e); }
+  if (!(await claimWelcome(db, uid))) return;
+  try {
+    let verifyUrl: string | undefined;
+    if (!emailVerified) {
+      try { verifyUrl = brandActionLink(await admin.auth().generateEmailVerificationLink(email, { url: 'https://www.marketbrainos.app/auth?verified=1' })); }
+      catch (e: any) { console.error('[email] verification link failed:', e?.message || e); }
+    }
+    await sendTemplate(email, 'welcome', { firstName: name, verifyUrl, monthlyTokens: DEFAULT_PRICING_CONFIG.plans.free.monthlyTokens });
+  } catch (e) {
+    await releaseWelcome(db, uid);
+    throw e;
   }
-  await sendTemplate(email, 'welcome', { firstName: name, verifyUrl, monthlyTokens: DEFAULT_PRICING_CONFIG.plans.free.monthlyTokens });
-  await userRef.set({ welcome_sent: true }, { merge: true });
 }
 
 // Background auth trigger — best-effort only (gen1 auth triggers can be unreliable), so the client
