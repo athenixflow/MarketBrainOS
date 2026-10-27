@@ -188,18 +188,6 @@ export const callUpdateSystemSettings = async (changes: Partial<AdminSettings>) 
   }
 };
 
-export const callConfirmTopUp = async (paymentReference: string, packId?: string) => {
-  if (!isFirebaseInitialized) throw new Error("Connection failed");
-  const confirmTopUp = httpsCallable(functions, 'confirmTopUp');
-  try {
-    // Server resolves the pack (price/tokens) from the live pricing config and credits purchased tokens.
-    const result = await confirmTopUp({ paymentReference, packId });
-    return result.data;
-  } catch (error: any) {
-    throw new Error(error.message || "Top-up failed.");
-  }
-};
-
 // Hierarchical token allocation — agency owner caps a client's budget (level 'client'); enterprise
 // owner caps an agency's budget (level 'agency'). amount 0 = uncapped (draws freely from the pool).
 export const callAllocateTokens = async (params: {

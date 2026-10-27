@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   PageHeader, Card, PrimaryButton, SecondaryButton, UpgradeCard, LockedFeatureCard,
   TokenStatusBanner, TokenHistoryModal, PaymentHistoryModal, EmptyState,
-  Stat, SectionLabel, Skeleton, ErrorMessage, SuccessMessage, Badge,
+  Stat, SectionLabel, Skeleton, ErrorMessage, Badge,
 } from '../components/UI';
 import AnimatedSection from '../components/AnimatedSection';
 import SubscriptionPanel from '../components/SubscriptionPanel';
@@ -12,7 +12,7 @@ import { itemText } from '../components/ResultSections';
 import { useAuth } from '../context/AuthContext';
 import { useScope } from '../context/ScopeContext';
 import {
-  callConfirmTopUp, replayOnboarding, createNotification,
+  replayOnboarding,
   getAnalysesForScope, getReportsForScope, getUserActionLogs,
   ToolAnalysisRecord,
 } from '../services/persistenceService';
@@ -20,7 +20,6 @@ import { Report, ActionLogEntry } from '../types';
 import { NAV_SUITES, TOOL_CONFIG_LIST, getToolMeta } from '../config/toolConfigs';
 import { canSeeFeature, tierAtLeast, isPaidTier } from '../config/access';
 import { PLAN_META } from '../config/pricingConfig';
-import { DEFAULT_PRICING_CONFIG } from '../config/pricingConfig';
 
 // Resolve a server module key to a friendly tool label (covers generic + bespoke modules).
 const moduleLabel = (m: string): string =>
@@ -39,8 +38,6 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const accessCtx = { profile, memberships };
 
-  const [topUpStatus, setTopUpStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
-  const [feedbackMsg, setFeedbackMsg] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const [showReceipts, setShowReceipts] = useState(false);
 
@@ -84,28 +81,6 @@ const Dashboard: React.FC = () => {
     if (!user) return;
     await replayOnboarding(user.uid);
     await refreshProfile();
-  };
-
-  const handleTopUp = async () => {
-    if (!isPaidTier(profile?.tier)) return;
-    setTopUpStatus('processing');
-    setFeedbackMsg('');
-    try {
-      const mockPaymentRef = `tx_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-      await callConfirmTopUp(mockPaymentRef);
-      await refreshProfile();
-      setTopUpStatus('success');
-      /* The figure comes from the pack the server actually credits (confirmTopUp with no
-         args takes the first pack), not from a number typed here — the same drift that
-         put "200 credits" on the pricing card while the config said something else. */
-      const credited = `${DEFAULT_PRICING_CONFIG.tokenPacks[0].tokens} tokens`;
-      setFeedbackMsg(`${credited} credited successfully.`);
-      if (user) createNotification(user.uid, 'Token', 'Top-up successful', `${credited} have been added to your balance.`);
-      setTimeout(() => { setTopUpStatus('idle'); setFeedbackMsg(''); }, 4000);
-    } catch (e: any) {
-      setTopUpStatus('error');
-      setFeedbackMsg(e.message || 'Transaction failed. No tokens charged.');
-    }
   };
 
   // --- Derived intelligence (client-side rollups; no backend work) ---
@@ -181,7 +156,8 @@ const Dashboard: React.FC = () => {
     { label: 'Run new analysis', onClick: scrollToTools, primary: true },
     { label: 'View history', to: '/history' },
     { label: 'Open reports', to: '/reports' },
-    ...(isPaidTier(tier) ? [{ label: 'Buy tokens', onClick: handleTopUp }] : []),
+    /* Packs are bought through checkout on the store; the server credits them from the payment webhook. */
+    ...(isPaidTier(tier) ? [{ label: 'Buy tokens', to: '/store' }] : []),
     ...(!tierAtLeast(tier, 'team') ? [{ label: 'Upgrade plan', to: '/pricing' }] : []),
   ];
 
@@ -255,12 +231,6 @@ const Dashboard: React.FC = () => {
             </div>
           </Card>
 
-          {/* Top-up feedback (pro) */}
-          {feedbackMsg && (
-            topUpStatus === 'error'
-              ? <ErrorMessage message={feedbackMsg} className="mt-4" />
-              : <SuccessMessage message={feedbackMsg} className="mt-4" />
-          )}
           <div className="mt-4 flex flex-wrap gap-x-6 gap-y-3">
             <button onClick={() => setShowHistory(true)} className={quietAction}>View usage history</button>
             {isPaidTier(tier) && <button onClick={() => setShowReceipts(true)} className={quietAction}>View receipts</button>}

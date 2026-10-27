@@ -852,6 +852,18 @@ ok(readsOldPaymentShape("const amt = (p as any)['amount_paid'];"), 'CONTROL: a b
 ok(!readsOldPaymentShape('// the old shape kept p.amount_paid in dollars'), 'a comment that mentions the old field is not a read');
 ok(!readsOldPaymentShape('export interface LegacyPaymentRecord { amount_paid: number; payment_reference: string; }'), 'a type declaring the old fields is not a read');
 
+console.log('\nNO CLIENT CALLS THE REFUSED TOP-UP:');
+/* confirmTopUp refuses every reference that did not come from a real payment, so any client caller is a
+   button that always errors (the Dashboard's "Buy tokens" made up its own reference). Tokens are bought
+   through checkout; the callable may be named in comments, never invoked. */
+export const callsConfirmTopUp = (text: string): boolean =>
+  /\bcallConfirmTopUp\b|httpsCallable\([^)]*['"`]confirmTopUp['"`]/.test(blank(text));
+const topUpCallers = clientFiles.filter((f) => callsConfirmTopUp(fs.readFileSync(path.join(root, f), 'utf8')));
+ok(topUpCallers.length === 0, `no client file calls or wraps confirmTopUp (${clientFiles.length} files scanned)`, topUpCallers.join(', '));
+ok(callsConfirmTopUp("await callConfirmTopUp(ref);"), 'CONTROL: a page calling callConfirmTopUp is caught');
+ok(callsConfirmTopUp("const c = httpsCallable(functions, 'confirmTopUp');"), 'CONTROL: a wrapper around the callable is caught');
+ok(!callsConfirmTopUp('// confirmTopUp refuses, so packs go through checkout'), 'a comment naming it is not a call');
+
 console.log('\nFINAL-REVIEW MINORS:');
 /* M1: the legacy changeSubscription cancel/downgrade would write subscription_status / tier on an account Bachs
    bills, behind Bachs' back (a "cancelled" flag with the card still charged, or Free with a pass still paid).
