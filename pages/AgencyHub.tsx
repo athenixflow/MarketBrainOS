@@ -3,8 +3,10 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   PageHeader, Card, PrimaryButton, SecondaryButton, Input, Select, LoadingState, ErrorMessage, Tabs, Badge, PermissionDenied,
 } from '../components/UI';
+import { Link } from 'react-router-dom';
 import AnimatedSection from '../components/AnimatedSection';
 import { useAuth } from '../context/AuthContext';
+import { tierAtLeast } from '../config/access';
 import { useScope } from '../context/ScopeContext';
 import { Membership, can, ROLE_LABELS } from '../services/permissionService';
 import { Agency, AgencyClient, WorkspaceMember, AgencyInvitation } from '../types';
@@ -144,12 +146,18 @@ const AgencyHub: React.FC = () => {
           <AnimatedSection index={1}><Card title="Create an Agency">
             <p className="text-sm text-gray-500 font-medium mb-6 leading-relaxed">
               Set up an agency to manage multiple clients with isolated data, team assignments, and per-client intelligence.
-              {profile?.tier !== 'agency' && profile?.tier !== 'enterprise' ? ' Creating one upgrades you to the Agency plan.' : ''}
             </p>
+            {/* The server refuses to create one below the Agency plan, so the form says so up front. */}
+            {!tierAtLeast(profile?.tier, 'agency') && (
+              <p className="text-sm text-gray-600 font-medium mb-6">
+                Agencies need the Agency plan.{' '}
+                <Link to="/pricing" className="font-bold text-[#0B0B0B] underline underline-offset-4 hover:text-[#FF0000]">See plans</Link>
+              </p>
+            )}
             <div className="max-w-xl">
               <Input label="Agency name" placeholder="e.g. Northwind Growth Partners" value={name} onChange={(e) => setName(e.target.value)} />
               <Input label="Description (optional)" placeholder="What your agency does" value={description} onChange={(e) => setDescription(e.target.value)} multiline />
-              <PrimaryButton onClick={createAgency} disabled={busy}>{busy ? 'Creating…' : 'Create Agency'}</PrimaryButton>
+              <PrimaryButton onClick={createAgency} disabled={busy || !tierAtLeast(profile?.tier, 'agency')}>{busy ? 'Creating…' : 'Create Agency'}</PrimaryButton>
             </div>
           </Card></AnimatedSection>
         </div>

@@ -77,6 +77,10 @@ const nineGeneric = grep(/\bnine generic\b/i);
 ok(nineGeneric.length === 0, 'no "nine generic" (there are ten)', nineGeneric.join('\n        '));
 const fourSuites = grep(/\bfour\b[^\n]{0,30}\bsuites?\b|\b4 suites\b/i);
 ok(fourSuites.length === 0, 'no "four suites" (there are five)', fourSuites.join('\n        '));
+/* Plans are only granted by a payment (or an admin). Creating a workspace, agency or enterprise
+   never upgrades anyone (the server refuses below the plan), and payments are not simulated. */
+const freeUpgrade = grep(/upgrades you to|auto-upgrades your plan|payments (in this environment )?are simulated|title: 'Simulated payments'/i);
+ok(freeUpgrade.length === 0, 'no copy promising an upgrade without payment, or simulated payments', freeUpgrade.join('\n        '));
 const placeholders = grep(/Sample Persona|Illustrative samples|replace with real customer quotes/i);
 ok(placeholders.length === 0, 'no placeholder testimonials in shipped copy', placeholders.join('\n        '));
 const credits = grep(/Analysis Credits/);

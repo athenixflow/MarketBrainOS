@@ -95,7 +95,7 @@ const tokenStore: DocArticle = {
     { type: 'paragraph', text: 'The [Token Store](/store) sells one-time packs. Purchased tokens **never expire** and stack on top of your monthly allowance.' },
     { type: 'table', headers: ['Pack', 'Tokens', 'Price'], align: ['left', 'right', 'right'], rows: cfg.tokenPacks.map((p) => [p.label, String(p.tokens), money(p.price)]) },
     { type: 'heading', id: 'buying', text: 'Buying tokens' },
-    { type: 'paragraph', text: 'Open the Token Store, choose a pack, and confirm. The tokens are credited instantly and you get a confirmation plus a notification. You can also reach the store from inside the [Billing Center](/documentation/billing/billing-center).' },
+    { type: 'paragraph', text: 'Open the Token Store, choose a pack, and pay on the secure checkout page. The tokens are added as soon as the payment clears, and you get a confirmation plus a notification. You can also reach the store from inside the [Billing Center](/documentation/billing/billing-center).' },
     { type: 'callout', tone: 'warning', title: 'Paid plans only', text: 'Token packs are available on Pro and above. On the Free plan the Buy button is disabled with a prompt to upgrade first.' },
   ],
 };
@@ -126,17 +126,17 @@ const upgrading: DocArticle = {
   id: 'upgrading',
   categoryId: 'billing',
   title: 'Upgrading & changing plans',
-  summary: 'How upgrades apply — instant for Pro, container-based for Team/Agency/Enterprise.',
+  summary: 'How upgrades apply: pay on the checkout page and the plan switches on as soon as the payment clears.',
   keywords: ['upgrade', 'downgrade', 'change plan', 'subscribe', 'checkout'],
   blocks: [
     { type: 'heading', id: 'how', text: 'How upgrades work' },
     { type: 'paragraph', text: 'Start from the [Pricing page](/pricing) and pick a plan:' },
     { type: 'list', items: [
-      '**Free → Pro** applies immediately — you are upgraded and your allowance jumps to the Pro level.',
-      '**Pro → Team / Agency / Enterprise** happens by creating the corresponding container. Creating a Team Workspace, an Agency, or an Enterprise auto-upgrades your plan to match.',
+      '**Pro, Team and Agency**: choose the plan, pay on the secure checkout page, and the plan switches on as soon as the payment clears. Your allowance moves to the new level at the same time.',
+      '**Team workspaces and Agencies** are created after you are on that plan: subscribe first, then create the workspace or agency from the sidebar.',
+      '**Enterprise** is arranged with our team. Use **Contact sales** on the Pricing page.',
     ] },
-    { type: 'paragraph', text: 'After an upgrade you land back on your dashboard with the new capabilities unlocked in the sidebar.' },
-    { type: 'callout', tone: 'info', title: 'Simulated payments', text: 'Payments in this environment are simulated and apply instantly — every purchase records an invoice and grants access right away.' },
+    { type: 'paragraph', text: 'After paying you return to MarketBrain OS with the new capabilities unlocked in the sidebar. Every payment appears in the [Billing Center](/documentation/billing/billing-center) with its receipt.' },
   ],
 };
 

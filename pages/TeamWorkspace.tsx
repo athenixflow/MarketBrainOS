@@ -2,7 +2,7 @@
 // Handles all states: no workspace (create/upgrade pitch), pending invitations (accept),
 // and an active workspace (tabbed: Overview/Members/Library/Reports/Analytics/Activity/Settings).
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { PageHeader, Card, PrimaryButton, Input, LoadingState, ErrorMessage, Tabs, Badge } from '../components/UI';
 import AnimatedSection from '../components/AnimatedSection';
 import { useAuth } from '../context/AuthContext';
@@ -154,14 +154,18 @@ const TeamWorkspace: React.FC = () => {
             <Card title="Create a Team Workspace">
               <p className="text-sm text-gray-500 font-medium mb-6 leading-relaxed">
                 Spin up a shared workspace to invite teammates, share analyses, and build collective intelligence.
-                {!tierAtLeast(profile?.tier, 'team')
-                  ? ' Creating one upgrades you to the Team plan.'
-                  : ''}
               </p>
+              {/* The server refuses to create one below the Team plan, so the form says so up front. */}
+              {!tierAtLeast(profile?.tier, 'team') && (
+                <p className="text-sm text-gray-600 font-medium mb-6">
+                  Workspaces need the Team plan.{' '}
+                  <Link to="/pricing" className="font-bold text-[#0B0B0B] underline underline-offset-4 hover:text-[#FF0000]">See plans</Link>
+                </p>
+              )}
               <div className="max-w-xl">
                 <Input label="Workspace name" placeholder="e.g. Acme Growth Team" value={name} onChange={(e) => setName(e.target.value)} />
                 <Input label="Description (optional)" placeholder="What this workspace is for" value={description} onChange={(e) => setDescription(e.target.value)} multiline />
-                <PrimaryButton onClick={createWorkspace} disabled={busy}>{busy ? 'Creating…' : 'Create Workspace'}</PrimaryButton>
+                <PrimaryButton onClick={createWorkspace} disabled={busy || !tierAtLeast(profile?.tier, 'team')}>{busy ? 'Creating…' : 'Create Workspace'}</PrimaryButton>
               </div>
             </Card>
           </AnimatedSection>

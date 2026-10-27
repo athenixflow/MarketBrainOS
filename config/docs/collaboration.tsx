@@ -31,7 +31,7 @@ const team: DocArticle = {
   keywords: ['team', 'workspace', 'members', 'seats', 'shared library', 'collaboration'],
   blocks: [
     { type: 'heading', id: 'what', text: 'What it is' },
-    { type: 'paragraph', text: 'A Team Workspace lets a group collaborate on shared analyses, reports, and intelligence in one place. Available on the **Team plan and above**; creating a workspace upgrades you to Team.' },
+    { type: 'paragraph', text: 'A Team Workspace lets a group collaborate on shared analyses, reports, and intelligence in one place. Available on the **Team plan and above**: subscribe to Team on the [Pricing page](/pricing) first, then create the workspace.' },
     { type: 'heading', id: 'tabs', text: 'The tabs' },
     { type: 'table', headers: ['Tab', 'What you do there'], rows: [
       ['Overview', 'Workspace stats and a snapshot of activity.'],
