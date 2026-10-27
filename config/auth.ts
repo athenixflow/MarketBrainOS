@@ -10,12 +10,15 @@ export const PASSWORD_MIN = 8;
  * /auth is refused, so the parameter cannot be used as an open redirect. Null means "go to /".
  */
 export const safeNext = (raw: string | null | undefined): string | null => {
-  if (!raw || !raw.startsWith('/') || raw.startsWith('//') || raw.startsWith('/\\')) return null;
-  if (/^\/auth(\/|\?|#|$)/.test(raw)) return null;
+  // Backslashes and control characters have no place in an app path and are how parsers disagree.
+  if (!raw || !raw.startsWith('/') || /[\\\u0000-\u001f\u007f]/.test(raw)) return null;
   try {
     const u = new URL(raw, 'https://app.invalid');
     if (u.origin !== 'https://app.invalid') return null;
-    return u.pathname + u.search + u.hash;
+    // Check what will actually be navigated to: "/.//host" normalises to "//host", "/./auth" to "/auth".
+    const out = u.pathname + u.search + u.hash;
+    if (out.startsWith('//') || /^\/auth(\/|$)/.test(u.pathname)) return null;
+    return out;
   } catch { return null; }
 };
 

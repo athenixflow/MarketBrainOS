@@ -62,6 +62,10 @@ const { safeNext } = await import('../config/auth');
 ok(safeNext('/billing') === '/billing' && safeNext('/conversion-doctor?x=1#a') === '/conversion-doctor?x=1#a', 'safeNext keeps an app path with its query');
 ok([null, '', 'billing', '//evil.example', '/\\evil.example', 'https://evil.example/x', 'javascript:alert(1)', '/auth', '/auth?next=/x']
   .every((v) => safeNext(v as any) === null), 'safeNext refuses other sites, protocol-relative and scheme URLs, and /auth itself');
+/* Parser differentials: the raw string starts with one slash, but URL normalisation turns it into
+   "//host" or reaches /auth. The returned value is checked, not just the input. */
+ok(['/.//evil.example', '/x/..//evil.example', '/%2F/evil.example', '/./auth', '/x/../auth?next=/y', '/\tevil', '/a\\b']
+  .every((v) => { const r = safeNext(v); return r === null || (!r.startsWith('//') && !/^\/auth\b/.test(r)); }), 'normalised forms cannot become //host or /auth');
 const app = read('App.tsx');
 ok(!/<Navigate to="\/auth"/.test(app) && /<SignInFirst \/>/.test(app), 'App.tsx guards send signed-out visitors through SignInFirst (?next=), never a bare /auth');
 const auth = read('pages/Auth.tsx');
