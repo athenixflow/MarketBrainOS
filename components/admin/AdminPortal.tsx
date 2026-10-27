@@ -47,7 +47,7 @@ const AdminPortalInner: React.FC = () => {
       <div className="w-12 h-12 bg-red-100 text-red-500 rounded-full flex items-center justify-center mb-6">!</div>
       <h3 className="text-xl font-bold text-white mb-2">Could not load the control center</h3>
       <p className="text-sm text-gray-400 max-w-md mb-8">{a.loadError}</p>
-      <button onClick={() => a.refresh()} className="px-8 py-3 rounded-2xl bg-[#FF0000] text-white text-[10px] font-bold uppercase tracking-widest hover:bg-[#D40000]">Retry</button>
+      <button onClick={() => a.refresh()} className="px-8 py-3 rounded-2xl bg-[#E00000] text-white text-[10px] font-bold uppercase tracking-widest hover:bg-[#D40000]">Retry</button>
     </div>
   );
 

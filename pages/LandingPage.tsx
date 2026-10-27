@@ -77,18 +77,18 @@ const LandingPage: React.FC = () => {
           <div className="md:col-span-7">
             <span className="text-sm font-bold text-[#FF0000] uppercase tracking-[0.2em] mb-6 block">The Deployment Problem</span>
             <h2 id="problem-heading" className="text-3xl md:text-4xl font-bold text-white mb-6">You find out the copy was wrong after you have paid for the clicks.</h2>
-            <p className="text-lg text-gray-500 leading-relaxed mb-6">
+            <p className="text-lg text-gray-400 leading-relaxed mb-6">
               Most founders and marketing teams launch ads based on guesswork. They write copy, build a landing page, and "hope it works." This approach incurs a heavy "Guesswork Tax"—thousands of dollars wasted on traffic sent to unproven messaging and unoptimized funnels.
             </p>
-            <p className="text-lg text-gray-500 leading-relaxed">
+            <p className="text-lg text-gray-400 leading-relaxed">
               Without a review first, you are paying an ad network to tell you something a careful read of the page would have: <strong>your conversion argument is weak.</strong>
             </p>
             <ul className="mt-10 space-y-4">
-              <li className="flex items-center gap-4 text-gray-500">
+              <li className="flex items-center gap-4 text-gray-400">
                 <span aria-hidden="true" className="w-6 h-6 shrink-0 rounded-full border-2 border-red-900 flex items-center justify-center text-red-900 font-bold text-sm">×</span>
                 <span className="font-medium">Writing copy based on "gut feeling"</span>
               </li>
-              <li className="flex items-center gap-4 text-gray-500">
+              <li className="flex items-center gap-4 text-gray-400">
                 <span aria-hidden="true" className="w-6 h-6 shrink-0 rounded-full border-2 border-red-900 flex items-center justify-center text-red-900 font-bold text-sm">×</span>
                 <span className="font-medium">Launching without conversion audits</span>
               </li>
@@ -111,12 +111,12 @@ const LandingPage: React.FC = () => {
       {/* 3. WHAT IS MARKETBRAINOS */}
       <AnimatedSection as="section" index={2} className="py-24 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" aria-labelledby="about-heading">
         <div className="max-w-3xl">
-          <span className="text-sm font-bold text-gray-500 uppercase tracking-[0.2em] mb-6 block">Platform Definition</span>
+          <span className="text-sm font-bold text-gray-400 uppercase tracking-[0.2em] mb-6 block">Platform Definition</span>
           <h2 id="about-heading" className="text-4xl font-bold text-white mb-8">What is MarketBrain OS?</h2>
           <p className="text-xl text-gray-400 leading-relaxed mb-8">
             MarketBrain OS is a <strong>decision-support system</strong> for growth marketing. It is an AI marketing platform designed to act as a pre-flight checklist for your campaigns. 
           </p>
-          <p className="text-lg text-gray-500 leading-relaxed">
+          <p className="text-lg text-gray-400 leading-relaxed">
             Unlike generative writing tools that simply produce text, MarketBrain OS is built to <strong>audit, score, and refine</strong>. It uses Google's Gemini models to read your assets the way a demanding reviewer would and return ranked, specific fixes, so you can improve conversion rates (CRO) before a campaign goes live.
           </p>
         </div>
@@ -135,7 +135,7 @@ const LandingPage: React.FC = () => {
             <div key={item.step} className="relative p-8 border border-gray-800 rounded-2xl hover:border-gray-600 transition-colors">
               <span className="text-6xl font-black text-gray-800 absolute top-4 right-6 opacity-20">{item.step}</span>
               <h3 className="text-xl font-bold text-white mb-4">{item.title}</h3>
-              <p className="text-sm text-gray-500 leading-relaxed font-medium">{item.desc}</p>
+              <p className="text-sm text-gray-400 leading-relaxed font-medium">{item.desc}</p>
             </div>
           ))}
         </div>
@@ -144,7 +144,7 @@ const LandingPage: React.FC = () => {
       {/* 5. CORE FEATURES */}
       <AnimatedSection as="section" index={4} className="py-32 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" aria-labelledby="features-heading">
         <h2 id="features-heading" className="text-3xl font-bold text-white mb-4 text-center">Core Capabilities</h2>
-        <p className="text-center text-gray-500 font-medium mb-20 max-w-2xl mx-auto">
+        <p className="text-center text-gray-400 font-medium mb-20 max-w-2xl mx-auto">
           A few highlights from a suite of <Link to="/features" className="text-white underline decoration-[#FF0000]/40 underline-offset-4 hover:decoration-[#FF0000]">{TOOL_COUNT} tools across five suites</Link> spanning marketing, sales, strategy, and operations.
         </p>
         
@@ -157,7 +157,7 @@ const LandingPage: React.FC = () => {
               <p className="text-lg text-gray-400 mb-8 leading-relaxed">
                 Marketing isn't just about words; it's about angles. AngleMiner X extracts deep psychological triggers from your product description across eight angle types — Emotional, Fear, Aspiration, Curiosity, Authority, Differentiation, Story, and Contrarian — to diversify your messaging strategy.
               </p>
-              <ul className="space-y-3 text-sm font-bold text-gray-500 uppercase tracking-widest">
+              <ul className="space-y-3 text-sm font-bold text-gray-400 uppercase tracking-widest">
                 <li className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#FF0000]" />Audience Trigger Extraction</li>
                 <li className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#FF0000]" />Tone Calibration</li>
                 <li className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#FF0000]" />Hook Generation</li>
@@ -169,12 +169,12 @@ const LandingPage: React.FC = () => {
               <div className="lg:col-span-7 bg-[#111] p-6 sm:p-10 rounded-2xl border border-gray-800 shadow-2xl">
                 <div className="space-y-6">
                    <div className="bg-gray-900/50 p-6 rounded-2xl border border-gray-800">
-                      <p className="text-xs text-gray-500 uppercase mb-2">Input</p>
+                      <p className="text-xs text-gray-400 uppercase mb-2">Input</p>
                       <p className="text-white font-medium">"SaaS for remote project management"</p>
                    </div>
-                   <div className="flex justify-center text-gray-600">↓</div>
+                   <div className="flex justify-center text-gray-400">↓</div>
                    <div className="bg-white p-6 rounded-2xl border border-gray-200">
-                      <p className="text-xs text-[#FF0000] font-bold uppercase mb-2">Generated Prime Angle</p>
+                      <p className="text-xs text-[#E00000] font-bold uppercase mb-2">Generated Prime Angle</p>
                       <p className="text-[#0B0B0B] font-bold text-lg">"The Async Synchronicity Paradox"</p>
                       <p className="text-xs text-gray-500 mt-2">Rational: Targets the anxiety of remote disconnection while promising the speed of in-person collaboration.</p>
                    </div>
@@ -209,7 +209,7 @@ const LandingPage: React.FC = () => {
               <p className="text-lg text-gray-400 mb-8 leading-relaxed">
                 An A/B test tells you which headline won after the budget is spent. TestLab Pro reviews two to five variants side by side before it is, scores each against conversion-copywriting principles, names the strongest and explains why. A reasoned second opinion on your copy — not a forecast of your results.
               </p>
-              <ul className="space-y-3 text-sm font-bold text-gray-500 uppercase tracking-widest">
+              <ul className="space-y-3 text-sm font-bold text-gray-400 uppercase tracking-widest">
                 <li className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#FF0000]" />Side-by-side comparison</li>
                 <li className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#FF0000]" />Headline Scoring</li>
                 <li className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#FF0000]" />Reasoning you can argue with</li>
@@ -225,7 +225,7 @@ const LandingPage: React.FC = () => {
               <p className="text-lg text-gray-400 mb-8 leading-relaxed">
                 Paste your landing page URL or raw copy. The Conversion Doctor scans the content for clarity, urgency, and friction. It identifies specific "conversion blockers"—elements that confuse or bore the reader—and prescribes actionable fixes.
               </p>
-              <ul className="space-y-3 text-sm font-bold text-gray-500 uppercase tracking-widest">
+              <ul className="space-y-3 text-sm font-bold text-gray-400 uppercase tracking-widest">
                 <li className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#FF0000]" />Friction Point Detection</li>
                 <li className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#FF0000]" />Call-To-Action Auditing</li>
                 <li className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#FF0000]" />Clinical Rewrite Suggestions</li>
@@ -263,7 +263,7 @@ const LandingPage: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
             <div>
               <span className="text-[#FF0000] text-xs font-bold uppercase tracking-widest mb-2 block">MarketBrain OS is NOT</span>
-              <ul className="text-gray-500 space-y-2 text-sm font-medium">
+              <ul className="text-gray-400 space-y-2 text-sm font-medium">
                 <li>• An automated ad buying tool</li>
                 <li>• A social media scheduler</li>
                 <li>• A generic blog post writer</li>
@@ -271,7 +271,7 @@ const LandingPage: React.FC = () => {
             </div>
             <div>
               <span className="text-green-500 text-xs font-bold uppercase tracking-widest mb-2 block">MarketBrain OS IS</span>
-              <ul className="text-gray-500 space-y-2 text-sm font-medium">
+              <ul className="text-gray-400 space-y-2 text-sm font-medium">
                 <li>• A strategic analysis engine</li>
                 <li>• A pre-launch validation tool</li>
                 <li>• A conversion intelligence suite</li>
@@ -290,8 +290,8 @@ const LandingPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
           <div className="p-6 sm:p-10 border border-gray-800 rounded-2xl bg-[#0B0B0B] flex flex-col">
             <h3 className="text-2xl font-bold text-white mb-2">Free Tier</h3>
-            <p className="text-gray-500 text-sm mb-8">For exploration and light testing.</p>
-            <div className="text-4xl font-black text-white mb-8">$0<span className="text-lg font-medium text-gray-600"> / mo</span></div>
+            <p className="text-gray-400 text-sm mb-8">For exploration and light testing.</p>
+            <div className="text-4xl font-black text-white mb-8">$0<span className="text-lg font-medium text-gray-400"> / mo</span></div>
             <ul className="space-y-4 mb-12 flex-grow">
               {/* The free allowance is a one-time grant, not a monthly reset (see FAQ "How do tokens work?"). */}
               <li className="flex items-center gap-3 text-sm text-gray-400"><div className="w-1.5 h-1.5 bg-gray-600 rounded-full" />{FREE_TOKENS} tokens, one-time</li>
@@ -304,12 +304,12 @@ const LandingPage: React.FC = () => {
           </div>
 
           <div className="p-6 sm:p-10 border-2 border-white/10 rounded-2xl bg-[#111] relative flex flex-col">
-            <div className="absolute top-0 right-0 bg-[#FF0000] text-white text-[10px] font-bold uppercase tracking-widest px-4 py-1 rounded-bl-2xl rounded-tr-2xl">
+            <div className="absolute top-0 right-0 bg-[#E00000] text-white text-[10px] font-bold uppercase tracking-widest px-4 py-1 rounded-bl-2xl rounded-tr-2xl">
               Professional
             </div>
             <h3 className="text-2xl font-bold text-white mb-2">Pro Access</h3>
-            <p className="text-gray-500 text-sm mb-8">For serious deployment validation.</p>
-            <div className="text-4xl font-black text-white mb-8">${PRO_PRICE}<span className="text-lg font-medium text-gray-600"> / mo</span></div>
+            <p className="text-gray-400 text-sm mb-8">For serious deployment validation.</p>
+            <div className="text-4xl font-black text-white mb-8">${PRO_PRICE}<span className="text-lg font-medium text-gray-400"> / mo</span></div>
             <ul className="space-y-4 mb-12 flex-grow">
               <li className="flex items-center gap-3 text-sm text-white"><div className="w-1.5 h-1.5 bg-[#FF0000] rounded-full" />{PRO_TOKENS} tokens / mo</li>
               <li className="flex items-center gap-3 text-sm text-white"><div className="w-1.5 h-1.5 bg-[#FF0000] rounded-full" />Full TestLab Pro Access</li>
@@ -335,13 +335,13 @@ const LandingPage: React.FC = () => {
       {/* 9. CTA */}
       <AnimatedSection as="section" index={10} className="py-32 px-6 md:px-12 text-center">
         <h2 className="text-4xl md:text-5xl font-black text-white tracking-tight mb-8">Stop guessing. Start validating.</h2>
-        <p className="text-xl text-gray-500 mb-12 max-w-2xl mx-auto">
+        <p className="text-xl text-gray-400 mb-12 max-w-2xl mx-auto">
           The most expensive decision in marketing is launching without intelligence. Calibrate your strategy with MarketBrain OS.
         </p>
         <Link to="/auth">
           <PrimaryButton className="!px-16 !py-6 !text-base shadow-2xl shadow-red-900/20">Launch Intelligence Engine</PrimaryButton>
         </Link>
-        <p className="mt-8 text-xs text-gray-600 uppercase tracking-widest">No credit card required for entry</p>
+        <p className="mt-8 text-xs text-gray-400 uppercase tracking-widest">No credit card required for entry</p>
       </AnimatedSection>
     </PublicLayout>
   );

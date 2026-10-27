@@ -48,7 +48,7 @@ const Features: React.FC = () => (
           <div className="w-8 h-[2px] bg-[#FF0000] rounded-full" />
           <h2 className="text-sm font-bold text-white uppercase tracking-[0.3em]">{group.suite}</h2>
         </div>
-        <p className="text-gray-500 font-medium mb-10 ml-12">{SUITE_BLURB[group.suite]}</p>
+        <p className="text-gray-400 font-medium mb-10 ml-12">{SUITE_BLURB[group.suite]}</p>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {group.items.map((tool) => (
             <div key={tool.path} className="p-8 border border-gray-800 rounded-2xl bg-[#0F0F0F] hover:border-gray-600 transition-colors">
@@ -58,7 +58,7 @@ const Features: React.FC = () => (
                   <span className="shrink-0 px-2.5 py-1 rounded-full bg-gray-900 text-gray-400 text-[9px] font-bold uppercase tracking-widest border border-gray-800">{tool.cost} {tool.cost === 1 ? 'Token' : 'Tokens'}</span>
                 )}
               </div>
-              <p className="text-sm text-gray-500 leading-relaxed font-medium">{tool.description}</p>
+              <p className="text-sm text-gray-400 leading-relaxed font-medium">{tool.description}</p>
             </div>
           ))}
         </div>

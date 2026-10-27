@@ -363,7 +363,7 @@ const ConversionDoctor: React.FC = () => {
                     <button
                       type="button"
                       onClick={handleReset}
-                      className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors text-center"
+                      className="text-[10px] font-bold text-gray-500 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors text-center"
                     >
                       Run another audit
                     </button>
@@ -409,7 +409,7 @@ const ConversionDoctor: React.FC = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <Card className="lg:col-span-1 flex flex-col justify-center items-center py-16" accent>
-                 <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-8">Conversion grade</p>
+                 <p className="text-[10px] font-bold text-[#E00000] uppercase tracking-widest mb-8">Conversion grade</p>
                  <div className="text-7xl sm:text-8xl font-black tracking-tighter tabular-nums mb-4 text-[#0B0B0B]">{result.score}</div>
                  {(() => {
                    const b = getScoreBand(result.score);
@@ -426,7 +426,7 @@ const ConversionDoctor: React.FC = () => {
                   {result.auditedUrl && (
                     <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 rounded-full w-fit max-w-full">
                       <div className="w-1 h-1 rounded-full bg-blue-500 shrink-0" />
-                      <span className="text-[10px] font-bold text-gray-400 truncate">{result.auditedUrl}</span>
+                      <span className="text-[10px] font-bold text-gray-500 truncate">{result.auditedUrl}</span>
                     </div>
                   )}
                   <p className="text-xl sm:text-2xl font-bold text-[#0B0B0B] leading-snug">
@@ -473,7 +473,7 @@ const ConversionDoctor: React.FC = () => {
                           <p className="mt-1 text-sm text-gray-600 leading-relaxed font-medium">{fix.how}</p></div>
                       )}
                       {fix.expectedResult && (
-                        <div className="mt-3"><span className="text-[10px] font-bold uppercase tracking-widest text-[#FF0000]">Expected result</span>
+                        <div className="mt-3"><span className="text-[10px] font-bold uppercase tracking-widest text-[#E00000]">Expected result</span>
                           <p className="mt-1 text-sm text-gray-700 leading-relaxed font-semibold">{fix.expectedResult}</p></div>
                       )}
                     </div>
@@ -492,15 +492,15 @@ const ConversionDoctor: React.FC = () => {
                       <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3">{rw.label}</p>
                       {rw.original && (
                         <div className="mb-3">
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Current</span>
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Current</span>
                           <p className="mt-1 text-sm text-gray-500 leading-relaxed line-through decoration-gray-300">"{rw.original}"</p>
                         </div>
                       )}
                       <div>
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-[#FF0000]">Rewrite</span>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-[#E00000]">Rewrite</span>
                         <p className="mt-1 text-sm text-[#0B0B0B] font-bold leading-relaxed">"{rw.text}"</p>
                       </div>
-                      <CopyButton text={rw.text} label="Copy rewrite" className="mt-4 text-[10px] font-bold text-[#FF0000] hover:opacity-60 transition-opacity uppercase tracking-widest border-b border-[#FF0000]/10 pb-1" />
+                      <CopyButton text={rw.text} label="Copy rewrite" className="mt-4 text-[10px] font-bold text-[#E00000] hover:opacity-60 transition-opacity uppercase tracking-widest border-b border-[#FF0000]/10 pb-1" />
                     </div>
                   ))}
                 </div>

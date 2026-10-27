@@ -21,7 +21,7 @@ export const ExpectedOutcome: React.FC<{
   <div className="bg-[#121212] border border-gray-900 rounded-2xl p-6 sm:p-8">
     <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">What this analysis generates</p>
-      {estimatedTime && <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Est. {estimatedTime}</span>}
+      {estimatedTime && <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Est. {estimatedTime}</span>}
     </div>
     {analyzes && <p className="text-sm text-gray-400 font-medium leading-relaxed mb-6">{analyzes}</p>}
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -45,10 +45,10 @@ export const AnalysisPreview: React.FC<{
   const filled = inputs.filter((i) => i.value && i.value.trim().length > 0);
   return (
     <div className="mb-8 p-6 rounded-2xl bg-gray-50 border border-gray-100">
-      <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-4">Analysis Preview</p>
+      <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-4">Analysis Preview</p>
       <div className="space-y-2 mb-5">
         {filled.length === 0 ? (
-          <p className="text-xs text-gray-400 font-medium">Fill in the inputs to preview your analysis.</p>
+          <p className="text-xs text-gray-500 font-medium">Fill in the inputs to preview your analysis.</p>
         ) : filled.slice(0, 5).map((i) => (
           // Stacks on mobile; fixed label column from `sm` up. The label needs a width of its own: as a
           // flex child with `min-w-0` it shrank below its own text in a narrow card, and because
@@ -90,11 +90,11 @@ export const RunProgress: React.FC<{ stage: RunStage; isTakingLong?: boolean }> 
           </React.Fragment>
         ))}
       </div>
-      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
         {stage === 'queued' ? 'Preparing analysis…' : stage === 'running' ? 'Running deep analysis…' : 'Analysis complete'}
       </p>
       {isTakingLong && stage === 'running' && (
-        <p className="mt-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest animate-in fade-in">This is taking longer than usual. Still working…</p>
+        <p className="mt-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest animate-in fade-in">This is taking longer than usual. Still working…</p>
       )}
     </div>
   );
@@ -122,7 +122,7 @@ export const FieldHint: React.FC<{ children?: React.ReactNode; example?: string;
  */
 export const ExampleNotice: React.FC<{ toolLabel: string; onClear: () => void }> = ({ toolLabel, onClear }) => (
   <div className="mb-8 rounded-2xl border border-[#FF0000]/20 bg-[#FF0000]/[0.04] p-5">
-    <p className="text-[10px] font-bold uppercase tracking-widest text-[#FF0000] mb-2">Example inputs</p>
+    <p className="text-[10px] font-bold uppercase tracking-widest text-[#E00000] mb-2">Example inputs</p>
     <p className="text-sm text-gray-600 leading-relaxed">
       These are made-up inputs, filled in so you can see what {toolLabel} returns without writing a brief
       first. Run them as they are to see the shape of a result, or replace them with your own — the
@@ -139,7 +139,7 @@ export const ExampleNotice: React.FC<{ toolLabel: string; onClear: () => void }>
 );
 
 export const CharCounter: React.FC<{ value: string; max: number }> = ({ value, max }) => (
-  <span className={`block text-right text-[10px] font-bold uppercase tracking-widest tabular-nums ${value.length > max ? 'text-[#FF0000]' : 'text-gray-400'}`}>
+  <span className={`block text-right text-[10px] font-bold uppercase tracking-widest tabular-nums ${value.length > max ? 'text-[#E00000]' : 'text-gray-500'}`}>
     {value.length} / {max}
   </span>
 );

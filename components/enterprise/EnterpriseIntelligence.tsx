@@ -20,7 +20,7 @@ const List: React.FC<{ title: string; items?: string[]; color: string }> = ({ ti
 );
 
 const TREND: Record<string, string> = { up: '↑', flat: '→', down: '↓' };
-const TREND_COLOR: Record<string, string> = { up: 'text-green-600', flat: 'text-gray-400', down: 'text-red-600' };
+const TREND_COLOR: Record<string, string> = { up: 'text-green-700', flat: 'text-gray-500', down: 'text-red-700' };
 
 const EnterpriseIntelligence: React.FC<{ latest: EnterpriseBriefing | null; forecasts: EnterpriseForecast[] }> = ({ latest, forecasts }) => {
   if (!latest && forecasts.length === 0) {
@@ -32,7 +32,7 @@ const EnterpriseIntelligence: React.FC<{ latest: EnterpriseBriefing | null; fore
         <>
           <Card title={latest.title}>
             <p className="text-sm text-gray-600 leading-relaxed font-medium">{latest.summary}</p>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums mt-4">{latest.period} · {new Date(latest.created_at).toLocaleDateString()}</p>
+            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest tabular-nums mt-4">{latest.period} · {new Date(latest.created_at).toLocaleDateString()}</p>
           </Card>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <List title="Strategic Opportunities" items={latest.opportunities} color="bg-green-500" />
@@ -48,7 +48,7 @@ const EnterpriseIntelligence: React.FC<{ latest: EnterpriseBriefing | null; fore
             {forecasts.map(f => (
               <div key={f.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
                 <div className="flex flex-wrap items-center justify-between gap-4">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{f.label}</p>
+                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{f.label}</p>
                   <span aria-label={`Trend ${f.trend}`} className={`text-lg font-black ${TREND_COLOR[f.trend] || ''}`}>{TREND[f.trend] || ''}</span>
                 </div>
                 <p className="text-sm text-gray-700 font-medium mt-1">{f.projection}</p>

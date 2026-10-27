@@ -511,7 +511,7 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
               <PrimaryButton onClick={handleRun} disabled={loading || run.inFlight} className="w-full">
                 {loading ? 'Analyzing…' : run.inFlight ? 'Finishing previous run…' : `${config.ctaVerb} (${cost} tokens)`}
               </PrimaryButton>
-              {!loading && run.inFlight && <p className="mt-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-relaxed">{IN_FLIGHT_NOTE}</p>}
+              {!loading && run.inFlight && <p className="mt-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest leading-relaxed">{IN_FLIGHT_NOTE}</p>}
             </div>
           </Card>
         </AnimatedSection>
@@ -553,7 +553,7 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
                 )}
                 {result.summary && (
                   <>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Summary</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3">Summary</p>
                     <p className="text-sm text-gray-600 leading-relaxed font-medium">{result.summary}</p>
                   </>
                 )}
@@ -564,16 +564,16 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
                         <span className="w-1.5 h-1.5 rounded-full bg-green-500" /> Saved
                       </span>
                     ) : result.saveError ? (
-                      <span className="inline-flex items-center gap-2 text-[10px] font-bold text-[#FF0000] uppercase tracking-widest" role="alert">
+                      <span className="inline-flex items-center gap-2 text-[10px] font-bold text-[#E00000] uppercase tracking-widest" role="alert">
                         <span className="w-1.5 h-1.5 rounded-full bg-[#FF0000]" /> Not saved to History
                       </span>
                     ) : null}
-                    <button onClick={handleRun} className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">Rerun</button>
-                    <button onClick={handleShare} className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">Share</button>
-                    <button onClick={handleSaveReport} disabled={savingReport} className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors disabled:opacity-40">
+                    <button onClick={handleRun} className="text-[10px] font-bold text-gray-500 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">Rerun</button>
+                    <button onClick={handleShare} className="text-[10px] font-bold text-gray-500 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">Share</button>
+                    <button onClick={handleSaveReport} disabled={savingReport} className="text-[10px] font-bold text-gray-500 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors disabled:opacity-40">
                       {savingReport ? 'Saving…' : 'Save as report'}
                     </button>
-                    <ConfirmTapButton onConfirm={handleDelete} className="text-[10px] font-bold text-gray-400 hover:text-[#FF0000] uppercase tracking-widest transition-colors" />
+                    <ConfirmTapButton onConfirm={handleDelete} className="text-[10px] font-bold text-gray-500 hover:text-[#FF0000] uppercase tracking-widest transition-colors" />
                     {actionMsg && <span className="text-[10px] font-bold text-green-600 uppercase tracking-widest">{actionMsg}</span>}
                   </div>
                   <ExportControls

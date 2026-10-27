@@ -54,7 +54,7 @@ const NotFound: React.FC = () => {
       <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight mb-5 max-w-xl">
         This page doesn’t exist, or it moved.
       </h1>
-      <p className="text-gray-500 font-medium leading-relaxed max-w-md mb-12">
+      <p className="text-gray-400 font-medium leading-relaxed max-w-md mb-12">
         The link may be broken, or the page may have been retired. Let’s get you back to something useful.
       </p>
 
@@ -75,7 +75,7 @@ const NotFound: React.FC = () => {
           <Link
             key={l.to}
             to={l.to}
-            className="text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:text-[#FF0000] transition-colors"
+            className="text-[10px] font-bold text-gray-400 uppercase tracking-widest hover:text-[#FF0000] transition-colors"
           >
             {l.label}
           </Link>

@@ -24,7 +24,7 @@ export const SegmentedControl = <T extends string>({ options, value, onChange, l
           aria-checked={active}
           onClick={() => onChange(o.value)}
           className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-full text-[10px] sm:text-[11px] font-bold uppercase tracking-widest whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF0000]/40 ${
-            active ? 'bg-white text-[#0B0B0B] shadow-sm' : 'text-gray-500 hover:text-[#0B0B0B]'
+            active ? 'bg-white text-[#0B0B0B] shadow-sm' : 'text-gray-600 hover:text-[#0B0B0B]'
           }`}
         >
           {o.label}

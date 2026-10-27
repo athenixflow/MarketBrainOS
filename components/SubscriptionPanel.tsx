@@ -101,7 +101,7 @@ const SubscriptionPanel: React.FC = () => {
           <Badge tone={badge.tone}>{badge.label}</Badge>
         </div>
         {isPaid && ends && (
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums">
+          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest tabular-nums">
             {isPass ? 'Ends' : status === 'cancelled' ? 'Access until' : 'Renews'} {new Date(ends).toLocaleDateString()}
           </p>
         )}

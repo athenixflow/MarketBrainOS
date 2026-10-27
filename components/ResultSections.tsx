@@ -36,7 +36,7 @@ export const ResultItemCard: React.FC<{ item: ResultItem; compact?: boolean }> =
       )}
       {action && (
         <div className="mt-3 pl-[18px]">
-          <span className="text-[9px] font-black uppercase tracking-widest text-[#FF0000]">Do this</span>
+          <span className="text-[9px] font-black uppercase tracking-widest text-[#E00000]">Do this</span>
           <p className="mt-1 text-sm text-gray-700 leading-relaxed font-semibold">{action}</p>
         </div>
       )}
@@ -47,7 +47,7 @@ export const ResultItemCard: React.FC<{ item: ResultItem; compact?: boolean }> =
 /** A list of result items for one section. */
 export const ResultItemList: React.FC<{ items: ResultItem[]; compact?: boolean }> = ({ items, compact }) => {
   if (!items || items.length === 0) {
-    return <p className="text-gray-400 text-sm font-medium">No items in this section.</p>;
+    return <p className="text-gray-500 text-sm font-medium">No items in this section.</p>;
   }
   return (
     <div className="space-y-3">

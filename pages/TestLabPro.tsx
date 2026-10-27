@@ -302,7 +302,7 @@ const TestLabPro: React.FC = () => {
                       <button
                         type="button"
                         onClick={handleAddVariant}
-                        className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest hover:opacity-60 transition-opacity"
+                        className="text-[10px] font-bold text-[#E00000] uppercase tracking-widest hover:opacity-60 transition-opacity"
                       >
                         + Add variant
                       </button>
@@ -310,7 +310,7 @@ const TestLabPro: React.FC = () => {
                     <button
                       type="button"
                       onClick={handleReset}
-                      className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors"
+                      className="text-[10px] font-bold text-gray-500 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors"
                     >
                       Reset test
                     </button>
@@ -382,7 +382,7 @@ const TestLabPro: React.FC = () => {
                       </h3>
                       <div className="flex items-center gap-3">
                         <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000]" />
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Highest projected performance</span>
+                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Highest projected performance</span>
                       </div>
                     </div>
                     <IntelligenceIndicator score={winningVariant.score} />
@@ -416,7 +416,7 @@ const TestLabPro: React.FC = () => {
                             <p className="text-sm font-bold text-[#0B0B0B]">{variantLabel(v)}</p>
                             {isWinner && <Badge tone="red">Winner</Badge>}
                           </div>
-                          <span className="text-sm font-black text-[#0B0B0B] tabular-nums">{v.score ?? '–'}<span className="text-gray-400 font-bold">/100</span></span>
+                          <span className="text-sm font-black text-[#0B0B0B] tabular-nums">{v.score ?? '–'}<span className="text-gray-500 font-bold">/100</span></span>
                         </div>
                         {v.text && <p className="text-sm text-gray-600 leading-relaxed">"{v.text}"</p>}
                       </Card>

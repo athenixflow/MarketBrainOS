@@ -207,21 +207,21 @@ const AuthPage: React.FC = () => {
     mode === 'forgot' ? (
       <p className="text-center text-sm text-gray-600">
         Remembered it?{' '}
-        <button onClick={() => switchMode('signin')} className="font-bold text-[#FF0000] hover:opacity-70 transition-opacity">
+        <button onClick={() => switchMode('signin')} className="font-bold text-[#E00000] hover:opacity-70 transition-opacity">
           Back to sign in
         </button>
       </p>
     ) : mode === 'signin' ? (
       <p className="text-center text-sm text-gray-600">
         New to MarketBrain OS?{' '}
-        <button onClick={() => switchMode('signup')} className="font-bold text-[#FF0000] hover:opacity-70 transition-opacity">
+        <button onClick={() => switchMode('signup')} className="font-bold text-[#E00000] hover:opacity-70 transition-opacity">
           Create an account
         </button>
       </p>
     ) : (
       <p className="text-center text-sm text-gray-600">
         Already have an account?{' '}
-        <button onClick={() => switchMode('signin')} className="font-bold text-[#FF0000] hover:opacity-70 transition-opacity">
+        <button onClick={() => switchMode('signin')} className="font-bold text-[#E00000] hover:opacity-70 transition-opacity">
           Sign in
         </button>
       </p>

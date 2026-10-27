@@ -57,7 +57,7 @@ const ScopeSwitcher: React.FC = () => {
         <div className="paper absolute right-0 mt-2 w-[min(15rem,calc(100vw-2rem))] bg-white text-[#0B0B0B] rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
           <button
             onClick={() => { resetToPersonal(); setOpen(false); }}
-            className={`w-full text-left px-5 py-3 text-sm font-bold hover:bg-gray-50 transition-colors ${scope.level === 'personal' ? 'text-[#FF0000]' : ''}`}
+            className={`w-full text-left px-5 py-3 text-sm font-bold hover:bg-gray-50 transition-colors ${scope.level === 'personal' ? 'text-[#E00000]' : ''}`}
           >
             Personal
           </button>
@@ -73,10 +73,10 @@ const ScopeSwitcher: React.FC = () => {
               <button
                 key={`${m.family}-${m.containerId}`}
                 onClick={() => pick(target)}
-                className={`w-full text-left px-5 py-3 hover:bg-gray-50 transition-colors ${active ? 'text-[#FF0000]' : ''}`}
+                className={`w-full text-left px-5 py-3 hover:bg-gray-50 transition-colors ${active ? 'text-[#E00000]' : ''}`}
               >
                 <p className="text-sm font-bold truncate">{m.name}</p>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{m.family}</p>
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{m.family}</p>
               </button>
             );
           })}

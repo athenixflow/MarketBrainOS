@@ -60,14 +60,14 @@ const TeamAnalytics: React.FC<{ workspace: Workspace }> = ({ workspace }) => {
         <Card title="Most-used tools">
           {topTools.length === 0 ? <EmptyState message="No data yet" submessage="Shared analyses will show which tools your team uses most." /> : (
             <div className="space-y-2">{topTools.map(([m, c]) => (
-              <div key={m} className="flex items-center justify-between gap-4"><span className="text-xs font-bold text-[#0B0B0B] truncate">{getToolMeta(m)?.label || m}</span><span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums">{c}</span></div>
+              <div key={m} className="flex items-center justify-between gap-4"><span className="text-xs font-bold text-[#0B0B0B] truncate">{getToolMeta(m)?.label || m}</span><span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest tabular-nums">{c}</span></div>
             ))}</div>
           )}
         </Card>
         <Card title="Analyses per member">
           {perMember.length === 0 ? <EmptyState message="No data yet" submessage="Shared analyses will show who runs them." /> : (
             <div className="space-y-2">{perMember.map(([uid, c]) => (
-              <div key={uid} className="flex items-center justify-between gap-4"><span className="text-xs font-medium text-gray-600 truncate">{emailFor(uid)}</span><span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums">{c}</span></div>
+              <div key={uid} className="flex items-center justify-between gap-4"><span className="text-xs font-medium text-gray-600 truncate">{emailFor(uid)}</span><span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest tabular-nums">{c}</span></div>
             ))}</div>
           )}
         </Card>

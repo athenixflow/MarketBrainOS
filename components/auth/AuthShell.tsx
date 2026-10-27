@@ -88,7 +88,7 @@ const AuthShell: React.FC<{
               <motion.li key={p.title} {...rise(0.2 + i * 0.08)}>
                 <div className="w-8 h-[2px] bg-[#FF0000] rounded-full mb-4" />
                 <h3 className="text-white font-bold text-[15px] mb-2">{p.title}</h3>
-                <p className="text-sm text-gray-500 leading-relaxed">{p.body}</p>
+                <p className="text-sm text-gray-400 leading-relaxed">{p.body}</p>
               </motion.li>
             ))}
           </ul>
@@ -96,7 +96,7 @@ const AuthShell: React.FC<{
 
         <motion.div
           {...rise(0.45)}
-          className="relative flex items-center gap-6 text-[11px] font-bold uppercase tracking-widest text-gray-600"
+          className="relative flex items-center gap-6 text-[11px] font-bold uppercase tracking-widest text-gray-400"
         >
           <span>&copy; {year} MarketBrain OS</span>
           <Link to="/privacy" className="hover:text-gray-300 transition-colors">Privacy</Link>
@@ -130,7 +130,7 @@ const AuthShell: React.FC<{
 
         {/* Mobile legal row; the desktop equivalent lives in the brand panel. */}
         <div className="lg:hidden px-6 pb-8 sm:px-10">
-          <div className="w-full max-w-[420px] mx-auto flex items-center gap-5 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+          <div className="w-full max-w-[420px] mx-auto flex items-center gap-5 text-[10px] font-bold uppercase tracking-widest text-gray-500">
             <span>&copy; {year} MarketBrain OS</span>
             <Link to="/privacy" className="hover:text-[#0B0B0B] transition-colors">Privacy</Link>
             <Link to="/terms" className="hover:text-[#0B0B0B] transition-colors">Terms</Link>

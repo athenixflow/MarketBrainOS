@@ -6,7 +6,7 @@ import {
   getAnalysisComments, createWorkspaceComment, updateWorkspaceComment, deleteWorkspaceComment,
 } from '../../services/persistenceService';
 
-const rowAction = 'text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors';
+const rowAction = 'text-[10px] font-bold text-gray-500 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors';
 
 const AnalysisComments: React.FC<{
   workspaceId: string; analysisId: string; selfUid: string; selfName: string;
@@ -68,7 +68,7 @@ const AnalysisComments: React.FC<{
   const renderRow = (c: WorkspaceComment, isReply?: boolean) => (
     <div key={c.id} className={`${isReply ? 'ml-8' : ''} p-4 bg-white rounded-2xl border border-gray-100`}>
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums">
+        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest tabular-nums">
           {c.author_name || 'Member'} · {c.created_at ? new Date(c.created_at).toLocaleString() : ''}{c.updated_at ? ' (edited)' : ''}
         </p>
         {c.author_uid === selfUid && editId !== c.id && (
@@ -101,7 +101,7 @@ const AnalysisComments: React.FC<{
 
   return (
     <div className="mt-4 pt-4 border-t border-gray-100">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Comments</p>
+      <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3">Comments</p>
       {error && <ErrorMessage message={error} className="mb-3" action={{ label: 'Retry', onClick: () => { setLoading(true); load(); } }} />}
       {loading ? (
         <div className="space-y-2" aria-busy="true">
@@ -110,7 +110,7 @@ const AnalysisComments: React.FC<{
         </div>
       ) : (
         <div className="space-y-2">
-          {roots.length === 0 && !error && <p className="text-xs text-gray-400 font-medium">No comments yet.</p>}
+          {roots.length === 0 && !error && <p className="text-xs text-gray-500 font-medium">No comments yet.</p>}
           {roots.map(c => (
             <div key={c.id} className="space-y-2">
               {renderRow(c)}

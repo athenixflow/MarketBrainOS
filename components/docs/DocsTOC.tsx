@@ -15,7 +15,7 @@ const DocsTOC: React.FC<{ article: DocArticle }> = ({ article }) => {
   return (
     <nav aria-label="On this page" className="hidden xl:block w-56 shrink-0">
       <div className="sticky top-24">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-4">On this page</p>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-4">On this page</p>
         <ul className="space-y-1 border-l border-gray-800">
           {headings.map((h) => {
             const isActive = active === h.id;
@@ -26,7 +26,7 @@ const DocsTOC: React.FC<{ article: DocArticle }> = ({ article }) => {
                   aria-current={isActive ? 'location' : undefined}
                   onClick={(e) => { e.preventDefault(); scrollToHeading(h.id); }}
                   className={`block -ml-px border-l-2 pl-4 py-1.5 text-[13px] leading-snug transition-colors ${
-                    isActive ? 'border-[#FF0000] text-white font-semibold' : 'border-transparent text-gray-500 hover:text-gray-300'
+                    isActive ? 'border-[#FF0000] text-white font-semibold' : 'border-transparent text-gray-400 hover:text-gray-300'
                   }`}
                 >
                   {h.text}

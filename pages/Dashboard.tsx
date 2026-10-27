@@ -26,9 +26,9 @@ const moduleLabel = (m: string): string =>
   getToolMeta(m)?.label || m.replace(/_.*/, '').replace(/([A-Z])/g, ' $1').trim() || m;
 
 // Text link used under empty states on this page (inside a white Card).
-const inlineLink = 'text-[10px] font-bold text-[#FF0000] uppercase tracking-widest hover:opacity-60 transition-opacity border-b border-[#FF0000]/20 pb-1';
+const inlineLink = 'text-[10px] font-bold text-[#E00000] uppercase tracking-widest hover:opacity-60 transition-opacity border-b border-[#FF0000]/20 pb-1';
 // Quiet text actions that sit on the page background under the welcome card.
-const quietAction = 'text-[10px] font-bold text-gray-500 hover:text-white uppercase tracking-widest transition-colors';
+const quietAction = 'text-[10px] font-bold text-gray-400 hover:text-white uppercase tracking-widest transition-colors';
 
 const Dashboard: React.FC = () => {
   const { user, profile, refreshProfile } = useAuth();
@@ -252,23 +252,23 @@ const Dashboard: React.FC = () => {
           ) : hasData ? (
             <div className={insightGrid}>
               <Card accent>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Most active tool</p>
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Most active tool</p>
                 <p className="text-xl font-bold text-[#0B0B0B] tracking-tight">{metrics.topLabel || 'None yet'}</p>
-                <p className="text-[11px] text-gray-400 mt-2 font-medium">Your most-used analysis so far.</p>
+                <p className="text-[11px] text-gray-500 mt-2 font-medium">Your most-used analysis so far.</p>
               </Card>
               <Card>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Recommended next</p>
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Recommended next</p>
                 {metrics.recommended ? (
                   <Link to={`/${metrics.recommended.slug}`} className="text-xl font-bold text-[#0B0B0B] tracking-tight hover:text-[#FF0000] transition-colors">{metrics.recommended.navLabel}</Link>
                 ) : <p className="text-xl font-bold text-[#0B0B0B]">None yet</p>}
-                <p className="text-[11px] text-gray-400 mt-2 font-medium">Pairs well with your recent work.</p>
+                <p className="text-[11px] text-gray-500 mt-2 font-medium">Pairs well with your recent work.</p>
               </Card>
               <Card>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Unused opportunity</p>
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Unused opportunity</p>
                 {metrics.unusedTool ? (
                   <Link to={`/${metrics.unusedTool.slug}`} className="text-xl font-bold text-[#0B0B0B] tracking-tight hover:text-[#FF0000] transition-colors">{metrics.unusedTool.navLabel}</Link>
                 ) : <p className="text-xl font-bold text-[#0B0B0B]">All tools explored</p>}
-                <p className="text-[11px] text-gray-400 mt-2 font-medium">A tool you have not tried yet.</p>
+                <p className="text-[11px] text-gray-500 mt-2 font-medium">A tool you have not tried yet.</p>
               </Card>
             </div>
           ) : (
@@ -326,7 +326,7 @@ const Dashboard: React.FC = () => {
                     return (
                       <div key={m.module}>
                         <div className="flex justify-between gap-4 text-xs font-bold text-[#0B0B0B] mb-1.5">
-                          <span className="truncate">{m.label}</span><span className="text-gray-400 tabular-nums shrink-0">{m.count}</span>
+                          <span className="truncate">{m.label}</span><span className="text-gray-500 tabular-nums shrink-0">{m.count}</span>
                         </div>
                         <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
                           <div className="h-full bg-[#FF0000] rounded-full" style={{ width: `${pct}%` }} />
@@ -379,7 +379,7 @@ const Dashboard: React.FC = () => {
                       <Badge tone="neutral">{a.kind}</Badge>
                       <span className="text-sm font-bold text-[#0B0B0B] truncate">{a.label}</span>
                     </div>
-                    <span className="text-[11px] font-medium text-gray-400 tabular-nums shrink-0">{a.ts ? new Date(a.ts).toLocaleDateString() : ''}</span>
+                    <span className="text-[11px] font-medium text-gray-500 tabular-nums shrink-0">{a.ts ? new Date(a.ts).toLocaleDateString() : ''}</span>
                   </div>
                 ))}
               </div>
@@ -399,12 +399,12 @@ const Dashboard: React.FC = () => {
 
         {/* ===================== ANALYSIS TOOLS ===================== */}
         <AnimatedSection as="section" index={6} id="tools-section" className="space-y-12 scroll-mt-8">
-          <SectionLabel action={<span className="text-[11px] font-bold text-gray-500 tabular-nums">{TOOL_COUNT} tools</span>}>
+          <SectionLabel action={<span className="text-[11px] font-bold text-gray-400 tabular-nums">{TOOL_COUNT} tools</span>}>
             Analysis tools
           </SectionLabel>
           {NAV_SUITES.map((group, gi) => (
             <div key={group.suite}>
-              <SectionLabel action={<span className="text-[11px] font-bold text-gray-600 tabular-nums">{group.items.length} {group.items.length === 1 ? 'tool' : 'tools'}</span>}>
+              <SectionLabel action={<span className="text-[11px] font-bold text-gray-400 tabular-nums">{group.items.length} {group.items.length === 1 ? 'tool' : 'tools'}</span>}>
                 {group.suite}
               </SectionLabel>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

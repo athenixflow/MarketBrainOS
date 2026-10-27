@@ -51,7 +51,7 @@ const LegalPage: React.FC<{
     <AnimatedSection as="section" index={0} className="pt-24 pb-10 px-6 md:px-12 max-w-4xl mx-auto">
       <span className="text-sm font-bold text-[#FF0000] uppercase tracking-[0.2em] mb-6 block">{eyebrow}</span>
       <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight mb-5 leading-[1.1]">{title}</h1>
-      <p className="text-[11px] font-bold text-gray-600 uppercase tracking-widest">Last updated · {lastUpdated}</p>
+      <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Last updated · {lastUpdated}</p>
       <div className="mt-8 text-lg text-gray-400 font-medium leading-relaxed">{intro}</div>
     </AnimatedSection>
     <div className="pb-16">{children}</div>

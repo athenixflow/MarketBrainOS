@@ -35,7 +35,7 @@ const CompareHub: React.FC = () => {
         <h1 className="text-4xl md:text-5xl font-bold text-white mb-6 leading-tight">
           How this compares with what you already use
         </h1>
-        <p className="text-lg text-gray-500 leading-relaxed mb-12 max-w-2xl">
+        <p className="text-lg text-gray-400 leading-relaxed mb-12 max-w-2xl">
           Most people weighing this up are already paying for a general AI assistant. These pages
           say what each one is genuinely better at before making any case for this, and link to
           the other side’s own pricing rather than quoting figures at you.
@@ -50,7 +50,7 @@ const CompareHub: React.FC = () => {
                   className="block border border-gray-800 rounded-2xl px-6 py-5 hover:border-gray-600 transition-colors"
                 >
                   <span className="text-white font-bold">MarketBrain OS vs {c.name}</span>
-                  <span className="block text-sm text-gray-500 mt-1">
+                  <span className="block text-sm text-gray-400 mt-1">
                     Checked {c.verifiedOn}
                   </span>
                 </Link>
@@ -64,7 +64,7 @@ const CompareHub: React.FC = () => {
             <p className="text-white font-bold mb-2">
               {publishable.length === 0 ? 'These are being re-verified' : 'Also being re-verified'}
             </p>
-            <p className="text-gray-500 text-sm">
+            <p className="text-gray-400 text-sm">
               {pending.map((c) => c.name).join(', ')} — plans change without notice, so a comparison
               stays out of search until somebody has re-read the other side’s pricing page and dated
               it. In the meantime the quickest honest comparison is to run the same page through both.

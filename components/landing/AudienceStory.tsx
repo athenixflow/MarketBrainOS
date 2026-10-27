@@ -70,7 +70,7 @@ const AudienceList: React.FC<AudienceStoryProps> = ({ audiences, index = 0 }) =>
           )}
           <div className="p-6 sm:p-8">
             <h3 className="text-xl font-bold text-white mb-4">{a.title}</h3>
-            <p className="text-gray-500 text-sm leading-relaxed">{a.desc}</p>
+            <p className="text-gray-400 text-sm leading-relaxed">{a.desc}</p>
           </div>
         </div>
       ))}
@@ -176,7 +176,7 @@ const PinnedStory: React.FC<{ audiences: Audience[] }> = ({ audiences }) => {
               ))}
             </div>
 
-            <p data-audience-counter className="mt-10 text-[11px] font-bold text-gray-500 uppercase tracking-widest tabular-nums">
+            <p data-audience-counter className="mt-10 text-[11px] font-bold text-gray-400 uppercase tracking-widest tabular-nums">
               {`${pad(active + 1)} / ${pad(n)}`}
             </p>
           </div>

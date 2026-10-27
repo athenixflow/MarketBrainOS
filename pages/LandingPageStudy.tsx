@@ -33,7 +33,7 @@ const Histogram: React.FC<{ title: string; s: SegmentSummary; max: number }> = (
     <figure className="border border-gray-800 rounded-2xl p-6">
       <figcaption className="flex items-baseline justify-between mb-5">
         <span className="text-white font-bold">{title}</span>
-        <span className="text-xs text-gray-500 tabular-nums">n = {s.n} · median {s.median ?? '—'}</span>
+        <span className="text-xs text-gray-400 tabular-nums">n = {s.n} · median {s.median ?? '—'}</span>
       </figcaption>
       <div className="relative h-40 flex items-end gap-[2px]" onMouseLeave={() => setHover(null)}>
         {s.buckets.map((b, i) => (
@@ -59,7 +59,7 @@ const Histogram: React.FC<{ title: string; s: SegmentSummary; max: number }> = (
           </div>
         )}
       </div>
-      <div className="flex justify-between text-[10px] text-gray-500 mt-2 tabular-nums border-t border-gray-800 pt-2">
+      <div className="flex justify-between text-[10px] text-gray-400 mt-2 tabular-nums border-t border-gray-800 pt-2">
         <span>0</span><span>50</span><span>100</span>
       </div>
     </figure>
@@ -135,9 +135,9 @@ const LandingPageStudy: React.FC = () => {
             { k: 'Africa vs global, median', v: gap.median == null ? '—' : `${gap.median > 0 ? '+' : ''}${gap.median}`, d: `${africa.median} vs ${global.median} points` },
           ].map((t) => (
             <div key={t.k} className="border border-gray-800 rounded-2xl p-5">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">{t.k}</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">{t.k}</p>
               <p className="text-3xl font-bold text-white tabular-nums">{t.v}</p>
-              <p className="text-xs text-gray-500 mt-1 tabular-nums">{t.d}</p>
+              <p className="text-xs text-gray-400 mt-1 tabular-nums">{t.d}</p>
             </div>
           ))}
         </div>
@@ -156,7 +156,7 @@ const LandingPageStudy: React.FC = () => {
         <div className="overflow-x-auto mb-16">
           <table className="w-full text-sm min-w-[560px]">
             <thead>
-              <tr className="text-left text-[10px] uppercase tracking-widest text-gray-500 border-b border-gray-800">
+              <tr className="text-left text-[10px] uppercase tracking-widest text-gray-400 border-b border-gray-800">
                 <th className="py-3 pr-4 font-bold">Category</th>
                 <th className="py-3 pr-4 font-bold w-[38%]">All pages</th>
                 <th className="py-3 pr-4 font-bold text-right">Africa</th>
@@ -191,7 +191,7 @@ const LandingPageStudy: React.FC = () => {
             </p>
             <table className="w-full text-sm mb-16">
               <thead>
-                <tr className="text-left text-[10px] uppercase tracking-widest text-gray-500 border-b border-gray-800">
+                <tr className="text-left text-[10px] uppercase tracking-widest text-gray-400 border-b border-gray-800">
                   <th className="py-3 pr-4 font-bold">Group</th>
                   <th className="py-3 pr-4 font-bold text-right">Pages</th>
                   <th className="py-3 font-bold text-right">Median score</th>
@@ -261,7 +261,7 @@ const LandingPageStudy: React.FC = () => {
         <div className="border border-gray-800 rounded-2xl p-8 text-center">
           <p className="text-white text-xl font-bold mb-2">Run the same audit on your own page</p>
           <p className="text-gray-400 text-sm mb-6">Free, no account: a score and the three biggest blockers.</p>
-          <Link to="/tools/landing-page-score" className="inline-block bg-[#FF0000] text-white font-bold px-6 py-3 rounded-xl">
+          <Link to="/tools/landing-page-score" className="inline-block bg-[#E00000] text-white font-bold px-6 py-3 rounded-xl">
             Score my landing page
           </Link>
         </div>

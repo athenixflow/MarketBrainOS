@@ -61,7 +61,7 @@ export const AuthField: React.FC<{
             type="button"
             onClick={() => setReveal((s) => !s)}
             aria-label={reveal ? 'Hide password' : 'Show password'}
-            className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-xl text-gray-400 hover:text-[#0B0B0B] hover:bg-gray-50 transition-colors"
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-xl text-gray-500 hover:text-[#0B0B0B] hover:bg-gray-50 transition-colors"
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5">
               {reveal ? (
@@ -152,7 +152,7 @@ export const GoogleButton: React.FC<{ onClick: () => void; disabled?: boolean; l
 export const OrDivider: React.FC<{ label?: string }> = ({ label = 'or' }) => (
   <div className="relative flex items-center py-6">
     <div className="flex-grow border-t border-gray-200" />
-    <span className="flex-shrink-0 mx-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{label}</span>
+    <span className="flex-shrink-0 mx-4 text-[11px] font-bold text-gray-500 uppercase tracking-widest">{label}</span>
     <div className="flex-grow border-t border-gray-200" />
   </div>
 );

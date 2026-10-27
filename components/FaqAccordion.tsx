@@ -18,7 +18,7 @@ const FaqAccordion: React.FC<{ items: FaqItem[] }> = ({ items }) => {
             </button>
             {isOpen && (
               <div className="px-7 pb-7 -mt-1 animate-in fade-in slide-in-from-top-1 duration-200">
-                <p className="text-gray-500 leading-relaxed font-medium">{item.a}</p>
+                <p className="text-gray-400 leading-relaxed font-medium">{item.a}</p>
               </div>
             )}
           </div>

@@ -58,7 +58,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onToggleSidebar, isSidebarOpen = 
 
       {/* Right cluster: fixed-width children, never clipped (ScopeSwitcher and NotificationCenter open popovers here). */}
       <div className="ml-auto flex items-center shrink-0 gap-3 sm:gap-4 lg:gap-8 xl:gap-10">
-        <nav aria-label="Account" className="flex items-center gap-4 lg:gap-6 text-[11px] font-bold tracking-widest text-gray-500 uppercase">
+        <nav aria-label="Account" className="flex items-center gap-4 lg:gap-6 text-[11px] font-bold tracking-widest text-gray-400 uppercase">
           {!isAdminPath && profile?.tier === 'free' && (
             <>
               {/* No animate-pulse: red already carries the emphasis, and it was the only perpetually moving chrome. */}

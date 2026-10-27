@@ -67,7 +67,7 @@ const DocArticle: React.FC = () => {
       <Seo title={article.title} description={article.summary} path={path} ogType="article" jsonLd={[articleJsonLd, breadcrumbJsonLd]} />
       <article className="min-w-0 flex-1 max-w-3xl">
         {/* Breadcrumbs */}
-        <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-gray-500 mb-6">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-6">
           <Link to="/documentation" className="hover:text-white transition-colors">Docs</Link>
           <Icon name="chevronRight" className="w-3 h-3 text-gray-700" />
           <Link to={`/documentation/${category.id}`} className="hover:text-white transition-colors">{category.title}</Link>
@@ -77,7 +77,7 @@ const DocArticle: React.FC = () => {
           <h1 className="text-3xl lg:text-4xl font-bold tracking-tight text-white leading-tight mb-4">{article.title}</h1>
           <div className="w-12 h-[2px] bg-[#FF0000] rounded-full mb-5" />
           <p className="text-lg text-gray-400 font-medium leading-relaxed">{article.summary}</p>
-          <p className="text-[11px] font-bold uppercase tracking-widest text-gray-600 mt-5">Last updated {DOCS_LAST_UPDATED}</p>
+          <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 mt-5">Last updated {DOCS_LAST_UPDATED}</p>
         </header>
 
         {/* Body card */}
@@ -89,13 +89,13 @@ const DocArticle: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-10">
           {prev ? (
             <Link to={`/documentation/${prev.categoryId}/${prev.id}`} className="group rounded-2xl border border-gray-800 hover:border-gray-600 bg-[#111] p-5 transition-colors">
-              <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2"><Icon name="arrowLeft" className="w-3.5 h-3.5" /> Previous</span>
+              <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2"><Icon name="arrowLeft" className="w-3.5 h-3.5" /> Previous</span>
               <span className="text-sm font-bold text-white group-hover:text-[#FF0000] transition-colors">{prev.title}</span>
             </Link>
           ) : <span />}
           {next ? (
             <Link to={`/documentation/${next.categoryId}/${next.id}`} className="group rounded-2xl border border-gray-800 hover:border-gray-600 bg-[#111] p-5 transition-colors text-right sm:col-start-2">
-              <span className="flex items-center justify-end gap-2 text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Next <Icon name="arrowRight" className="w-3.5 h-3.5" /></span>
+              <span className="flex items-center justify-end gap-2 text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Next <Icon name="arrowRight" className="w-3.5 h-3.5" /></span>
               <span className="text-sm font-bold text-white group-hover:text-[#FF0000] transition-colors">{next.title}</span>
             </Link>
           ) : <span />}

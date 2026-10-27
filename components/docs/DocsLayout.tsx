@@ -52,8 +52,8 @@ const DocsLayout: React.FC = () => {
               className="group flex-1 max-w-md flex items-center gap-3 bg-[#141414] border border-gray-800 hover:border-gray-600 rounded-xl px-4 py-2.5 text-left transition-colors"
             >
               <Icon name="search" className="w-4 h-4 text-gray-500" />
-              <span className="text-[13px] text-gray-500 flex-1">Search the docs…</span>
-              <span className="hidden sm:inline text-[9px] font-bold uppercase tracking-widest text-gray-600 border border-gray-700 rounded px-1.5 py-0.5">Ctrl K</span>
+              <span className="text-[13px] text-gray-400 flex-1">Search the docs…</span>
+              <span className="hidden sm:inline text-[9px] font-bold uppercase tracking-widest text-gray-400 border border-gray-700 rounded px-1.5 py-0.5">Ctrl K</span>
             </button>
 
             <div className="flex items-center gap-4 shrink-0">
@@ -62,7 +62,7 @@ const DocsLayout: React.FC = () => {
               ) : (
                 <>
                   <Link to="/auth" className="hidden sm:inline text-[11px] font-bold uppercase tracking-widest text-gray-400 hover:text-white transition-colors">Sign In</Link>
-                  <Link to="/auth" className="text-[11px] font-bold uppercase tracking-widest bg-[#FF0000] text-white px-4 py-2 rounded-xl hover:bg-[#D40000] transition-colors">Start Free</Link>
+                  <Link to="/auth" className="text-[11px] font-bold uppercase tracking-widest bg-[#E00000] text-white px-4 py-2 rounded-xl hover:bg-[#D40000] transition-colors">Start Free</Link>
                 </>
               )}
             </div>

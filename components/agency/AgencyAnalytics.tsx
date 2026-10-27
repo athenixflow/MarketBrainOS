@@ -19,7 +19,7 @@ const AgencyAnalytics: React.FC<{ agency: Agency; clients: AgencyClient[]; membe
       <Card title="Top clients by analysis volume">
         {topClients.length === 0 ? <EmptyState message="No data yet" submessage="Run analyses inside a client workspace to see volume by client." /> : (
           <div className="space-y-2">{topClients.map(c => (
-            <div key={c.id} className="flex items-center justify-between gap-4"><span className="text-xs font-bold text-[#0B0B0B] truncate">{c.name}</span><span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums">{c.analysis_count || 0}</span></div>
+            <div key={c.id} className="flex items-center justify-between gap-4"><span className="text-xs font-bold text-[#0B0B0B] truncate">{c.name}</span><span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest tabular-nums">{c.analysis_count || 0}</span></div>
           ))}</div>
         )}
       </Card>

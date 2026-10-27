@@ -36,7 +36,7 @@ const TokenStorePage: React.FC = () => {
           )}
         </div>
       </Card>
-      <TokenStore />
+      <TokenStore onDark />
     </div>
   );
 };

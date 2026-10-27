@@ -61,7 +61,7 @@ const Reports: React.FC = () => {
           message="No reports yet"
           submessage="Run an analysis and use Save as report on the result to start building your reporting library."
           action={
-            <Link to="/" className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest hover:opacity-60 transition-opacity border-b border-[#FF0000]/20 pb-1">
+            <Link to="/" className="text-[10px] font-bold text-[#E00000] uppercase tracking-widest hover:opacity-60 transition-opacity border-b border-[#FF0000]/20 pb-1">
               Run your first analysis →
             </Link>
           }

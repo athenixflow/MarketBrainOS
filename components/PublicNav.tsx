@@ -36,7 +36,7 @@ const PublicNav: React.FC = () => {
             <Link
               key={l.to}
               to={l.to}
-              className={`whitespace-nowrap shrink-0 text-[11px] font-bold uppercase tracking-widest transition-colors ${location.pathname === l.to ? 'text-white' : 'text-gray-500 hover:text-white'}`}
+              className={`whitespace-nowrap shrink-0 text-[11px] font-bold uppercase tracking-widest transition-colors ${location.pathname === l.to ? 'text-white' : 'text-gray-400 hover:text-white'}`}
             >
               {l.label}
             </Link>
@@ -50,7 +50,7 @@ const PublicNav: React.FC = () => {
             <>
               {/* /auth opens in sign-in mode, so "Start Free" covers both paths where there is no room for two CTAs. */}
               <Link to="/auth" className="hidden lg:inline whitespace-nowrap shrink-0 text-[11px] font-bold uppercase tracking-widest text-gray-400 hover:text-white transition-colors py-4 -my-4">Sign In</Link>
-              <Link to="/auth" className="hidden md:inline whitespace-nowrap shrink-0 text-[11px] font-bold uppercase tracking-widest bg-[#FF0000] text-white px-5 py-2.5 rounded-xl hover:bg-[#D40000] transition-colors">Start Free</Link>
+              <Link to="/auth" className="hidden md:inline whitespace-nowrap shrink-0 text-[11px] font-bold uppercase tracking-widest bg-[#E00000] text-white px-5 py-2.5 rounded-xl hover:bg-[#D40000] transition-colors">Start Free</Link>
             </>
           )}
 
@@ -84,7 +84,7 @@ const PublicNav: React.FC = () => {
             ) : (
               <>
                 <Link to="/auth" onClick={close} className="text-xs font-bold uppercase tracking-widest text-gray-400 py-3.5 -my-1">Sign In</Link>
-                <Link to="/auth" onClick={close} className="text-xs font-bold uppercase tracking-widest bg-[#FF0000] text-white px-4 py-2 rounded-xl">Start Free</Link>
+                <Link to="/auth" onClick={close} className="text-xs font-bold uppercase tracking-widest bg-[#E00000] text-white px-4 py-2 rounded-xl">Start Free</Link>
               </>
             )}
           </div>

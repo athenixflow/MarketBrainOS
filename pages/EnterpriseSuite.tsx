@@ -253,8 +253,8 @@ const EnterpriseSuite: React.FC = () => {
               </Card>
               <Card title="Linked containers (aggregation scope)">
                 <p className="text-xs text-gray-500 mb-6">Select which teams and agencies the analytics engine aggregates over.</p>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Teams</p>
-                {linkableWorkspaces.length === 0 ? <p className="text-sm text-gray-400 font-medium mb-6">You do not belong to any teams yet.</p> : (
+                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3">Teams</p>
+                {linkableWorkspaces.length === 0 ? <p className="text-sm text-gray-500 font-medium mb-6">You do not belong to any teams yet.</p> : (
                   <div className="flex flex-wrap gap-2 mb-6">
                     {linkableWorkspaces.map(w => {
                       const on = (enterprise.linked_workspaces || []).includes(w.containerId);
@@ -262,8 +262,8 @@ const EnterpriseSuite: React.FC = () => {
                     })}
                   </div>
                 )}
-                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Agencies</p>
-                {linkableAgencies.length === 0 ? <p className="text-sm text-gray-400 font-medium">You do not belong to any agencies yet.</p> : (
+                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3">Agencies</p>
+                {linkableAgencies.length === 0 ? <p className="text-sm text-gray-500 font-medium">You do not belong to any agencies yet.</p> : (
                   <div className="flex flex-wrap gap-2">
                     {linkableAgencies.map(a => {
                       const on = (enterprise.linked_agencies || []).includes(a.containerId);
@@ -291,7 +291,7 @@ const EnterpriseSuite: React.FC = () => {
                       </div>
                     </div>
                     <div className="pt-8 border-t border-gray-100">
-                      <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-2">Archive organization</p>
+                      <p className="text-[10px] font-bold text-[#E00000] uppercase tracking-widest mb-2">Archive organization</p>
                       <p className="text-xs text-gray-500 mb-4 leading-relaxed">Archiving disables the organization for every member.</p>
                       {confirmArchive ? (
                         <div className="flex flex-wrap items-center gap-3">

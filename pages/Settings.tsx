@@ -43,7 +43,7 @@ const Toggle: React.FC<{ label: string; description?: string; checked: boolean; 
     <div className="flex items-center justify-between gap-6 py-5 border-b border-gray-100 last:border-0">
       <div className="min-w-0">
         <p className="text-sm font-bold text-[#0B0B0B]">{label}</p>
-        {description && <p className="text-xs text-gray-400 font-medium mt-1">{description}</p>}
+        {description && <p className="text-xs text-gray-500 font-medium mt-1">{description}</p>}
       </div>
       <button
         type="button"
@@ -63,7 +63,7 @@ const RoadmapRow: React.FC<{ title: string; description: string }> = ({ title, d
   <div className="p-5 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-between gap-4">
     <div className="min-w-0">
       <p className="text-sm font-bold text-[#0B0B0B]">{title}</p>
-      <p className="text-xs text-gray-400 font-medium mt-1">{description}</p>
+      <p className="text-xs text-gray-500 font-medium mt-1">{description}</p>
     </div>
     <ComingSoon className="shrink-0" />
   </div>
@@ -382,17 +382,17 @@ const Settings: React.FC = () => {
           </p>
           {sharesErr && <ErrorMessage message={sharesErr} />}
           {shares === null ? <Skeleton className="h-16" /> : shares.length === 0 ? (
-            <p className="text-sm text-gray-400 font-medium">You have not shared any results yet. Use <strong>Share</strong> on a result to create a link.</p>
+            <p className="text-sm text-gray-500 font-medium">You have not shared any results yet. Use <strong>Share</strong> on a result to create a link.</p>
           ) : (
             <div className="divide-y divide-gray-100">
               {shares.map((row) => (
                 <div key={row.id} className="flex flex-wrap items-center gap-4 py-4">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-bold text-[#0B0B0B]">
-                      {row.label}{row.score != null && <span className="text-gray-400"> · {row.score}/100</span>}
+                      {row.label}{row.score != null && <span className="text-gray-500"> · {row.score}/100</span>}
                     </p>
-                    <p className="text-xs text-gray-400 font-medium break-all">{row.url}</p>
-                    <p className="text-[11px] text-gray-400 font-medium mt-1">
+                    <p className="text-xs text-gray-500 font-medium break-all">{row.url}</p>
+                    <p className="text-[11px] text-gray-500 font-medium mt-1">
                       {row.views} {row.views === 1 ? 'view' : 'views'}
                       {row.created_at && ` · shared ${new Date(row.created_at).toLocaleDateString()}`}
                     </p>
@@ -444,7 +444,7 @@ const Settings: React.FC = () => {
                       {r.containers.map((c) => (
                         <li key={`${c.kind}_${c.id}`} className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-2xl bg-white border border-red-100">
                           <span className="text-sm font-bold text-[#0B0B0B] min-w-0 truncate">{c.name}</span>
-                          <Link to={CONTAINER_PATH[c.kind] || '/'} className="text-[10px] font-bold uppercase tracking-widest text-[#FF0000] hover:text-[#D40000] transition-colors whitespace-nowrap">
+                          <Link to={CONTAINER_PATH[c.kind] || '/'} className="text-[10px] font-bold uppercase tracking-widest text-[#E00000] hover:text-[#D40000] transition-colors whitespace-nowrap">
                             {c.kind} settings →
                           </Link>
                         </li>
@@ -578,7 +578,7 @@ const Settings: React.FC = () => {
           <Toggle label="Workspace notifications" description="Member, client, and report activity." checked={!!prefs.workspace} onChange={(v) => savePrefs({ ...prefs, workspace: v })} />
           <Toggle label="Email" description="Master switch for the email channel." checked={!!prefs.email} onChange={(v) => savePrefs({ ...prefs, email: v })} />
           <Flash msg={prefsMsg} error={prefsErr} />
-          {savingPrefs && <p className="mt-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Saving…</p>}
+          {savingPrefs && <p className="mt-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest">Saving…</p>}
         </Card>
       )}
 
@@ -625,14 +625,14 @@ const Settings: React.FC = () => {
                         right={
                           <div>
                             {p.tokens_credited ? <p className="text-sm font-black text-green-600">+{p.tokens_credited} tokens</p> : null}
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{v.display}</p>
+                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{v.display}</p>
                           </div>
                         }
                       />
                     );
                   })}
                 </div>
-                <button onClick={() => downloadAsCSV('MarketBrainOS_Billing_History', paymentsToCSV(payments))} className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">Export CSV</button>
+                <button onClick={() => downloadAsCSV('MarketBrainOS_Billing_History', paymentsToCSV(payments))} className="text-[10px] font-bold text-gray-500 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">Export CSV</button>
               </>
             )}
           </Card>
@@ -665,7 +665,7 @@ const Settings: React.FC = () => {
           </Link>
           {canSeeFeature('agencyHub', accessCtx) && (
             <div className="mt-6">
-              <Link to="/agency" className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest hover:opacity-60 transition-opacity border-b border-[#FF0000]/20 pb-1">Manage agency clients →</Link>
+              <Link to="/agency" className="text-[10px] font-bold text-[#E00000] uppercase tracking-widest hover:opacity-60 transition-opacity border-b border-[#FF0000]/20 pb-1">Manage agency clients →</Link>
             </div>
           )}
         </Card>

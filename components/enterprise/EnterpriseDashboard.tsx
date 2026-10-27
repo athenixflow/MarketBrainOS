@@ -14,17 +14,17 @@ const EnterpriseDashboard: React.FC<{
   <div className="space-y-10">
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
       <Card className="lg:col-span-1 flex flex-col items-center justify-center text-center">
-        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">Enterprise Health</p>
+        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-4">Enterprise Health</p>
         {health ? (
           <>
             <p className={`text-6xl font-black tabular-nums leading-none ${BAND_COLOR[health.band] || 'text-[#0B0B0B]'}`}>{health.score}</p>
             <p className={`text-xs font-bold uppercase tracking-widest mt-3 ${BAND_COLOR[health.band] || 'text-gray-500'}`}>{health.band}</p>
-            <p className="text-[10px] text-gray-400 mt-3 tabular-nums">Updated {new Date(health.computed_at).toLocaleDateString()}</p>
+            <p className="text-[10px] text-gray-500 mt-3 tabular-nums">Updated {new Date(health.computed_at).toLocaleDateString()}</p>
           </>
         ) : (
           <>
             <p className="text-4xl font-black text-gray-200">—</p>
-            <p className="text-xs text-gray-400 font-medium mt-3">No health score yet. Refresh analytics to compute one.</p>
+            <p className="text-xs text-gray-500 font-medium mt-3">No health score yet. Refresh analytics to compute one.</p>
           </>
         )}
       </Card>

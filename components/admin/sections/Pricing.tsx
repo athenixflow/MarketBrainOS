@@ -148,7 +148,7 @@ const PricingAdmin: React.FC = () => {
       </Card>
 
       <div className="flex items-center gap-4">
-        <button onClick={save} disabled={busy || !isSuper} className="px-8 py-3 rounded-2xl bg-[#FF0000] text-white text-[11px] font-bold uppercase tracking-widest disabled:opacity-40">{busy ? 'Saving…' : 'Save pricing'}</button>
+        <button onClick={save} disabled={busy || !isSuper} className="px-8 py-3 rounded-2xl bg-[#E00000] text-white text-[11px] font-bold uppercase tracking-widest disabled:opacity-40">{busy ? 'Saving…' : 'Save pricing'}</button>
         {msg && <span className="text-sm font-semibold text-[#0B0B0B]">{msg}</span>}
       </div>
     </div>

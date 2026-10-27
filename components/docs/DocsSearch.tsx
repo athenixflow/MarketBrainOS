@@ -52,16 +52,16 @@ const DocsSearch: React.FC<{ open: boolean; onClose: () => void }> = ({ open, on
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search the docs — tools, tokens, roles, billing…"
-            className="flex-1 bg-transparent outline-none text-base text-white placeholder:text-gray-600"
+            className="flex-1 bg-transparent outline-none text-base text-white placeholder:text-gray-400"
           />
-          <button onClick={onClose} className="text-[9px] font-bold uppercase tracking-widest text-gray-500 border border-gray-700 rounded-lg px-2 py-1 hover:text-white hover:border-gray-500 transition-colors">Esc</button>
+          <button onClick={onClose} className="text-[9px] font-bold uppercase tracking-widest text-gray-400 border border-gray-700 rounded-lg px-2 py-1 hover:text-white hover:border-gray-500 transition-colors">Esc</button>
         </div>
 
         <div className="max-h-[55vh] overflow-y-auto">
           {query.trim().length < 2 ? (
-            <p className="px-5 py-10 text-center text-sm text-gray-600">Type at least two characters to search.</p>
+            <p className="px-5 py-10 text-center text-sm text-gray-400">Type at least two characters to search.</p>
           ) : results.length === 0 ? (
-            <p className="px-5 py-10 text-center text-sm text-gray-600">No results for “{query}”.</p>
+            <p className="px-5 py-10 text-center text-sm text-gray-400">No results for “{query}”.</p>
           ) : (
             <ul className="py-2">
               {results.map((r, i) => (
@@ -72,11 +72,11 @@ const DocsSearch: React.FC<{ open: boolean; onClose: () => void }> = ({ open, on
                     className={`w-full text-left px-5 py-3 flex flex-col gap-0.5 transition-colors ${i === active ? 'bg-[#FF0000]/10' : 'hover:bg-white/5'}`}
                   >
                     <span className="flex items-center gap-2">
-                      <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500">{r.category.title}</span>
-                      {r.anchorText && <><span className="text-gray-700">/</span><span className="text-[9px] font-bold uppercase tracking-widest text-[#FF0000]">{r.anchorText}</span></>}
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">{r.category.title}</span>
+                      {r.anchorText && <><span className="text-gray-400">/</span><span className="text-[9px] font-bold uppercase tracking-widest text-[#FF0000]">{r.anchorText}</span></>}
                     </span>
                     <span className="text-sm font-bold text-white">{r.article.title}</span>
-                    <span className="text-[12px] text-gray-500 leading-snug truncate">{r.snippet}</span>
+                    <span className="text-[12px] text-gray-400 leading-snug truncate">{r.snippet}</span>
                   </button>
                 </li>
               ))}
@@ -84,7 +84,7 @@ const DocsSearch: React.FC<{ open: boolean; onClose: () => void }> = ({ open, on
           )}
         </div>
 
-        <div className="flex items-center gap-4 px-5 py-2.5 border-t border-gray-800 text-[10px] font-bold uppercase tracking-widest text-gray-600">
+        <div className="flex items-center gap-4 px-5 py-2.5 border-t border-gray-800 text-[10px] font-bold uppercase tracking-widest text-gray-400">
           <span>↑↓ navigate</span><span>↵ open</span><span>esc close</span>
         </div>
       </div>

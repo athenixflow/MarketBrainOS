@@ -80,7 +80,7 @@ const ConsentBanner: React.FC = () => {
           id="consent-accept"
           type="button"
           onClick={() => decide('yes')}
-          className="flex-1 sm:flex-none h-10 bg-[#FF0000] text-white px-5 text-[11px] font-bold rounded-2xl shadow-sm hover:bg-[#D40000] active:scale-[0.99] transition-all duration-300 tracking-widest uppercase whitespace-nowrap"
+          className="flex-1 sm:flex-none h-10 bg-[#E00000] text-white px-5 text-[11px] font-bold rounded-2xl shadow-sm hover:bg-[#D40000] active:scale-[0.99] transition-all duration-300 tracking-widest uppercase whitespace-nowrap"
         >
           Accept analytics
         </button>

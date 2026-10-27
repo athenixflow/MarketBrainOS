@@ -68,7 +68,7 @@ const Compare: React.FC = () => {
           is entitled to know, before reading a word of the argument, that one of them
           wrote this page.
         */}
-        <p className="text-sm text-gray-500 border border-gray-800 rounded-2xl px-5 py-4 mb-10">
+        <p className="text-sm text-gray-400 border border-gray-800 rounded-2xl px-5 py-4 mb-10">
           <strong className="text-gray-300">Who wrote this:</strong> we make MarketBrain OS.
           We have tried to describe {competitor.name} as its own users would. Where a figure is
           not public we say so and link to their page rather than guess.
@@ -99,7 +99,7 @@ const Compare: React.FC = () => {
           <table className="w-full text-left border-collapse min-w-[520px]">
             <thead>
               <tr className="border-b border-gray-800">
-                <th className="py-3 pr-4 text-[10px] font-bold text-gray-600 uppercase tracking-widest">Can it…</th>
+                <th className="py-3 pr-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Can it…</th>
                 <th className="py-3 px-4 text-[10px] font-bold text-white uppercase tracking-widest">MarketBrain OS</th>
                 <th className="py-3 pl-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">{competitor.name}</th>
               </tr>
@@ -129,12 +129,12 @@ const Compare: React.FC = () => {
           ))}
         </ul>
         {competitor.plans.some((p) => p.currency === 'NGN') && (
-          <p className="text-xs text-gray-500 mb-2">
+          <p className="text-xs text-gray-400 mb-2">
             Shown in naira: {competitor.name}’s pricing page shows prices by country, and these are the figures
             it showed from Nigeria. We have not converted them — check the page for your own country.
           </p>
         )}
-        <p className="text-xs text-gray-600 mb-12">
+        <p className="text-xs text-gray-400 mb-12">
           <a href={competitor.pricingUrl} rel="nofollow noopener" target="_blank" className="underline">
             {competitor.name}’s own pricing page
           </a>
@@ -156,7 +156,7 @@ const Compare: React.FC = () => {
           <p className="text-gray-400 mb-5">
             The quickest way to decide is to run one page through both and compare what comes back.
           </p>
-          <Link to="/tools/landing-page-score" className="inline-block bg-[#FF0000] text-white px-8 py-4 rounded-2xl font-bold text-sm uppercase tracking-widest">
+          <Link to="/tools/landing-page-score" className="inline-block bg-[#E00000] text-white px-8 py-4 rounded-2xl font-bold text-sm uppercase tracking-widest">
             Score a page free, no account
           </Link>
         </div>
@@ -168,7 +168,7 @@ const Compare: React.FC = () => {
 /** 'unknown' is rendered as unknown. A blank cell reads as "no" and would be a claim. */
 const Mark: React.FC<{ value: Capability }> = ({ value }) => {
   const label = value === 'yes' ? 'Yes' : value === 'no' ? 'No' : value === 'partial' ? 'Partly' : 'Not checked';
-  const tone = value === 'yes' ? 'text-green-400' : value === 'no' ? 'text-gray-600' : 'text-gray-500';
+  const tone = value === 'yes' ? 'text-green-400' : value === 'no' ? 'text-gray-400' : 'text-gray-400';
   return <span className={`text-sm font-bold ${tone}`}>{label}</span>;
 };
 

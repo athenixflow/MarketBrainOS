@@ -65,7 +65,7 @@ const CopyBlock: React.FC<{ text: string; words: number }> = ({ text, words }) =
   return (
     <div className="border border-gray-800 rounded-2xl p-6">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">About {words} words</span>
+        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">About {words} words</span>
         <button
           type="button"
           className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-white"
@@ -104,7 +104,7 @@ const Press: React.FC = () => {
             ['Data', 'Stored in Google Firebase; submitted content is processed by the Gemini API and not used to train our models.'],
           ].map(([k, v]) => (
             <div key={k}>
-              <dt className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">{k}</dt>
+              <dt className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">{k}</dt>
               <dd className="text-gray-300 leading-relaxed">{v}</dd>
             </div>
           ))}

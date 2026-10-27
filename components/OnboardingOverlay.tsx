@@ -93,7 +93,7 @@ const OnboardingOverlay: React.FC = () => {
             >
               <p className="text-base font-bold tracking-tight mb-1">{example.title}</p>
               <p className="text-sm text-gray-500 leading-relaxed mb-3">{example.blurb}</p>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 group-hover:text-[#FF0000] transition-colors tabular-nums">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 group-hover:text-[#FF0000] transition-colors tabular-nums">
                 {example.toolLabel} · {example.cost} tokens
               </p>
             </button>
@@ -102,7 +102,7 @@ const OnboardingOverlay: React.FC = () => {
 
         <button
           onClick={skip}
-          className="mt-6 text-[11px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors"
+          className="mt-6 text-[11px] font-bold text-gray-500 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors"
         >
           I&rsquo;ll start from scratch
         </button>

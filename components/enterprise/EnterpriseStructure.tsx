@@ -5,7 +5,7 @@ import { Enterprise, EnterpriseDepartment, EnterpriseBrand } from '../../types';
 import { callManageDepartment, callManageBrand } from '../../services/persistenceService';
 
 const DEPT_TYPES = ['Marketing', 'Sales', 'Operations', 'Strategy', 'Product', 'Customer Success'];
-const rowAction = 'text-[10px] font-bold text-gray-400 hover:text-[#FF0000] uppercase tracking-widest transition-colors shrink-0';
+const rowAction = 'text-[10px] font-bold text-gray-500 hover:text-[#FF0000] uppercase tracking-widest transition-colors shrink-0';
 
 const EnterpriseStructure: React.FC<{
   enterprise: Enterprise; departments: EnterpriseDepartment[]; brands: EnterpriseBrand[]; canManage: boolean; onReload: () => void;
@@ -49,7 +49,7 @@ const EnterpriseStructure: React.FC<{
             <div className="space-y-2">
               {departments.map(d => (
                 <div key={d.id} className="flex flex-wrap items-center justify-between gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                  <div className="min-w-0"><p className="text-sm font-bold text-[#0B0B0B] truncate">{d.name}</p><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{d.type || 'General'}</p></div>
+                  <div className="min-w-0"><p className="text-sm font-bold text-[#0B0B0B] truncate">{d.name}</p><p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{d.type || 'General'}</p></div>
                   {canManage && <ConfirmTapButton onConfirm={() => delDept(d.id)} className={`${rowAction} hover:text-[#FF0000]`} />}
                 </div>
               ))}
@@ -73,7 +73,7 @@ const EnterpriseStructure: React.FC<{
             <div className="space-y-2">
               {brands.map(b => (
                 <div key={b.id} className="flex flex-wrap items-center justify-between gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                  <div className="min-w-0"><p className="text-sm font-bold text-[#0B0B0B] truncate">{b.name}</p><p className="text-[10px] font-medium text-gray-400 truncate">{b.description || 'No description'}</p></div>
+                  <div className="min-w-0"><p className="text-sm font-bold text-[#0B0B0B] truncate">{b.name}</p><p className="text-[10px] font-medium text-gray-500 truncate">{b.description || 'No description'}</p></div>
                   {canManage && <ConfirmTapButton onConfirm={() => delBrand(b.id)} className={`${rowAction} hover:text-[#FF0000]`} />}
                 </div>
               ))}

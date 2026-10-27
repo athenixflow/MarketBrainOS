@@ -47,7 +47,7 @@ const DocsCategory: React.FC = () => {
   return (
     <div className="max-w-4xl">
       <Seo title={category.title} description={category.summary} path={`/documentation/${category.id}`} jsonLd={[collectionJsonLd, breadcrumbJsonLd]} />
-      <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-gray-500 mb-6">
+      <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-6">
         <Link to="/documentation" className="hover:text-white transition-colors">Docs</Link>
         <Icon name="chevronRight" className="w-3 h-3 text-gray-700" />
         <span className="text-gray-300">{category.title}</span>
@@ -66,7 +66,7 @@ const DocsCategory: React.FC = () => {
           <Link key={a.id} to={`/documentation/${a.categoryId}/${a.id}`}
             className="group rounded-2xl border border-gray-800 hover:border-gray-600 bg-[#111] p-6 transition-colors">
             <h3 className="text-base font-bold text-white group-hover:text-[#FF0000] transition-colors mb-2">{a.title}</h3>
-            <p className="text-[13px] text-gray-500 leading-relaxed">{a.summary}</p>
+            <p className="text-[13px] text-gray-400 leading-relaxed">{a.summary}</p>
           </Link>
         ))}
       </div>

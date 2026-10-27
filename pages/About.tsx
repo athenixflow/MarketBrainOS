@@ -35,18 +35,18 @@ const About: React.FC = () => (
 
     <AnimatedSection as="section" index={1} className="py-12 px-6 md:px-12 max-w-4xl mx-auto border-t border-gray-900/50">
       <h2 className="text-2xl font-bold text-white mb-6">Our mission</h2>
-      <p className="text-lg text-gray-500 leading-relaxed mb-10">
+      <p className="text-lg text-gray-400 leading-relaxed mb-10">
         Transform raw business ideas, campaigns, workflows, funnels, offers, and growth initiatives into
         actionable strategic intelligence. We believe the most expensive decisions are the ones made on
         gut feel — so we built a system that pressure-tests them first.
       </p>
       <h2 className="text-2xl font-bold text-white mb-6">Our vision</h2>
-      <p className="text-lg text-gray-500 leading-relaxed mb-10">
+      <p className="text-lg text-gray-400 leading-relaxed mb-10">
         To become the operating system for business decision-making: one connected intelligence layer that
         sits between your ideas and your spend, across every part of your go-to-market.
       </p>
       <h2 className="text-2xl font-bold text-white mb-6">The story</h2>
-      <p className="text-lg text-gray-500 leading-relaxed">
+      <p className="text-lg text-gray-400 leading-relaxed">
         Most teams launch on instinct and pay an ad network to tell them what a careful review would
         have told them first. MarketBrain OS was built to close that gap — combining specialized analysis
         tools with a rigorous, repeatable result framework so insight is consistent, comparable, and
@@ -65,7 +65,7 @@ const About: React.FC = () => (
           <div key={p.t} className="p-8 border border-gray-800 rounded-2xl bg-[#0F0F0F]">
             <div className="w-8 h-[2px] bg-[#FF0000] rounded-full mb-6" />
             <h3 className="text-white font-bold mb-3">{p.t}</h3>
-            <p className="text-sm text-gray-500 leading-relaxed">{p.d}</p>
+            <p className="text-sm text-gray-400 leading-relaxed">{p.d}</p>
           </div>
         ))}
       </div>

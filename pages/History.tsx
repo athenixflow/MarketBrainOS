@@ -20,7 +20,7 @@ const BESPOKE_SLUG: Record<string, string> = {
 };
 
 const LOAD_ERROR = 'We could not load your history. Please try again.';
-const rowAction = 'text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors';
+const rowAction = 'text-[10px] font-bold text-gray-500 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors';
 
 const History: React.FC = () => {
   const { user, profile } = useAuth();
@@ -118,7 +118,7 @@ const History: React.FC = () => {
           message="No saved analyses yet"
           submessage="Run any analysis tool and it appears here automatically: searchable, exportable, and saved for good."
           action={
-            <Link to="/" className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest hover:opacity-60 transition-opacity border-b border-[#FF0000]/20 pb-1">
+            <Link to="/" className="text-[10px] font-bold text-[#E00000] uppercase tracking-widest hover:opacity-60 transition-opacity border-b border-[#FF0000]/20 pb-1">
               Run your first analysis →
             </Link>
           }
@@ -173,7 +173,7 @@ const History: React.FC = () => {
                         })()}
                         {rec.result?.verdict && <Badge tone="dark">{rec.result.verdict}</Badge>}
                       </div>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 tabular-nums">
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 tabular-nums">
                         {rec.timestamp ? new Date(rec.timestamp).toLocaleString() : 'Date unknown'}
                       </p>
                       {rec.result?.summary && (
@@ -201,14 +201,14 @@ const History: React.FC = () => {
                         </button>
                       </>
                     )}
-                    <ConfirmTapButton onConfirm={() => handleDelete(rec)} className="text-[10px] font-bold text-gray-400 hover:text-[#FF0000] uppercase tracking-widest transition-colors" />
+                    <ConfirmTapButton onConfirm={() => handleDelete(rec)} className="text-[10px] font-bold text-gray-500 hover:text-[#FF0000] uppercase tracking-widest transition-colors" />
                   </div>
 
                   {isOpen && (
                     <div className="mt-6 space-y-6 animate-in fade-in duration-300">
                       {/* Without this, a record with no sections expanded to literally nothing. */}
                       {(rec.result?.sections || []).length === 0 && (
-                        <p className="text-sm text-gray-400 font-medium">
+                        <p className="text-sm text-gray-500 font-medium">
                           {rec.result?.summary || 'This record has no saved detail sections.'}
                         </p>
                       )}

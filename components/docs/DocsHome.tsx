@@ -43,8 +43,8 @@ const DocsHome: React.FC = () => {
           className="group w-full max-w-xl flex items-center gap-3 bg-[#141414] border border-gray-800 hover:border-gray-600 rounded-2xl px-5 py-4 text-left transition-colors"
         >
           <Icon name="search" className="w-5 h-5 text-gray-500" />
-          <span className="text-[15px] text-gray-500 flex-1">Search the docs — tools, tokens, roles, billing…</span>
-          <span className="text-[9px] font-bold uppercase tracking-widest text-gray-600 border border-gray-700 rounded px-2 py-1">Ctrl K</span>
+          <span className="text-[15px] text-gray-400 flex-1">Search the docs — tools, tokens, roles, billing…</span>
+          <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400 border border-gray-700 rounded px-2 py-1">Ctrl K</span>
         </button>
       </section>
 
@@ -60,9 +60,9 @@ const DocsHome: React.FC = () => {
               <div className="min-w-0">
                 <h3 className="text-base font-bold text-white group-hover:text-[#FF0000] transition-colors mb-1 flex items-center gap-2">
                   {cat.title}
-                  <span className="text-[10px] font-bold text-gray-600">{articleCount(cat.id)}</span>
+                  <span className="text-[10px] font-bold text-gray-400">{articleCount(cat.id)}</span>
                 </h3>
-                <p className="text-[13px] text-gray-500 leading-relaxed">{cat.summary}</p>
+                <p className="text-[13px] text-gray-400 leading-relaxed">{cat.summary}</p>
               </div>
             </Link>
           ))}
@@ -71,7 +71,7 @@ const DocsHome: React.FC = () => {
 
       {/* Popular */}
       <section>
-        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-4">Popular guides</p>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-4">Popular guides</p>
         <div className="flex flex-wrap gap-2.5">
           {POPULAR.map(({ cat, id }) => {
             const a = getArticle(cat, id);

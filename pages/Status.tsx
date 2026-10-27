@@ -38,7 +38,7 @@ const Status: React.FC = () => {
             <p className="text-gray-400 mt-1">{STATUS.message}</p>
           </div>
         </div>
-        <p className="text-xs text-gray-500 mb-16">
+        <p className="text-xs text-gray-400 mb-16">
           Last updated {when(STATUS.updated)}. This page is updated by hand, not by an automatic monitor — if a tool is
           failing for you and this still says operational, tell us at{' '}
           <a href="mailto:support@marketbrainos.app" className="text-gray-300 underline">support@marketbrainos.app</a>.
@@ -52,7 +52,7 @@ const Status: React.FC = () => {
             {STATUS.incidents.map((i) => (
               <li key={i.started} className="border-b border-gray-900 pb-6">
                 <p className="text-white font-bold">{i.title}</p>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-gray-400 mt-1">
                   {when(i.started)} — {i.resolved ? `resolved ${when(i.resolved)}` : 'ongoing'}
                 </p>
                 <p className="text-gray-400 mt-2">{i.detail}</p>

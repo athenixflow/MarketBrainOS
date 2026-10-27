@@ -62,8 +62,8 @@ export const PrimaryButton: React.FC<{
     className={`${
       danger
         ? 'bg-[#B91C1C] enabled:hover:bg-[#991B1B] enabled:hover:shadow-[#B91C1C]/10'
-        : 'bg-[#FF0000] enabled:hover:bg-[#D40000] enabled:hover:shadow-[#FF0000]/10'
-    } text-white ${PRIMARY_SIZE[size]} font-bold rounded-2xl shadow-sm tracking-widest uppercase transition-all duration-300 enabled:hover:shadow-xl enabled:active:scale-[0.99] disabled:bg-gray-100 disabled:text-gray-500 disabled:shadow-none disabled:ring-1 disabled:ring-inset disabled:ring-gray-200 disabled:cursor-not-allowed ${className}`}
+        : 'bg-[#E00000] enabled:hover:bg-[#D40000] enabled:hover:shadow-[#FF0000]/10'
+    } text-white ${PRIMARY_SIZE[size]} font-bold rounded-2xl shadow-sm tracking-widest uppercase transition-all duration-300 enabled:hover:shadow-xl enabled:active:scale-[0.99] disabled:bg-gray-100 disabled:text-gray-600 disabled:shadow-none disabled:ring-1 disabled:ring-inset disabled:ring-gray-200 disabled:cursor-not-allowed ${className}`}
   >
     {children}
   </button>
@@ -159,7 +159,7 @@ export const Tabs: React.FC<{
           className={`pb-4 text-[11px] font-bold uppercase tracking-widest whitespace-nowrap transition-all relative ${
             active
               ? tone === 'dark' ? 'text-white' : 'text-[#0B0B0B]'
-              : tone === 'dark' ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'
+              : tone === 'dark' ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           {tab}
@@ -175,7 +175,7 @@ const fieldClasses = (tone: Tone, error?: boolean) =>
   // 16px, not 15: iOS Safari auto-zooms the page on focus of any field under 16px and leaves it zoomed.
   `w-full min-w-0 border px-4 py-3.5 rounded-2xl outline-none transition-all text-base focus:ring-4 focus:ring-[#FF0000]/10 focus:border-[#FF0000] disabled:opacity-50 ${
     tone === 'dark'
-      ? `bg-[#121212] text-white placeholder:text-gray-500 ${error ? 'border-red-500/60' : 'border-gray-800'}`
+      ? `bg-[#121212] text-white placeholder:text-gray-400 ${error ? 'border-red-500/60' : 'border-gray-800'}`
       : `bg-[#FBFBFB] text-[#0B0B0B] placeholder:text-gray-500 ${error ? 'border-red-300' : 'border-gray-200'}`
   }`;
 
@@ -254,7 +254,7 @@ export const Input: React.FC<{
         />
       )}
       {error && <p className="mt-2 text-[13px] font-medium text-red-600">{error}</p>}
-      {hint && !error && <div className={`mt-2 text-xs leading-relaxed ${tone === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>{hint}</div>}
+      {hint && !error && <div className={`mt-2 text-xs leading-relaxed ${tone === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>{hint}</div>}
     </div>
   );
 };
@@ -321,7 +321,7 @@ export const SectionHeader: React.FC<{ title: string; subtitle?: string; onDark?
       <div className="w-8 h-[2px] bg-[#FF0000] rounded-full flex-shrink-0" />
       <h3 className={`text-xl font-bold uppercase tracking-widest ${onDark ? 'text-white' : 'text-[#0B0B0B]'}`}>{title}</h3>
     </div>
-    {subtitle && <p className={`font-medium text-base ml-12 ${onDark ? 'text-gray-500' : 'text-gray-400'}`}>{subtitle}</p>}
+    {subtitle && <p className={`font-medium text-base ml-12 ${onDark ? 'text-gray-400' : 'text-gray-500'}`}>{subtitle}</p>}
   </div>
 );
 
@@ -329,7 +329,7 @@ export const SectionHeader: React.FC<{ title: string; subtitle?: string; onDark?
 // One style for all of them instead of the six hand-rolled variants that used to exist.
 export const SectionLabel: React.FC<{ children: React.ReactNode; className?: string; action?: React.ReactNode }> = ({ children, className = '', action }) => (
   <div className={`flex items-center justify-between gap-4 mb-6 ${className}`}>
-    <h2 className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">{children}</h2>
+    <h2 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">{children}</h2>
     {action}
   </div>
 );
@@ -348,8 +348,8 @@ export const EmptyState: React.FC<{
       <div className="w-12 h-12 bg-[#F9F9F9] border border-gray-100 rounded-full mb-8 flex items-center justify-center">
         <div className="w-1.5 h-1.5 bg-[#FF0000] rounded-full opacity-30" />
       </div>
-      <h3 className="text-xl font-bold text-gray-400 mb-3">{message}</h3>
-      {submessage && <p className="text-gray-400/60 text-sm max-w-xs leading-relaxed">{submessage}</p>}
+      <h3 className="text-xl font-bold text-gray-500 mb-3">{message}</h3>
+      {submessage && <p className="text-gray-500 text-sm max-w-xs leading-relaxed">{submessage}</p>}
       {action && <div className="mt-8">{action}</div>}
     </div>
   );
@@ -369,8 +369,8 @@ export const PermissionDenied: React.FC<{ message?: string; submessage?: string;
           <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
         </svg>
       </div>
-      <h3 className="text-xl font-bold text-gray-400 mb-3">{message}</h3>
-      <p className="text-gray-400/60 text-sm max-w-xs leading-relaxed">{submessage}</p>
+      <h3 className="text-xl font-bold text-gray-500 mb-3">{message}</h3>
+      <p className="text-gray-500 text-sm max-w-xs leading-relaxed">{submessage}</p>
     </div>
   );
   return card ? <Card>{body}</Card> : body;
@@ -389,9 +389,9 @@ export const Badge: React.FC<{
   className?: string;
 }> = ({ children, tone = 'neutral', className = '' }) => {
   const tones = {
-    neutral: 'bg-gray-100 text-gray-500',
-    red: 'bg-red-50 text-[#FF0000]',
-    green: 'bg-green-50 text-green-600',
+    neutral: 'bg-gray-100 text-gray-600',
+    red: 'bg-red-50 text-red-700',
+    green: 'bg-green-50 text-green-700',
     blue: 'bg-blue-50 text-blue-600',
     yellow: 'bg-yellow-50 text-yellow-700',
     dark: 'bg-[#1A1A1A] text-gray-300 border border-gray-800',
@@ -413,9 +413,9 @@ export const Stat: React.FC<{
   className?: string;
 }> = ({ label, value, sub, tone = 'light', size = 'md', className = '' }) => (
   <div className={`min-w-0 ${className}`}>
-    <p className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${tone === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>{label}</p>
+    <p className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${tone === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>{label}</p>
     <p className={`${size === 'lg' ? 'text-3xl sm:text-4xl' : 'text-2xl sm:text-3xl'} font-black tracking-tight tabular-nums leading-none ${tone === 'dark' ? 'text-white' : 'text-[#0B0B0B]'}`}>{value}</p>
-    {sub && <div className={`mt-2 text-xs font-medium ${tone === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>{sub}</div>}
+    {sub && <div className={`mt-2 text-xs font-medium ${tone === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>{sub}</div>}
   </div>
 );
 
@@ -432,7 +432,7 @@ export const LoadingState: React.FC<{
 }> = ({ message = 'Analyzing...', isTakingLong, onCancel }) => (
   <div role="status" aria-live="polite" className="flex flex-col items-center justify-center py-24 animate-in fade-in duration-500">
     <div className="w-1.5 h-1.5 bg-[#FF0000] rounded-full mb-6 animate-pulse" />
-    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-4">{message}</span>
+    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">{message}</span>
     {isTakingLong && (
       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest animate-in fade-in">
         This is taking longer than usual. Still working…
@@ -447,7 +447,7 @@ export const LoadingState: React.FC<{
           Stop waiting
         </button>
         {/* Was "Cancel and retry", which only hid the spinner: the server keeps running and bills the run. */}
-        <p className="mt-3 text-[10px] font-bold text-gray-600 uppercase tracking-widest text-center max-w-xs">
+        <p className="mt-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center max-w-xs">
           The analysis keeps running on the server and its tokens are spent; the result will be discarded.
         </p>
       </>
@@ -533,12 +533,12 @@ export const AnalysisFailureState: React.FC<{
     icon={<path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />}
     title="Analysis interrupted"
   >
-    <p className="text-sm font-medium text-gray-500 mb-8 max-w-md leading-relaxed">{message}</p>
+    <p className="text-sm font-medium text-gray-600 mb-8 max-w-md leading-relaxed">{message}</p>
     <NoTokensChip />
     {onRetry && (
       <button
         onClick={onRetry}
-        className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest hover:text-[#D40000] hover:underline underline-offset-4 transition-all"
+        className="text-[10px] font-bold text-[#E00000] uppercase tracking-widest hover:text-[#D40000] hover:underline underline-offset-4 transition-all"
       >
         Adjust inputs and retry
       </button>
@@ -555,7 +555,7 @@ export const SystemBlockState: React.FC<{ message: string }> = ({ message }) => 
   >
     <p className="text-sm font-medium text-gray-500 mb-8 max-w-md leading-relaxed">{message}</p>
     <NoTokensChip className="mb-6" />
-    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Please check back shortly.</p>
+    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Please check back shortly.</p>
   </StatePanel>
 );
 
@@ -566,8 +566,8 @@ export const RateLimitState: React.FC<{ message: string }> = ({ message }) => (
     icon={<path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />}
     title="Cooldown active"
   >
-    <p className="text-sm font-medium text-gray-500 mb-2">You’re making requests too quickly.</p>
-    <p className="text-xs text-gray-400 mb-8 max-w-md leading-relaxed">
+    <p className="text-sm font-medium text-gray-600 mb-2">You’re making requests too quickly.</p>
+    <p className="text-xs text-gray-600 mb-8 max-w-md leading-relaxed">
       {message.toLowerCase().includes('wait') || message.toLowerCase().includes('limit')
         ? message
         : 'To keep the platform stable, we limit how often complex analyses can run.'}
@@ -637,7 +637,7 @@ export const PageHeader: React.FC<{ title: string; subtitle: string; actions?: R
     <div className="min-w-0">
       <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white mb-5 leading-tight">{title}</h1>
       <div className="w-12 h-[2px] bg-[#FF0000] rounded-full mb-6" />
-      <p className="text-gray-500 font-medium text-lg sm:text-xl max-w-2xl leading-relaxed">{subtitle}</p>
+      <p className="text-gray-400 font-medium text-lg sm:text-xl max-w-2xl leading-relaxed">{subtitle}</p>
     </div>
     {actions && <div className="flex flex-wrap items-center gap-3">{actions}</div>}
   </div>
@@ -676,7 +676,7 @@ export const Modal: React.FC<{
               <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000] mb-3" />
               <h3 id={titleId} className="text-2xl font-bold tracking-tight">{title}</h3>
             </div>
-            <button onClick={onClose} aria-label="Close" className="p-2 -m-2 text-gray-400 hover:text-[#0B0B0B] transition-colors">
+            <button onClick={onClose} aria-label="Close" className="p-2 -m-2 text-gray-500 hover:text-[#0B0B0B] transition-colors">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -716,7 +716,7 @@ export const UsageLimitModal: React.FC<{
         <p className="text-gray-500 font-medium mb-8 leading-relaxed">Your token balance could not be read, so this run was not started. Check your connection and try again.</p>
         <div className="flex flex-col gap-4">
           <PrimaryButton onClick={retry} disabled={retrying} className="w-full">{retrying ? 'Retrying…' : 'Retry'}</PrimaryButton>
-          <button onClick={onClose} className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest py-3 transition-colors">Close</button>
+          <button onClick={onClose} className="text-[10px] font-bold text-gray-500 hover:text-[#0B0B0B] uppercase tracking-widest py-3 transition-colors">Close</button>
         </div>
       </Modal>
     );
@@ -774,13 +774,13 @@ export const UsageLimitModal: React.FC<{
       <h3 className="text-2xl font-bold mb-4 tracking-tight">{content.title}</h3>
       <p className="text-gray-500 font-medium mb-8 leading-relaxed whitespace-pre-line">{content.body}</p>
       {content.hint && (
-        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-8">{content.hint}</p>
+        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-8">{content.hint}</p>
       )}
       <div className="flex flex-col gap-4">
         <PrimaryButton onClick={handlePrimaryAction} className="w-full">{content.primaryCTA}</PrimaryButton>
         <button
           onClick={onClose}
-          className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest py-3 transition-colors"
+          className="text-[10px] font-bold text-gray-500 hover:text-[#0B0B0B] uppercase tracking-widest py-3 transition-colors"
         >
           {content.secondaryCTA}
         </button>
@@ -837,7 +837,7 @@ export const TokenStatusBanner: React.FC<{
 
 // 15. UPGRADE CARD (DASHBOARD)
 export const UpgradeCard: React.FC<{ onClick: () => void }> = ({ onClick }) => (
-  <Card className="!bg-[#FF0000] !text-white !border-none shadow-2xl shadow-[#FF0000]/20 hover:scale-[1.01] transition-transform cursor-pointer" onClick={onClick}>
+  <Card className="!bg-[#E00000] !text-white !border-none shadow-2xl shadow-[#FF0000]/20 hover:scale-[1.01] transition-transform cursor-pointer" onClick={onClick}>
     <div className="flex flex-col h-full justify-between">
       <div>
         <p className="text-[10px] font-bold uppercase tracking-widest mb-8 opacity-60">Pro plan</p>
@@ -869,7 +869,7 @@ export const LockedFeatureCard: React.FC<{
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-gray-500">
           <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
         </svg>
-        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Locked</p>
+        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Locked</p>
       </div>
       <h3 className="text-xl font-bold tracking-tight mb-3">{title}</h3>
       <p className="text-sm text-gray-400 font-medium leading-relaxed mb-8">{description}</p>
@@ -923,7 +923,7 @@ export const ExportControls: React.FC<{
 
   const btn = tone === 'dark'
     ? 'text-[10px] font-bold text-gray-400 hover:text-white uppercase tracking-widest transition-colors'
-    : 'text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors';
+    : 'text-[10px] font-bold text-gray-500 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors';
   const divider = tone === 'dark' ? 'w-[1px] h-3 bg-gray-800' : 'w-[1px] h-3 bg-gray-200';
 
   return (
@@ -1066,7 +1066,7 @@ export const LedgerRow: React.FC<{
 }> = ({ when, title, detail, right }) => (
   <div className="p-5 sm:p-6 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-between gap-6 hover:bg-gray-100 transition-colors">
     <div className="flex flex-col gap-1 min-w-0">
-      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums">
+      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest tabular-nums">
         {when.toLocaleDateString()} · {when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
       </p>
       <p className="text-sm font-bold text-[#0B0B0B] truncate">{title}</p>
@@ -1106,12 +1106,12 @@ const LedgerModal: React.FC<{ kind: 'tokens' | 'payments'; onClose: () => void }
           {!isTokens && payments.length > 0 && (
             <button
               onClick={() => downloadAsCSV('MarketBrainOS_Billing_History', paymentsToCSV(payments))}
-              className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors mb-3"
+              className="text-[10px] font-bold text-gray-500 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors mb-3"
             >
               Export CSV
             </button>
           )}
-          <p className="text-[10px] text-gray-400">
+          <p className="text-[10px] text-gray-500">
             {isTokens ? 'All records are server-verified.' : 'Token packs add tokens that never expire.'}
           </p>
         </div>
@@ -1126,7 +1126,7 @@ const LedgerModal: React.FC<{ kind: 'tokens' | 'payments'; onClose: () => void }
       ) : error ? (
         <ErrorMessage message={error} />
       ) : count === 0 ? (
-        <div className="py-16 text-center text-gray-400 font-medium">
+        <div className="py-16 text-center text-gray-500 font-medium">
           {isTokens ? 'No token usage recorded yet.' : 'No payments yet.'}
         </div>
       ) : isTokens ? (
@@ -1145,12 +1145,12 @@ const LedgerModal: React.FC<{ kind: 'tokens' | 'payments'; onClose: () => void }
                   isFailure ? (
                     <div>
                       <Badge tone="neutral" className="mb-1">Refunded</Badge>
-                      <p className="text-xs font-bold text-gray-400 line-through">{log.tokens_used} tokens</p>
+                      <p className="text-xs font-bold text-gray-500 line-through">{log.tokens_used} tokens</p>
                     </div>
                   ) : isTopUp ? (
                     <div>
-                      <p className="text-sm font-black text-green-600">+{log.tokens_added ?? STARTER_PACK.tokens} tokens</p>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{topUpLogPrice(log, STARTER_PACK.price)}</p>
+                      <p className="text-sm font-black text-green-700">+{log.tokens_added ?? STARTER_PACK.tokens} tokens</p>
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{topUpLogPrice(log, STARTER_PACK.price)}</p>
                     </div>
                   ) : (
                     <p className="text-sm font-black text-[#0B0B0B]">-{log.tokens_used} tokens</p>
@@ -1175,12 +1175,12 @@ const LedgerModal: React.FC<{ kind: 'tokens' | 'payments'; onClose: () => void }
                   isFailed ? (
                     <div>
                       <Badge tone="red" className="mb-1">Failed</Badge>
-                      <p className="text-xs font-bold text-gray-400 line-through">{v.display}</p>
+                      <p className="text-xs font-bold text-gray-500 line-through">{v.display}</p>
                     </div>
                   ) : (
                     <div>
-                      {payment.tokens_credited ? <p className="text-sm font-black text-green-600">+{payment.tokens_credited} tokens</p> : null}
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{v.display} {v.currency}</p>
+                      {payment.tokens_credited ? <p className="text-sm font-black text-green-700">+{payment.tokens_credited} tokens</p> : null}
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{v.display} {v.currency}</p>
                     </div>
                   )
                 }

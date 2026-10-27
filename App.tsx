@@ -87,7 +87,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         onClick={onClose}
         aria-current={isActive ? 'page' : undefined}
         className={`flex items-center gap-4 px-5 ${pad} font-bold tracking-widest uppercase rounded-2xl transition-all duration-300 mb-1 group ${
-          isActive ? 'bg-[#121212] text-white shadow-lg shadow-black/20' : 'text-gray-500 hover:text-white'
+          isActive ? 'bg-[#121212] text-white shadow-lg shadow-black/20' : 'text-gray-400 hover:text-white'
         }`}
       >
         <div className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${isActive ? 'bg-[#FF0000]' : 'bg-transparent group-hover:bg-gray-800'}`} />
@@ -124,7 +124,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         <aside className={sidebarClasses} {...drawerHidden}>
           {/* Mobile Header inside Drawer */}
           <div className="flex items-center justify-between p-6 lg:hidden border-b border-gray-900/30">
-             <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Admin Menu</span>
+             <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Admin Menu</span>
              <button type="button" onClick={onClose} aria-label="Close navigation" className="text-white p-2">
                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -138,7 +138,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             </div>
             {visibleAdminSections(profile?.role).map((grp) => (
               <div key={grp.group} className="mb-6">
-                <p className="px-5 mb-3 text-[10px] font-bold text-gray-600 uppercase tracking-widest">{grp.group}</p>
+                <p className="px-5 mb-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">{grp.group}</p>
                 {grp.items.map((item) => {
                   const path = adminPath(item.key);
                   const isActive = location.pathname === path || (item.key === '' && location.pathname === '/admin');
@@ -148,7 +148,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                       to={path}
                       onClick={onClose}
                       className={`flex items-center gap-4 px-6 py-3 text-[12px] font-bold tracking-widest uppercase rounded-2xl transition-all duration-300 mb-1 group ${
-                        isActive ? 'bg-[#121212] text-white shadow-lg shadow-black/20' : 'text-gray-500 hover:text-white'
+                        isActive ? 'bg-[#121212] text-white shadow-lg shadow-black/20' : 'text-gray-400 hover:text-white'
                       }`}
                     >
                       <div className={`w-1.5 h-1.5 rounded-full transition-all ${isActive ? 'bg-[#FF0000]' : 'bg-transparent group-hover:bg-gray-800'}`} />
@@ -159,7 +159,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               </div>
             ))}
             <div className="pt-4 mt-2 border-t border-gray-900/50">
-              <Link to="/" onClick={onClose} className="flex items-center gap-4 px-6 py-3 text-[12px] font-bold tracking-widest uppercase rounded-2xl text-gray-500 hover:text-white transition-all">
+              <Link to="/" onClick={onClose} className="flex items-center gap-4 px-6 py-3 text-[12px] font-bold tracking-widest uppercase rounded-2xl text-gray-400 hover:text-white transition-all">
                 <div className="w-1.5 h-1.5 rounded-full bg-transparent" />
                 Exit Admin
               </Link>
@@ -176,7 +176,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       <aside id="app-sidebar" className={sidebarClasses} {...drawerHidden}>
         {/* Mobile Header inside Drawer */}
         <div className="flex items-center justify-between p-6 lg:hidden border-b border-gray-900/30">
-           <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Navigation</span>
+           <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Navigation</span>
            <button type="button" onClick={onClose} aria-label="Close navigation" className="text-white p-2">
              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -186,7 +186,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         {/* The header's ScopeSwitcher is hidden under 640px, and Team/client pages auto-enter their scope,
             so on a phone there was no way back to Personal. It lives in the drawer too. */}
         <div className="px-6 py-4 md:hidden border-b border-gray-900/30 flex items-center justify-between gap-4">
-          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Scope</span>
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Scope</span>
           <ScopeSwitcher />
         </div>
 
@@ -197,7 +197,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           {/* Analysis Tools — data-driven suites (V1 Tool Architecture grouping) */}
           {NAV_SUITES.map((group) => (
             <div key={group.suite} className="mt-6">
-              <p className="px-5 mb-2 text-[10px] font-bold text-gray-600 uppercase tracking-widest">{group.suite}</p>
+              <p className="px-5 mb-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">{group.suite}</p>
               {group.items.map((item) => renderNavLink({ label: item.label, path: item.path }, 'sm'))}
             </div>
           ))}
@@ -208,7 +208,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             if (links.length === 0) return null;
             return (
               <div className="mt-6">
-                <p className="px-5 mb-2 text-[10px] font-bold text-gray-600 uppercase tracking-widest">{NAV_COLLABORATION.heading}</p>
+                <p className="px-5 mb-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">{NAV_COLLABORATION.heading}</p>
                 {links.map((link) => renderNavLink(link, 'sm'))}
               </div>
             );
@@ -216,7 +216,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
           {/* Account — Billing / Settings / Support */}
           <div className="mt-6">
-            <p className="px-5 mb-2 text-[10px] font-bold text-gray-600 uppercase tracking-widest">{NAV_ACCOUNT.heading}</p>
+            <p className="px-5 mb-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">{NAV_ACCOUNT.heading}</p>
             {visibleLinks(NAV_ACCOUNT, accessCtx).map((link) => renderNavLink(link, 'sm'))}
           </div>
         </nav>
@@ -233,10 +233,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           )}
           {profile && (
             <Link to="/billing" onClick={onClose} className="block px-5 py-4 bg-[#121212] rounded-2xl border border-gray-900 hover:border-gray-700 transition-colors">
-              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Token balance</p>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Token balance</p>
               <div className="flex items-end gap-2">
                 <span className="text-2xl font-black text-white tabular-nums leading-none">{profile.tokens}</span>
-                <span className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-0.5">tokens</span>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">tokens</span>
               </div>
               {profile.tokens === 0 && (
                 <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-900">

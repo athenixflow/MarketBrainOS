@@ -115,7 +115,7 @@ const AuthAction: React.FC = () => {
         subtitle={`Choose a new password for ${accountEmail}.`}
         footer={
           <p className="text-center text-sm text-gray-600">
-            <Link to="/auth" className="font-bold text-[#FF0000] hover:opacity-70 transition-opacity">
+            <Link to="/auth" className="font-bold text-[#E00000] hover:opacity-70 transition-opacity">
               Back to sign in
             </Link>
           </p>

@@ -28,7 +28,7 @@ const STATUS_OPTIONS = [
 ];
 
 const roleLabel = (r: string) => r.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
-const rowAction = 'text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors';
+const rowAction = 'text-[10px] font-bold text-gray-500 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors';
 // Tag chips live inside a white Card, so the "on" state is the dark chip.
 const tagChip = (on: boolean) =>
   `px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-colors ${
@@ -164,7 +164,7 @@ const ClientWorkspace: React.FC<{
                     className="text-left p-4 rounded-2xl bg-gray-50 border border-gray-100 hover:border-[#FF0000] transition-colors"
                   >
                     <p className="text-sm font-bold text-[#0B0B0B]">{t.navLabel}</p>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1 tabular-nums">{TOKEN_COSTS[t.costKey]} tokens</p>
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1 tabular-nums">{TOKEN_COSTS[t.costKey]} tokens</p>
                   </button>
                 ))}
               </div>
@@ -173,7 +173,7 @@ const ClientWorkspace: React.FC<{
               <dl className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {info.map(([k, v]) => (
                   <div key={k}>
-                    <dt className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{k}</dt>
+                    <dt className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">{k}</dt>
                     <dd className="text-sm font-medium text-[#0B0B0B] break-words">{v || 'Not set'}</dd>
                   </div>
                 ))}
@@ -191,7 +191,7 @@ const ClientWorkspace: React.FC<{
                   <div className="flex flex-wrap items-center justify-between gap-4">
                     <div className="min-w-0">
                       <p className="text-sm font-bold text-[#0B0B0B]">{getToolMeta(a.module)?.label || a.module}</p>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums">{a.timestamp ? new Date(a.timestamp).toLocaleString() : ''}</p>
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest tabular-nums">{a.timestamp ? new Date(a.timestamp).toLocaleString() : ''}</p>
                     </div>
                     {typeof a.result?.score === 'number' && <span className="text-sm font-black text-[#0B0B0B] tabular-nums">{a.result.score}/100</span>}
                   </div>
@@ -213,7 +213,7 @@ const ClientWorkspace: React.FC<{
                 {notes.map(n => (
                   <div key={n.id} className={`p-4 rounded-2xl border ${n.pinned ? 'border-[#FF0000]/30 bg-red-50/30' : 'border-gray-100 bg-gray-50'}`}>
                     <div className="flex flex-wrap items-center justify-between gap-4">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums">{n.author_name || 'Member'} · {n.created_at ? new Date(n.created_at).toLocaleString() : ''}</p>
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest tabular-nums">{n.author_name || 'Member'} · {n.created_at ? new Date(n.created_at).toLocaleString() : ''}</p>
                       <div className="flex items-center gap-3">
                         <button onClick={() => togglePin(n)} className={rowAction}>{n.pinned ? 'Unpin' : 'Pin'}</button>
                         {n.author_uid === selfUid && <ConfirmTapButton onConfirm={() => delNote(n.id)} className={`${rowAction} hover:text-[#FF0000]`} />}
@@ -236,7 +236,7 @@ const ClientWorkspace: React.FC<{
                     <div className="w-1.5 h-1.5 rounded-full mt-2 bg-[#FF0000] shrink-0" />
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-gray-700">{ev.summary}</p>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums">{ev.actor_name || 'Someone'} · {ev.created_at ? new Date(ev.created_at).toLocaleString() : ''}</p>
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest tabular-nums">{ev.actor_name || 'Someone'} · {ev.created_at ? new Date(ev.created_at).toLocaleString() : ''}</p>
                     </div>
                   </div>
                 ))}

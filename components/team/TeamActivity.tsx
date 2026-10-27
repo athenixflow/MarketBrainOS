@@ -45,7 +45,7 @@ const TeamActivity: React.FC<{ workspace: Workspace }> = ({ workspace }) => {
             <div className={`w-1.5 h-1.5 rounded-full mt-2 shrink-0 ${TYPE_COLORS[ev.type] || 'bg-gray-400'}`} />
             <div className="min-w-0">
               <p className="text-sm font-medium text-gray-700">{ev.summary}</p>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums">
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest tabular-nums">
                 {ev.actor_name || 'Someone'} · {ev.created_at ? new Date(ev.created_at).toLocaleString() : ''}
               </p>
             </div>

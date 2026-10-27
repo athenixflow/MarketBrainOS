@@ -73,7 +73,7 @@ const LandingPageScore: React.FC = () => {
         <h1 className="text-4xl md:text-5xl font-bold text-white mb-6 leading-tight">
           Score a landing page before you spend on it.
         </h1>
-        <p className="text-lg text-gray-500 leading-relaxed mb-10 max-w-2xl">
+        <p className="text-lg text-gray-400 leading-relaxed mb-10 max-w-2xl">
           Paste any public page. You get a 0–100 conversion score, a one-line verdict and the
           three most costly blockers — read from the live page, not guessed from the address.
         </p>
@@ -88,23 +88,23 @@ const LandingPageScore: React.FC = () => {
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://yourpage.com"
-            className="flex-1 bg-[#121212] border border-gray-800 rounded-2xl px-5 py-4 text-white placeholder-gray-600 focus:outline-none focus:border-gray-600"
+            className="flex-1 bg-[#121212] border border-gray-800 rounded-2xl px-5 py-4 text-white placeholder-gray-400 focus:outline-none focus:border-gray-600"
           />
           <button
             type="submit"
             disabled={state === 'running' || !url.trim()}
-            className="bg-[#FF0000] text-white px-8 py-4 rounded-2xl font-bold text-sm uppercase tracking-widest disabled:bg-gray-800 disabled:text-gray-600 transition-colors whitespace-nowrap"
+            className="bg-[#E00000] text-white px-8 py-4 rounded-2xl font-bold text-sm uppercase tracking-widest disabled:bg-gray-800 disabled:text-gray-600 transition-colors whitespace-nowrap"
           >
             {state === 'running' ? 'Reading the page…' : 'Score it'}
           </button>
         </form>
-        <p className="text-xs text-gray-600 mb-16">
+        <p className="text-xs text-gray-400 mb-16">
           Three pages a day, free. The full audit — every blocker, the fixes and ready-to-paste
           rewrites — is in the free account.
         </p>
 
         {state === 'running' && (
-          <p className="text-gray-500" role="status">
+          <p className="text-gray-400" role="status">
             Fetching the page and reading it. This usually takes about twenty seconds.
           </p>
         )}
@@ -112,7 +112,7 @@ const LandingPageScore: React.FC = () => {
         {state === 'error' && error && (
           <div role="alert" className="border border-gray-800 rounded-2xl p-6 bg-[#121212]">
             <p className="text-white font-bold mb-2">That did not work</p>
-            <p className="text-gray-500">{error}</p>
+            <p className="text-gray-400">{error}</p>
             <Link to="/auth" onClick={() => track('free_tool_unlock_clicked', { from: 'error' })}
               className="inline-block mt-5 text-[#FF0000] font-bold text-sm uppercase tracking-widest">
               Create a free account →
@@ -122,25 +122,25 @@ const LandingPageScore: React.FC = () => {
 
         {state === 'done' && result && (
           <div className="border border-gray-800 rounded-2xl p-8 bg-[#121212]">
-            <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-6 break-all">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-6 break-all">
               {result.url}{result.cached ? ' · scored earlier today' : ''}
             </p>
             {result.score != null && (
               <div className="flex items-baseline gap-2 mb-6">
                 <span className="text-7xl font-black text-[#FF0000] leading-none">{result.score}</span>
-                <span className="text-xl text-gray-600">/100</span>
+                <span className="text-xl text-gray-400">/100</span>
               </div>
             )}
             {result.summary && <p className="text-lg text-gray-300 mb-8">{result.summary}</p>}
 
-            <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-4">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">
               The three biggest blockers
             </p>
             <ol className="space-y-5 mb-10">
               {result.blockers.map((b, i) => (
                 <li key={i} className="border-l-2 border-[#FF0000] pl-5">
                   <p className="text-white font-bold mb-1">{b.blocker}</p>
-                  <p className="text-gray-500 text-sm">{b.impact}</p>
+                  <p className="text-gray-400 text-sm">{b.impact}</p>
                 </li>
               ))}
             </ol>

@@ -14,7 +14,7 @@ import { getScoreBand } from '../services/scoreBands';
 import { downloadAsCSV, toolResultToCSV, exportResultPdf } from '../services/exportService';
 import { deleteReport } from '../services/persistenceService';
 
-const rowAction = 'text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors';
+const rowAction = 'text-[10px] font-bold text-gray-500 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors';
 
 /** Saved report content is a ToolAnalysisResult when it came from an analysis; anything else is shown raw. */
 const asResult = (content: any): ToolAnalysisResult | null =>
@@ -63,7 +63,7 @@ export const ReportCard: React.FC<{
     <Card accent>
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <Badge tone="neutral">{report.report_type || 'Report'}</Badge>
-        {date && <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums">{date.toLocaleDateString()}</span>}
+        {date && <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest tabular-nums">{date.toLocaleDateString()}</span>}
         {typeof result?.score === 'number' && (() => {
           const b = getScoreBand(result.score);
           return <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border tabular-nums ${b.bgClass} ${b.textClass}`}>{result.score} · {b.band}</span>;
@@ -97,7 +97,7 @@ export const ReportCard: React.FC<{
             <>
               {result.summary && <p className="text-sm text-gray-600 font-medium leading-relaxed">{result.summary}</p>}
               {result.sections.length === 0 && !result.summary && (
-                <p className="text-sm text-gray-400 font-medium">This report has no saved detail sections.</p>
+                <p className="text-sm text-gray-500 font-medium">This report has no saved detail sections.</p>
               )}
               {result.sections.map((section, si) => (
                 <div key={si}>

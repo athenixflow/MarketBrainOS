@@ -39,7 +39,7 @@ const CapacityPanel: React.FC<{ title?: string; rows: CapacityRow[] }> = ({ titl
               <div className="min-w-0">
                 <p className="text-sm font-bold text-[#0B0B0B]">{r.label}</p>
                 <div className="flex flex-wrap items-center gap-2 mt-1">
-                  <p className={`text-[10px] font-bold uppercase tracking-widest tabular-nums ${full ? 'text-[#FF0000]' : 'text-gray-400'}`}>
+                  <p className={`text-[10px] font-bold uppercase tracking-widest tabular-nums ${full ? 'text-[#E00000]' : 'text-gray-500'}`}>
                     {r.used.toLocaleString()} of {r.cap.toLocaleString()} used
                   </p>
                   {full && <Badge tone="red">Full</Badge>}

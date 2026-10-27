@@ -298,7 +298,7 @@ const Workflow: React.FC = () => {
 
       <AnimatedSection index={0} className="flex flex-wrap justify-between items-center gap-4 mb-8">
         <div className="flex flex-wrap items-center gap-4 min-w-0">
-          <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2 bg-[#121212] rounded-full border border-gray-900 tabular-nums whitespace-nowrap">
+          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-4 py-2 bg-[#121212] rounded-full border border-gray-900 tabular-nums whitespace-nowrap">
             Step {Math.max(1, step)} of 6
           </div>
           <div className="h-1 w-full sm:w-48 bg-gray-900 rounded-full overflow-hidden">
@@ -311,7 +311,7 @@ const Workflow: React.FC = () => {
         {step > 0 && step < 6 && (
           <button 
             onClick={() => setStep(0)}
-            className="text-[10px] font-bold text-gray-500 hover:text-white uppercase tracking-widest transition-colors"
+            className="text-[10px] font-bold text-gray-400 hover:text-white uppercase tracking-widest transition-colors"
           >
             Exit workflow
           </button>
@@ -348,7 +348,7 @@ const Workflow: React.FC = () => {
         <AnimatedSection index={1} className="max-w-2xl mx-auto text-center py-12 sm:py-20">
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white mb-5 leading-tight">Integrated Campaign Workflow</h1>
           <div className="w-12 h-[2px] bg-[#FF0000] rounded-full mb-6 mx-auto" />
-          <p className="text-gray-500 font-medium text-lg sm:text-xl leading-relaxed mb-10">
+          <p className="text-gray-400 font-medium text-lg sm:text-xl leading-relaxed mb-10">
             Connect ideation, testing, and auditing into one guided process. Build and validate your marketing before you launch.
           </p>
           <div className="mb-12 text-left">
@@ -460,7 +460,7 @@ const Workflow: React.FC = () => {
         <Card className="max-w-4xl mx-auto shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
           <SectionHeader title="Step 3: TestLab Pro" subtitle="How the angles compare." />
           <div className="mb-10">
-            <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-6 text-center">Strongest variation</p>
+            <p className="text-[10px] font-bold text-[#E00000] uppercase tracking-widest mb-6 text-center">Strongest variation</p>
             <div className="p-6 sm:p-8 bg-gray-50 rounded-2xl text-center border border-gray-100 shadow-inner">
               <p className="text-2xl font-bold text-[#0B0B0B] mb-8 leading-relaxed">"{winningAngleText}"</p>
               <IntelligenceIndicator score={winningAngleScore} />
@@ -500,7 +500,7 @@ const Workflow: React.FC = () => {
           <SectionHeader title="Step 5: Improvement Pipeline" subtitle="Combine the winning angle with the audit findings to produce final assets." />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
             <div className="p-6 sm:p-8 bg-[#FFF9F9] rounded-2xl border border-[#FF0000]/10">
-              <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-6">Top conversion blockers</p>
+              <p className="text-[10px] font-bold text-[#E00000] uppercase tracking-widest mb-6">Top conversion blockers</p>
               {(auditResult.issues || []).length === 0 ? (
                 <p className="text-sm font-medium text-gray-500">No conversion blockers were flagged in the audit.</p>
               ) : (
@@ -515,7 +515,7 @@ const Workflow: React.FC = () => {
               )}
             </div>
             <div className="p-6 sm:p-8 bg-gray-50 rounded-2xl border border-gray-100">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-6">Winning angle</p>
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-6">Winning angle</p>
               {winningAngleText ? (
                 <p className="text-sm font-medium text-gray-600 leading-relaxed italic">"{winningAngleText}"</p>
               ) : (
@@ -527,7 +527,7 @@ const Workflow: React.FC = () => {
             <PrimaryButton onClick={handleRunImprovement} disabled={loading || run.inFlight} className="w-full">
               Generate final improved assets
             </PrimaryButton>
-            <button onClick={nextStep} className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest text-center transition-colors">Skip to summary</button>
+            <button onClick={nextStep} className="text-[10px] font-bold text-gray-500 hover:text-[#0B0B0B] uppercase tracking-widest text-center transition-colors">Skip to summary</button>
           </div>
         </Card>
       )}
@@ -554,7 +554,7 @@ const Workflow: React.FC = () => {
               {finalImprovements ? (
                 <>
                   <h1 className="text-4xl sm:text-5xl font-black text-white tracking-tighter mb-6">Your assets are ready.</h1>
-                  <p className="text-gray-500 text-lg sm:text-xl font-medium mb-12">The winning angle, the audit findings and the refined assets, in one place.</p>
+                  <p className="text-gray-400 text-lg sm:text-xl font-medium mb-12">The winning angle, the audit findings and the refined assets, in one place.</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-10 text-left">
                     <Card title="Improved headline">
                       <p className="text-lg font-bold text-[#0B0B0B] leading-relaxed">"{finalImprovements.headline}"</p>
@@ -570,7 +570,7 @@ const Workflow: React.FC = () => {
               ) : (
                 <>
                   <h1 className="text-4xl sm:text-5xl font-black text-white tracking-tighter mb-6">Workflow complete.</h1>
-                  <p className="text-gray-500 text-lg sm:text-xl font-medium mb-10 max-w-xl mx-auto leading-relaxed">
+                  <p className="text-gray-400 text-lg sm:text-xl font-medium mb-10 max-w-xl mx-auto leading-relaxed">
                     You skipped the final improvement step, so no refined assets were generated. Go back to
                     step 5 to produce the improved headline, CTA and offer messaging.
                   </p>

@@ -16,7 +16,9 @@ import { track } from '../services/analytics';
 const PACKS = DEFAULT_PRICING_CONFIG.tokenPacks;
 const BEST_VALUE_ID = PACKS.reduce((best, p) => (p.tokens / p.price > best.tokens / best.price ? p : best), PACKS[0]).id;
 
-export const TokenStore: React.FC<{ onPurchased?: () => void; compact?: boolean }> = ({ onPurchased, compact }) => {
+export const TokenStore: React.FC<{ onPurchased?: () => void; compact?: boolean; onDark?: boolean }> = ({ onPurchased, compact, onDark }) => {
+  // The footer lines sit outside the pack cards: on the dark page at /store, inside a white Card elsewhere.
+  const footText = onDark ? 'text-gray-400' : 'text-gray-500';
   const { user, profile } = useAuth();
   const packs = PACKS;
   const [busy, setBusy] = useState<string | null>(null);
@@ -61,7 +63,7 @@ export const TokenStore: React.FC<{ onPurchased?: () => void; compact?: boolean 
         {packs.map((p) => (
           <Card key={p.id} className="flex flex-col">
             <div className="flex flex-wrap items-start justify-between gap-2 mb-4">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{p.label}</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{p.label}</p>
               {p.id === BEST_VALUE_ID && <Badge tone="red">Best value</Badge>}
             </div>
             <p className="text-2xl sm:text-3xl font-black tracking-tight tabular-nums leading-none text-[#0B0B0B]">{p.tokens.toLocaleString()}</p>
@@ -88,7 +90,7 @@ export const TokenStore: React.FC<{ onPurchased?: () => void; compact?: boolean 
               </PrimaryButton>
               {isFree && (
                 <p className="mt-3 text-[10px] font-bold uppercase tracking-widest leading-relaxed">
-                  <Link to="/pricing" className="text-[#FF0000] hover:text-[#D40000] underline-offset-4 hover:underline transition-colors">
+                  <Link to="/pricing" className="text-[#E00000] hover:text-[#D40000] underline-offset-4 hover:underline transition-colors">
                     Upgrade to Pro to buy tokens →
                   </Link>
                 </p>
@@ -98,19 +100,19 @@ export const TokenStore: React.FC<{ onPurchased?: () => void; compact?: boolean 
         ))}
       </div>
       {!isFree && closed && (
-        <p className="mt-6 text-sm text-gray-500 font-medium">Token packs open when payments go live.</p>
+        <p className={`mt-6 text-sm ${footText} font-medium`}>Token packs open when payments go live.</p>
       )}
       {isFree && (
         <div className="mt-6 flex flex-wrap items-center gap-3">
           <Badge tone="neutral">Paid plans only</Badge>
-          <p className="text-sm text-gray-500 font-medium">
+          <p className={`text-sm ${footText} font-medium`}>
             Token packs are available on Pro and higher. Your Free allowance is a one-time balance and does not refill; upgrade to Pro for a monthly allowance and the ability to top up.
           </p>
         </div>
       )}
       {msg && (
         busy !== null
-          ? <p className="mt-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">{msg}</p>
+          ? <p className={`mt-6 text-[10px] font-bold ${footText} uppercase tracking-widest`}>{msg}</p>
           : msgErr
             ? <ErrorMessage message={msg} className="mt-6" />
             : <SuccessMessage message={msg} className="mt-6" />

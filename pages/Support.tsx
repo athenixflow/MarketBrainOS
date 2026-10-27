@@ -37,7 +37,7 @@ const Support: React.FC = () => {
             <p className="text-sm text-gray-500 font-medium leading-relaxed mb-8">{c.body}</p>
             <Link
               to={c.to}
-              className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest hover:opacity-60 transition-opacity border-b border-[#FF0000]/20 pb-1"
+              className="text-[10px] font-bold text-[#E00000] uppercase tracking-widest hover:opacity-60 transition-opacity border-b border-[#FF0000]/20 pb-1"
             >
               {c.cta} →
             </Link>
@@ -46,7 +46,7 @@ const Support: React.FC = () => {
       </div>
 
       <Card>
-        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Contact</p>
+        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Contact</p>
         <h3 className="text-lg font-bold text-[#0B0B0B] tracking-tight mb-3">Email our team</h3>
         <p className="text-sm text-gray-500 font-medium leading-relaxed mb-8">
           Can't find what you need? Send us a message and we will get back to you. Include your account
@@ -54,7 +54,7 @@ const Support: React.FC = () => {
         </p>
         <a
           href={`mailto:${SUPPORT_EMAIL}`}
-          className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest hover:opacity-60 transition-opacity border-b border-[#FF0000]/20 pb-1 break-all"
+          className="text-[10px] font-bold text-[#E00000] uppercase tracking-widest hover:opacity-60 transition-opacity border-b border-[#FF0000]/20 pb-1 break-all"
         >
           {SUPPORT_EMAIL} →
         </a>

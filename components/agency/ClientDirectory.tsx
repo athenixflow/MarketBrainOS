@@ -83,7 +83,7 @@ const ClientDirectory: React.FC<{
                 <h3 className="text-base font-bold text-[#0B0B0B] tracking-tight truncate min-w-0">{c.name}</h3>
                 <Badge tone={STATUS_TONE[c.status] || 'neutral'}>{c.status.replace('_', ' ')}</Badge>
               </div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{c.industry || 'No industry'}</p>
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{c.industry || 'No industry'}</p>
               <p className="text-xs text-gray-500 font-medium mt-2 tabular-nums">{c.analysis_count || 0} analyses</p>
               {(c.tags && c.tags.length > 0) && (
                 <div className="flex flex-wrap gap-1.5 mt-3">{c.tags.slice(0, 3).map(t => <Badge key={t} tone="neutral">{t}</Badge>)}</div>

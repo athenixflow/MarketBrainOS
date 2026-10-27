@@ -88,7 +88,7 @@ const TeamOverview: React.FC<{ workspace: Workspace; onQuickAction: (tab: string
                   <div className="w-1.5 h-1.5 rounded-full mt-2 bg-[#FF0000] shrink-0" />
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-700">{ev.summary}</p>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums">
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest tabular-nums">
                       {ev.actor_name || 'Someone'} · {ev.created_at ? new Date(ev.created_at).toLocaleString() : ''}
                     </p>
                   </div>
@@ -99,20 +99,20 @@ const TeamOverview: React.FC<{ workspace: Workspace; onQuickAction: (tab: string
         </Card>
 
         <Card title="Team Intelligence">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Most-used tools</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3">Most-used tools</p>
           {topTools.length === 0 ? (
-            <p className="text-sm text-gray-400 font-medium mb-6">Run shared analyses to build team intelligence.</p>
+            <p className="text-sm text-gray-500 font-medium mb-6">Run shared analyses to build team intelligence.</p>
           ) : (
             <div className="space-y-2 mb-6">
               {topTools.map(([mod, count]) => (
                 <div key={mod} className="flex items-center justify-between gap-4">
                   <span className="text-xs font-bold text-[#0B0B0B] truncate">{getToolMeta(mod)?.label || mod}</span>
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums">{count}</span>
+                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest tabular-nums">{count}</span>
                 </div>
               ))}
             </div>
           )}
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Most-active members</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3">Most-active members</p>
           <div className="space-y-2">
             {members.slice(0, 5).map(m => (
               <div key={m.id} className="flex items-center justify-between gap-4">

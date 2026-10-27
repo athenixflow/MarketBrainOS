@@ -254,7 +254,7 @@ const AgencyHub: React.FC = () => {
                       </div>
                     </div>
                     <div className="pt-8 border-t border-gray-100">
-                      <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-2">Archive agency</p>
+                      <p className="text-[10px] font-bold text-[#E00000] uppercase tracking-widest mb-2">Archive agency</p>
                       <p className="text-xs text-gray-500 mb-4 leading-relaxed">Archiving disables the agency for every member.</p>
                       {confirmArchive ? (
                         <div className="flex flex-wrap items-center gap-3">

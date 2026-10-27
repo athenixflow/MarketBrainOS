@@ -266,14 +266,14 @@ const AngleMinerX: React.FC = () => {
       <div className="flex flex-wrap justify-between items-start gap-4 mb-8">
         <div className="min-w-0">
           <h3 className="text-xl font-bold text-[#0B0B0B] mb-2">{angle.title}</h3>
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{angle.type || 'Emotional'} angle</p>
+          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{angle.type || 'Emotional'} angle</p>
         </div>
         <IntelligenceIndicator score={angle.score} />
       </div>
 
       <div className="space-y-8">
         <div className="p-6 sm:p-8 bg-gray-50 rounded-2xl border border-gray-100">
-          <p className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-4">Core hook</p>
+          <p className="text-[10px] font-bold text-[#E00000] uppercase tracking-widest mb-4">Core hook</p>
           <p className="text-lg font-bold text-[#0B0B0B] leading-relaxed">
             "{angle.improved || angle.hook}"
           </p>
@@ -283,7 +283,7 @@ const AngleMinerX: React.FC = () => {
         </div>
 
         <div>
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">Strategic rationale</p>
+          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-4">Strategic rationale</p>
           <p className="text-sm font-medium text-gray-500 leading-relaxed">{angle.rational}</p>
         </div>
 
@@ -291,11 +291,11 @@ const AngleMinerX: React.FC = () => {
           <button
             onClick={() => handleImprove(angle)}
             disabled={angle.improving}
-            className="text-[10px] font-bold text-[#FF0000] hover:opacity-60 transition-opacity uppercase tracking-widest disabled:opacity-30"
+            className="text-[10px] font-bold text-[#E00000] hover:opacity-60 transition-opacity uppercase tracking-widest disabled:opacity-30"
           >
             {angle.improving ? 'Refining…' : 'Refine angle'}
           </button>
-          <CopyButton text={angle.improved || angle.hook} label="Copy hook" className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] transition-colors uppercase tracking-widest" />
+          <CopyButton text={angle.improved || angle.hook} label="Copy hook" className="text-[10px] font-bold text-gray-500 hover:text-[#0B0B0B] transition-colors uppercase tracking-widest" />
         </div>
       </div>
     </Card>
@@ -404,7 +404,7 @@ const AngleMinerX: React.FC = () => {
                     <p className="text-[11px] font-bold text-gray-500 mb-3 tracking-widest uppercase">Tone profile</p>
                     <div className="flex flex-wrap gap-2">
                       {tones.map(t => (
-                        <button key={t} type="button" onClick={() => handleToggleTone(t)} aria-pressed={selectedTones.includes(t)} className={chip(selectedTones.includes(t), 'bg-[#FF0000] text-white shadow-md shadow-[#FF0000]/20')}>
+                        <button key={t} type="button" onClick={() => handleToggleTone(t)} aria-pressed={selectedTones.includes(t)} className={chip(selectedTones.includes(t), 'bg-[#E00000] text-white shadow-md shadow-[#FF0000]/20')}>
                           {t}
                         </button>
                       ))}
@@ -447,7 +447,7 @@ const AngleMinerX: React.FC = () => {
                     <button
                       type="button"
                       onClick={handleReset}
-                      className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors"
+                      className="text-[10px] font-bold text-gray-500 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors"
                     >
                       Reset inputs
                     </button>
@@ -529,20 +529,20 @@ const AngleMinerX: React.FC = () => {
                       <div key={channel} className="space-y-6">
                         <h4 className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest mb-4 text-center">{channel} hooks</h4>
                         {buckets[channel].length === 0 ? (
-                          <p className="text-gray-500 text-xs font-medium text-center py-4">No {channel.toLowerCase()} hooks for this input.</p>
+                          <p className="text-gray-400 text-xs font-medium text-center py-4">No {channel.toLowerCase()} hooks for this input.</p>
                         ) : buckets[channel].map((hook, i) => (
                           <Card key={i}>
                             <div className="space-y-6">
                               {hook.platform && <Badge tone="neutral">{hook.platform}</Badge>}
                               <div>
-                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Short hook</p>
+                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Short hook</p>
                                 <p className="text-sm font-bold text-[#0B0B0B]">"{hook.short}"</p>
                               </div>
                               <div>
-                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Expanded</p>
+                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Expanded</p>
                                 <p className="text-xs text-gray-500 leading-relaxed italic">"{hook.expanded}"</p>
                               </div>
-                              <CopyButton text={hook.short + "\n" + hook.expanded} label="Copy hook" className="text-[10px] font-bold text-[#FF0000] hover:opacity-60 transition-opacity uppercase tracking-widest border-b border-[#FF0000]/10 pb-1" />
+                              <CopyButton text={hook.short + "\n" + hook.expanded} label="Copy hook" className="text-[10px] font-bold text-[#E00000] hover:opacity-60 transition-opacity uppercase tracking-widest border-b border-[#FF0000]/10 pb-1" />
                             </div>
                           </Card>
                         ))}

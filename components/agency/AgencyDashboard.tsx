@@ -44,7 +44,7 @@ const AgencyDashboard: React.FC<{
                 <button key={c.id} onClick={() => onOpenClient(c)} className="w-full flex flex-wrap items-center justify-between gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:bg-gray-100 transition-colors text-left">
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-[#0B0B0B] truncate">{c.name}</p>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{c.industry || 'No industry'}</p>
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{c.industry || 'No industry'}</p>
                   </div>
                   <Badge tone={STATUS_TONE[c.status] || 'neutral'}>{c.status.replace('_', ' ')}</Badge>
                 </button>
@@ -54,13 +54,13 @@ const AgencyDashboard: React.FC<{
         </Card>
 
         <Card title="Agency Intelligence">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Most active clients</p>
-          {topClients.length === 0 ? <p className="text-sm text-gray-400 font-medium">No activity yet.</p> : (
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3">Most active clients</p>
+          {topClients.length === 0 ? <p className="text-sm text-gray-500 font-medium">No activity yet.</p> : (
             <div className="space-y-2">
               {topClients.map(c => (
                 <div key={c.id} className="flex items-center justify-between gap-4">
                   <span className="text-xs font-bold text-[#0B0B0B] truncate">{c.name}</span>
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums">{c.analysis_count || 0} analyses</span>
+                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest tabular-nums">{c.analysis_count || 0} analyses</span>
                 </div>
               ))}
             </div>

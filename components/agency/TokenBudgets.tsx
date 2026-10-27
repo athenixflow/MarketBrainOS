@@ -63,7 +63,7 @@ const TokenBudgets: React.FC<{
                 <div key={c.id} className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-2xl bg-gray-50 border border-gray-100">
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-[#0B0B0B] truncate">{c.name}</p>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums mt-1">
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest tabular-nums mt-1">
                       {cap > 0
                         ? `Budget ${cap.toLocaleString()} · used ${consumed.toLocaleString()} · ${remaining?.toLocaleString()} left`
                         : `Uncapped · used ${consumed.toLocaleString()} this cycle`}

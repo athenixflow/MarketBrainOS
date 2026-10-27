@@ -17,7 +17,7 @@ const EnterprisePerformance: React.FC<{
         {byModule.length === 0 ? <EmptyState message="No usage data yet" submessage="Refresh analytics from the Dashboard to populate tool usage." /> : (
           <div className="space-y-2">
             {byModule.slice(0, 10).map(m => (
-              <div key={m.module} className="flex items-center justify-between gap-4"><span className="text-xs font-bold text-[#0B0B0B] truncate">{getToolMeta(m.module)?.label || m.module}</span><span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums">{m.count}</span></div>
+              <div key={m.module} className="flex items-center justify-between gap-4"><span className="text-xs font-bold text-[#0B0B0B] truncate">{getToolMeta(m.module)?.label || m.module}</span><span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest tabular-nums">{m.count}</span></div>
             ))}
           </div>
         )}
@@ -28,8 +28,8 @@ const EnterprisePerformance: React.FC<{
             <div className="space-y-2">
               {departments.map(d => (
                 <div key={d.id} className="flex flex-wrap items-center justify-between gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                  <div className="min-w-0"><p className="text-sm font-bold text-[#0B0B0B] truncate">{d.name}</p><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{d.type || 'General'}</p></div>
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums shrink-0">{(d.linked_workspaces || []).length} teams</span>
+                  <div className="min-w-0"><p className="text-sm font-bold text-[#0B0B0B] truncate">{d.name}</p><p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{d.type || 'General'}</p></div>
+                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest tabular-nums shrink-0">{(d.linked_workspaces || []).length} teams</span>
                 </div>
               ))}
             </div>
@@ -40,8 +40,8 @@ const EnterprisePerformance: React.FC<{
             <div className="space-y-2">
               {brands.map(b => (
                 <div key={b.id} className="flex flex-wrap items-center justify-between gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                  <div className="min-w-0"><p className="text-sm font-bold text-[#0B0B0B] truncate">{b.name}</p><p className="text-[10px] font-medium text-gray-400 truncate">{b.description || 'No description'}</p></div>
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums shrink-0">{(b.linked_workspaces || []).length} teams</span>
+                  <div className="min-w-0"><p className="text-sm font-bold text-[#0B0B0B] truncate">{b.name}</p><p className="text-[10px] font-medium text-gray-500 truncate">{b.description || 'No description'}</p></div>
+                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest tabular-nums shrink-0">{(b.linked_workspaces || []).length} teams</span>
                 </div>
               ))}
             </div>

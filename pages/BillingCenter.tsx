@@ -128,7 +128,7 @@ const BillingCenter: React.FC = () => {
           <div className="space-y-8">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               <Stat label="Plan" value={planName} />
-              <Stat label="Price" value={<>{priceAmount}{priceCadence && <span className="text-sm sm:text-base font-bold text-gray-400 tracking-normal">{priceCadence}</span>}</>} />
+              <Stat label="Price" value={<>{priceAmount}{priceCadence && <span className="text-sm sm:text-base font-bold text-gray-500 tracking-normal">{priceCadence}</span>}</>} />
               <Stat label={isPass ? 'Ends' : 'Renews'} value={renews} />
             </div>
             <div className="flex flex-wrap items-center gap-3">
@@ -200,13 +200,13 @@ const BillingCenter: React.FC = () => {
                     right={
                       <div>
                         {p.tokens_credited ? <p className="text-sm font-black text-green-600">+{p.tokens_credited.toLocaleString()} tokens</p> : null}
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{v.display}</p>
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{v.display}</p>
                       </div>
                     }
                   />
                 ))}
               </div>
-              <button onClick={() => downloadAsCSV('MarketBrainOS_Billing_History', paymentsToCSV(payments))} className="text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">Export CSV</button>
+              <button onClick={() => downloadAsCSV('MarketBrainOS_Billing_History', paymentsToCSV(payments))} className="text-[10px] font-bold text-gray-500 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">Export CSV</button>
             </>
           )}
         </Card>

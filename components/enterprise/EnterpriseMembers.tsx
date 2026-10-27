@@ -40,7 +40,7 @@ const roleTone = (role: string): 'red' | 'blue' | 'neutral' => {
   if (role === 'admin' || role === 'agency_director' || role === 'executive_admin') return 'blue';
   return 'neutral';
 };
-const rowAction = 'text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors';
+const rowAction = 'text-[10px] font-bold text-gray-500 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors';
 
 const EnterpriseMembers: React.FC<{
   enterprise: Enterprise; members: WorkspaceMember[]; membership: Membership | null; selfUid: string; onReload: () => void;
@@ -175,7 +175,7 @@ const EnterpriseMembers: React.FC<{
                     <Badge tone={roleTone(m.role)}>{ROLE_LABELS[m.role] || m.role}</Badge>
                   </div>
                   {!isOwner && (
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest tabular-nums mt-1">
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest tabular-nums mt-1">
                       {toolCount === 0 ? 'All tools' : `${toolCount} tools`} · Budget {cap > 0 ? cap : 'unlimited'}
                     </p>
                   )}

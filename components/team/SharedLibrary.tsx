@@ -9,7 +9,7 @@ import { getScoreBand } from '../../services/scoreBands';
 import AnalysisComments from './AnalysisComments';
 import { ResultItemList } from '../ResultSections';
 
-const rowAction = 'text-[10px] font-bold text-gray-400 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors';
+const rowAction = 'text-[10px] font-bold text-gray-500 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors';
 
 const SharedLibrary: React.FC<{ workspace: Workspace; selfUid: string; selfName: string }> = ({ workspace, selfUid, selfName }) => {
   const [records, setRecords] = useState<ToolAnalysisRecord[]>([]);
@@ -91,7 +91,7 @@ const SharedLibrary: React.FC<{ workspace: Workspace; selfUid: string; selfName:
                 <h3 className="text-lg font-bold text-[#0B0B0B] tracking-tight">{label}</h3>
                 {typeof score === 'number' && (() => { const b = getScoreBand(score); return <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border tabular-nums ${b.bgClass} ${b.textClass}`}>{score} · {b.band}</span>; })()}
               </div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 tabular-nums">{rec.timestamp ? new Date(rec.timestamp).toLocaleString() : 'Date unknown'}</p>
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 tabular-nums">{rec.timestamp ? new Date(rec.timestamp).toLocaleString() : 'Date unknown'}</p>
               {rec.result?.summary && <p className="text-sm text-gray-500 font-medium leading-relaxed line-clamp-2">{rec.result.summary}</p>}
 
               <div className="flex items-center gap-5 flex-wrap pt-4 mt-4 border-t border-gray-100">
@@ -102,7 +102,7 @@ const SharedLibrary: React.FC<{ workspace: Workspace; selfUid: string; selfName:
               {isOpen && (
                 <div className="mt-6 space-y-6 animate-in fade-in duration-300">
                   {(rec.result?.sections || []).length === 0 && (
-                    <p className="text-sm text-gray-400 font-medium">{rec.result?.summary || 'This record has no saved detail sections.'}</p>
+                    <p className="text-sm text-gray-500 font-medium">{rec.result?.summary || 'This record has no saved detail sections.'}</p>
                   )}
                   {(rec.result?.sections || []).map((s: any, i: number) => (
                     <div key={i}>

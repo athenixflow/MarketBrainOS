@@ -19,7 +19,7 @@ const DocsSidebar: React.FC<{ onNavigate?: () => void }> = ({ onNavigate }) => {
             <Link
               to={`/documentation/${cat.id}`}
               onClick={onNavigate}
-              className={`flex items-center gap-2.5 mb-3 text-[11px] font-bold uppercase tracking-widest transition-colors ${catActive ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
+              className={`flex items-center gap-2.5 mb-3 text-[11px] font-bold uppercase tracking-widest transition-colors ${catActive ? 'text-white' : 'text-gray-400 hover:text-gray-300'}`}
             >
               <Icon name={cat.icon} className={`w-4 h-4 ${catActive ? 'text-[#FF0000]' : ''}`} />
               {cat.title}
@@ -34,7 +34,7 @@ const DocsSidebar: React.FC<{ onNavigate?: () => void }> = ({ onNavigate }) => {
                       onClick={onNavigate}
                       aria-current={active ? 'page' : undefined}
                       className={`block -ml-px border-l-2 pl-4 py-1.5 text-[13px] leading-snug transition-colors ${
-                        active ? 'border-[#FF0000] text-white font-semibold' : 'border-transparent text-gray-500 hover:text-gray-300'
+                        active ? 'border-[#FF0000] text-white font-semibold' : 'border-transparent text-gray-400 hover:text-gray-300'
                       }`}
                     >
                       {a.title}
