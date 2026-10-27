@@ -127,7 +127,9 @@ ok(/u\.marketing_opt_out === true/.test(code), 'the dispatcher skips anybody wit
  */
 ok(/notification_prefs\?\.product === false/.test(code),
   "the dispatcher honours Settings' own product-email toggle");
-ok(/notification_prefs: \{ product: false \}/.test(endpoint),
+/* As a merge-set map or (since deletion must not re-create profiles) a dotted-path update; both
+   switch off only `product` and leave the other preferences alone. */
+ok(/notification_prefs: \{ product: false \}|'notification_prefs\.product': false/.test(endpoint),
   'unsubscribing switches that toggle off too, so the account page agrees with the link');
 
 /* ============================ 5. the sequence itself */
