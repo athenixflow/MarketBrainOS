@@ -1754,13 +1754,9 @@ export const callAdminManageReport = async (reportId: string, action: 'archive' 
   catch (e: any) { throw new Error(e.message || 'Report action failed.'); }
 };
 
-export const updateUserRiskProfile = async (userId: string, riskScore: number, isSuspended: boolean, reason?: string) => {
+/* The server records it and raises the risk score (reportHoneypot); suspension is an admin decision. */
+export const callReportHoneypot = async (where: string) => {
   if (!isFirebaseInitialized) return;
-  try {
-    const updateData: any = { risk_score: riskScore, is_suspended: isSuspended };
-    if (reason) updateData.suspension_reason = reason;
-    await updateDoc(doc(db, 'users', userId), updateData);
-  } catch (e) {
-    console.error("Failed to update risk profile", e);
-  }
+  try { await httpsCallable(functions, 'reportHoneypot')({ where }); }
+  catch (e) { console.warn('honeypot report failed', e); }
 };

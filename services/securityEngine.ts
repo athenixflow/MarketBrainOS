@@ -1,5 +1,5 @@
 
-import { logSecurityViolation, updateUserRiskProfile, getSystemSettings } from './persistenceService';
+import { logSecurityViolation, callReportHoneypot, getSystemSettings } from './persistenceService';
 import { UserProfile, SecurityEvent, PermissionScope, SystemLoadLevel, UserRole } from '../types';
 import { verifyAuditChain, ChainResult } from './auditChain';
 
@@ -168,14 +168,13 @@ export const SecurityEngine = {
   },
 
   async handleViolation(type: SecurityEvent['event_type'], severity: SecurityEvent['severity'], details: string, user?: UserProfile | null, identity?: string) {
+    /* Logged only. The browser cannot (and must not) suspend an account: the rules refuse it, and a
+       suspension is an admin decision made from the server-side record. */
     await logSecurityViolation({ user_id: user?.id, event_type: type, severity, details, risk_increment: 15, identity_fingerprint: identity || user?.id });
-    if (user && severity === 'critical' && type !== 'SYSTEM_EMERGENCY_ACTIVATED' && type !== 'SYSTEM_EMERGENCY_DEACTIVATED') {
-      await updateUserRiskProfile(user.id, 100, true, `Auto-Block: ${type}`);
-    }
   },
 
-  async handleHoneypotTrigger(user: UserProfile | null) {
-    await this.handleViolation('HONEYPOT_TRIGGER', 'critical', 'Operational data probe detected.', user);
+  async handleHoneypotTrigger(user: UserProfile | null, where = '') {
+    await callReportHoneypot(where || (typeof location !== 'undefined' ? location.pathname : ''));
   },
 
   async checkLoginVelocity(email: string): Promise<{ allowed: boolean, error?: string, waitSeconds?: number }> { 

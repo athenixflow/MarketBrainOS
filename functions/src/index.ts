@@ -3164,6 +3164,27 @@ export const requestPasswordReset = functions.https.onCall(async (data: any, con
   return { success: true };
 });
 
+// --- HONEYPOT ---
+// The hidden decoy link and form fields no person can see or reach. A hit is recorded here and raises
+// the account's risk score for an admin to review. It does not suspend: a single hidden-link click is
+// too weak a signal to lock a paying account (assistive tech and some extensions follow hidden links).
+export const reportHoneypot = functions.https.onCall(async (data: any, context: any) => {
+  const uid: string | null = context?.auth?.uid || null;
+  const ip = (context?.rawRequest?.ip || context?.rawRequest?.headers?.['x-forwarded-for'] || 'unknown').toString().split(',')[0].trim();
+  if (!(await underLimit('honeypot', uid || ip, 5, 60 * 60 * 1000))) return { recorded: false };
+  const where = String(data?.where || '').slice(0, 80);
+  await db.collection('security_audit_logs').add({
+    user_id: uid, event_type: 'HONEYPOT_TRIGGER', severity: 'critical', source: 'server',
+    details: where ? `Hidden decoy triggered (${where}).` : 'Hidden decoy triggered.',
+    ip_hash: crypto.createHash('sha256').update(ip).digest('hex').slice(0, 16),
+    timestamp: new Date().toISOString(),
+  });
+  if (uid) {
+    await updateIfProfileExists(uid, { risk_score: admin.firestore.FieldValue.increment(25), honeypot_flagged_at: new Date().toISOString() });
+  }
+  return { recorded: true };
+});
+
 // ============================================================
 // ACCOUNT DELETION (Privacy §8, within §6) — self-service, server-authoritative
 // One callable does all destructive work on the Admin SDK; firestore.rules deny every relevant

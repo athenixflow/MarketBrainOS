@@ -883,6 +883,23 @@ ok(/collection\('deleted_accounts'\)\.doc\(uid\)\.set\(/.test(del), 'deleteAccou
 ok(/revokeRefreshTokens\(uid\)/.test(del), 'deleteAccount revokes the refresh tokens');
 ok(/'email_flags'/.test(del) && /'lifecycle_sent'/.test(del), 'deleteAccount removes the email bookkeeping (email_flags, lifecycle_sent)');
 
+console.log('\nTHE HONEYPOT IS RECORDED BY THE SERVER, AND SUSPENDS NOBODY:');
+/* The browser tried to suspend the account itself (is_suspended, risk_score), which the rules always
+   refuse, so the "auto-block" never blocked anyone. The event now goes to a rate-limited callable
+   that records it and raises the risk score for an admin to review. No client file writes
+   suspension state. */
+const honeypot = exported(index, 'reportHoneypot');
+ok(honeypot.length > 0 && /underLimit\(/.test(honeypot) && /security_audit_logs/.test(honeypot), 'reportHoneypot is rate-limited and records the event server-side');
+ok(!/is_suspended/.test(honeypot), 'reportHoneypot does not suspend (a hidden-link click is too weak a signal on its own)');
+/* A write sets it to a value; mapping a profile read (`is_suspended: data.is_suspended`) is not one. */
+export const writesSuspension = (text: string): boolean => /\bis_suspended\s*:(?!\s*data\.)\s*[^,}\s]/.test(blank(text)) && /updateDoc|setDoc/.test(text);
+const suspenders = clientFiles.filter((f) => !/types\.ts$/.test(f) && writesSuspension(fs.readFileSync(path.join(root, f), 'utf8')));
+ok(suspenders.length === 0, 'no client file writes is_suspended', suspenders.join(', '));
+ok(writesSuspension("await updateDoc(ref, { risk_score: 100, is_suspended: true });"), 'CONTROL: a client suspension write is caught');
+ok(!writesSuspension("updateDoc(x); return { is_suspended: data.is_suspended };"), 'CONTROL: mapping a read is not a write');
+ok(/reportHoneypot/.test(fs.readFileSync(path.join(root, 'services', 'securityEngine.ts'), 'utf8') + fs.readFileSync(path.join(root, 'services', 'persistenceService.ts'), 'utf8')),
+  'the browser reports the honeypot through reportHoneypot');
+
 console.log('\nNO CLIENT CALLS THE REFUSED TOP-UP:');
 /* confirmTopUp refuses every reference that did not come from a real payment, so any client caller is a
    button that always errors (the Dashboard's "Buy tokens" made up its own reference). Tokens are bought
