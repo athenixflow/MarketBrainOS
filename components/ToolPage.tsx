@@ -16,6 +16,7 @@ import {
   Select,
   Badge,
   ConfirmTapButton,
+  DisclosureToggle,
 } from './UI';
 import { runToolAnalysis, MAX_INPUT_CHARS } from '../services/geminiService';
 import { ToolAnalysisResult, TOKEN_COSTS } from '../types';
@@ -444,14 +445,7 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
 
               {advancedFields.length > 0 && (
                 <div className="mb-10">
-                  <button
-                    type="button"
-                    onClick={() => setShowAdvanced(v => !v)}
-                    className="flex items-center gap-2 text-[10px] font-bold text-gray-600 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors"
-                  >
-                    <span className="text-base leading-none w-4 text-center">{showAdvanced ? '−' : '+'}</span>
-                    Advanced context (optional)
-                  </button>
+                  <DisclosureToggle open={showAdvanced} onToggle={() => setShowAdvanced(v => !v)}>Advanced context (optional)</DisclosureToggle>
                   <p className="mt-2 mb-6 text-[11px] font-medium text-gray-500 leading-relaxed pl-6">
                     The more context you add here, the deeper and more tailored your analysis. All optional.
                   </p>

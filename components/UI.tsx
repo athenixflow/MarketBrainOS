@@ -643,6 +643,17 @@ export const PageHeader: React.FC<{ title: string; subtitle: string; actions?: R
   </div>
 );
 
+// 12a. DISCLOSURE TOGGLE ("+ Advanced context"). The 10px label was a 16px-tall tap target on
+// phones; min-h-6 makes it 24px without moving the layout, and aria-expanded says whether it is open.
+export const DisclosureToggle: React.FC<{ open: boolean; onToggle: () => void; children: React.ReactNode; controls?: string }> =
+  ({ open, onToggle, children, controls }) => (
+    <button type="button" onClick={onToggle} aria-expanded={open} aria-controls={controls}
+      className="flex items-center gap-2 min-h-6 -my-1 py-1 text-[10px] font-bold text-gray-600 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">
+      <span aria-hidden="true" className="text-base leading-none w-4 text-center">{open ? '−' : '+'}</span>
+      {children}
+    </button>
+  );
+
 // 12b. MODAL SHELL. Escape closes, backdrop click closes, background scroll is locked while open.
 // UsageLimitModal and the ledger modals below are built on it; nothing should hand-roll a fixed overlay.
 export const Modal: React.FC<{

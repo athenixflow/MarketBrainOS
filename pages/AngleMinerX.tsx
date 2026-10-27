@@ -26,7 +26,8 @@ import {
   NetworkErrorState,
   isSystemBlockError,
   isRateLimitError,
-  isNetworkError
+  isNetworkError,
+  DisclosureToggle,
 } from '../components/UI';
 import { analyzeMarketingAngle, improveAngle, MAX_INPUT_CHARS } from '../services/geminiService';
 import { MarketingAngle, AngleMinerResults, AngleType, ANGLE_TYPES, TOKEN_COSTS, AngleHook, HookChannel, HOOK_CHANNELS } from '../types';
@@ -413,10 +414,7 @@ const AngleMinerX: React.FC = () => {
                 </div>
 
                 <div className="mb-10">
-                  <button type="button" onClick={() => setShowAdvanced(v => !v)} aria-expanded={showAdvanced} className="flex items-center gap-2 text-[10px] font-bold text-gray-600 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">
-                    <span className="text-base leading-none w-4 text-center">{showAdvanced ? '−' : '+'}</span>
-                    Advanced context (optional)
-                  </button>
+                  <DisclosureToggle open={showAdvanced} onToggle={() => setShowAdvanced(v => !v)}>Advanced context (optional)</DisclosureToggle>
                   <p className="mt-2 mb-6 text-[11px] font-medium text-gray-500 leading-relaxed pl-6">The more context you add, the sharper and more tailored the angles. All optional.</p>
                   {showAdvanced && (
                     <div>

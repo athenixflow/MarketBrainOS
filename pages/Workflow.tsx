@@ -23,7 +23,8 @@ import {
   NetworkErrorState,
   isSystemBlockError,
   isRateLimitError,
-  isNetworkError
+  isNetworkError,
+  DisclosureToggle,
 } from '../components/UI';
 import { 
   analyzeMarketingAngle, 
@@ -393,10 +394,7 @@ const Workflow: React.FC = () => {
               </div>
             </div>
             <div className="mt-8">
-              <button type="button" onClick={() => setWfAdvanced(v => !v)} className="flex items-center gap-2 text-[10px] font-bold text-gray-600 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors">
-                <span className="text-base leading-none w-4 text-center">{wfAdvanced ? '−' : '+'}</span>
-                Advanced context (optional)
-              </button>
+              <DisclosureToggle open={wfAdvanced} onToggle={() => setWfAdvanced(v => !v)}>Advanced context (optional)</DisclosureToggle>
               <p className="mt-2 mb-6 text-[11px] font-medium text-gray-500 leading-relaxed pl-6">More context makes the generated angles sharper. All optional.</p>
               {wfAdvanced && (
                 <div className="space-y-4">

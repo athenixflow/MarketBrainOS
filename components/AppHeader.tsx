@@ -76,9 +76,11 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onToggleSidebar, isSidebarOpen = 
             </>
           )}
           <Link to="/documentation" className="hidden sm:inline shrink-0 whitespace-nowrap hover:text-white transition-colors">Docs</Link>
-          <Link to="/documentation" aria-label="Documentation" className="sm:hidden shrink-0 hover:text-white transition-colors">?</Link>
+          {/* The bare "?" was a 6px-wide tap target and Sign out 16px tall: both now clear 24px (28px
+              tall, the same height as the Pro pill) without widening the 375px right cluster. */}
+          <Link to="/documentation" aria-label="Documentation" className="sm:hidden shrink-0 inline-flex items-center justify-center h-7 min-w-7 hover:text-white transition-colors">?</Link>
           {user ? (
-            <button type="button" onClick={signOut} className="shrink-0 whitespace-nowrap hover:text-white transition-colors uppercase tracking-widest font-bold">Sign out</button>
+            <button type="button" onClick={signOut} className="shrink-0 inline-flex items-center h-7 whitespace-nowrap hover:text-white transition-colors uppercase tracking-widest font-bold">Sign out</button>
           ) : (
             <Link to="/auth" className="shrink-0 whitespace-nowrap hover:text-white transition-colors">Sign in</Link>
           )}
