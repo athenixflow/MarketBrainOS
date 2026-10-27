@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { VideoAsset } from './types';
+import { fetchPriorityAttr } from './Picture';
 
 interface HeroVideoProps {
   asset: VideoAsset;
@@ -51,7 +52,7 @@ const HeroVideo: React.FC<HeroVideoProps> = ({ asset, className = '' }) => {
           alt=""
           width={asset.width}
           height={asset.height}
-          fetchPriority="high"
+          {...fetchPriorityAttr('high')}
           decoding="async"
           className="absolute inset-0 h-full w-full object-cover"
         />

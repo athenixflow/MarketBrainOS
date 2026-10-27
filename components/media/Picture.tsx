@@ -1,6 +1,10 @@
 import React from 'react';
 import type { ImageAsset } from './types';
 
+/* React 18 does not recognise the camelCase `fetchPriority` prop (it warns and may drop it); the
+   lowercase HTML attribute is passed through as-is, prerendered HTML included. */
+export const fetchPriorityAttr = (value: 'high' | 'low' | 'auto') => ({ fetchpriority: value } as Record<string, string>);
+
 interface PictureProps {
   asset: ImageAsset;
   /** Rendered width hint for the browser's srcset selection, e.g. "(min-width: 1024px) 50vw, 100vw". */
@@ -27,7 +31,7 @@ const Picture: React.FC<PictureProps> = ({ asset, sizes = '100vw', priority = fa
       height={asset.height}
       loading={priority ? 'eager' : 'lazy'}
       decoding="async"
-      fetchPriority={priority ? 'high' : 'auto'}
+      {...fetchPriorityAttr(priority ? 'high' : 'auto')}
       className={`block w-full h-auto ${imgClassName}`}
     />
   </picture>

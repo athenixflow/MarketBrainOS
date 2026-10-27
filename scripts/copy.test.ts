@@ -82,6 +82,10 @@ ok(fourSuites.length === 0, 'no "four suites" (there are five)', fourSuites.join
    never upgrades anyone (the server refuses below the plan), and payments are not simulated. */
 const freeUpgrade = grep(/upgrades you to|auto-upgrades your plan|payments (in this environment )?are simulated|title: 'Simulated payments'/i);
 ok(freeUpgrade.length === 0, 'no copy promising an upgrade without payment, or simulated payments', freeUpgrade.join('\n        '));
+/* React 18 does not know the camelCase `fetchPriority` prop: it warns in every visitor's console and
+   the hint may not reach the <img>. The lowercase attribute is passed straight through. */
+const camelFetch = grep(/\bfetchPriority=/);
+ok(camelFetch.length === 0, 'no camelCase fetchPriority prop (React 18 warns; use the lowercase attribute)', camelFetch.join('\n        '));
 const placeholders = grep(/Sample Persona|Illustrative samples|replace with real customer quotes/i);
 ok(placeholders.length === 0, 'no placeholder testimonials in shipped copy', placeholders.join('\n        '));
 const credits = grep(/Analysis Credits/);
