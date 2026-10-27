@@ -104,8 +104,17 @@ export const unresolvable = (entries, readFile = (f) => fs.readFileSync(f, 'utf8
       }
     }
   }
-  return { problems, visited: seen.size };
+  return { problems, visited: seen.size, files: [...seen] };
 };
+
+/**
+ * Full `puppeteer` resolves, but its Chrome download is not on Vercel ("Could not find Chrome" failed
+ * the first CSP-enforcing preview). A build step gets a browser from scripts/browser.ts, which uses
+ * @sparticuz/chromium there; any other file the build loads that imports `puppeteer` is flagged.
+ */
+const LAUNCHER = path.join('scripts', 'browser.ts');
+export const unlaunchedBrowsers = (files, readFile = (f) => fs.readFileSync(f, 'utf8')) =>
+  files.filter((f) => !path.relative(root, f).endsWith(LAUNCHER) && loadTimeSpecifiers(readFile(f)).includes('puppeteer'));
 
 /* ---------------------------------------------------------------- the real build */
 
@@ -114,10 +123,14 @@ console.log('WHAT VERCEL CAN INSTALL:');
 const entries = [...buildEntries(pkg.scripts.build).filter((e) => e !== 'scripts/deploy.test.mjs'), 'index.tsx'];
 ok(entries.length > 10 && entries.includes('scripts/study.test.ts') && entries.includes('scripts/prerender.ts'),
   `the build command's ${entries.length - 1} steps and the app entry are all walked`);
-const { problems, visited } = unresolvable(entries);
+const { problems, visited, files } = unresolvable(entries);
 for (const [file, spec, why] of problems) console.log(`      ${path.relative(root, file)}: '${spec}' — ${why}`);
 ok(problems.length === 0, `every one of the ${visited} files the build loads resolves from the root install`,
   `${problems.length} problem(s) above`);
+const rogue = unlaunchedBrowsers(files);
+ok(rogue.length === 0 && files.some((f) => f.endsWith(LAUNCHER)),
+  'every build step that needs Chrome launches it through scripts/browser.ts (Vercel has no puppeteer download)',
+  rogue.map((f) => path.relative(root, f)).join(', '));
 
 /* ---------------------------------------------------------------- negative controls */
 
@@ -142,6 +155,11 @@ ok(probe({ 'scripts/x.test.ts': "export { z } from 'left-pad-unlisted';" }).leng
   'CONTROL: a re-export from an unlisted package is caught');
 ok(probe({ 'scripts/x.test.ts': "import './missing';" }).length === 0 && probe({}, 'scripts/gone.test.ts').length === 1,
   'CONTROL: a build step pointing at a file that does not exist is caught');
+{
+  const f = fake({ 'scripts/c.check.ts': "const p = (await import('puppeteer')).default;", 'scripts/browser.ts': "const p = await import('puppeteer');" });
+  ok(unlaunchedBrowsers([path.join(root, 'scripts/c.check.ts'), path.join(root, 'scripts/browser.ts')], f.read).length === 1,
+    'CONTROL (the Oct 27 break): a build step launching full puppeteer itself is caught, the shared launcher is not');
+}
 ok(buildEntries('node scripts/a.mjs && tsx scripts/b/c.test.ts && tsc && vite build').join() === 'scripts/a.mjs,scripts/b/c.test.ts',
   'build steps are read from the command itself');
 

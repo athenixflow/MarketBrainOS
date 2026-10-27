@@ -13,23 +13,7 @@ import { SITE_URL } from '../config/seo';
 import { COMPETITORS, isPublishable } from '../config/pseo/competitors';
 import { STUDY_PATH, isStudyPublished } from '../config/research/study';
 
-// Launch headless Chrome. On Vercel/CI the build sandbox (Amazon Linux) has no usable Chromium, so
-// use @sparticuz/chromium (a self-contained Linux binary) via puppeteer-core. Locally, use full
-// puppeteer's bundled Chromium. Same launch shape both ways.
-async function launchBrowser(): Promise<any> {
-  if (process.env.VERCEL || process.env.CI) {
-    const chromium: any = (await import('@sparticuz/chromium')).default;
-    const pc: any = await import('puppeteer-core');
-    return pc.launch({
-      args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'],
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
-      defaultViewport: { width: 1280, height: 800 },
-    });
-  }
-  const puppeteer: any = (await import('puppeteer')).default;
-  return puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
-}
+import { launchBrowser } from './browser';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.resolve(__dirname, '../dist');

@@ -18,6 +18,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { launchBrowser } from './browser';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -46,12 +47,11 @@ const routes = (): string[] => {
 const main = async () => {
   if (!fs.existsSync(path.join(DIST, 'index.html'))) { console.error('FAIL — dist/ missing; run vite build first'); process.exit(1); }
   const sirv = (await import('sirv')).default;
-  const puppeteer: any = (await import('puppeteer')).default;
 
   const serve = sirv(DIST, { single: true, dev: false });
   const server = http.createServer((req, res) => serve(req, res, () => { res.statusCode = 404; res.end('not found'); }));
   await new Promise<void>((r) => server.listen(PORT, r));
-  const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu'] });
+  const browser = await launchBrowser();
 
   const targets = [...routes(), '/app.html', '/auth'];
   const violations: string[] = [];
