@@ -70,6 +70,32 @@ export const AnalysisPreview: React.FC<{
   );
 };
 
+/*
+ * The result panel before a first run. It was a tall white card saying only "Your analysis will
+ * appear here", which on desktop sat empty beside the form. It now shows the shape of the report:
+ * each section by name with a placeholder bar, so the column is a preview rather than a blank.
+ */
+export const ResultOutline: React.FC<{ sections: string[] }> = ({ sections }) => (
+  <div className="paper bg-white rounded-2xl border border-gray-100 p-6 sm:p-8" aria-label="Your report will include">
+    <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-1">Your report</p>
+    <p className="text-sm text-gray-600 font-medium mb-6">Fill in the inputs and run the tool. The report comes back in these sections:</p>
+    <ol className="space-y-5">
+      {sections.slice(0, 6).map((s, i) => (
+        <li key={s} className="flex items-start gap-4">
+          <span className="text-[10px] font-bold text-gray-500 tabular-nums w-5 shrink-0 pt-0.5">{String(i + 1).padStart(2, '0')}</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-bold uppercase tracking-widest text-[#0B0B0B] mb-2">{s}</p>
+            <div aria-hidden="true" className="space-y-1.5">
+              <div className="h-2 rounded-full bg-gray-100 w-full" />
+              <div className="h-2 rounded-full bg-gray-100" style={{ width: `${70 - i * 6}%` }} />
+            </div>
+          </div>
+        </li>
+      ))}
+    </ol>
+  </div>
+);
+
 export type RunStage = 'queued' | 'running' | 'completed';
 
 // Staged progress indicator (replaces a bare spinner during a run).

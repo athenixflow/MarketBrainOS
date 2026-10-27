@@ -27,7 +27,7 @@ import { SecurityEngine } from '../services/securityEngine';
 import { ToolConfig, getToolMeta, getToolGuide } from '../config/toolConfigs';
 import { getUserToolAnalyses, ToolAnalysisRecord, deleteGenericAnalysis, saveReport } from '../services/persistenceService';
 import { getScoreBand } from '../services/scoreBands';
-import { ExpectedOutcome, AnalysisPreview, RunProgress, CharCounter, FieldHint, RunStage, TAKING_LONG_MS, ExampleNotice } from './ToolGuide';
+import { ExpectedOutcome, AnalysisPreview, RunProgress, CharCounter, FieldHint, RunStage, TAKING_LONG_MS, ExampleNotice, ResultOutline } from './ToolGuide';
 import { useLocation } from 'react-router-dom';
 import { findExample } from '../config/onboardingExamples';
 import { ResultItemList } from './ResultSections';
@@ -514,12 +514,9 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
         <div className="space-y-6">
           {executionError && <AnalysisFailureState message={executionError} onRetry={handleRun} />}
           {loading && <RunProgress stage={runStage} isTakingLong={isTakingLong} />}
-          {!loading && !result && !executionError && (
-            <EmptyState
-              card
-              message={deleted ? 'Analysis deleted' : 'Your analysis will appear here'}
-              submessage={deleted ? 'Run the tool again to generate a new analysis.' : 'Fill in the inputs and run the tool to generate your analysis.'}
-            />
+          {!loading && !result && !executionError && (deleted
+            ? <EmptyState card message="Analysis deleted" submessage="Run the tool again to generate a new analysis." />
+            : <ResultOutline sections={guide.outcomes} />
           )}
 
           {result && !loading && (
