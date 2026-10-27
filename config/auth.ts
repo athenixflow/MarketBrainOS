@@ -19,6 +19,14 @@ export const safeNext = (raw: string | null | undefined): string | null => {
   } catch { return null; }
 };
 
+/** The name to greet someone by: their first name, else their email's local part without a +tag. */
+export const greetingName = (p: { first_name?: string | null; email?: string | null } | null | undefined): string => {
+  const first = (p?.first_name || '').trim();
+  if (first) return first;
+  const local = (p?.email || '').split('@')[0].split('+')[0].trim();
+  return local || 'there';
+};
+
 /** The message to show when a new password is too short, or null when it is long enough. */
 export const passwordProblem = (password: string): string | null =>
   password.length < PASSWORD_MIN ? `Use at least ${PASSWORD_MIN} characters.` : null;

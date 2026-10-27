@@ -18,6 +18,7 @@ import {
 } from '../services/persistenceService';
 import { Report, ActionLogEntry } from '../types';
 import { NAV_SUITES, TOOL_CONFIG_LIST, TOOL_COUNT, getToolMeta } from '../config/toolConfigs';
+import { greetingName } from '../config/auth';
 import { canSeeFeature, tierAtLeast, isPaidTier } from '../config/access';
 import { PLAN_META } from '../config/pricingConfig';
 
@@ -120,7 +121,7 @@ const Dashboard: React.FC = () => {
     return items.sort((a, b) => b.ts - a.ts).slice(0, 6);
   }, [analyses, reports]);
 
-  const displayName = profile?.email ? profile.email.split('@')[0] : 'there';
+  const displayName = greetingName(profile);
   const tier = profile?.tier || 'free';
   const tierLabel = PLAN_META[tier]?.name || tier;
   const tokens = profile?.tokens ?? 0;

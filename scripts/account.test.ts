@@ -67,5 +67,14 @@ ok(!/<Navigate to="\/auth"/.test(app) && /<SignInFirst \/>/.test(app), 'App.tsx 
 const auth = read('pages/Auth.tsx');
 ok(!/navigate\('\/'\)/.test(auth) && /safeNext\(/.test(auth), 'every sign-in path in Auth.tsx goes to safeNext(next), falling back to /');
 
+/* THE GREETING USES THE PERSON'S NAME. It used the email's local part, so a plus-address greeted
+   "Welcome back, jane+work". The first name wins; otherwise the local part without its +tag. */
+console.log('\nTHE DASHBOARD GREETS PEOPLE BY NAME:');
+const { greetingName } = await import('../config/auth');
+ok(greetingName({ first_name: 'Ada', email: 'ada+e2e@example.com' }) === 'Ada', 'the first name wins');
+ok(greetingName({ first_name: '  ', email: 'jane.doe+work@example.com' }) === 'jane.doe', 'without one, the email local part minus its +tag');
+ok(greetingName(null) === 'there' && greetingName({ email: '+x@example.com' }) === 'there', 'nothing usable falls back to "there"');
+ok(/greetingName\(profile\)/.test(read('pages/Dashboard.tsx')), 'the dashboard greeting uses greetingName');
+
 console.log(failed ? `\nFAILED — ${failed} assertion(s).` : '\nPASS — account rules agree across screens.');
 process.exit(failed ? 1 : 0);
