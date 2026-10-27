@@ -96,7 +96,16 @@ if (process.argv.includes('--write')) {
   const envPath = path.join(root, 'functions', '.env');
   // Keep every other line exactly as it is (comments and blank separators included); only the three
   // product lines are replaced, appended after the last non-blank line.
-  const kept = fs.readFileSync(envPath, 'utf8').split(/\r?\n/).filter((l) => !l.startsWith('BACHS_PRODUCT_'));
+  const current = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
+  /* functions/.env is what gets deployed. A sandbox run once replaced the live plan ids there with
+     sandbox ones, which would have broken every live checkout. A different id is never overwritten
+     silently: that is a different environment, so it needs --replace. */
+  const clashes = lines.filter((l) => { const [k] = l.split('='); const old = current.find((c) => c.startsWith(`${k}=`)); return old && old !== l; });
+  if (clashes.length && !process.argv.includes('--replace')) {
+    console.error(`Refusing to write: ${clashes.length} product id(s) in functions/.env differ (another environment?). Pass --replace if that is intended.`);
+    process.exit(1);
+  }
+  const kept = current.filter((l) => !l.startsWith('BACHS_PRODUCT_'));
   while (kept.length && !kept[kept.length - 1].trim()) kept.pop();
   fs.writeFileSync(envPath, [...kept, ...lines].join('\n') + '\n');
   console.log('written to functions/.env');
