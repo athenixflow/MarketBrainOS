@@ -900,6 +900,21 @@ ok(!writesSuspension("updateDoc(x); return { is_suspended: data.is_suspended };"
 ok(/reportHoneypot/.test(fs.readFileSync(path.join(root, 'services', 'securityEngine.ts'), 'utf8') + fs.readFileSync(path.join(root, 'services', 'persistenceService.ts'), 'utf8')),
   'the browser reports the honeypot through reportHoneypot');
 
+console.log('\nTHE ADMIN PORTAL LOADS PER SECTION:');
+/* It fetched twelve collections (every user, payment, report and log) before rendering anything, a
+   cost that grows with every customer (17s desktop / 58s iPhone in the loaded launch run). Now only
+   settings block the portal; each section loads what it reads (SECTION_DATA) when it opens. */
+const ctxSrc = blank(fs.readFileSync(path.join(root, 'components', 'admin', 'AdminContext.tsx'), 'utf8'));
+const refreshBody = ctxSrc.slice(ctxSrc.indexOf('const refresh = async'), ctxSrc.indexOf('const refresh = async') + 900);
+export const loadsEverythingUpFront = (body: string): boolean => /adminGetAll(Users|Payments|Reports)\(|adminGet(Audit|Security|Action)Logs\(/.test(body);
+ok(refreshBody.length > 0 && !loadsEverythingUpFront(refreshBody), 'refresh() loads settings and counts only; collections load per section');
+ok(loadsEverythingUpFront('const refresh = async () => { const [u] = await Promise.all([adminGetAllUsers(), adminGetAllPayments()]); }'), 'CONTROL: an up-front load of every collection is caught');
+const portalSrc = fs.readFileSync(path.join(root, 'components', 'admin', 'AdminPortal.tsx'), 'utf8');
+ok(/a\.ensure\(sectionData\(pathname\), true\)/.test(portalSrc) && /users: \['users'\]/.test(portalSrc), 'opening a section loads (and refreshes) what it reads; the user directory loads users only');
+const statsSrc = fs.readFileSync(path.join(root, 'services', 'persistenceService.ts'), 'utf8');
+const stats = statsSrc.slice(statsSrc.indexOf('export const adminGetPlatformStats'), statsSrc.indexOf('export const adminGetPlatformStats') + 1500);
+ok(/await Promise\.all\(\[/.test(stats) && (stats.match(/await getCountFromServer/g) || []).length === 0, 'the five platform counts run in parallel');
+
 console.log('\nNO CLIENT CALLS THE REFUSED TOP-UP:');
 /* confirmTopUp refuses every reference that did not come from a real payment, so any client caller is a
    button that always errors (the Dashboard's "Buy tokens" made up its own reference). Tokens are bought

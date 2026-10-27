@@ -38,8 +38,16 @@ export interface ConfirmRequest {
   run?: () => Promise<void>;
 }
 
+/** The collections a section can ask for; each loads on first use (see SECTION_DATA in AdminPortal). */
+export type AdminResource = 'users' | 'payments' | 'reports' | 'auditLogs' | 'securityLogs' | 'actionLogs' | 'orgs';
+
 interface AdminContextValue {
+  /** True while settings and aggregate counts load (the only data the portal waits for). */
   loading: boolean;
+  /** Load what a section reads; force reloads it. */
+  ensure: (keys: AdminResource[], force?: boolean) => Promise<void>;
+  /** Resources still loading, so a section can say "Loading" instead of "No results". */
+  pending: Set<AdminResource>;
   profile: UserProfile | null;
   users: UserProfile[];
   auditLogs: AuditLogEntry[];
@@ -106,19 +114,33 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [reauthBusy, setReauthBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const refresh = async () => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const [u, logs, sLogs, aLogs, settings, admSettings, stats, pays, ws, ag, en, reps] = await Promise.all([
-        adminGetAllUsers(), adminGetAuditLogs(), adminGetSecurityLogs(), adminGetActionLogs(SAMPLE_SIZE),
-        getSystemSettings(), getAdminSettings(), adminGetPlatformStats(), adminGetAllPayments(),
-        adminGetWorkspaces(), adminGetAgencies(), adminGetEnterprises(), adminGetAllReports(),
-      ]);
-      setUsers(u); setAuditLogs(logs); setSecurityLogs(sLogs); setActionLogs(aLogs);
-      setSystemSettings(settings); setAdminSettings(admSettings); setPlatformStats(stats); setPayments(pays);
-      setWorkspaces(ws); setAgencies(ag); setEnterprises(en); setReports(reps);
-
+  /*
+   * Data loads per section, not all up front. The portal used to fetch twelve collections (every user,
+   * payment, report and log) before showing anything: 17s on desktop and 58s on an iPhone with 26
+   * accounts, growing with every customer. Now only settings and the server-side aggregate counts load
+   * first; AdminPortal asks for what the open section reads (SECTION_DATA) and that loads then.
+   */
+  const loaded = React.useRef(new Set<AdminResource>());
+  const [pending, setPending] = useState<Set<AdminResource>>(new Set());
+  const loaders: Record<AdminResource, () => Promise<void>> = {
+    users: async () => setUsers(await adminGetAllUsers()),
+    payments: async () => setPayments(await adminGetAllPayments()),
+    reports: async () => setReports(await adminGetAllReports()),
+    securityLogs: async () => setSecurityLogs(await adminGetSecurityLogs()),
+    orgs: async () => {
+      const [ws, ag, en] = await Promise.all([adminGetWorkspaces(), adminGetAgencies(), adminGetEnterprises()]);
+      setWorkspaces(ws); setAgencies(ag); setEnterprises(en);
+    },
+    auditLogs: async () => {
+      const logs = await adminGetAuditLogs();
+      setAuditLogs(logs);
+      const verify = await SecurityEngine.verifyChainIntegrity(logs);
+      setChainValid(verify.valid);
+      setChainLegacy(verify.legacy);
+    },
+    actionLogs: async () => {
+      const aLogs = await adminGetActionLogs(SAMPLE_SIZE);
+      setActionLogs(aLogs);
       const recent = aLogs.filter(l => {
         const t = l.created_at ? l.created_at.toMillis() : new Date(l.timestamp || 0).getTime();
         return (Date.now() - t) < 86400000;
@@ -127,23 +149,46 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setFailureRate(recent.length ? (failures.length / recent.length) * 100 : 0);
       const lf = aLogs.find(l => l.status === 'failed_refunded');
       setLastFailure(lf ? (lf.created_at ? new Date(lf.created_at.toMillis()).toLocaleString() : new Date(lf.timestamp!).toLocaleString()) : null);
+    },
+  };
 
-      const verify = await SecurityEngine.verifyChainIntegrity(logs);
-      setChainValid(verify.valid);
-      setChainLegacy(verify.legacy);
+  /** Loads the named resources; `force` reloads ones already loaded (opening a section refreshes it). */
+  const ensure = async (keys: AdminResource[], force = false) => {
+    const todo = keys.filter((k) => force || !loaded.current.has(k));
+    if (!todo.length) return;
+    setPending((p) => new Set([...p, ...todo]));
+    try {
+      await Promise.all(todo.map(async (k) => { await loaders[k](); loaded.current.add(k); }));
+    } catch (e: any) {
+      setLoadError(e?.message || 'Failed to load admin data. Check your connection and clearance.');
+    } finally {
+      setPending((p) => { const n = new Set(p); todo.forEach((k) => n.delete(k)); return n; });
+    }
+  };
+
+  /** Settings (all the portal waits for), then the aggregate counts and whatever was already loaded
+      (after an admin action, or Retry) in the background. */
+  const refresh = async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const [settings, admSettings] = await Promise.all([getSystemSettings(), getAdminSettings()]);
+      setSystemSettings(settings); setAdminSettings(admSettings);
     } catch (e: any) {
       setLoadError(e?.message || 'Failed to load admin data. Check your connection and clearance.');
     } finally {
       setLoading(false);
     }
+    adminGetPlatformStats().then(setPlatformStats).catch(() => undefined);
+    await ensure([...loaded.current], true);
   };
 
   useEffect(() => { if (profile && profile.role !== 'user') refresh(); /* eslint-disable-next-line */ }, [profile]);
 
   const runManualIntegrityCheck = async () => {
     setVerifyingChain(true);
-    const verify = await SecurityEngine.verifyChainIntegrity(auditLogs);
-    setTimeout(() => { setChainValid(verify.valid); setChainLegacy(verify.legacy); setVerifyingChain(false); }, 900);
+    await ensure(['auditLogs'], true);
+    setTimeout(() => setVerifyingChain(false), 600);
   };
 
   const metrics = useMemo(() => computeSystemMetrics(actionLogs), [actionLogs]);
@@ -193,7 +238,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const value: AdminContextValue = {
-    loading, profile, users, auditLogs, securityLogs, actionLogs, payments,
+    loading, ensure, pending, profile, users, auditLogs, securityLogs, actionLogs, payments,
     systemSettings, adminSettings, platformStats, workspaces, agencies, enterprises, reports,
     metrics, isEmergencyActive,
     failureRate, lastFailure, chainValid, chainLegacy, verifyingChain, loadError, refresh, confirm, runManualIntegrityCheck,

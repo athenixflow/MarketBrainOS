@@ -1409,28 +1409,18 @@ export const adminGetPlatformStats = async (): Promise<PlatformStats> => {
   const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
   try {
-    // 1. Total Users Count
-    const usersSnap = await getCountFromServer(usersColl);
+    // Five independent aggregations, run together (they ran one after another: five round trips).
+    const [usersSnap, activeUsersSnap, logsAggSnap, totalAnalysesSnap, failedSnap] = await Promise.all([
+      getCountFromServer(usersColl),                                                        // total users
+      getCountFromServer(query(usersColl, where('last_active', '>=', twentyFourHoursAgo))), // active, last 24h
+      getAggregateFromServer(logsColl, { totalTokens: sum('tokens_used') }),               // tokens consumed
+      getCountFromServer(logsColl),                                                         // analyses
+      getCountFromServer(query(logsColl, where('status', '==', 'failed_refunded'))),        // failed analyses
+    ]);
     const totalUsers = usersSnap.data().count;
-
-    // 2. Active Users (Last 24h)
-    const activeUsersQuery = query(usersColl, where('last_active', '>=', twentyFourHoursAgo));
-    const activeUsersSnap = await getCountFromServer(activeUsersQuery);
     const activeUsers = activeUsersSnap.data().count;
-
-    // 3. Tokens Consumed (Sum)
-    const logsAggSnap = await getAggregateFromServer(logsColl, {
-      totalTokens: sum('tokens_used')
-    });
     const tokensConsumed = logsAggSnap.data().totalTokens;
-
-    // 4. Total Analyses Count
-    const totalAnalysesSnap = await getCountFromServer(logsColl);
     const totalAnalyses = totalAnalysesSnap.data().count;
-
-    // 5. Failed Analyses Count
-    const failedQuery = query(logsColl, where('status', '==', 'failed_refunded'));
-    const failedSnap = await getCountFromServer(failedQuery);
     const failedAnalyses = failedSnap.data().count;
 
     return {

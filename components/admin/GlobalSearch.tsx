@@ -2,7 +2,7 @@
 // enterprises, reports, and transactions, all from the single AdminContext load. Each result
 // links to its detail view, wiring the entity relationships together.
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdmin } from './AdminContext';
 import { Pill } from './primitives';
@@ -14,6 +14,10 @@ const GlobalSearch: React.FC<{ placeholder?: string }> = ({ placeholder = 'Searc
   const a = useAdmin();
   const navigate = useNavigate();
   const [q, setQ] = useState('');
+  /* The portal loads per section; searching everything needs everything, loaded on the first keystroke. */
+  const searching = q.trim().length > 0;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (searching) a.ensure(['users', 'orgs', 'reports', 'payments']); }, [searching]);
 
   const results = useMemo<Result[]>(() => {
     const n = q.trim().toLowerCase();
