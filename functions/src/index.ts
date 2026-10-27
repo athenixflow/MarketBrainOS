@@ -14,6 +14,7 @@ import { sendTemplate } from './email/send';
 import { verifyUnsubToken, unsubToken } from './email/unsubscribe';
 import { verifyResendWebhook, webhookConfigured, EVENT_FIELD, emailStatusFor } from './email/webhook';
 import { claimWelcome, releaseWelcome } from './email/welcome';
+import { appendAuditEntry } from './audit';
 import { catalogItem, toMajorString, withPinnedPrices, TIER_RANK, PAID_TIERS, PaidTier, Kind, Currency } from './bachs/catalog';
 import { billingLive as bachsBillingLive, productForTier, tierForProduct } from './bachs/config';
 import { BachsEvent, SubscriptionSnapshot, parseBachsEvent, parseCheckoutSession, parseSubscription } from './bachs/events';
@@ -330,37 +331,15 @@ const hookChannelDirective = (goal?: string): string => {
   return 'Spread the hooks evenly across all three channels, with at least two of each.';
 };
 
-const generateHash = (content: string, prevHash: string): string => {
-  const hash = crypto.createHash('sha256');
-  hash.update(content + prevHash);
-  return hash.digest('hex');
-};
-
+/* Appends to the hash chain inside a transaction on its head document (functions/src/audit.ts). */
 const logAdminAudit = async (adminUid: string, adminEmail: string, action: string, targetUid: string, metadata: any) => {
-  const logsRef = db.collection('admin_audit_logs');
-  const lastLogQuery = await logsRef.orderBy('timestamp', 'desc').limit(1).get();
-  const prevHash = lastLogQuery.empty 
-    ? "0000000000000000000000000000000000000000000000000000000000000000" 
-    : lastLogQuery.docs[0].data().hash;
-
-  const timestamp = new Date().toISOString();
-  const entry = {
+  await appendAuditEntry(db, {
     admin_uid: adminUid,
     admin_email: adminEmail,
     action_type: action,
     target: targetUid,
     metadata,
-    timestamp
-  };
-  
-  // Create deterministic string for hashing
-  const content = JSON.stringify(entry);
-  const hash = generateHash(content, prevHash);
-
-  await logsRef.add({
-    ...entry,
-    hash,
-    previous_hash: prevHash
+    timestamp: new Date().toISOString(),
   });
 };
 

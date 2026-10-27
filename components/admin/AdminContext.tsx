@@ -57,6 +57,8 @@ interface AdminContextValue {
   failureRate: number;
   lastFailure: string | null;
   chainValid: boolean | null;
+  /** Audit entries written before the chain fix: listed, but not verifiable. */
+  chainLegacy: number;
   verifyingChain: boolean;
   loadError: string | null;
   refresh: () => Promise<void>;
@@ -90,6 +92,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [failureRate, setFailureRate] = useState(0);
   const [lastFailure, setLastFailure] = useState<string | null>(null);
   const [chainValid, setChainValid] = useState<boolean | null>(null);
+  const [chainLegacy, setChainLegacy] = useState(0);
   const [verifyingChain, setVerifyingChain] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -125,6 +128,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       const verify = await SecurityEngine.verifyChainIntegrity(logs);
       setChainValid(verify.valid);
+      setChainLegacy(verify.legacy);
     } catch (e: any) {
       setLoadError(e?.message || 'Failed to load admin data. Check your connection and clearance.');
     } finally {
@@ -137,7 +141,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const runManualIntegrityCheck = async () => {
     setVerifyingChain(true);
     const verify = await SecurityEngine.verifyChainIntegrity(auditLogs);
-    setTimeout(() => { setChainValid(verify.valid); setVerifyingChain(false); }, 900);
+    setTimeout(() => { setChainValid(verify.valid); setChainLegacy(verify.legacy); setVerifyingChain(false); }, 900);
   };
 
   const metrics = useMemo(() => computeSystemMetrics(actionLogs), [actionLogs]);
@@ -187,7 +191,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     loading, profile, users, auditLogs, securityLogs, actionLogs, payments,
     systemSettings, adminSettings, platformStats, workspaces, agencies, enterprises, reports,
     metrics, isEmergencyActive,
-    failureRate, lastFailure, chainValid, verifyingChain, loadError, refresh, confirm, runManualIntegrityCheck,
+    failureRate, lastFailure, chainValid, chainLegacy, verifyingChain, loadError, refresh, confirm, runManualIntegrityCheck,
   };
 
   return (

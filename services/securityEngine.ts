@@ -1,6 +1,7 @@
 
 import { logSecurityViolation, updateUserRiskProfile, logAdminAction, getSystemSettings } from './persistenceService';
 import { UserProfile, SecurityEvent, PermissionScope, SystemLoadLevel, UserRole } from '../types';
+import { verifyAuditChain, ChainResult } from './auditChain';
 
 const ADMIN_SESSION_TTL = 3600000; // 1 hour
 const STEP_UP_REQUIRED_AGE = 900000; // 15 mins for destructive actions
@@ -32,22 +33,8 @@ export const SecurityEngine = {
   /**
    * Cryptographically verifies a sequence of log entries.
    */
-  async verifyChainIntegrity(logs: any[]): Promise<{ valid: boolean; failedIndex?: number }> {
-    if (logs.length === 0) return { valid: true };
-    const sorted = [...logs].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-    for (let i = 0; i < sorted.length; i++) {
-      const current = sorted[i];
-      const prevHash = i === 0 ? "0000000000000000000000000000000000000000000000000000000000000000" : sorted[i-1].hash;
-      const { id, hash, previous_hash, ...contentObj } = current;
-      const contentStr = JSON.stringify(contentObj);
-      const encoder = new TextEncoder();
-      const data = encoder.encode(contentStr + prevHash);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      const calculatedHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-      if (calculatedHash !== current.hash) return { valid: false, failedIndex: i };
-    }
-    return { valid: true };
+  async verifyChainIntegrity(logs: any[]): Promise<ChainResult> {
+    return verifyAuditChain(logs);
   },
 
   async detectAutomationAbuse(user: UserProfile | null): Promise<{ status: 'clean' | 'flagged' | 'blocked', reason?: string }> {

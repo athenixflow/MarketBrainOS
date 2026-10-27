@@ -37,7 +37,8 @@ const Audit: React.FC = () => {
         <KpiCard label="Total Audit Events" value={a.auditLogs.length} accent />
         <KpiCard label="Security Events" value={a.securityLogs.length} />
         <KpiCard label="Event Types" value={types.length - 1} />
-        <KpiCard label="Chain" value={a.chainValid === false ? 'ERROR' : 'Valid'} tone={a.chainValid === false ? 'danger' : 'good'} />
+        <KpiCard label="Chain" value={a.chainValid === false ? 'ERROR' : 'Valid'} tone={a.chainValid === false ? 'danger' : 'good'}
+          hint={a.chainLegacy > 0 ? `${a.chainLegacy} older ${a.chainLegacy === 1 ? 'entry predates' : 'entries predate'} the chain and ${a.chainLegacy === 1 ? 'is' : 'are'} not verified` : undefined} />
       </div>
 
       <div className="flex items-center gap-3 flex-wrap">
