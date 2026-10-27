@@ -28,7 +28,7 @@ const source = (rel: string) => {
 };
 export const usesPublicChrome = (text: string): boolean => /from '\.\.\/components\/(PublicLayout|LegalPage)'/.test(text);
 
-/* Routes with a single unconditional page are public candidates; `user ? <X /> : <Navigate …>` are app routes. */
+/* Routes with a single unconditional page are public candidates; `user ? <X /> : <SignInFirst />` are app routes. */
 const routes = [...app.matchAll(/<Route path="([^"]+)" element=\{(.*?)\} \/>/g)].map((m) => ({ path: m[1], element: m[2] }));
 const sample = (p: string) => p.replace(/:\w+/g, 'example').replace(/\/\*$/, '/getting-started');
 
@@ -44,7 +44,9 @@ for (const r of routes) {
 ok(checked >= 10, `found the pages that use PublicLayout (${checked})`);
 
 console.log('\nSIGNED-IN-ONLY ROUTES KEEP THE APP CHROME:');
-for (const r of routes.filter((r) => /^user \? <\w+ \/> : <Navigate/.test(r.element))) {
+const appRoutes = routes.filter((r) => /^user \? <\w+ \/> : <(Navigate|SignInFirst)\b/.test(r.element));
+ok(appRoutes.length >= 10, `found the signed-in-only routes (${appRoutes.length})`);
+for (const r of appRoutes) {
   ok(!isPublicRoute(r.path), `${r.path} is not a public route`);
 }
 ok(!isPublicRoute('/'), '/ is not public (signed-in users get the dashboard there)');

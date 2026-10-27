@@ -55,10 +55,10 @@ test.describe('signed out', () => {
     await expect(page.getByText(/invalid link|expired|already been used|could not/i).first()).toBeVisible({ timeout: 20_000 });
   });
 
-  test('a deep link survives sign-in (bug #4: lands on / instead)', async ({ page }) => {
+  test('a deep link survives sign-in', async ({ page }) => {
     await consent(page);
     await page.goto('/billing'); await settle(page);
-    await expect(page).toHaveURL(/\/auth$/);
+    await expect(page).toHaveURL(/\/auth\?next=%2Fbilling$/);
     await signIn(page, accounts.emails.free, accounts.password);
     await page.waitForURL((u) => u.pathname !== '/auth', { timeout: 45_000 });
     await settle(page);

@@ -52,5 +52,20 @@ const fnIndex = read('functions/src/index.ts');
 const resend = fnIndex.slice(fnIndex.indexOf('export const resendVerification'), fnIndex.indexOf('export const resendVerification') + 1200);
 ok(/underLimit\('verify_email'/.test(resend) && /sendTemplate\(email, 'verifyEmail'/.test(resend), 'resendVerification is rate-limited and sends the verify template');
 
+/*
+ * SIGNING IN RETURNS YOU TO THE PAGE YOU ASKED FOR. Every guard sent a signed-out visitor to a bare
+ * /auth and every sign-in path went to `/`, so a link to /billing or a tool landed on the dashboard.
+ * The guards now pass ?next=, and only a path on this site is honoured (no open redirect).
+ */
+console.log('\nSIGNING IN RETURNS YOU TO THE PAGE YOU ASKED FOR:');
+const { safeNext } = await import('../config/auth');
+ok(safeNext('/billing') === '/billing' && safeNext('/conversion-doctor?x=1#a') === '/conversion-doctor?x=1#a', 'safeNext keeps an app path with its query');
+ok([null, '', 'billing', '//evil.example', '/\\evil.example', 'https://evil.example/x', 'javascript:alert(1)', '/auth', '/auth?next=/x']
+  .every((v) => safeNext(v as any) === null), 'safeNext refuses other sites, protocol-relative and scheme URLs, and /auth itself');
+const app = read('App.tsx');
+ok(!/<Navigate to="\/auth"/.test(app) && /<SignInFirst \/>/.test(app), 'App.tsx guards send signed-out visitors through SignInFirst (?next=), never a bare /auth');
+const auth = read('pages/Auth.tsx');
+ok(!/navigate\('\/'\)/.test(auth) && /safeNext\(/.test(auth), 'every sign-in path in Auth.tsx goes to safeNext(next), falling back to /');
+
 console.log(failed ? `\nFAILED — ${failed} assertion(s).` : '\nPASS — account rules agree across screens.');
 process.exit(failed ? 1 : 0);

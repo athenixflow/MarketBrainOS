@@ -1,5 +1,6 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
-import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate, Navigate, useSearchParams } from 'react-router-dom';
+import { safeNext } from './config/auth';
 import { NavigationItem } from './types';
 // Eager: first-paint surfaces (logged-out landing + auth).
 import AuthPage from './pages/Auth';
@@ -252,6 +253,19 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   );
 };
 
+// --- SIGN-IN GUARD ---
+// A signed-out visitor goes to /auth with the page they asked for in ?next= (a query string survives
+// Google's redirect sign-in; router state would not), and comes back to it afterwards.
+const SignInFirst: React.FC = () => {
+  const { pathname, search, hash } = useLocation();
+  return <Navigate to={`/auth?next=${encodeURIComponent(pathname + search + hash)}`} replace />;
+};
+// Signed in while on /auth: go where ?next= says (a path on this site only), else the dashboard.
+const AfterSignIn: React.FC = () => {
+  const [params] = useSearchParams();
+  return <Navigate to={safeNext(params.get('next')) ?? '/'} replace />;
+};
+
 // --- ADMIN GUARD ---
 // Enforces role-based security at the routing level.
 const AdminGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -260,7 +274,7 @@ const AdminGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   if (loading) return <LoadingState message="Verifying Security Clearance..." />;
   
   // 1. Must be authenticated
-  if (!user) return <Navigate to="/auth" replace />;
+  if (!user) return <SignInFirst />;
 
   // 2. Must be an admin
   const isAdmin = profile?.role === 'super_admin' || profile?.role === 'ops_admin';
@@ -289,26 +303,26 @@ const AppRoutes: React.FC = () => {
       <Route path="/" element={user ? <Dashboard /> : <LandingPage />} />
       
       {/* Protected Routes */}
-      <Route path="/history" element={user ? <History /> : <Navigate to="/auth" />} />
-      <Route path="/reports" element={user ? <Reports /> : <Navigate to="/auth" />} />
-      <Route path="/settings" element={user ? <Settings /> : <Navigate to="/auth" />} />
-      <Route path="/store" element={user ? <TokenStorePage /> : <Navigate to="/auth" />} />
-      <Route path="/billing" element={user ? <BillingCenter /> : <Navigate to="/auth" />} />
-      <Route path="/support" element={user ? <Support /> : <Navigate to="/auth" />} />
-      <Route path="/team" element={user ? <TeamWorkspace /> : <Navigate to="/auth" />} />
-      <Route path="/agency" element={user ? <AgencyHub /> : <Navigate to="/auth" />} />
-      <Route path="/enterprise" element={user ? <EnterpriseSuite /> : <Navigate to="/auth" />} />
-      <Route path="/angle-miner" element={user ? <AngleMinerX /> : <Navigate to="/auth" />} />
-      <Route path="/test-lab" element={user ? <TestLabPro /> : <Navigate to="/auth" />} />
-      <Route path="/conversion-doctor" element={user ? <ConversionDoctor /> : <Navigate to="/auth" />} />
-      <Route path="/workflow" element={user ? <Workflow /> : <Navigate to="/auth" />} />
+      <Route path="/history" element={user ? <History /> : <SignInFirst />} />
+      <Route path="/reports" element={user ? <Reports /> : <SignInFirst />} />
+      <Route path="/settings" element={user ? <Settings /> : <SignInFirst />} />
+      <Route path="/store" element={user ? <TokenStorePage /> : <SignInFirst />} />
+      <Route path="/billing" element={user ? <BillingCenter /> : <SignInFirst />} />
+      <Route path="/support" element={user ? <Support /> : <SignInFirst />} />
+      <Route path="/team" element={user ? <TeamWorkspace /> : <SignInFirst />} />
+      <Route path="/agency" element={user ? <AgencyHub /> : <SignInFirst />} />
+      <Route path="/enterprise" element={user ? <EnterpriseSuite /> : <SignInFirst />} />
+      <Route path="/angle-miner" element={user ? <AngleMinerX /> : <SignInFirst />} />
+      <Route path="/test-lab" element={user ? <TestLabPro /> : <SignInFirst />} />
+      <Route path="/conversion-doctor" element={user ? <ConversionDoctor /> : <SignInFirst />} />
+      <Route path="/workflow" element={user ? <Workflow /> : <SignInFirst />} />
 
       {/* PRD §14–22 analysis tools */}
       {TOOL_CONFIG_LIST.map((tool) => (
         <Route
           key={tool.slug}
           path={`/${tool.slug}`}
-          element={user ? <ToolPage config={tool} /> : <Navigate to="/auth" />}
+          element={user ? <ToolPage config={tool} /> : <SignInFirst />}
         />
       ))}
 
@@ -338,7 +352,7 @@ const AppRoutes: React.FC = () => {
       <Route path="/compare/:slug" element={<Compare />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/terms" element={<Terms />} />
-      <Route path="/auth" element={user ? <Navigate to="/" /> : <AuthPage />} />
+      <Route path="/auth" element={user ? <AfterSignIn /> : <AuthPage />} />
       <Route path="/auth/action" element={<AuthAction />} />
 
       {/* Catch-all — branded 404 for any unmatched path (adapts to auth state) */}

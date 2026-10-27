@@ -13,7 +13,7 @@ import {
 import { PrimaryButton } from '../components/UI';
 import AuthShell from '../components/auth/AuthShell';
 import { AuthField, PasswordStrength, FormAlert, GoogleButton, OrDivider } from '../components/auth/AuthField';
-import { passwordProblem } from '../config/auth';
+import { passwordProblem, safeNext } from '../config/auth';
 import { SecurityEngine } from '../services/securityEngine';
 import { readAttribution, track } from '../services/analytics';
 import { useAuth } from '../context/AuthContext';
@@ -82,7 +82,7 @@ const AuthPage: React.FC = () => {
       else track('login', { method: 'google' });
       if (redirectIsNew) callSendWelcomeEmail();
       await refreshProfile();
-      navigate('/');
+      navigate(safeNext(params.get('next')) ?? '/', { replace: true });
     }).catch((err) => { if (active) setError(err?.message || 'Google sign-in did not complete. Please try again.'); });
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -137,12 +137,12 @@ const AuthPage: React.FC = () => {
         track('sign_up', { method: 'email', ...readAttribution() });
         callSendWelcomeEmail(); // fire-and-forget welcome + verification email
         await refreshProfile();
-        navigate('/');
+        navigate(safeNext(params.get('next')) ?? '/', { replace: true });
       } else if (mode === 'signin') {
         await signInWithEmailAndPassword(auth, email, password);
         track('login', { method: 'email' });
         await refreshProfile();
-        navigate('/');
+        navigate(safeNext(params.get('next')) ?? '/', { replace: true });
       } else {
         await callRequestPasswordReset(email);
         setSuccessMsg('If an account exists for that address, a reset link is on its way. Check your inbox and spam folder.');
@@ -167,7 +167,7 @@ const AuthPage: React.FC = () => {
       else track('login', { method: 'google' });
       if (isNew) callSendWelcomeEmail(); // welcome for brand-new Google accounts
       await refreshProfile();
-      navigate('/');
+      navigate(safeNext(params.get('next')) ?? '/', { replace: true });
     } catch (err: any) {
       console.error(err);
       // Surface specific, actionable provider errors instead of a generic failure.
