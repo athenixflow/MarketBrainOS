@@ -19,6 +19,19 @@ test.describe('ops_admin', () => {
   test.use(asRole('admin'));
   test.beforeEach(({}, ti) => { test.skip(ti.project.name !== 'desktop-chrome', 'admin: desktop only'); });
 
+  test('tables name people by email, not by raw uid', async ({ page, firewall }) => {
+    firewall.tolerateBlocks = true;
+    await consent(page);
+    for (const s of ['analyses', 'reports']) {
+      await page.goto(`/admin/${s}`); await settle(page);
+      const main = page.locator('main');
+      await expect(main).toContainText('@', { timeout: 30_000 });
+      await expect(page.getByText(/^Loading /)).toHaveCount(0, { timeout: 30_000 });
+      const uids = ((await main.innerText()).match(/\b[A-Za-z0-9]{28}\b/g) || []);
+      expect(uids, `/admin/${s} shows raw uids`).toEqual([]);
+    }
+  });
+
   test('super-admin-only sections are walled off', async ({ page, firewall }) => {
     firewall.tolerateBlocks = true;
     await consent(page);

@@ -44,12 +44,13 @@ const ALL: AdminResource[] = ['users', 'payments', 'reports', 'auditLogs', 'secu
 export const SECTION_DATA: Record<string, AdminResource[]> = {
   '': ['users', 'payments', 'actionLogs'],
   users: ['users'], subscriptions: ['users'], tokens: ['users', 'payments', 'actionLogs'],
-  analyses: ['actionLogs'], tools: ['actionLogs'], 'ai-ops': ['actionLogs'], health: ['actionLogs'],
+  // `users` wherever a table names a person, so it shows their email (userLabel), not a raw uid.
+  analyses: ['actionLogs', 'users'], tools: ['actionLogs'], 'ai-ops': ['actionLogs'], health: ['actionLogs'],
   flags: [], pricing: [], notifications: [], support: [], content: [], settings: ['users', 'securityLogs'],
-  workspaces: ['orgs', 'reports', 'actionLogs'], agencies: ['orgs', 'actionLogs'], enterprise: ['orgs'],
+  workspaces: ['orgs', 'reports', 'actionLogs', 'users'], agencies: ['orgs', 'actionLogs', 'users'], enterprise: ['orgs', 'users'],
   clients: ['reports', 'actionLogs'], revenue: ['payments', 'users'], transactions: ['payments', 'users'],
   refunds: ['payments', 'users'], reports: ['reports', 'users', 'payments', 'actionLogs'],
-  audit: ['auditLogs', 'securityLogs'], security: ['securityLogs', 'auditLogs', 'actionLogs', 'users'],
+  audit: ['auditLogs', 'securityLogs', 'users'], security: ['securityLogs', 'auditLogs', 'actionLogs', 'users'],
 };
 const RESOURCE_LABEL: Record<AdminResource, string> = {
   users: 'users', payments: 'payments', reports: 'reports', auditLogs: 'audit log', securityLogs: 'security log', actionLogs: 'activity', orgs: 'organizations',

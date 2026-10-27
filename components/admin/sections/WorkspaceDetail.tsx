@@ -40,7 +40,7 @@ const WorkspaceDetail: React.FC = () => {
 
   return (
     <div className="space-y-10">
-      <AdminSectionHeader title={ws.name || 'Workspace'} subtitle={`Owner ${ws.owner_id} • ${ws.status || 'active'}`}
+      <AdminSectionHeader title={ws.name || 'Workspace'} subtitle={`Owner ${a.userLabel(ws.owner_id)} • ${ws.status || 'active'}`}
         actions={<button onClick={() => navigate('/admin/workspaces')} className="text-[10px] font-bold text-gray-400 uppercase tracking-widest hover:text-white">← Back to Workspaces</button>} />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
@@ -52,7 +52,7 @@ const WorkspaceDetail: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card title="Workspace Info">
-          {[['Name', ws.name], ['Owner', ws.owner_id], ['Status', ws.status || 'active'], ['Created', fmtDate(ws.created_at)], ['Workspace ID', ws.id]].map(([k, v]) => (
+          {[['Name', ws.name], ['Owner', a.userLabel(ws.owner_id)], ['Status', ws.status || 'active'], ['Created', fmtDate(ws.created_at)], ['Workspace ID', ws.id]].map(([k, v]) => (
             <div key={k} className="flex justify-between py-2.5 border-b border-gray-50 last:border-0"><span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{k}</span><span className="text-sm font-bold text-[#0B0B0B] truncate max-w-[60%]">{v as string}</span></div>
           ))}
         </Card>

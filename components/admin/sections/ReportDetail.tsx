@@ -35,7 +35,7 @@ const ReportDetail: React.FC = () => {
         <KpiCard label="Type" value={<span className="text-lg">{r.report_type || '—'}</span>} accent />
         <KpiCard label="Visibility" value={<span className="text-lg">{r.visibility_type || 'private'}</span>} />
         <KpiCard label="Created" value={<span className="text-lg">{fmtDate(r.created_at)}</span>} />
-        <KpiCard label="Creator" value={<span className="text-xs break-all">{r.creator_user_id}</span>} />
+        <KpiCard label="Creator" value={<span className="text-xs break-all">{a.userLabel(r.creator_user_id)}</span>} />
       </div>
 
       {canDelete && (

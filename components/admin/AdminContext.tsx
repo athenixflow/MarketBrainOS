@@ -48,6 +48,8 @@ interface AdminContextValue {
   ensure: (keys: AdminResource[], force?: boolean) => Promise<void>;
   /** Resources still loading, so a section can say "Loading" instead of "No results". */
   pending: Set<AdminResource>;
+  /** A uid as a person reads it: the account's email when loaded, else a short id (non-uids pass through). */
+  userLabel: (uid?: string | null) => string;
   profile: UserProfile | null;
   users: UserProfile[];
   auditLogs: AuditLogEntry[];
@@ -237,8 +239,16 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
+  const emailByUid = useMemo(() => new Map(users.map((u) => [u.id, u.email])), [users]);
+  const userLabel = (uid?: string | null): string => {
+    if (!uid) return 'Unknown';
+    const email = emailByUid.get(uid);
+    if (email) return email;
+    return /^[A-Za-z0-9]{20,}$/.test(uid) ? `${uid.slice(0, 8)}…` : uid;
+  };
+
   const value: AdminContextValue = {
-    loading, ensure, pending, profile, users, auditLogs, securityLogs, actionLogs, payments,
+    loading, ensure, pending, userLabel, profile, users, auditLogs, securityLogs, actionLogs, payments,
     systemSettings, adminSettings, platformStats, workspaces, agencies, enterprises, reports,
     metrics, isEmergencyActive,
     failureRate, lastFailure, chainValid, chainLegacy, verifyingChain, loadError, refresh, confirm, runManualIntegrityCheck,

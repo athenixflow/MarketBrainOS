@@ -58,7 +58,7 @@ const Audit: React.FC = () => {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-8 text-[11px]">
                 <div><p className="font-bold text-gray-400 uppercase tracking-widest mb-1">Actor</p><p className="font-bold text-[#0B0B0B] truncate">{log.admin_email}</p></div>
-                <div><p className="font-bold text-gray-400 uppercase tracking-widest mb-1">Target</p><p className="font-bold text-[#0B0B0B] truncate">{log.target}</p></div>
+                <div><p className="font-bold text-gray-400 uppercase tracking-widest mb-1">Target</p><p className="font-bold text-[#0B0B0B] truncate">{a.userLabel(log.target)}</p></div>
               </div>
               {log.metadata && Object.keys(log.metadata).length > 0 && (
                 <div className="pt-3 border-t border-gray-50">

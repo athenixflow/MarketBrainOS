@@ -34,7 +34,7 @@ const Reports: React.FC = () => {
     { key: 'title', header: 'Title', render: r => <button onClick={() => navigate(`/admin/reports/${r.id}`)} className="text-sm font-bold text-[#0B0B0B] hover:text-[#FF0000] text-left truncate block max-w-[220px]">{r.title || 'Untitled'}</button> },
     { key: 'type', header: 'Type', render: r => <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{r.report_type || '—'}</span> },
     { key: 'vis', header: 'Visibility', render: r => <Pill tone={r.visibility_type === 'private' ? 'gray' : 'blue'}>{r.visibility_type || 'private'}</Pill> },
-    { key: 'creator', header: 'Creator', render: r => <span className="text-xs text-gray-500 truncate block max-w-[140px]">{r.creator_user_id}</span> },
+    { key: 'creator', header: 'Creator', render: r => <span className="text-xs text-gray-500 truncate block max-w-[140px]">{a.userLabel(r.creator_user_id)}</span> },
     { key: 'date', header: 'Created', render: r => <span className="text-xs text-gray-500">{fmtDate(r.created_at)}</span> },
     { key: 'actions', header: 'Actions', align: 'right', render: r => canDelete ? (
       <div className="flex items-center justify-end gap-2">

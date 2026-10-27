@@ -25,14 +25,14 @@ const Transactions: React.FC = () => {
     const v = paymentView(p);
     a.confirm({
       scope: 'admin:system_config', keyword: 'REFUND',
-      warningTitle: 'ISSUE REFUND', warningMessage: `Refund ${v.display} to ${p.uid}. This is recorded in the ledger and audited.`,
+      warningTitle: 'ISSUE REFUND', warningMessage: `Refund ${v.display} to ${a.userLabel(p.uid)}. This is recorded in the ledger and audited.`,
       run: async () => { await callAdminRefund({ paymentId: p.id, uid: p.uid, amountMinor: v.amountMinor, currency: v.currency, reason: 'Admin-issued refund' }); },
     });
   };
 
   const columns: Column<PaymentRecord>[] = [
     { key: 'date', header: 'Date', render: p => <span className="text-xs text-gray-600">{fmtDate(p.created_at)}</span> },
-    { key: 'user', header: 'Customer', render: p => <button onClick={() => navigate(`/admin/users/${p.uid}`)} className="text-xs font-bold text-[#0B0B0B] hover:text-[#FF0000] truncate block max-w-[160px] text-left">{p.uid}</button> },
+    { key: 'user', header: 'Customer', render: p => <button onClick={() => navigate(`/admin/users/${p.uid}`)} className="text-xs font-bold text-[#0B0B0B] hover:text-[#FF0000] truncate block max-w-[160px] text-left">{a.userLabel(p.uid)}</button> },
     { key: 'amount', header: 'Amount', align: 'right', render: p => { const v = paymentView(p); return <span className={`text-sm font-black ${v.amountMinor < 0 ? 'text-red-500' : 'text-green-600'}`}>{v.display}</span>; } },
     { key: 'provider', header: 'Provider', render: p => <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{p.provider || 'legacy'}</span> },
     { key: 'status', header: 'Status', render: p => <Pill tone={p.status === 'failed' ? 'red' : p.status === 'pending' ? 'yellow' : 'green'}>{paymentView(p).status}</Pill> },

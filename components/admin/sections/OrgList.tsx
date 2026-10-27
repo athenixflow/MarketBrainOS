@@ -35,7 +35,7 @@ const OrgList: React.FC<{ kind: AdminOrgKind }> = ({ kind }) => {
 
   const columns: Column<any>[] = [
     { key: 'name', header: 'Name', render: r => <button onClick={() => navigate(`/admin/${cfg.route}/${r.id}`)} className="text-sm font-bold text-[#0B0B0B] hover:text-[#FF0000] transition-colors text-left">{r.name || 'Untitled'}</button> },
-    { key: 'owner', header: 'Owner', render: r => <span className="text-xs text-gray-500 truncate block max-w-[160px]">{r.owner_id}</span> },
+    { key: 'owner', header: 'Owner', render: r => <span className="text-xs text-gray-500 truncate block max-w-[160px]">{a.userLabel(r.owner_id)}</span> },
     { key: 'count', header: cfg.countLabel, render: r => <span className="text-sm font-bold text-[#0B0B0B]">{r[cfg.countField] ?? '—'}</span> },
     { key: 'status', header: 'Status', render: r => <Pill tone={r.status === 'archived' ? 'gray' : r.status === 'suspended' ? 'red' : 'green'}>{r.status || 'active'}</Pill> },
     { key: 'created', header: 'Created', render: r => <span className="text-xs text-gray-500">{fmtDate(r.created_at)}</span> },

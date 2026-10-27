@@ -27,7 +27,7 @@ const Analyses: React.FC = () => {
 
   const columns: Column<ActionLogEntry>[] = [
     { key: 'time', header: 'Time', render: l => <span className="text-xs font-medium text-gray-600">{fmtDateTime(l.created_at || l.timestamp)}</span> },
-    { key: 'user', header: 'User', render: l => <span className="text-xs font-bold text-[#0B0B0B] truncate block max-w-[160px]">{l.uid || l.user_id || 'Unknown'}</span> },
+    { key: 'user', header: 'User', render: l => <span className="text-xs font-bold text-[#0B0B0B] truncate block max-w-[160px]">{a.userLabel(l.uid || l.user_id)}</span> },
     { key: 'module', header: 'Tool', render: l => <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{l.module || '—'}</span> },
     { key: 'status', header: 'Status', render: l => <div><Pill tone={statusTone(l.status)}>{statusLabel(l.status)}</Pill>{l.error_code && <p className="text-[9px] text-red-500 mt-1 truncate max-w-[140px]">{l.error_code}</p>}</div> },
     { key: 'cost', header: 'Tokens', align: 'right', render: l => <span className="text-xs font-bold text-gray-600">{l.tokens_used ?? '—'}</span> },
