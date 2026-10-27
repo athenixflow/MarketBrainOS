@@ -9,6 +9,7 @@ import PublicFooter from '../PublicFooter';
 import DocsSidebar from './DocsSidebar';
 import DocsSearch from './DocsSearch';
 import Icon from './icons';
+import { useOverlayLock } from '../useOverlayLock';
 
 const SearchCtx = createContext<{ openSearch: () => void }>({ openSearch: () => {} });
 export const useDocsSearch = () => useContext(SearchCtx);
@@ -17,6 +18,7 @@ const DocsLayout: React.FC = () => {
   const { user } = useAuth();
   const [searchOpen, setSearchOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  useOverlayLock(drawerOpen, () => setDrawerOpen(false));
 
   // Global shortcuts: "/" focuses search, Ctrl/Cmd+K opens it.
   useEffect(() => {

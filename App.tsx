@@ -42,6 +42,7 @@ import { TOOL_CONFIG_LIST, NAV_SUITES } from './config/toolConfigs';
 import { NAV_CORE, NAV_COLLABORATION, NAV_ACCOUNT, visibleLinks, NavLink } from './config/access';
 import { visibleAdminSections, adminPath } from './config/adminAccess';
 import { isPublicRoute } from './config/publicRoutes';
+import { useOverlayLock, useMediaQuery } from './components/useOverlayLock';
 import LandingPageScore from './pages/LandingPageScore';
 import LandingPageStudy from './pages/LandingPageStudy';
 import Status from './pages/Status';
@@ -66,6 +67,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   // Centralized feature visibility (config/access.ts) — a user only sees what their plan or
   // membership grants. Same context powers the Dashboard quick-actions, so hidden = hidden everywhere.
   const accessCtx = { profile, memberships };
+
+  // Below lg the sidebar is a drawer over the page: Escape closes it, the page behind stops
+  // scrolling, and while it is closed (off-canvas) its links leave the tab order.
+  const isDrawer = useMediaQuery('(max-width: 1023.98px)');
+  useOverlayLock(isOpen && isDrawer, onClose);
+  const drawerHidden = isDrawer && !isOpen ? ({ inert: '', 'aria-hidden': true } as Record<string, unknown>) : {};
 
   const renderNavLink = (link: NavLink, size: 'lg' | 'sm' = 'lg') => {
     // Non-exact links also highlight on their sub-paths (e.g. /team/... keeps Team Workspace lit).
@@ -114,11 +121,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     return (
       <>
         <MobileOverlay />
-        <aside className={sidebarClasses}>
+        <aside className={sidebarClasses} {...drawerHidden}>
           {/* Mobile Header inside Drawer */}
           <div className="flex items-center justify-between p-6 lg:hidden border-b border-gray-900/30">
              <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Admin Menu</span>
-             <button onClick={onClose} className="text-white p-2">
+             <button type="button" onClick={onClose} aria-label="Close navigation" className="text-white p-2">
                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                </svg>
@@ -166,11 +173,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   return (
     <>
       <MobileOverlay />
-      <aside id="app-sidebar" className={sidebarClasses}>
+      <aside id="app-sidebar" className={sidebarClasses} {...drawerHidden}>
         {/* Mobile Header inside Drawer */}
         <div className="flex items-center justify-between p-6 lg:hidden border-b border-gray-900/30">
            <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Navigation</span>
-           <button onClick={onClose} className="text-white p-2">
+           <button type="button" onClick={onClose} aria-label="Close navigation" className="text-white p-2">
              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
              </svg>

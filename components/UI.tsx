@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useId } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useOverlayLock } from './useOverlayLock';
 import { isPaidTier } from '../config/access';
 import { SecurityEngine } from '../services/securityEngine';
 import { useAuth } from '../context/AuthContext';
@@ -655,25 +656,7 @@ export const Modal: React.FC<{
   scrollBody?: boolean;
 }> = ({ open = true, onClose, title, size = 'md', children, footer, scrollBody }) => {
   const titleId = useId();
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKey);
-    // body { overflow: hidden } is ignored by iOS Safari, so the page scrolled behind every modal.
-    // Fixing the body at its current offset is the lock that works there; restore on close.
-    const body = document.body;
-    const scrollY = window.scrollY;
-    const prev = { position: body.style.position, top: body.style.top, width: body.style.width, overflow: body.style.overflow };
-    body.style.overflow = 'hidden';
-    body.style.position = 'fixed';
-    body.style.top = `-${scrollY}px`;
-    body.style.width = '100%';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      body.style.position = prev.position; body.style.top = prev.top; body.style.width = prev.width; body.style.overflow = prev.overflow;
-      window.scrollTo(0, scrollY);
-    };
-  }, [open, onClose]);
+  useOverlayLock(open, onClose);
   if (!open) return null;
   const width = { sm: 'max-w-md', md: 'max-w-2xl', lg: 'max-w-4xl' }[size];
   return (
