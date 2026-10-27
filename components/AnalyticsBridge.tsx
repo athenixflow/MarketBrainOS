@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useScope } from '../context/ScopeContext';
+import { isMarketingRoute } from '../config/publicRoutes';
 import {
   captureAttribution, cohortWeek, readAttribution, setAnalyticsContext, track,
 } from '../services/analytics';
@@ -52,14 +53,12 @@ const AnalyticsBridge: React.FC = () => {
   /*
    * MARKETING ROUTES ONLY. Firing this inside the signed-in app would count a person
    * moving between tools as an arrival and make the acquisition funnel's top meaningless.
-   * The list mirrors App.tsx's PUBLIC_ROUTES; `/` is included because it is the landing
+   * The pages come from config/publicRoutes.ts; `/` is included because it is the landing
    * page for a signed-out visitor and the dashboard for everybody else.
    */
   useEffect(() => {
     const path = location.pathname;
-    const isMarketing = !user && (path === '/' || [
-      '/features', '/pricing', '/about', '/faq', '/privacy', '/terms', '/auth',
-    ].includes(path));
+    const isMarketing = !user && (path === '/' || path === '/auth' || isMarketingRoute(path));
     if (!isMarketing) return;
     track('landing_view', { page: path });
   }, [location.pathname, user]);

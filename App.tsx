@@ -41,6 +41,7 @@ import ScopeSwitcher from './components/ScopeSwitcher';
 import { TOOL_CONFIG_LIST, NAV_SUITES } from './config/toolConfigs';
 import { NAV_CORE, NAV_COLLABORATION, NAV_ACCOUNT, visibleLinks, NavLink } from './config/access';
 import { visibleAdminSections, adminPath } from './config/adminAccess';
+import { isPublicRoute } from './config/publicRoutes';
 import LandingPageScore from './pages/LandingPageScore';
 import LandingPageStudy from './pages/LandingPageStudy';
 import Status from './pages/Status';
@@ -355,16 +356,10 @@ const AppContainer: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Public marketing pages carry their own chrome (PublicLayout) and must render full-width,
-  // even for logged-in users — otherwise the app sidebar/header double up with the public nav.
-  // The docs hub (/documentation/*) is its own full-bleed mini-app with its own nav, so it is
-  // treated the same way for every visitor (matched by prefix to cover its sub-pages).
-  const PUBLIC_ROUTES = ['/features', '/pricing', '/about', '/faq', '/privacy', '/terms'];
-  const isDocsRoute = location.pathname.startsWith('/documentation');
-  const isPublicRoute = PUBLIC_ROUTES.includes(location.pathname) || isDocsRoute || location.pathname === '/auth/action';
-
-  // Use layout logic: If user is logged in (and not on a public marketing page), show sidebar.
-  const showSidebar = !!user && !isPublicRoute;
+  // Public pages carry their own chrome (PublicLayout, or the docs hub's nav) and render full-width
+  // even for logged-in users, otherwise the app sidebar/header double up with the public nav.
+  // The list lives in config/publicRoutes.ts; scripts/public-routes.test.ts keeps it complete.
+  const showSidebar = !!user && !isPublicRoute(location.pathname);
 
   return (
     <div className="min-h-screen bg-[#0B0B0B] text-white selection:bg-[#FF0000] selection:text-white antialiased">
