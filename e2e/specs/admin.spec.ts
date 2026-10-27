@@ -12,7 +12,7 @@ import type { Page } from '@playwright/test';
 import { test, expect, settle, asRole } from '../fixtures/test';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const accounts = JSON.parse(readFileSync(path.join(here, '..', '.accounts.local.json'), 'utf8')) as { emails: Record<string, string> };
+const accounts = JSON.parse(readFileSync(path.join(here, '..', '.accounts.local.json'), 'utf8')) as { password: string; emails: Record<string, string> };
 const consent = (page: Page) => page.addInitScript(() => { try { localStorage.setItem('mbos_consent', 'analytics:no'); } catch {} });
 
 test.describe('ops_admin', () => {
@@ -47,14 +47,17 @@ test.describe('ops_admin', () => {
     const before = Number((await page.locator('main').innerText()).match(/(\d+)\s*tokens?/i)?.[1] ?? NaN);
     await page.getByPlaceholder('Amount').fill('10');
     await page.getByRole('button', { name: 'Apply Adjustment' }).click();
-    // The confirm box is not marked up as a dialog (an a11y finding), so target its own controls.
-    await page.getByPlaceholder('CONFIRM').fill('CONFIRM');
-    await page.getByRole('button', { name: /^execute$/i }).click();
-    // Then a step-up code. It is a client-side constant (services/securityEngine.ts), itself a finding.
-    const stepUp = page.getByPlaceholder('000000');
-    await stepUp.fill('133742', { timeout: 20_000 });
-    await page.getByRole('button', { name: /^authorize$/i }).click();
-    await expect(stepUp).toBeHidden({ timeout: 20_000 });
+    const confirmBox = page.getByRole('dialog');
+    await confirmBox.getByPlaceholder('CONFIRM').fill('CONFIRM');
+    await confirmBox.getByRole('button', { name: /^execute$/i }).click();
+    // The server wants a recent sign-in for token grants (assertRecentAuth). A session older than 15
+    // minutes gets "Confirm it's you"; a fresh one goes straight through.
+    const reauth = page.getByRole('dialog', { name: "Confirm it's you" });
+    if (await reauth.waitFor({ timeout: 15_000 }).then(() => true).catch(() => false)) {
+      await reauth.getByLabel('Password').fill(accounts.password);
+      await reauth.getByRole('button', { name: /confirm and continue/i }).click();
+      await expect(reauth).toBeHidden({ timeout: 20_000 });
+    }
     await page.waitForTimeout(3_000);
     test.info().annotations.push({ type: 'balance-before', description: String(before) });
   });

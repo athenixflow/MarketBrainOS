@@ -234,10 +234,10 @@ service cloud.firestore {
     // ---------- platform settings / security ledgers ----------
     // System lockdown state. Every signed-in client reads this on each access/login check
     // (securityEngine.isSystemLocked); platform admins toggle emergency lockdown from the
-    // admin console (updateSystemEmergency does a client-side merge write).
+    // admin console through the setEmergencyLockdown callable, which requires a recent sign-in.
     match /system_settings/{id} {
       allow read:  if isSignedIn();
-      allow write: if isPlatformAdmin();
+      allow write: if false;          // setEmergencyLockdown only
     }
     match /admin_settings/{id} {
       allow read:  if isSignedIn();   // module flags gate the UI

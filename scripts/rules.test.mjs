@@ -262,6 +262,19 @@ await check('author cannot move their comment into another workspace', () =>
 await check('author can still edit the comment text', () =>
   assertSucceeds(updateDoc(doc(outsiderDb, 'workspace_comments', 'c1'), { content: 'edited', updated_at: new Date().toISOString() })));
 
+console.log('\nEMERGENCY LOCKDOWN GOES THROUGH THE SERVER (needs a recent sign-in there):');
+
+await testEnv.withSecurityRulesDisabled(async (ctx) => {
+  const adminDb = ctx.firestore();
+  await setDoc(doc(adminDb, 'users', 'platform_admin'), { id: 'platform_admin', email: 'ops@example.com', role: 'super_admin', tier: 'free' });
+  await setDoc(doc(adminDb, 'system_settings', 'global'), { emergency_lockdown: false });
+});
+const platformAdminDb = testEnv.authenticatedContext('platform_admin', { email: 'ops@example.com', email_verified: true }).firestore();
+await check('a platform admin cannot toggle lockdown with a direct write', () =>
+  assertFails(setDoc(doc(platformAdminDb, 'system_settings', 'global'), { emergency_lockdown: true }, { merge: true })));
+await check('signed-in users can still read the lockdown flag', () =>
+  assertSucceeds(getDoc(doc(outsiderDb, 'system_settings', 'global'))));
+
 await testEnv.cleanup();
 
 console.log(`\n${passed} passed, ${failed} failed\n`);

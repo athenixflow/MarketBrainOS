@@ -852,6 +852,23 @@ ok(readsOldPaymentShape("const amt = (p as any)['amount_paid'];"), 'CONTROL: a b
 ok(!readsOldPaymentShape('// the old shape kept p.amount_paid in dollars'), 'a comment that mentions the old field is not a read');
 ok(!readsOldPaymentShape('export interface LegacyPaymentRecord { amount_paid: number; payment_reference: string; }'), 'a type declaring the old fields is not a read');
 
+console.log('\nDESTRUCTIVE ADMIN ACTIONS NEED A RECENT SIGN-IN, CHECKED ON THE SERVER:');
+/* The admin "step-up" was a fixed six-digit code compared in the browser, in a public repo, so it
+   stopped nobody. The real check is on the server: each destructive admin callable requires the
+   caller's auth_time to be recent (the client re-authenticates with password or Google first). */
+const ADMIN_MUTATORS = ['manageUser', 'adminManageTokens', 'adminManageSubscription', 'adminBulkAction', 'adminCreateUser',
+  'adminManageOrg', 'adminRefund', 'adminManageReport', 'updateSystemSettings', 'updatePricingConfig', 'setEmergencyLockdown'];
+for (const name of ADMIN_MUTATORS) {
+  const fn = exported(index, name);
+  const at = fn.search(/await assertRecentAuth\(context\)/);
+  const firstWrite = fn.search(/\.(set|update|add|delete|commit)\(|runTransaction\(/);
+  ok(fn.length > 0 && at > 0 && (firstWrite < 0 || at < firstWrite), `${name} checks assertRecentAuth before it writes`);
+}
+const recent = index.slice(index.indexOf('const assertRecentAuth'), index.indexOf('const assertRecentAuth') + 700);
+ok(/auth_time/.test(recent) && /reauth-required/.test(recent) && /failed-precondition/.test(recent), 'assertRecentAuth reads auth_time and refuses with reauth-required');
+const fixedCode = clientFiles.filter((f) => /\b133742\b/.test(fs.readFileSync(path.join(root, f), 'utf8')));
+ok(fixedCode.length === 0, 'no fixed step-up code ships in the client', fixedCode.join(', '));
+
 console.log('\nNO CLIENT CALLS THE REFUSED TOP-UP:');
 /* confirmTopUp refuses every reference that did not come from a real payment, so any client caller is a
    button that always errors (the Dashboard's "Buy tokens" made up its own reference). Tokens are bought

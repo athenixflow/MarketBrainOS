@@ -1,7 +1,7 @@
-// Admin portal shared state + the destructive-action protocol (confirm keyword → optional step-up
-// verification → execute → refresh). Ported from the original AdminDashboard and generalized: a
-// request may carry a `run` thunk so any section can route a custom mutation through the same
-// audited confirm/step-up flow. Exposes everything via useAdmin().
+// Admin portal shared state + the destructive-action protocol (confirm keyword → execute → if the
+// server wants a recent sign-in, "confirm it's you" and retry once → refresh). A request may carry
+// a `run` thunk so any section can route a custom mutation through the same flow. Exposes
+// everything via useAdmin().
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
@@ -17,7 +17,8 @@ import {
   UserProfile, AuditLogEntry, SecurityEvent, SystemSettings, AdminSettings, ActionLogEntry,
   PaymentRecord, PermissionScope, Workspace, Agency, Enterprise, Report,
 } from '../../types';
-import { Card, Input, PrimaryButton, ErrorMessage } from '../UI';
+import { Input, PrimaryButton, ErrorMessage, Modal } from '../UI';
+import { confirmIdentity, isReauthRequired, usesPassword } from '../../services/reauth';
 
 // How many recent action_logs we sample for client-side analytics. Section metrics derived from
 // this are a RECENT sample (not platform totals) — sections label them as such. Platform totals
@@ -74,7 +75,7 @@ export const useAdmin = () => {
 };
 
 export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -96,12 +97,13 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [verifyingChain, setVerifyingChain] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Confirm + step-up modal state
+  // Confirm + "confirm it's you" modal state
   const [confirmReq, setConfirmReq] = useState<ConfirmRequest | null>(null);
   const [confirmInput, setConfirmInput] = useState('');
-  const [showStepUp, setShowStepUp] = useState(false);
-  const [verificationCode, setVerificationCode] = useState('');
-  const [pendingAction, setPendingAction] = useState<ConfirmRequest | null>(null);
+  const [pendingAction, setPendingAction] = useState<ConfirmRequest | null>(null);   // waiting on re-auth
+  const [reauthPwd, setReauthPwd] = useState('');
+  const [reauthError, setReauthError] = useState<string | null>(null);
+  const [reauthBusy, setReauthBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const refresh = async () => {
@@ -155,22 +157,24 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setActionError(null);
     const scope: PermissionScope = req.scope || (req.type === 'TOGGLE_LOCKDOWN' || req.type === 'UPDATE_SETTINGS' ? 'admin:system_config' : 'admin:user_management');
     const check = await SecurityEngine.checkPermission(profile, scope);
-    if (check.stepUpRequired) { setPendingAction(req); setShowStepUp(true); return; }
     if (!check.allowed) { setActionError(check.error || 'Permission Denied.'); return; }
     execute(req);
   };
 
-  const handleVerifyStepUp = async () => {
-    if (!profile || !pendingAction) return;
-    const res = await SecurityEngine.verifyStepUp(profile, verificationCode);
-    if (res.valid) {
-      profile.is_verified_admin = true; profile.last_verification = new Date().toISOString();
-      setShowStepUp(false); setVerificationCode('');
-      execute(pendingAction);
-    } else { setActionError('Invalid verification code.'); }
+  /* The server asked for a recent sign-in: confirm identity, then retry the same action once. */
+  const confirmAndRetry = async () => {
+    if (!user || !pendingAction) return;
+    setReauthBusy(true); setReauthError(null);
+    const problem = await confirmIdentity(user, reauthPwd);
+    setReauthBusy(false);
+    if (problem) { setReauthError(problem); return; }
+    const req = pendingAction;
+    closeReauth();
+    execute(req, true);
   };
+  const closeReauth = () => { setPendingAction(null); setReauthPwd(''); setReauthError(null); };
 
-  const execute = async (req: ConfirmRequest) => {
+  const execute = async (req: ConfirmRequest, retried = false) => {
     try {
       if (req.run) {
         await req.run();
@@ -183,6 +187,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
       await refresh();
     } catch (err: any) {
+      if (!retried && isReauthRequired(err)) { setPendingAction(req); return; }
       setActionError(err.message || 'Action failed.');
     }
   };
@@ -198,45 +203,43 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     <AdminContext.Provider value={value}>
       {children}
 
-      {/* CONFIRMATION MODAL */}
-      {confirmReq && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0B0B0B]/95 backdrop-blur-md p-6">
-          <div className="max-w-md w-full bg-[#1A1A1A] border-2 border-red-600 rounded-2xl p-10 shadow-2xl shadow-red-900/40 animate-in zoom-in duration-300">
-            <p className="text-[10px] font-black text-red-500 uppercase tracking-[0.3em] mb-4">Destructive Action Protocol</p>
-            <h3 className="text-2xl font-black text-white mb-6 uppercase leading-none">{confirmReq.warningTitle}</h3>
-            <p className="text-sm font-medium text-gray-400 mb-8 leading-relaxed">{confirmReq.warningMessage}</p>
-            <div className="bg-black/50 p-6 rounded-2xl mb-8 border border-white/10">
-              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Type the following to confirm:</p>
-              <p className="text-xl font-mono text-white tracking-widest font-bold select-all">"{confirmReq.keyword}"</p>
+      {/* CONFIRMATION: type the keyword, then Execute. */}
+      <Modal open={!!confirmReq} onClose={() => setConfirmReq(null)} title={confirmReq?.warningTitle} size="sm">
+        {confirmReq && (
+          <form onSubmit={(e) => { e.preventDefault(); if (confirmInput === confirmReq.keyword) handleConfirmed(confirmReq); }}>
+            <p className="text-sm font-medium text-gray-600 mb-6 leading-relaxed">{confirmReq.warningMessage}</p>
+            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Type <span className="font-mono text-[#0B0B0B] select-all">{confirmReq.keyword}</span> to confirm</p>
+            <Input label="Confirmation keyword" placeholder={confirmReq.keyword} value={confirmInput} onChange={(e) => setConfirmInput(e.target.value)} />
+            <div className="flex flex-col sm:flex-row gap-3 mt-6">
+              <button type="submit" disabled={confirmInput !== confirmReq.keyword}
+                className="flex-1 py-3.5 bg-red-700 text-white text-xs font-bold uppercase tracking-[0.2em] rounded-xl hover:bg-red-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">Execute</button>
+              <button type="button" onClick={() => setConfirmReq(null)} className="flex-1 py-3.5 text-xs font-bold text-gray-600 hover:text-[#0B0B0B] uppercase tracking-widest">Cancel</button>
             </div>
-            <Input label="Confirmation Keyword" placeholder={confirmReq.keyword} value={confirmInput} onChange={(e) => setConfirmInput(e.target.value)} />
-            <div className="flex flex-col gap-4 mt-8">
-              <button onClick={() => handleConfirmed(confirmReq)} disabled={confirmInput !== confirmReq.keyword}
-                className="w-full py-4 bg-red-600 text-white font-black uppercase tracking-[0.2em] rounded-xl hover:bg-red-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all">Execute</button>
-              <button onClick={() => setConfirmReq(null)} className="w-full py-3 text-xs font-bold text-gray-500 hover:text-white uppercase tracking-widest">Cancel Operation</button>
-            </div>
-          </div>
-        </div>
-      )}
+          </form>
+        )}
+      </Modal>
 
-      {/* STEP-UP MODAL */}
-      {showStepUp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0B0B0B]/90 backdrop-blur-sm p-6">
-          <Card accent className="max-w-md w-full shadow-2xl animate-in zoom-in duration-300">
-            <h3 className="text-xl font-black uppercase text-[#0B0B0B] mb-4">Identity Verification</h3>
-            <p className="text-sm text-gray-500 mb-8 font-medium">Verify your administrative identity to proceed with this change.</p>
-            <Input label="Verification Code" placeholder="000000" value={verificationCode} onChange={(e) => setVerificationCode(e.target.value)} />
-            {actionError && <div className="mb-6"><ErrorMessage message={actionError} /></div>}
-            <div className="flex gap-4">
-              <PrimaryButton className="flex-grow" onClick={handleVerifyStepUp}>Authorize</PrimaryButton>
-              <button onClick={() => setShowStepUp(false)} className="px-6 text-xs font-bold text-gray-400 uppercase tracking-widest">Cancel</button>
-            </div>
-          </Card>
-        </div>
-      )}
+      {/* CONFIRM IT'S YOU: the server wants a recent sign-in before this action. */}
+      <Modal open={!!pendingAction} onClose={closeReauth} title="Confirm it's you" size="sm">
+        <form onSubmit={(e) => { e.preventDefault(); confirmAndRetry(); }}>
+          <p className="text-sm font-medium text-gray-600 mb-6 leading-relaxed">
+            Changes like this need a recent sign-in. {usesPassword(user) ? 'Enter your password to continue.' : 'Continue with Google to confirm.'}
+          </p>
+          {usesPassword(user) && (
+            <Input label="Password" type="password" autoComplete="current-password" placeholder="Your account password" value={reauthPwd} onChange={(e) => setReauthPwd(e.target.value)} />
+          )}
+          {reauthError && <div className="mb-4"><ErrorMessage message={reauthError} /></div>}
+          <div className="flex flex-col sm:flex-row gap-3 mt-2">
+            <PrimaryButton type="submit" className="flex-1" disabled={reauthBusy || (usesPassword(user) && !reauthPwd)}>
+              {reauthBusy ? 'Checking…' : usesPassword(user) ? 'Confirm and continue' : 'Continue with Google'}
+            </PrimaryButton>
+            <button type="button" onClick={closeReauth} className="flex-1 py-3.5 text-xs font-bold text-gray-600 hover:text-[#0B0B0B] uppercase tracking-widest">Cancel</button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Toast error */}
-      {actionError && !showStepUp && !confirmReq && (
+      {actionError && !pendingAction && !confirmReq && (
         <div className="fixed bottom-10 right-10 z-50 animate-in slide-in-from-bottom-4">
           <ErrorMessage message={actionError} action={{ label: 'Dismiss', onClick: () => setActionError(null) }} />
         </div>

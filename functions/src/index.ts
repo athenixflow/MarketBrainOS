@@ -229,6 +229,7 @@ export const updatePricingConfig = functions.https.onCall(async (data: any, cont
   if (callerSnap.data()?.role !== 'super_admin') {
     throw new functions.https.HttpsError('permission-denied', 'Super admin only.');
   }
+  await assertRecentAuth(context);
   const changes = data?.changes;
   if (!changes || typeof changes !== 'object') {
     throw new functions.https.HttpsError('invalid-argument', 'No changes provided.');
@@ -1100,6 +1101,7 @@ export const manageUser = functions.https.onCall(async (data: any, context: any)
   if (callerData?.role !== 'super_admin' && callerData?.role !== 'ops_admin') {
      throw new functions.https.HttpsError('permission-denied', 'Insufficient privileges');
   }
+  await assertRecentAuth(context);
 
   const { action, targetUserId, payload } = data;
   
@@ -1194,6 +1196,19 @@ const assertAdmin = async (context: any): Promise<{ uid: string; email: string; 
   return { uid, email, data };
 };
 
+/*
+ * Destructive admin actions need a recent sign-in. The browser re-authenticates (password or Google)
+ * when this refuses, then retries; the old "step-up" was a fixed code compared in the browser, which
+ * stopped nobody. 15 minutes matches the window that step-up promised.
+ */
+const ADMIN_REAUTH_WINDOW_S = 15 * 60;
+const assertRecentAuth = async (context: any): Promise<void> => {
+  const authTime = Number(context.auth?.token?.auth_time || 0);
+  if (!authTime || Date.now() / 1000 - authTime > ADMIN_REAUTH_WINDOW_S) {
+    throw new functions.https.HttpsError('failed-precondition', 'Please confirm it is you to continue.', { reason: 'reauth-required' });
+  }
+};
+
 const writeServerActionLog = (t: admin.firestore.Transaction, entry: any) => {
   const ref = db.collection('action_logs').doc();
   t.set(ref, { created_at: admin.firestore.FieldValue.serverTimestamp(), ...entry });
@@ -1202,6 +1217,7 @@ const writeServerActionLog = (t: admin.firestore.Transaction, entry: any) => {
 // --- ADMIN: token adjustments (add / remove / refund / bonus / reset) ---
 export const adminManageTokens = functions.https.onCall(async (data: any, context: any) => {
   const caller = await assertAdmin(context);
+  await assertRecentAuth(context);
   const { action, targetUserId, payload } = data;
   if (!targetUserId) throw new functions.https.HttpsError('invalid-argument', 'Target User ID required');
   const amount = Math.abs(Number(payload?.amount) || 0);
@@ -1248,6 +1264,7 @@ export const adminManageTokens = functions.https.onCall(async (data: any, contex
 // --- ADMIN: subscription management (grant / trial / extend / cancel / changePlan) ---
 export const adminManageSubscription = functions.https.onCall(async (data: any, context: any) => {
   const caller = await assertAdmin(context);
+  await assertRecentAuth(context);
   const { action, targetUserId, payload } = data;
   if (!targetUserId) throw new functions.https.HttpsError('invalid-argument', 'Target User ID required');
   const targetRef = db.collection('users').doc(targetUserId);
@@ -1300,6 +1317,7 @@ export const adminManageSubscription = functions.https.onCall(async (data: any, 
 // --- ADMIN: bulk operations over a set of users ---
 export const adminBulkAction = functions.https.onCall(async (data: any, context: any) => {
   const caller = await assertAdmin(context);
+  await assertRecentAuth(context);
   const { action, targetUserIds, payload } = data;
   if (!Array.isArray(targetUserIds) || targetUserIds.length === 0) throw new functions.https.HttpsError('invalid-argument', 'targetUserIds required');
   if (targetUserIds.length > 400) throw new functions.https.HttpsError('invalid-argument', 'Limit 400 users per bulk action');
@@ -1336,6 +1354,7 @@ export const adminBulkAction = functions.https.onCall(async (data: any, context:
 // --- ADMIN: create a new user (Auth + profile) ---
 export const adminCreateUser = functions.https.onCall(async (data: any, context: any) => {
   const caller = await assertAdmin(context);
+  await assertRecentAuth(context);
   const { email, password, tier } = data || {};
   if (!email || !password) throw new functions.https.HttpsError('invalid-argument', 'Email and password required');
   if (String(password).length < 6) throw new functions.https.HttpsError('invalid-argument', 'Password must be at least 6 characters');
@@ -1358,6 +1377,7 @@ export const adminCreateUser = functions.https.onCall(async (data: any, context:
 // --- ADMIN: organization administration (suspend / restore / archive / transfer) ---
 export const adminManageOrg = functions.https.onCall(async (data: any, context: any) => {
   const caller = await assertAdmin(context);
+  await assertRecentAuth(context);
   const { kind, orgId, action, payload } = data;
   const COLL: Record<string, string> = { workspace: 'workspaces', agency: 'agencies', enterprise: 'enterprises' };
   const coll = COLL[kind];
@@ -1390,6 +1410,7 @@ export const adminManageOrg = functions.https.onCall(async (data: any, context: 
 // --- ADMIN: issue a refund (records a refund entry; simulated provider — no external settlement) ---
 export const adminRefund = functions.https.onCall(async (data: any, context: any) => {
   const caller = await assertAdmin(context);
+  await assertRecentAuth(context);
   const { paymentId, uid, reason } = data || {};
   /* Recorded the way Bachs payments are — minor units with the currency that was paid — so a naira
      refund is never read (or mailed) as dollars. */
@@ -1430,6 +1451,7 @@ export const adminRefund = functions.https.onCall(async (data: any, context: any
 // --- ADMIN: report management (archive / delete / restore) ---
 export const adminManageReport = functions.https.onCall(async (data: any, context: any) => {
   const caller = await assertAdmin(context);
+  await assertRecentAuth(context);
   const { reportId, action } = data || {};
   if (!reportId) throw new functions.https.HttpsError('invalid-argument', 'reportId required');
   const ref = db.collection('reports').doc(reportId);
@@ -1468,6 +1490,7 @@ export const updateSystemSettings = functions.https.onCall(async (data: any, con
   if (callerData?.role !== 'super_admin' && callerData?.role !== 'ops_admin') {
      throw new functions.https.HttpsError('permission-denied', 'Insufficient privileges');
   }
+  await assertRecentAuth(context);
 
   const { changes } = data; // Partial object of AdminSettings
   if (!changes || typeof changes !== 'object') throw new functions.https.HttpsError('invalid-argument', 'Invalid changes payload');
@@ -1475,33 +1498,44 @@ export const updateSystemSettings = functions.https.onCall(async (data: any, con
   const settingsRef = db.collection('admin_settings').doc('global');
 
   try {
-    await db.runTransaction(async (t: admin.firestore.Transaction) => {
+    const previous = await db.runTransaction(async (t: admin.firestore.Transaction) => {
       const doc = await t.get(settingsRef);
       const currentData = doc.exists ? doc.data() : {};
-      
+
       const newData = {
         ...currentData,
         ...changes,
         last_updated: new Date().toISOString(),
         updated_by: context.auth!.token.email
       };
-      
+
       t.set(settingsRef, newData, { merge: true });
-      
-      // Audit Log
-      await logAdminAudit(
-        callerUid, 
-        context.auth!.token.email || 'unknown', 
-        'UPDATE_SYSTEM_SETTINGS', 
-        'GLOBAL_SETTINGS', 
-        { changes, previous: currentData }
-      );
+      return currentData;
     });
+    // Audited after the commit: inside the callback a retried transaction would append twice.
+    await logAdminAudit(callerUid, context.auth!.token.email || 'unknown', 'UPDATE_SYSTEM_SETTINGS', 'GLOBAL_SETTINGS', { changes, previous });
     return { success: true };
   } catch (error: any) {
     console.error("System Update Failed:", error);
     throw new functions.https.HttpsError('internal', error.message || 'Update failed');
   }
+});
+
+// --- EMERGENCY LOCKDOWN ---
+// Was a client-side write to system_settings, so it skipped the recent sign-in every other
+// destructive admin action needs. Any platform admin may toggle it (the client keeps the rule that
+// only a super admin can act during a lockdown, besides releasing it).
+export const setEmergencyLockdown = functions.https.onCall(async (data: any, context: any) => {
+  const caller = await assertAdmin(context);
+  await assertRecentAuth(context);
+  const active = data?.active === true;
+  await db.collection('system_settings').doc('global').set({
+    emergency_lockdown: active,
+    last_updated: new Date().toISOString(),
+    updated_by: caller.email,
+  }, { merge: true });
+  await logAdminAudit(caller.uid, caller.email, active ? 'LOCKDOWN_ACTIVATED' : 'LOCKDOWN_RELEASED', 'GLOBAL_SYSTEM', { active });
+  return { success: true, active };
 });
 
 // --- TOKEN TOP-UP FUNCTION (closed) ---

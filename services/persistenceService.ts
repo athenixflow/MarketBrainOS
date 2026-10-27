@@ -246,25 +246,19 @@ export const callChangeSubscription = async (action: 'upgrade' | 'cancel' | 'dow
   }
 };
 
+/* Through the server (setEmergencyLockdown), which needs a recent sign-in and writes the audit entry;
+   the rules refuse a direct write to system_settings. */
 export const updateSystemEmergency = async (admin: UserProfile, active: boolean) => {
   if (!isFirebaseInitialized) throw new Error("Database not connected");
-  const now = new Date().toISOString();
-  const docRef = doc(db, 'system_settings', 'global');
-  
-  await setDoc(docRef, { 
-    emergency_lockdown: active, 
-    last_updated: now, 
-    updated_by: admin.email 
-  }, { merge: true });
-  
+  const fn = httpsCallable(functions, 'setEmergencyLockdown');
+  try { await fn({ active }); }
+  catch (e: any) { throw new Error(e.message || 'Lockdown change failed.'); }
   await SecurityEngine.handleViolation(
     active ? 'SYSTEM_EMERGENCY_ACTIVATED' : 'SYSTEM_EMERGENCY_DEACTIVATED',
     'critical',
     `System emergency state toggled to ${active ? 'ACTIVE' : 'INACTIVE'} by admin.`,
     admin
   );
-  // Log locally for immediate feedback, though server should also log critical events
-  await logAdminAction(admin, active ? 'LOCKDOWN_ACTIVATED' : 'LOCKDOWN_RELEASED', 'GLOBAL_SYSTEM');
 };
 
 export const getUserProfile = async (userId: string): Promise<UserProfile | null> => {
@@ -446,23 +440,6 @@ export const logSecurityViolation = async (event: Omit<SecurityEvent, 'id' | 'ti
 // written SERVER-SIDE by logAdminAudit (Cloud Functions); admin_audit_logs is server-only by
 // security rules, so this client write may be denied — and that's fine. It must NEVER throw or it
 // would abort the caller (e.g. the step-up verify→execute flow would skip the actual mutation).
-export const logAdminAction = async (admin: UserProfile, action: string, target: string, metadata?: any) => {
-  if (!isFirebaseInitialized) return;
-  try {
-    // Firestore rejects `undefined`; strip it and default to {} so addDoc never fails on shape.
-    const safeMetadata = JSON.parse(JSON.stringify(metadata ?? {}));
-    const prevHash = await safeGetLastHash('admin_audit_logs');
-    const timestamp = new Date().toISOString();
-    const entry = { admin_email: admin.email, admin_role: admin.role, action_type: action, target, metadata: safeMetadata };
-    const content = JSON.stringify({ ...entry, timestamp });
-    const hash = await generateHash(content, prevHash);
-
-    await addDoc(collection(db, 'admin_audit_logs'), { ...entry, timestamp, previous_hash: prevHash, hash });
-  } catch (e) {
-    console.warn('logAdminAction (client breadcrumb) skipped:', e);
-  }
-};
-
 // --- ARTIFACT PERSISTENCE ---
 
 export const saveAngleMinerResult = async (userId: string, product: string, industry: string, target: string, results: AngleMinerResults) => {

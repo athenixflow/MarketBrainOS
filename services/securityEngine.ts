@@ -1,10 +1,8 @@
 
-import { logSecurityViolation, updateUserRiskProfile, logAdminAction, getSystemSettings } from './persistenceService';
+import { logSecurityViolation, updateUserRiskProfile, getSystemSettings } from './persistenceService';
 import { UserProfile, SecurityEvent, PermissionScope, SystemLoadLevel, UserRole } from '../types';
 import { verifyAuditChain, ChainResult } from './auditChain';
 
-const ADMIN_SESSION_TTL = 3600000; // 1 hour
-const STEP_UP_REQUIRED_AGE = 900000; // 15 mins for destructive actions
 
 const ROLE_PERMISSIONS: Record<UserRole, PermissionScope[]> = {
   'user': ['analysis:execute', 'audit:execute', 'simulation:execute'],
@@ -14,7 +12,6 @@ const ROLE_PERMISSIONS: Record<UserRole, PermissionScope[]> = {
 
 const GUEST_PERMISSIONS: PermissionScope[] = ['analysis:execute', 'audit:execute', 'simulation:execute'];
 
-const DESTRUCTIVE_ACTIONS = ['admin:user_management', 'admin:security_override', 'admin:token_management', 'admin:system_config'];
 
 // In-memory monitoring state
 const requestLogs: Record<string, number[]> = {};
@@ -56,7 +53,9 @@ export const SecurityEngine = {
     return { status: 'clean' };
   },
 
-  async checkPermission(user: UserProfile | null, requiredScope: PermissionScope, resourceOwnerId?: string): Promise<{ allowed: boolean, stepUpRequired?: boolean, error?: string }> {
+  /* A first, client-side screen (role, lockdown, velocity). The server is the authority: it checks the
+     role again and, for destructive admin actions, a recent sign-in (services/reauth.ts). */
+  async checkPermission(user: UserProfile | null, requiredScope: PermissionScope, resourceOwnerId?: string): Promise<{ allowed: boolean, error?: string }> {
     if (!user) return { allowed: false, error: "Authentication required." };
     if (user.is_suspended) return { allowed: false, error: "Identity access revoked." };
 
@@ -77,16 +76,6 @@ export const SecurityEngine = {
     }
 
     if (user.role !== 'user') {
-      const sessionAge = Date.now() - new Date(user.session_started || 0).getTime();
-      if (sessionAge > ADMIN_SESSION_TTL) {
-        return { allowed: false, error: "Administrative session expired. Re-authentication required." };
-      }
-      if (DESTRUCTIVE_ACTIONS.includes(requiredScope)) {
-        const lastVerifyAge = Date.now() - new Date(user.last_verification || 0).getTime();
-        if (lastVerifyAge > STEP_UP_REQUIRED_AGE || !user.is_verified_admin) {
-          return { allowed: false, stepUpRequired: true, error: "High-stakes operation requires verification." };
-        }
-      }
       const anomaly = await this.monitorAdminBehavior(user, requiredScope);
       if (anomaly.flagged) return { allowed: false, error: anomaly.reason };
     }
@@ -105,15 +94,6 @@ export const SecurityEngine = {
       return { flagged: true, reason: "Anomalous velocity detected." };
     }
     return { flagged: false };
-  },
-
-  async verifyStepUp(admin: UserProfile, code: string): Promise<{ valid: boolean, error?: string }> {
-    if (code === '133742') {
-      await logAdminAction(admin, 'STEP_UP_SUCCESS', admin.id);
-      return { valid: true };
-    }
-    await this.handleViolation('STEP_UP_FAILURE', 'medium', "Step-up failure.", admin);
-    return { valid: false, error: "Invalid verification credentials." };
   },
 
   async detectAdversarialPatterns(input: string, user: UserProfile | null): Promise<{ safe: boolean, reason?: string }> {
@@ -214,8 +194,6 @@ export const SecurityEngine = {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   },
   async checkSessionIntegrity(user: any, ip: string): Promise<{ status: 'trusted' | 'step_up' | 'blocked', reason?: string }> { return { status: 'trusted' }; },
-  async requestStepUpOTP(user: any): Promise<{ allowed: boolean, code?: string, error?: string }> { return { allowed: true, code: '133742' }; },
-  async verifyStepUpOTP(code: string, user: any): Promise<{ valid: boolean, error?: string }> { return { valid: code === '133742' }; },
   async recordLoginFailure(email: string) {},
   resetLoginAttempts(email: string) {},
   async checkEndpointQuota(user: any, endpoint: string): Promise<{ allowed: boolean, error?: string }> { return { allowed: true }; },

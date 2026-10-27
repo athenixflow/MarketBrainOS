@@ -26,7 +26,7 @@ const AdminSettings: React.FC = () => {
       <Card title="Your Admin Identity">
         <div className="flex items-center justify-between py-2 border-b border-gray-50"><span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Email</span><span className="text-sm font-bold text-[#0B0B0B]">{a.profile?.email}</span></div>
         <div className="flex items-center justify-between py-2 border-b border-gray-50"><span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Role</span><span className="text-sm font-bold text-[#0B0B0B]">{a.profile?.role.replace('_', ' ')}</span></div>
-        <div className="flex items-center justify-between py-2"><span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Clearance</span><span className="text-sm font-bold text-[#0B0B0B]">{a.profile?.is_verified_admin ? 'Level 2: Verified' : 'Level 1: Read-only'}</span></div>
+        <div className="flex items-center justify-between py-2"><span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Destructive actions</span><span className="text-sm font-bold text-[#0B0B0B]">Ask you to sign in again after 15 minutes</span></div>
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

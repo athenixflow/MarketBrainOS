@@ -37,7 +37,8 @@ import Placeholder from './sections/Placeholder';
 
 const AdminPortalInner: React.FC = () => {
   const a = useAdmin();
-  const clearance = a.profile?.is_verified_admin ? 'Level 2: VERIFIED' : 'Level 1: READ_ONLY';
+  /* Destructive actions ask for a recent sign-in when they run; there is no standing clearance level. */
+  const clearance = a.profile?.role === 'super_admin' ? 'Super admin' : 'Ops admin';
 
   if (a.loading && a.users.length === 0 && !a.loadError) return <LoadingState message="Synchronizing Strategic Ledger..." />;
 
@@ -63,9 +64,9 @@ const AdminPortalInner: React.FC = () => {
       <div className="flex justify-between items-start flex-wrap gap-6">
         <PageHeader title="Control Center" subtitle="Platform governance, monitoring & immutable ledgers" />
         <div className="flex flex-col items-end gap-3 pt-4">
-          <div className={`flex items-center gap-3 px-5 py-2.5 rounded-full border ${a.profile?.is_verified_admin ? 'bg-green-50 border-green-100 text-green-600' : 'bg-blue-50 border-blue-100 text-blue-600'}`}>
-            <div className={`w-2 h-2 rounded-full animate-pulse ${a.profile?.is_verified_admin ? 'bg-green-500' : 'bg-blue-500'}`} />
-            <span className="text-[10px] font-bold uppercase tracking-widest">Clearance: {clearance}</span>
+          <div className="flex items-center gap-3 px-5 py-2.5 rounded-full border bg-blue-50 border-blue-100 text-blue-700">
+            <div className="w-2 h-2 rounded-full bg-blue-500" />
+            <span className="text-[10px] font-bold uppercase tracking-widest">Role: {clearance}</span>
           </div>
           <div onClick={a.runManualIntegrityCheck}
             className={`flex items-center gap-3 px-5 py-2.5 rounded-full border cursor-pointer ${a.chainValid === false ? 'bg-red-50 border-red-100 text-red-600' : 'bg-gray-50 border-gray-100 text-gray-400'}`}>
