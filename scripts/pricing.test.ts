@@ -293,6 +293,25 @@ if (merge) {
     drift.map((i) => JSON.stringify(i).slice(0, 80)).join('\n        '));
 }
 
+/*
+ * "CHARGED IN USD" (founder decision D1, Oct 2026). Nigerian buyers keep both price lists; when one
+ * picks dollars, every dollar price says it is charged in USD (checkout pins billing_currency, so it
+ * is). Nobody else sees the note, and naira prices never carry it.
+ */
+console.log('\n"CHARGED IN USD" FOR NIGERIAN BUYERS WHO PICK DOLLARS:');
+const { usdChargeNote } = await import('../services/planActions');
+ok(usdChargeNote('NGN', 'USD') === 'Charged in USD', 'a naira-default buyer who picks dollars is told the charge is in USD');
+ok(usdChargeNote('NGN', 'NGN') === null && usdChargeNote('USD', 'USD') === null && usdChargeNote('USD', 'NGN') === null, 'no note otherwise');
+const read = (f: string) => fs.readFileSync(path.join(root, f), 'utf8');
+ok(/usdChargeNote\(defaultCurrency\(\), value\)/.test(read('components/CurrencyToggle.tsx')), 'the shared toggle shows the note beside itself');
+for (const f of ['pages/Pricing.tsx', 'components/TokenStore.tsx', 'components/SubscriptionPanel.tsx']) {
+  const text = read(f);
+  ok(/<CurrencyToggle\b/.test(text) && !/role="group" aria-label="Currency"/.test(text), `${f} uses the shared CurrencyToggle (no hand-rolled ₦/$ pair)`);
+}
+for (const f of ['pages/Pricing.tsx', 'components/TokenStore.tsx']) {
+  ok(/usdChargeNote\(/.test(read(f)), `${f} marks each dollar price "Charged in USD" for a naira-default buyer`);
+}
+
 console.log(failures === 0
   ? '\nPASS — one ladder, both copies agreeing, and no pack undercutting a plan.'
   : `\nFAILED — ${failures} assertion(s).`);

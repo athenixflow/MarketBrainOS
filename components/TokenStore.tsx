@@ -7,8 +7,10 @@ import { Link } from 'react-router-dom';
 import { Card, Badge, PrimaryButton, SuccessMessage, ErrorMessage } from './UI';
 import { useAuth } from '../context/AuthContext';
 import { DEFAULT_PRICING_CONFIG } from '../config/pricingConfig';
-import { fetchBillingStatus, BillingStatus, Currency, formatPrice, canPay, startCheckout } from '../services/billing';
+import { fetchBillingStatus, BillingStatus, Currency, formatPrice, canPay, startCheckout, defaultCurrency } from '../services/billing';
 import { useCurrency } from './useCurrency';
+import CurrencyToggle from './CurrencyToggle';
+import { usdChargeNote } from '../services/planActions';
 import { track } from '../services/analytics';
 
 // The pack with the most tokens per dollar gets the "Best value" badge. Derived from config so it
@@ -31,6 +33,7 @@ export const TokenStore: React.FC<{ onPurchased?: () => void; compact?: boolean;
      credited by the webhook once Bachs confirms the payment, never from here. */
   const [billing, setBilling] = useState<BillingStatus | null>(null);
   const [currency, setCurrency] = useCurrency(profile?.billing_currency);
+  const usdNote = usdChargeNote(defaultCurrency(), currency);
   useEffect(() => {
     let alive = true;
     void fetchBillingStatus().then((s) => { if (alive) setBilling(s); });
@@ -51,14 +54,7 @@ export const TokenStore: React.FC<{ onPurchased?: () => void; compact?: boolean;
 
   return (
     <div>
-      <div className="flex mb-4" role="group" aria-label="Currency">
-        {(['NGN', 'USD'] as Currency[]).map((c) => (
-          <button key={c} type="button" onClick={() => setCurrency(c)} aria-pressed={currency === c} aria-label={c === 'NGN' ? 'Naira' : 'US dollars'}
-            className={`px-3 py-2 text-[10px] font-bold uppercase tracking-widest border border-gray-200 first:rounded-l-lg last:rounded-r-lg ${currency === c ? 'bg-[#0B0B0B] text-white' : 'text-gray-500'}`}>
-            {c === 'NGN' ? '₦' : '$'}
-          </button>
-        ))}
-      </div>
+      <CurrencyToggle value={currency} onChange={setCurrency} tone={onDark ? 'dark' : 'light'} className="mb-4" />
       <div className={`grid gap-4 ${compact ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-5'}`}>
         {packs.map((p) => (
           <Card key={p.id} className="flex flex-col">
@@ -69,6 +65,7 @@ export const TokenStore: React.FC<{ onPurchased?: () => void; compact?: boolean;
             <p className="text-2xl sm:text-3xl font-black tracking-tight tabular-nums leading-none text-[#0B0B0B]">{p.tokens.toLocaleString()}</p>
             <p className="mt-2 text-[11px] font-bold text-gray-500 uppercase tracking-widest">tokens</p>
             <p className="mt-4 text-lg font-black tabular-nums text-[#0B0B0B]">{currency === 'NGN' && p.priceNgn ? formatPrice(p.priceNgn, 'NGN') : formatPrice(p.price, 'USD')}</p>
+            {usdNote && !(currency === 'NGN' && p.priceNgn) && <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-600">{usdNote}</p>}
             <div className="mt-3 mb-6"><Badge tone="green">Never expires</Badge></div>
             {/* Free tier: the button is greyed (PrimaryButton's disabled recipe) with a lock glyph, and the
                 reason sits right under it so the card explains itself without scrolling to the note below. */}

@@ -7,8 +7,10 @@ import { DEFAULT_PRICING_CONFIG as CFG, PLAN_META, PLAN_ORDER, Tier } from '../c
 import Seo from '../components/Seo';
 import { MARKETING_SEO, SITE_URL, SITE_NAME } from '../config/seo';
 import { track } from '../services/analytics';
-import { fetchBillingStatus, BillingStatus, Currency, formatPrice, canPay, startCheckout, callManageBilling } from '../services/billing';
+import { fetchBillingStatus, BillingStatus, Currency, formatPrice, canPay, startCheckout, callManageBilling, defaultCurrency } from '../services/billing';
 import { useCurrency } from '../components/useCurrency';
+import CurrencyToggle from '../components/CurrencyToggle';
+import { usdChargeNote } from '../services/planActions';
 import { isPassRenewal, passReplaceNotice, subscriptionUpgradeBlock } from '../services/planActions';
 import { Modal, PrimaryButton, SecondaryButton } from '../components/UI';
 
@@ -58,6 +60,7 @@ const Pricing: React.FC = () => {
      cannot charge is the worst place in the product to be wrong about this. */
   const [billing, setBilling] = useState<BillingStatus | null>(null);
   const [currency, setCurrency] = useCurrency(profile?.billing_currency);
+  const usdNote = usdChargeNote(defaultCurrency(), currency);
   useEffect(() => {
     let alive = true;
     void fetchBillingStatus().then((s) => { if (alive) setBilling(s); });
@@ -146,14 +149,7 @@ const Pricing: React.FC = () => {
       </AnimatedSection>
 
       <AnimatedSection as="section" index={1} className="pb-16 px-6 md:px-12 max-w-7xl mx-auto">
-        <div className="flex justify-center mb-8" role="group" aria-label="Currency">
-          {(['NGN', 'USD'] as Currency[]).map((c) => (
-            <button key={c} type="button" onClick={() => setCurrency(c)} aria-pressed={currency === c}
-              className={`px-5 py-2 text-[11px] font-bold uppercase tracking-widest border border-gray-800 first:rounded-l-xl last:rounded-r-xl ${currency === c ? 'bg-white text-[#0B0B0B]' : 'text-gray-400'}`}>
-              {c === 'NGN' ? '₦ Naira' : '$ Dollars'}
-            </button>
-          ))}
-        </div>
+        <CurrencyToggle value={currency} onChange={setCurrency} className="justify-center mb-8" />
         {currency === 'NGN' && <p className="text-center text-xs text-gray-400 mb-8">Naira plans are 30-day passes: pay once, no automatic charge. We email you before it ends.</p>}
         {currency === 'USD' && upgradeBlock && <p className="text-center text-xs text-gray-400 mb-8">{upgradeBlock}</p>}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
@@ -176,6 +172,11 @@ const Pricing: React.FC = () => {
                       columns, and a wrap on some cards only would push their token line out of line with the rest of the row. */}
                   <span className={`text-base font-medium text-gray-400 ${currency === 'NGN' ? 'block' : ''}`}>{ngnPrice ? '/30 days' : '/mo'}</span>
                 </div>
+                {/* A dollar price in front of a naira buyer says so: dollars they chose (D1), or Enterprise, which
+                    has no naira price and is billed in USD (it read "$999/mo" under the Naira toggle). */}
+                {plan.price > 0 && ngnPrice === undefined && (usdNote || currency === 'NGN') && (
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-300 mb-2">{currency === 'NGN' ? 'Billed in USD' : usdNote}</p>
+                )}
                 <p className="text-[#FF0000] text-xs font-bold uppercase tracking-widest mb-5">
                   {plan.monthlyTokens.toLocaleString()} tokens {tier === 'free' ? 'one-time' : '/ mo'}
                 </p>

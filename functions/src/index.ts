@@ -4426,6 +4426,10 @@ export const createCheckout = functions.runWith({ secrets: BACHS_SECRETS }).http
     success_url: `${SITE}/billing?checkout=success&for=${kind}`,
     cancel_url: `${SITE}/billing?checkout=cancelled`,
     expires_in_minutes: 60,
+    /* Charge in the currency the buyer chose. Without this Bachs converted a raw USD amount from the
+       buyer's location (a $10 pack was ₦14,201 in Nigeria), and the store's "Charged in USD" would
+       have been false. "Locks the session to a currency" (docs.bachs.io, checkout sessions). */
+    billing_currency: currency,
     ...(email ? { customer: { email, name } } : {}),
   };
   const body = kind === 'plan'

@@ -581,10 +581,12 @@ for (const f of ['pages/Pricing.tsx', 'components/SubscriptionPanel.tsx', 'compo
   ok(usesAccountCurrency(code(src(f))), `${f} starts in the account's currency`);
 }
 ok(!usesAccountCurrency("const [currency, setCurrency] = useState<Currency>(defaultCurrency());"), 'CONTROL: a surface that starts from the browser alone is caught');
+/* The compact "₦ / $" pairs became the shared CurrencyToggle, whose buttons read "₦ Naira" and
+   "$ Dollars", so a screen reader names them from their text. */
 for (const f of ['components/SubscriptionPanel.tsx', 'components/TokenStore.tsx']) {
-  const t = code(src(f));
-  ok(/aria-label=\{c === 'NGN' \? 'Naira' : 'US dollars'\}/.test(t), `${f}: the compact ₦ / $ buttons are named for a screen reader`);
+  ok(/<CurrencyToggle\b/.test(code(src(f))), `${f}: the currency buttons are the shared, named CurrencyToggle`);
 }
+ok(/\{c === 'NGN' \? '₦ Naira' : '\$ Dollars'\}/.test(code(src('components/CurrencyToggle.tsx'))), 'CurrencyToggle labels each button with the currency name, not a bare symbol');
 /* No Enterprise pass exists, so in naira mode its button must not promise "30 days": the "— 30 days" label
    is for plans that have a naira price in the pricing config. */
 const pricingSrc = code(src('pages/Pricing.tsx'));
@@ -843,6 +845,12 @@ ok(!editorPricesReadOnly("const PRICES_NOTE = 'Prices are fixed in code while Ba
 ok(!editorPricesReadOnly("const PRICES_NOTE = 'Prices are fixed in code while Bachs products are pinned.'; <NumInput value={pk.price} onChange={(v) => setPack(i, 'price', v)} />"),
   'CONTROL: an editor that still lets a pack price be typed is caught');
 ok(!readsPinnedPrices('const cfg = await getBillingConfig(); const live = await getPricingConfig();'), 'CONTROL: a path that also reads the runtime config is caught');
+/* THE CURRENCY THE BUYER CHOSE IS THE ONE CHARGED. A raw USD amount was converted by Bachs from the
+   buyer's location (a $10 pack showed ₦14,201 to a Nigerian buyer), so "Charged in USD" would have
+   been false. `billing_currency` "locks the session to a currency" (docs.bachs.io checkout sessions). */
+export const pinsCurrency = (body: string): boolean => /const common = \{[\s\S]*?\bbilling_currency: currency\b[\s\S]*?\};/.test(body);
+ok(pinsCurrency(bodyOf('createCheckout')), 'createCheckout pins billing_currency to the currency the buyer chose, on every kind');
+ok(!pinsCurrency('const common = { reference, metadata: { currency } };'), 'CONTROL: a session without billing_currency is caught');
 
 /* THE RENEWAL EMAIL LANDS WHERE A PASS CAN BE RENEWED (final review I2). passReminder and passExpired link to
    /billing, which offered only "Change plan" → /pricing, where the holder's own tier was a disabled

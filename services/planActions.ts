@@ -18,6 +18,13 @@ export interface BillingProfile {
 export const formatPrice = (major: number, currency: Currency): string =>
   currency === 'NGN' ? `₦${Math.round(major).toLocaleString('en-US')}` : `$${major}`;
 
+/**
+ * Shown beside dollar prices to a buyer whose browser says Nigeria and who switched to dollars:
+ * their card is charged in USD (createCheckout pins billing_currency), not converted to naira.
+ */
+export const usdChargeNote = (localCurrency: Currency, selected: Currency): string | null =>
+  localCurrency === 'NGN' && selected === 'USD' ? 'Charged in USD' : null;
+
 const naira = (tier: string): number | undefined =>
   Object.prototype.hasOwnProperty.call(DEFAULT_PRICING_CONFIG.plans, tier)
     ? DEFAULT_PRICING_CONFIG.plans[tier as Tier].priceNgn
