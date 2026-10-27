@@ -275,6 +275,21 @@ await check('a platform admin cannot toggle lockdown with a direct write', () =>
 await check('signed-in users can still read the lockdown flag', () =>
   assertSucceeds(getDoc(doc(outsiderDb, 'system_settings', 'global'))));
 
+console.log('\nA DELETED ACCOUNT CANNOT PUT ITS PROFILE BACK:');
+
+await testEnv.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), 'deleted_accounts', 'gone_user'), { deleted_at: new Date().toISOString() });
+});
+const goneDb = testEnv.authenticatedContext('gone_user', { email: 'gone@example.com', email_verified: true }).firestore();
+const newDb = testEnv.authenticatedContext('new_user', { email: 'new@example.com', email_verified: true }).firestore();
+const profileFor = (uid, email) => ({ ...freshProfile('user'), id: uid, email });
+await check('CONTROL: a new account can create its own Free profile', () =>
+  assertSucceeds(setDoc(doc(newDb, 'users', 'new_user'), profileFor('new_user', 'new@example.com'))));
+await check('a deleted account (tombstoned) cannot re-create its profile with its old token', () =>
+  assertFails(setDoc(doc(goneDb, 'users', 'gone_user'), profileFor('gone_user', 'gone@example.com'))));
+await check('nobody can read or write the tombstones from the client', () =>
+  assertFails(getDoc(doc(goneDb, 'deleted_accounts', 'gone_user'))));
+
 await testEnv.cleanup();
 
 console.log(`\n${passed} passed, ${failed} failed\n`);

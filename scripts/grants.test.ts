@@ -869,6 +869,20 @@ ok(/auth_time/.test(recent) && /reauth-required/.test(recent) && /failed-precond
 const fixedCode = clientFiles.filter((f) => /\b133742\b/.test(fs.readFileSync(path.join(root, f), 'utf8')));
 ok(fixedCode.length === 0, 'no fixed step-up code ships in the client', fixedCode.join(', '));
 
+console.log('\nDELETED ACCOUNTS STAY DELETED:');
+/* Deleted accounts left profile documents behind: the export counter, the unsubscribe link and the NPS
+   link all merge-set users/{uid}, which CREATES the document when the account is gone, and the
+   deleted user's ID token stays valid for up to an hour, so an open tab could re-create a fresh
+   profile. These writers update only an existing profile; deletion leaves a tombstone the rules check. */
+for (const name of ['onActionLogged', 'unsubscribe', 'nps']) {
+  const fn = exported(index, name);
+  ok(fn.length > 0 && !/collection\('users'\)\.doc\(\w+\)\.set\(/.test(fn) && /updateIfProfileExists\(/.test(fn), `${name} updates an existing profile and never creates one`);
+}
+const del = exported(index, 'deleteAccount');
+ok(/collection\('deleted_accounts'\)\.doc\(uid\)\.set\(/.test(del), 'deleteAccount writes a deleted_accounts tombstone');
+ok(/revokeRefreshTokens\(uid\)/.test(del), 'deleteAccount revokes the refresh tokens');
+ok(/'email_flags'/.test(del) && /'lifecycle_sent'/.test(del), 'deleteAccount removes the email bookkeeping (email_flags, lifecycle_sent)');
+
 console.log('\nNO CLIENT CALLS THE REFUSED TOP-UP:');
 /* confirmTopUp refuses every reference that did not come from a real payment, so any client caller is a
    button that always errors (the Dashboard's "Buy tokens" made up its own reference). Tokens are bought

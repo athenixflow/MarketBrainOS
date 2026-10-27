@@ -91,7 +91,9 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if self(uid) || isPlatformAdmin();
 
+      // A deleted account's still-valid token cannot put a profile back (deleteAccount's tombstone).
       allow create: if self(uid)
+        && !exists(/databases/$(database)/documents/deleted_accounts/$(uid))
         && request.resource.data.tier == 'free'
         && request.resource.data.tokens <= 20
         && request.resource.data.get('monthly_tokens', 0) <= 20

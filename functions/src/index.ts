@@ -1197,6 +1197,21 @@ const assertAdmin = async (context: any): Promise<{ uid: string; email: string; 
 };
 
 /*
+ * Writes the given fields onto a profile only if it exists (dotted paths reach into maps without
+ * replacing them). A set with merge would CREATE users/{uid} for an account that has been deleted,
+ * which is how deleted accounts kept leaving profile documents behind. False when there is none.
+ */
+const updateIfProfileExists = async (uid: string, fields: Record<string, unknown>): Promise<boolean> => {
+  try {
+    await db.collection('users').doc(uid).update(fields);
+    return true;
+  } catch (e: any) {
+    if (e?.code === 5 || /NOT_FOUND|No document to update/i.test(String(e?.message))) return false;
+    throw e;
+  }
+};
+
+/*
  * Destructive admin actions need a recent sign-in. The browser re-authenticates (password or Google)
  * when this refuses, then retries; the old "step-up" was a fixed code compared in the browser, which
  * stopped nobody. 15 minutes matches the window that step-up promised.
@@ -3417,6 +3432,12 @@ export const deleteAccount = functions
       const rlRef = db.collection('rate_limits').doc(uid);
       if ((await rlRef.get()).exists) { await rlRef.delete(); bump(deleted, 'rate_limits', 1); }
       if (email) await db.collection('provisioning_markers').doc(email).delete().catch(() => undefined);
+      for (const c of ['email_flags', 'lifecycle_sent']) await db.collection(c).doc(uid).delete().catch(() => undefined);
+      /* The deleted user's ID token stays valid for up to an hour, and the rules let a user create
+         their own profile, so an open tab could put a fresh Free profile back. The tombstone (no
+         personal data) makes the rules refuse that; revoking the refresh token ends the session. */
+      await db.collection('deleted_accounts').doc(uid).set({ deleted_at: new Date().toISOString() });
+      await admin.auth().revokeRefreshTokens(uid).catch(() => undefined);
       if (userSnap.exists) { await userSnap.ref.delete(); bump(deleted, 'users', 1); }
 
       // Server audit entry. No email or name here — action_logs are retained and were just scrubbed.
@@ -3823,18 +3844,18 @@ a{display:inline-block;margin-top:22px;background:#FF0000;color:#fff;text-decora
   try {
     /* `marketing_opt_out` is the field the dispatcher already checks before every send,
        so this is the whole mechanism — not a second list that has to be kept in step. */
-    await db.collection('users').doc(uid).set({
+    /* A deleted account has nothing left to unsubscribe and must not get a profile back; the
+       page still says "Unsubscribed", which is true. */
+    await updateIfProfileExists(uid, {
       marketing_opt_out: true,
       marketing_opt_out_at: new Date().toISOString(),
       /* The same decision, written where the account page reads it: somebody who
          unsubscribes from an email and then opens Settings must not be told that product
-         emails are still on. */
-      notification_prefs: { product: false },
-    /* `mergeFields` ALONE, never beside `merge` — Firestore rejects a call carrying both.
-       Naming the paths is what keeps this from clobbering the other notification
-       preferences: a plain merge of `{ notification_prefs: { product: false } }` replaces
-       that whole map and silently switches their other email settings back on. */
-    }, { mergeFields: ['marketing_opt_out', 'marketing_opt_out_at', 'notification_prefs.product'] });
+         emails are still on. The dotted path keeps the other notification preferences:
+         writing `notification_prefs: { product: false }` would replace the whole map and
+         silently switch their other email settings back on. */
+      'notification_prefs.product': false,
+    });
   } catch (e: any) {
     console.error('unsubscribe failed:', e?.message || e);
     return page('Something went wrong', 'We could not record that just now. Please try the link again, or change it in your account settings.', false);
@@ -3864,10 +3885,10 @@ export const onActionLogged = functions.firestore
     const uid = String(row.user_id || row.uid || '');
     if (!uid) return null;
     try {
-      await db.collection('users').doc(uid).set({
+      await updateIfProfileExists(uid, {
         export_count: admin.firestore.FieldValue.increment(1),
         last_export_at: new Date().toISOString(),
-      }, { merge: true });
+      });
     } catch (e: any) {
       /* Measurement must never be able to fail somebody's export. */
       console.error('onActionLogged: export counter failed:', e?.message || e);
@@ -3936,9 +3957,7 @@ ${comment ? `<form method="POST" action="/e/nps?u=${esc(uid)}&amp;t=${esc(token)
       uid, score, created_at: new Date().toISOString(),
     }, { merge: true });
     /* On the user too, so the dispatcher can hold off asking again without a second read. */
-    await db.collection('users').doc(uid).set({
-      nps_last_score: score, nps_last_at: new Date().toISOString(),
-    }, { mergeFields: ['nps_last_score', 'nps_last_at'] });
+    await updateIfProfileExists(uid, { nps_last_score: score, nps_last_at: new Date().toISOString() });
   } catch (e: any) {
     console.error('nps failed:', e?.message || e);
     return page('Something went wrong', 'We could not record that just now.', false);
