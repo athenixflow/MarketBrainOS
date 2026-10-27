@@ -220,13 +220,11 @@ const Dashboard: React.FC = () => {
             </div>
 
             {/* Quick actions (gated) */}
-            <div className="flex flex-wrap gap-3 lg:justify-end">
-              {quickActions.map((qa) => {
-                const go = qa.to ? () => navigate(qa.to as string) : qa.onClick;
-                return qa.primary
-                  ? <PrimaryButton key={qa.label} size="sm" onClick={go}>{qa.label}</PrimaryButton>
-                  : <SecondaryButton key={qa.label} size="sm" tone="dark" onClick={go}>{qa.label}</SecondaryButton>;
-              })}
+            {/* An even grid: wrapped as a flex row they broke 1 + 3 or 3 + 1 depending on the label lengths. */}
+            <div data-quick-actions className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3 lg:w-[28rem] lg:ml-auto">
+              {quickActions.map((qa) => qa.primary
+                ? <PrimaryButton key={qa.label} size="sm" className="w-full" to={qa.to} onClick={qa.onClick}>{qa.label}</PrimaryButton>
+                : <SecondaryButton key={qa.label} size="sm" tone="dark" className="w-full" to={qa.to} onClick={qa.onClick}>{qa.label}</SecondaryButton>)}
             </div>
           </Card>
 

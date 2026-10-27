@@ -6,6 +6,18 @@
 import { test, expect, settle, asRole } from '../fixtures/test';
 
 test.use(asRole('free'));
+test('the welcome card quick actions sit in an even grid', async ({ page, firewall }, ti) => {
+  test.skip(!['laptop-chrome', 'tablet-chrome', 'desktop-chrome', 'pixel-7-chrome'].includes(ti.project.name));
+  firewall.tolerateBlocks = true;
+  await page.addInitScript(() => { try { localStorage.setItem('mbos_consent', 'analytics:no'); } catch {} });
+  await page.goto('/'); await settle(page);
+  const actions = page.locator('[data-quick-actions] > *');
+  await expect(actions.first()).toBeVisible({ timeout: 30_000 });
+  const widths = await actions.evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().width)));
+  expect(widths.length).toBeGreaterThanOrEqual(3);
+  expect(Math.max(...widths) - Math.min(...widths), `quick action widths ${widths.join(', ')}`).toBeLessThanOrEqual(2);
+});
+
 test('every dashboard tool card fits, badge included', async ({ page, firewall }, ti) => {
   test.skip(!['laptop-chrome', 'tablet-chrome', 'desktop-chrome', 'pixel-7-chrome'].includes(ti.project.name));
   firewall.tolerateBlocks = true;
