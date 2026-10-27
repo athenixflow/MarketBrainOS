@@ -36,5 +36,21 @@ const signup = read('pages/Auth.tsx');
 ok(/mode === 'signup'[\s\S]{0,200}passwordProblem\(password\)/.test(signup), 'sign-up refuses a short password before creating the account');
 ok(!/mode === 'signin'[^\n]*passwordProblem/.test(signup), 'sign-in does not check the length (older accounts keep working)');
 
+/*
+ * INVITATIONS NEED A VERIFIED EMAIL, AND THE PAGES SAY SO. The rules only let a verified address
+ * read its invitations, so an unverified invitee saw an empty Team/Agency/Enterprise page with no
+ * reason, and the verify link only ever came once, in the welcome email.
+ */
+console.log('\nUNVERIFIED INVITEES ARE TOLD WHY, AND CAN GET A NEW LINK:');
+for (const f of ['pages/TeamWorkspace.tsx', 'pages/AgencyHub.tsx', 'pages/EnterpriseSuite.tsx']) {
+  ok(/<VerifyEmailNotice onVerified=\{/.test(read(f)), `${f} shows the verify-email notice (which re-loads invitations once verified)`);
+}
+const notice = read('components/VerifyEmailNotice.tsx');
+ok(/user\.emailVerified\) return null/.test(notice) && /callResendVerification\(/.test(notice) && /getIdToken\(true\)/.test(notice),
+  'the notice hides once verified, resends the link, and refreshes the token after "I\'ve verified"');
+const fnIndex = read('functions/src/index.ts');
+const resend = fnIndex.slice(fnIndex.indexOf('export const resendVerification'), fnIndex.indexOf('export const resendVerification') + 1200);
+ok(/underLimit\('verify_email'/.test(resend) && /sendTemplate\(email, 'verifyEmail'/.test(resend), 'resendVerification is rate-limited and sends the verify template');
+
 console.log(failed ? `\nFAILED — ${failed} assertion(s).` : '\nPASS — account rules agree across screens.');
 process.exit(failed ? 1 : 0);

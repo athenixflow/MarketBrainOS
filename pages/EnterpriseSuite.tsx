@@ -4,6 +4,7 @@ import {
   PageHeader, Card, PrimaryButton, SecondaryButton, Input, Select, LoadingState, ErrorMessage, Tabs, Badge, PermissionDenied,
 } from '../components/UI';
 import AnimatedSection from '../components/AnimatedSection';
+import VerifyEmailNotice from '../components/VerifyEmailNotice';
 import { useAuth } from '../context/AuthContext';
 import { useScope } from '../context/ScopeContext';
 import { Membership, can, ROLE_LABELS } from '../services/permissionService';
@@ -150,6 +151,7 @@ const EnterpriseSuite: React.FC = () => {
         <PageHeader title="Enterprise Suite" subtitle="Executive intelligence across your entire organization — health, risks, opportunities, forecasts, and AI briefings." />
         <div className="space-y-10">
           {error && <ErrorMessage message={error} />}
+          <VerifyEmailNotice onVerified={loadAll} />
           {invites.length > 0 && (
             <AnimatedSection index={0}><Card title="Pending invitations">
               <div className="space-y-3">{invites.map(inv => (

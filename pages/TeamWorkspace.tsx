@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PageHeader, Card, PrimaryButton, Input, LoadingState, ErrorMessage, Tabs, Badge } from '../components/UI';
 import AnimatedSection from '../components/AnimatedSection';
+import VerifyEmailNotice from '../components/VerifyEmailNotice';
 import { useAuth } from '../context/AuthContext';
 import { tierAtLeast } from '../config/access';
 import { useScope } from '../context/ScopeContext';
@@ -131,6 +132,7 @@ const TeamWorkspace: React.FC = () => {
         <PageHeader title="Team Workspace" subtitle="Collaborate with your team — shared analyses, reports, and intelligence." />
         <div className="space-y-10">
           {error && <ErrorMessage message={error} />}
+          <VerifyEmailNotice onVerified={loadWorkspace} />
 
           {invites.length > 0 && (
             <AnimatedSection index={0}>

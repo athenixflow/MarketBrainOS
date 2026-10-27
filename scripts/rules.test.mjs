@@ -275,6 +275,25 @@ await check('a platform admin cannot toggle lockdown with a direct write', () =>
 await check('signed-in users can still read the lockdown flag', () =>
   assertSucceeds(getDoc(doc(outsiderDb, 'system_settings', 'global'))));
 
+console.log('\nINVITATIONS REACH A VERIFIED INVITEE WHATEVER THE CASE OF THEIR ADDRESS:');
+
+/* Invites are stored lowercased (the callables lowercase on invite and the client queries
+   lowercase), but the token carries the address as the person typed it at sign-up. */
+await testEnv.withSecurityRulesDisabled(async (ctx) => {
+  const adminDb = ctx.firestore();
+  for (const c of ['workspace_invitations', 'agency_invitations', 'enterprise_invitations']) {
+    await setDoc(doc(adminDb, c, 'inv_case'), { email: 'mixed.case@example.com', status: 'pending', role: 'member' });
+  }
+});
+const mixedDb = testEnv.authenticatedContext('mixed_user', { email: 'Mixed.Case@Example.com', email_verified: true }).firestore();
+const unverifiedInviteeDb = testEnv.authenticatedContext('unverified_user', { email: 'mixed.case@example.com', email_verified: false }).firestore();
+for (const c of ['workspace_invitations', 'agency_invitations', 'enterprise_invitations']) {
+  await check(`${c}: a verified invitee signed up as Mixed.Case@ can read their invite`, () =>
+    assertSucceeds(getDoc(doc(mixedDb, c, 'inv_case'))));
+  await check(`${c}: an unverified address still cannot`, () =>
+    assertFails(getDoc(doc(unverifiedInviteeDb, c, 'inv_case'))));
+}
+
 console.log('\nA DELETED ACCOUNT CANNOT PUT ITS PROFILE BACK:');
 
 await testEnv.withSecurityRulesDisabled(async (ctx) => {

@@ -297,11 +297,13 @@ service cloud.firestore {
                     && request.resource.data.actor_uid == request.auth.uid;
       allow update, delete: if false;
     }
+    // Invitations are stored lowercased; the token carries the address as typed at sign-up, hence
+    // .lower(). Reading them needs a verified email (the pages say so when it is not).
     // Invitations: the invitee may read invites addressed to their email; all writes go
     // through the manageMembership callable (invite / accept / revoke).
     match /workspace_invitations/{id} {
       allow read:  if isSignedIn()
-        && ((resource.data.email == request.auth.token.email && request.auth.token.email_verified == true)
+        && ((resource.data.email == request.auth.token.email.lower() && request.auth.token.email_verified == true)
             || isPlatformAdmin());
       allow write: if false;
     }
@@ -340,7 +342,7 @@ service cloud.firestore {
     match /client_reports/{id}   { allow read: if isAgencyMember(resource.data.agency_id) || isPlatformAdmin(); allow write: if false; }
     match /agency_invitations/{id} {
       allow read:  if isSignedIn()
-        && ((resource.data.email == request.auth.token.email && request.auth.token.email_verified == true)
+        && ((resource.data.email == request.auth.token.email.lower() && request.auth.token.email_verified == true)
             || isPlatformAdmin());
       allow write: if false;
     }
@@ -366,7 +368,7 @@ service cloud.firestore {
     match /enterprise_health_scores/{id}{ allow read: if isEnterpriseMember(resource.data.enterprise_id) || isPlatformAdmin(); allow write: if false; }
     match /enterprise_invitations/{id} {
       allow read:  if isSignedIn()
-        && ((resource.data.email == request.auth.token.email && request.auth.token.email_verified == true)
+        && ((resource.data.email == request.auth.token.email.lower() && request.auth.token.email_verified == true)
             || isPlatformAdmin());
       allow write: if false;
     }

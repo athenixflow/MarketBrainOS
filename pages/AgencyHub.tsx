@@ -5,6 +5,7 @@ import {
 } from '../components/UI';
 import { Link } from 'react-router-dom';
 import AnimatedSection from '../components/AnimatedSection';
+import VerifyEmailNotice from '../components/VerifyEmailNotice';
 import { useAuth } from '../context/AuthContext';
 import { tierAtLeast } from '../config/access';
 import { useScope } from '../context/ScopeContext';
@@ -130,6 +131,7 @@ const AgencyHub: React.FC = () => {
         <PageHeader title="Agency Hub" subtitle="Manage multiple clients from one account — isolated workspaces, reports, and intelligence." />
         <div className="space-y-10">
           {error && <ErrorMessage message={error} />}
+          <VerifyEmailNotice onVerified={loadAgency} />
           {invites.length > 0 && (
             <AnimatedSection index={0}><Card title="Pending invitations">
               <div className="space-y-3">{invites.map(inv => (

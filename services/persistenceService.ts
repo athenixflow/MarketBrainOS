@@ -1163,6 +1163,14 @@ export const callRequestPasswordReset = async (email: string) => {
   catch (error: any) { throw new Error(error.message || 'Could not send reset email.'); }
 };
 
+/* Sends a fresh "confirm your email" link (rate-limited on the server). Invitations need it. */
+export const callResendVerification = async () => {
+  if (!isFirebaseInitialized) throw new Error('Connection failed');
+  const fn = httpsCallable(functions, 'resendVerification');
+  try { return (await fn({})).data as { sent: boolean; alreadyVerified?: boolean }; }
+  catch (error: any) { throw new Error(error.message || 'Could not send the email.'); }
+};
+
 // Account deletion (Privacy §8) — contract in docs/qa-fix-deletion-flow.md. `dryRun` returns the
 // manifest (and any refusal) without writing. Unlike the other wrappers this rethrows the original
 // callable error: the UI needs `code` (reauth-required vs refusal) and `details.containers`.

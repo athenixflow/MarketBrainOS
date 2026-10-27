@@ -3164,6 +3164,25 @@ export const requestPasswordReset = functions.https.onCall(async (data: any, con
   return { success: true };
 });
 
+// --- RESEND VERIFICATION ---
+// Invitations are only readable with a verified email, and the welcome email (the only place the
+// link used to come from) is sent once. The Team/Agency/Enterprise pages offer this when the
+// address is unverified. Three an hour per account.
+export const resendVerification = functions.https.onCall(async (_data: any, context: any) => {
+  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
+  const uid = context.auth.uid;
+  const email = (context.auth.token.email || '').toString();
+  if (!email) throw new functions.https.HttpsError('failed-precondition', 'This account has no email address.');
+  const rec = await admin.auth().getUser(uid);
+  if (rec.emailVerified) return { sent: false, alreadyVerified: true };
+  if (!(await underLimit('verify_email', uid, 3, 60 * 60 * 1000))) {
+    throw new functions.https.HttpsError('resource-exhausted', 'We have sent a few already. Check your inbox (and spam), or try again in an hour.');
+  }
+  const verifyUrl = brandActionLink(await admin.auth().generateEmailVerificationLink(email, { url: 'https://www.marketbrainos.app/auth?verified=1' }));
+  await sendTemplate(email, 'verifyEmail', { verifyUrl });
+  return { sent: true };
+});
+
 // --- HONEYPOT ---
 // The hidden decoy link and form fields no person can see or reach. A hit is recorded here and raises
 // the account's risk score for an admin to review. It does not suspend: a single hidden-link click is
