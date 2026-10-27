@@ -4,6 +4,7 @@ import PublicLayout from '../components/PublicLayout';
 import AnimatedSection from '../components/AnimatedSection';
 import Seo from '../components/Seo';
 import { DEFAULT_PRICING_CONFIG } from '../config/pricingConfig';
+import { TOOL_COUNT } from '../config/toolConfigs';
 
 /**
  * `/press` (GTM part 14 §6) — everything a journalist needs without asking.
@@ -96,7 +97,7 @@ const Press: React.FC = () => {
         <dl className="grid sm:grid-cols-2 gap-x-8 gap-y-5 mb-16 text-sm">
           {[
             ['What it is', 'A pre-spend review tool: it scores marketing work and says what to fix before money goes behind it. It does not buy media, schedule posts or forecast results.'],
-            ['Tools', '13 — led by Conversion Doctor (landing pages), TestLab Pro (comparing variants) and Offer Analyzer.'],
+            ['Tools', `${TOOL_COUNT}, led by Conversion Doctor (landing pages), TestLab Pro (comparing variants) and Offer Analyzer.`],
             ['Model', 'Google Gemini 2.5 Pro, one call per analysis.'],
             ['Pricing', `Free tier, no card. ${paid.map((p) => `${p.t[0].toUpperCase()}${p.t.slice(1)} $${p.price}/month (${p.tokens} tokens)`).join(', ')}.`],
             ['Free to try', 'The landing page scorer needs no account.'],

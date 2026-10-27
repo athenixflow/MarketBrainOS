@@ -8,6 +8,7 @@ import FaqAccordion from '../components/FaqAccordion';
 import { FAQ_ITEMS } from '../config/marketingContent';
 import Seo from '../components/Seo';
 import { MARKETING_SEO } from '../config/seo';
+import { TOOL_COUNT } from '../config/toolConfigs';
 import { DEFAULT_PRICING_CONFIG } from '../config/pricingConfig';
 import Picture from '../components/media/Picture';
 import HeroVideo from '../components/media/HeroVideo';
@@ -144,7 +145,7 @@ const LandingPage: React.FC = () => {
       <AnimatedSection as="section" index={4} className="py-32 px-6 md:px-12 max-w-7xl mx-auto border-b border-gray-900/50" aria-labelledby="features-heading">
         <h2 id="features-heading" className="text-3xl font-bold text-white mb-4 text-center">Core Capabilities</h2>
         <p className="text-center text-gray-500 font-medium mb-20 max-w-2xl mx-auto">
-          A few highlights from a suite of <Link to="/features" className="text-white underline decoration-[#FF0000]/40 underline-offset-4 hover:decoration-[#FF0000]">14 tools across five suites</Link> spanning marketing, sales, strategy, and operations.
+          A few highlights from a suite of <Link to="/features" className="text-white underline decoration-[#FF0000]/40 underline-offset-4 hover:decoration-[#FF0000]">{TOOL_COUNT} tools across five suites</Link> spanning marketing, sales, strategy, and operations.
         </p>
         
         <div className="space-y-32">

@@ -71,8 +71,9 @@ const grep = (re: RegExp, exempt?: RegExp): string[] => {
 };
 
 console.log('COPY GUARDS:');
-const thirteen = grep(/\b(13|thirteen)\b[^\n]{0,40}\b(tools?|analy[sz]ers?|analysis tools)\b/i);
-ok(thirteen.length === 0, 'no "13 tools / thirteen analyzers" copy (the product has 14)', thirteen.join('\n        '));
+const thirteen = grep(/\b(13|thirteen)\b[^\n]{0,40}\b(tools?|analy[sz]ers?|analysis tools)\b|\btools?['"`]?\s*[,:]\s*['"`]?\s*(13|thirteen)\b/i);
+ok(thirteen.length === 0, 'no "13 tools / thirteen analyzers" copy (the product has 14), in either word order', thirteen.join('\n        '));
+ok(/\btools?['"`]?\s*[,:]\s*['"`]?\s*(13|thirteen)\b/i.test("['Tools', '13 — led by Conversion Doctor']"), 'CONTROL: a fact-sheet row "Tools: 13" is caught');
 const nineGeneric = grep(/\bnine generic\b/i);
 ok(nineGeneric.length === 0, 'no "nine generic" (there are ten)', nineGeneric.join('\n        '));
 const fourSuites = grep(/\bfour\b[^\n]{0,30}\bsuites?\b|\b4 suites\b/i);

@@ -383,3 +383,6 @@ export const NAV_SUITES: { suite: Suite; items: NavEntry[] }[] = SUITE_ORDER
     ],
   }))
   .filter((g) => g.items.length > 0);
+
+/** How many tools the product has: every page that states the number reads it from here. */
+export const TOOL_COUNT = NAV_SUITES.reduce((n, g) => n + g.items.length, 0);

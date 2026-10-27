@@ -17,15 +17,13 @@ import {
   ToolAnalysisRecord,
 } from '../services/persistenceService';
 import { Report, ActionLogEntry } from '../types';
-import { NAV_SUITES, TOOL_CONFIG_LIST, getToolMeta } from '../config/toolConfigs';
+import { NAV_SUITES, TOOL_CONFIG_LIST, TOOL_COUNT, getToolMeta } from '../config/toolConfigs';
 import { canSeeFeature, tierAtLeast, isPaidTier } from '../config/access';
 import { PLAN_META } from '../config/pricingConfig';
 
 // Resolve a server module key to a friendly tool label (covers generic + bespoke modules).
 const moduleLabel = (m: string): string =>
   getToolMeta(m)?.label || m.replace(/_.*/, '').replace(/([A-Z])/g, ' $1').trim() || m;
-
-const TOOL_COUNT = NAV_SUITES.reduce((n, g) => n + g.items.length, 0);
 
 // Text link used under empty states on this page (inside a white Card).
 const inlineLink = 'text-[10px] font-bold text-[#FF0000] uppercase tracking-widest hover:opacity-60 transition-opacity border-b border-[#FF0000]/20 pb-1';
