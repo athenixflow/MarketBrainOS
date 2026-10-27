@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/deploy.test.mjs && node scripts/routes.test.mjs && tsx scripts/results.test.ts && tsx scripts/fetchpage.test.ts && tsx scripts/access.test.ts && tsx scripts/runtime.test.ts && tsx scripts/copy.test.ts && tsx scripts/analytics.test.ts && tsx scripts/pricing.test.ts && tsx scripts/share.test.ts && tsx scripts/lifecycle.test.ts && tsx scripts/appcheck.test.ts && tsx scripts/onboarding.test.ts && tsx scripts/grants.test.ts && tsx scripts/compare.test.ts && tsx scripts/study.test.ts && tsx scripts/bachs.test.ts && tsx scripts/welcome.test.ts && tsx scripts/public-routes.test.ts && tsx scripts/account.test.ts && tsx scripts/audit.test.ts && tsx scripts/pdf.test.ts && tsc && vite build && tsx scripts/prerender.ts",
+    "build": "node scripts/deploy.test.mjs && node scripts/routes.test.mjs && tsx scripts/results.test.ts && tsx scripts/fetchpage.test.ts && tsx scripts/access.test.ts && tsx scripts/runtime.test.ts && tsx scripts/copy.test.ts && tsx scripts/analytics.test.ts && tsx scripts/pricing.test.ts && tsx scripts/share.test.ts && tsx scripts/lifecycle.test.ts && tsx scripts/appcheck.test.ts && tsx scripts/onboarding.test.ts && tsx scripts/grants.test.ts && tsx scripts/compare.test.ts && tsx scripts/study.test.ts && tsx scripts/bachs.test.ts && tsx scripts/welcome.test.ts && tsx scripts/public-routes.test.ts && tsx scripts/account.test.ts && tsx scripts/audit.test.ts && tsx scripts/pdf.test.ts && tsc && vite build && tsx scripts/prerender.ts && tsx scripts/csp.check.ts",
     "build:novite": "tsx scripts/prerender.ts",
     "preview": "vite preview",
     "media:generate": "tsx scripts/media/generate.ts",

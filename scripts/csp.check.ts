@@ -1,11 +1,12 @@
 // Enforces the Content-Security-Policy from vercel.json over every crawlable route and reports
-// violations - BEFORE the production header is switched from Report-Only to enforcing.
+// violations. Production enforces it (since Oct 2026; it was Report-Only), so any violation here is a
+// broken page in production. Runs at the end of `npm run build`.
 //
-// Production serves the policy as Content-Security-Policy-Report-Only, which blocks nothing. This
-// script serves the built site locally, injects the same policy as an ENFORCING header on every
-// document response, loads each prerendered route plus the app shell and the sign-in page, and
-// collects the browser's "Refused to ..." console messages. Any violation here would be a broken
-// page in production once the header is enforced.
+// The script serves the built site locally, puts the same policy as an ENFORCING header on our own
+// document responses (never on third-party frames, which bring their own), loads each prerendered
+// route plus the app shell and the sign-in page, and collects the browser's "Refused to ..."
+// messages. Enforcing it first found App Check's reCAPTCHA script and its calls blocked, which would
+// have failed every callable.
 //
 // Stated limit: signed-in flows (Firestore reads, the Google sign-in popup) cannot be exercised
 // without credentials, so their origins are allowlisted from the SDK's documented endpoints rather
@@ -60,8 +61,10 @@ const main = async () => {
       const page = await browser.newPage();
       await page.setRequestInterception(true);
       page.on('request', async (req: any) => {
-        // Only document responses carry the header in production; mirror that.
-        if (req.resourceType() !== 'document') return req.continue();
+        // Only OUR document responses carry the header in production; mirror that. A third-party
+        // frame (the reCAPTCHA iframe from www.google.com) is served by its own origin with its own
+        // headers: putting this policy on it made `frame-ancestors 'self'` refuse it, a false failure.
+        if (req.resourceType() !== 'document' || !req.url().startsWith(`http://localhost:${PORT}`)) return req.continue();
         try {
           const upstream = await fetch(req.url());
           const body = Buffer.from(await upstream.arrayBuffer());
@@ -73,6 +76,9 @@ const main = async () => {
       });
       page.on('console', (m: any) => {
         const t = m.text();
+        // "[Report Only]" lines come from a third party's own report-only policy (Google's frames): they
+        // block nothing. Ours is enforcing here, so every one of its violations is a real refusal.
+        if (/^\[Report Only\]/.test(t)) return;
         if (/Content Security Policy|Refused to/i.test(t)) violations.push(`${route}: ${t.slice(0, 220)}`);
       });
       await page.goto(`http://localhost:${PORT}${route}`, { waitUntil: 'networkidle0', timeout: 60_000 }).catch(() => undefined);
