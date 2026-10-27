@@ -98,6 +98,8 @@ export async function probeLayout(page: Page, opts: { touch: boolean }): Promise
       if (!visible(el) || el.children.length > 2) continue;
       const s = getComputedStyle(el);
       if (s.textOverflow === 'ellipsis' || s.webkitLineClamp !== 'none' && s.webkitLineClamp !== '') continue;
+      // Visually hidden on purpose (Tailwind sr-only: a 1px box with clip): read by screen readers, never shown.
+      if ((el.clientWidth <= 1 && el.clientHeight <= 1) || s.clip === 'rect(0px, 0px, 0px, 0px)' || /inset\(50%\)/.test(s.clipPath)) continue;
       const hides = s.overflow === 'hidden' || s.overflowX === 'hidden' || s.overflowY === 'hidden';
       if (!hides) continue;
       const text = (el as HTMLElement).innerText?.trim();

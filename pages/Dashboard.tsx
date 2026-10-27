@@ -413,8 +413,10 @@ const Dashboard: React.FC = () => {
                   <Card key={tool.path} accent={gi === 0 && ti === 0} className="group hover:shadow-2xl hover:shadow-black/10 duration-500">
                     <div className="flex flex-col h-full justify-between">
                       <div>
-                        <div className="flex items-start justify-between gap-3 mb-4">
-                          <h3 className="text-2xl font-bold text-[#0B0B0B] tracking-tight group-hover:text-[#FF0000] transition-colors duration-500">{tool.label}</h3>
+                        {/* Wraps: at a 1024px laptop a long title ("Audience Intelligence") left no room and
+                            pushed the token badge past the card edge. Now the badge drops under the title. */}
+                        <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 mb-4">
+                          <h3 className="min-w-0 break-words text-2xl font-bold text-[#0B0B0B] tracking-tight group-hover:text-[#FF0000] transition-colors duration-500">{tool.label}</h3>
                           {typeof tool.cost === 'number' && (
                             <Badge tone="neutral" className="shrink-0 mt-1 tabular-nums">{tool.cost} {tool.cost === 1 ? 'token' : 'tokens'}</Badge>
                           )}
