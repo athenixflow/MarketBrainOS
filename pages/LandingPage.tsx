@@ -58,14 +58,8 @@ const LandingPage: React.FC = () => {
               MarketBrain OS is the pre-spend review for marketing decisions. Audit a funnel, compare your ad variants and pressure-test the plan — and get a scored report with ranked fixes before you spend a dollar on ads.
             </p>
             <div className="flex flex-col sm:flex-row gap-6">
-              <Link to="/auth" aria-label="Sign up for MarketBrain OS">
-                <PrimaryButton className="!text-sm !px-12 !py-5">Initialize Free Account</PrimaryButton>
-              </Link>
-              <Link to="/documentation" aria-label="Read platform documentation">
-                <SecondaryButton className="!text-sm !px-10 !py-5 !bg-transparent !text-white !border-gray-700 hover:!border-white">
-                  Read Documentation
-                </SecondaryButton>
-              </Link>
+              <PrimaryButton to="/auth" ariaLabel="Sign up for MarketBrain OS" className="!text-sm !px-12 !py-5">Initialize Free Account</PrimaryButton>
+              <SecondaryButton to="/documentation" ariaLabel="Read platform documentation" className="!text-sm !px-10 !py-5 !bg-transparent !text-white !border-gray-700 hover:!border-white">Read Documentation</SecondaryButton>
             </div>
           </div>
         </div>
@@ -298,9 +292,7 @@ const LandingPage: React.FC = () => {
               <li className="flex items-center gap-3 text-sm text-gray-400"><div className="w-1.5 h-1.5 bg-gray-600 rounded-full" />Basic Angle Mining</li>
               <li className="flex items-center gap-3 text-sm text-gray-400"><div className="w-1.5 h-1.5 bg-gray-600 rounded-full" />Limited comparisons</li>
             </ul>
-            <Link to="/auth" className="w-full">
-               <SecondaryButton tone="dark" className="w-full">Start Free</SecondaryButton>
-            </Link>
+            <SecondaryButton to="/auth" tone="dark" className="w-full">Start Free</SecondaryButton>
           </div>
 
           <div className="p-6 sm:p-10 border-2 border-white/10 rounded-2xl bg-[#111] relative flex flex-col">
@@ -316,9 +308,7 @@ const LandingPage: React.FC = () => {
               <li className="flex items-center gap-3 text-sm text-white"><div className="w-1.5 h-1.5 bg-[#FF0000] rounded-full" />Conversion Doctor Elite</li>
               <li className="flex items-center gap-3 text-sm text-white"><div className="w-1.5 h-1.5 bg-[#FF0000] rounded-full" />PDF Report Exports</li>
             </ul>
-            <Link to="/auth" className="w-full block">
-              <PrimaryButton className="w-full">Get Started with Pro</PrimaryButton>
-            </Link>
+            <PrimaryButton to="/auth" className="w-full">Get Started with Pro</PrimaryButton>
           </div>
         </div>
       </AnimatedSection>
@@ -338,9 +328,7 @@ const LandingPage: React.FC = () => {
         <p className="text-xl text-gray-400 mb-12 max-w-2xl mx-auto">
           The most expensive decision in marketing is launching without intelligence. Calibrate your strategy with MarketBrain OS.
         </p>
-        <Link to="/auth">
-          <PrimaryButton className="!px-16 !py-6 !text-base shadow-2xl shadow-red-900/20">Launch Intelligence Engine</PrimaryButton>
-        </Link>
+        <PrimaryButton to="/auth" className="!px-16 !py-6 !text-base shadow-2xl shadow-red-900/20">Launch Intelligence Engine</PrimaryButton>
         <p className="mt-8 text-xs text-gray-400 uppercase tracking-widest">No credit card required for entry</p>
       </AnimatedSection>
     </PublicLayout>

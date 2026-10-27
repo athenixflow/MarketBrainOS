@@ -591,7 +591,7 @@ const Settings: React.FC = () => {
           <Card title="Billing center">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <p className="text-sm text-gray-500 font-medium">See your plan, renewal date, token balance, expansions and invoices in one place.</p>
-              <Link to="/billing"><PrimaryButton size="sm">Open billing center</PrimaryButton></Link>
+              <PrimaryButton to="/billing" size="sm">Open billing center</PrimaryButton>
             </div>
           </Card>
           <Card title="Token store">
@@ -660,9 +660,7 @@ const Settings: React.FC = () => {
           <p className="text-sm text-gray-500 font-medium leading-relaxed mb-8">
             Manage your workspace (members, permissions, branding, and settings) from the Team Workspace.
           </p>
-          <Link to="/team">
-            <PrimaryButton>Open Team Workspace</PrimaryButton>
-          </Link>
+          <PrimaryButton to="/team">Open Team Workspace</PrimaryButton>
           {canSeeFeature('agencyHub', accessCtx) && (
             <div className="mt-6">
               <Link to="/agency" className="text-[10px] font-bold text-[#E00000] uppercase tracking-widest hover:opacity-60 transition-opacity border-b border-[#FF0000]/20 pb-1">Manage agency clients →</Link>

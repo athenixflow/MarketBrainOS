@@ -95,7 +95,7 @@ const Compare: React.FC = () => {
         </ul>
 
         <h2 className="text-2xl font-bold text-white mb-5">Side by side</h2>
-        <div className="overflow-x-auto mb-12">
+        <div className="overflow-x-auto mb-12 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF0000] rounded-sm" tabIndex={0} role="region" aria-label="Comparison table">
           <table className="w-full text-left border-collapse min-w-[520px]">
             <thead>
               <tr className="border-b border-gray-800">

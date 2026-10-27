@@ -17,8 +17,9 @@ const Toggle: React.FC<{ label: string; checked: boolean; onChange: () => void; 
   ({ label, checked, onChange, color = 'bg-[#FF0000]', disabled }) => (
     <div className="flex items-center justify-between p-5 bg-gray-50 rounded-2xl border border-gray-100">
       <span className="text-sm font-bold text-[#0B0B0B]">{label}</span>
-      <button onClick={onChange} disabled={disabled} className={`w-14 h-8 rounded-full p-1 transition-colors duration-300 ${checked ? color : 'bg-gray-300'} disabled:opacity-50`}>
-        <div className={`w-6 h-6 rounded-full bg-white shadow-md transform transition-transform duration-300 ${checked ? 'translate-x-6' : 'translate-x-0'}`} />
+      <button type="button" role="switch" aria-checked={checked} aria-label={label} onClick={onChange} disabled={disabled}
+        className={`w-14 h-8 rounded-full p-1 transition-colors duration-300 ${checked ? color : 'bg-gray-300'} disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF0000] focus-visible:ring-offset-2`}>
+        <div aria-hidden="true" className={`w-6 h-6 rounded-full bg-white shadow-md transform transition-transform duration-300 ${checked ? 'translate-x-6' : 'translate-x-0'}`} />
       </button>
     </div>
   );

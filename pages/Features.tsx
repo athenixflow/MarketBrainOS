@@ -1,5 +1,4 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 import PublicLayout from '../components/PublicLayout';
 import AnimatedSection from '../components/AnimatedSection';
 import { PrimaryButton } from '../components/UI';
@@ -67,7 +66,7 @@ const Features: React.FC = () => (
 
     <AnimatedSection as="section" index={9} className="py-24 px-6 md:px-12 text-center border-t border-gray-900/50">
       <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight mb-8">Try the full suite free.</h2>
-      <Link to="/auth"><PrimaryButton className="!px-12 !py-5">Initialize Free Account</PrimaryButton></Link>
+      <PrimaryButton to="/auth" className="!px-12 !py-5">Initialize Free Account</PrimaryButton>
     </AnimatedSection>
   </PublicLayout>
 );

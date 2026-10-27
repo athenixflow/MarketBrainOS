@@ -59,9 +59,7 @@ const NotFound: React.FC = () => {
       </p>
 
       <div className="flex flex-col sm:flex-row items-center gap-6">
-        <Link to="/">
-          <PrimaryButton className="!px-10">{user ? 'Back to dashboard' : 'Back to home'}</PrimaryButton>
-        </Link>
+        <PrimaryButton to="/" className="!px-10">{user ? 'Back to dashboard' : 'Back to home'}</PrimaryButton>
         <button
           onClick={() => navigate(-1)}
           className="text-[10px] font-bold text-gray-400 uppercase tracking-widest hover:text-white transition-colors border-b border-gray-800 hover:border-gray-500 pb-1"

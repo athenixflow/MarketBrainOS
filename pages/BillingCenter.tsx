@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import {
   PageHeader, Card, PrimaryButton, SecondaryButton, Stat, Skeleton, EmptyState, LedgerRow, ErrorMessage, SuccessMessage, LoadingState,
 } from '../components/UI';
@@ -138,7 +137,7 @@ const BillingCenter: React.FC = () => {
               {isSub && (
                 <SecondaryButton onClick={updateCard} disabled={openingPortal}>{openingPortal ? 'Opening…' : 'Update card'}</SecondaryButton>
               )}
-              <Link to="/pricing"><PrimaryButton>Change plan</PrimaryButton></Link>
+              <PrimaryButton to="/pricing">Change plan</PrimaryButton>
             </div>
           </div>
           {renewError && <ErrorMessage message={renewError} className="mt-6" />}

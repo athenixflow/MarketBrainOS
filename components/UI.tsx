@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useId } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { useOverlayLock } from './useOverlayLock';
 import { isPaidTier } from '../config/access';
 import { SecurityEngine } from '../services/securityEngine';
@@ -54,20 +54,23 @@ export const PrimaryButton: React.FC<{
   size?: ButtonSize;
   /** Destructive tone for irreversible actions (delete account, archive). */
   danger?: boolean;
-}> = ({ onClick, children, disabled, className = '', type = 'button', size = 'md', danger }) => (
-  <button
-    type={type}
-    onClick={onClick}
-    disabled={disabled}
-    className={`${
-      danger
-        ? 'bg-[#B91C1C] enabled:hover:bg-[#991B1B] enabled:hover:shadow-[#B91C1C]/10'
-        : 'bg-[#E00000] enabled:hover:bg-[#D40000] enabled:hover:shadow-[#FF0000]/10'
-    } text-white ${PRIMARY_SIZE[size]} font-bold rounded-2xl shadow-sm tracking-widest uppercase transition-all duration-300 enabled:hover:shadow-xl enabled:active:scale-[0.99] disabled:bg-gray-100 disabled:text-gray-600 disabled:shadow-none disabled:ring-1 disabled:ring-inset disabled:ring-gray-200 disabled:cursor-not-allowed ${className}`}
-  >
-    {children}
-  </button>
-);
+  /** Navigates instead of acting: renders a link styled as this button. A <button> inside a <Link>
+      is two interactive elements in one (invalid HTML, announced twice by screen readers). */
+  to?: string;
+  ariaLabel?: string;
+}> = ({ onClick, children, disabled, className = '', type = 'button', size = 'md', danger, to, ariaLabel }) => {
+  const classes = `${
+    danger
+      ? 'bg-[#B91C1C] enabled:hover:bg-[#991B1B] enabled:hover:shadow-[#B91C1C]/10'
+      : 'bg-[#E00000] enabled:hover:bg-[#D40000] enabled:hover:shadow-[#FF0000]/10'
+  } text-white ${PRIMARY_SIZE[size]} font-bold rounded-2xl shadow-sm tracking-widest uppercase transition-all duration-300 enabled:hover:shadow-xl enabled:active:scale-[0.99] disabled:bg-gray-100 disabled:text-gray-600 disabled:shadow-none disabled:ring-1 disabled:ring-inset disabled:ring-gray-200 disabled:cursor-not-allowed ${className}`;
+  if (to) return <RouterLink to={to} onClick={onClick} aria-label={ariaLabel} className={asLink(classes)}>{children}</RouterLink>;
+  return <button type={type} onClick={onClick} disabled={disabled} aria-label={ariaLabel} className={classes}>{children}</button>;
+};
+
+/* A link has no enabled/disabled state: its hover styles apply directly, and it lays out like a button. */
+const asLink = (classes: string) =>
+  `inline-flex items-center justify-center text-center ${classes.replace(/\benabled:/g, '').replace(/\bdisabled:\S+/g, '')}`;
 
 // 2. SECONDARY BUTTON. `tone="dark"` is the variant for the page background (white text, grey border);
 // the default light tone is for use inside white Cards; `tone="danger"` is the paper variant for a
@@ -80,22 +83,20 @@ export const SecondaryButton: React.FC<{
   type?: 'button' | 'submit' | 'reset';
   size?: ButtonSize;
   tone?: Tone | 'danger';
-}> = ({ onClick, children, disabled, className = '', type = 'button', size = 'md', tone = 'light' }) => (
-  <button
-    type={type}
-    onClick={onClick}
-    disabled={disabled}
-    className={`bg-transparent border ${SECONDARY_SIZE[size]} font-bold rounded-2xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed tracking-widest uppercase active:scale-[0.99] ${
-      tone === 'dark'
-        ? 'text-white border-gray-700 hover:border-white hover:bg-white/5'
-        : tone === 'danger'
-          ? 'text-[#B91C1C] border-red-200 hover:bg-red-50 hover:border-red-300'
-          : 'text-[#0B0B0B] border-gray-200 hover:bg-gray-50 hover:border-gray-300'
-    } ${className}`}
-  >
-    {children}
-  </button>
-);
+  /** Navigates instead of acting (see PrimaryButton). */
+  to?: string;
+  ariaLabel?: string;
+}> = ({ onClick, children, disabled, className = '', type = 'button', size = 'md', tone = 'light', to, ariaLabel }) => {
+  const classes = `bg-transparent border ${SECONDARY_SIZE[size]} font-bold rounded-2xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed tracking-widest uppercase active:scale-[0.99] ${
+    tone === 'dark'
+      ? 'text-white border-gray-700 hover:border-white hover:bg-white/5'
+      : tone === 'danger'
+        ? 'text-[#B91C1C] border-red-200 hover:bg-red-50 hover:border-red-300'
+        : 'text-[#0B0B0B] border-gray-200 hover:bg-gray-50 hover:border-gray-300'
+  } ${className}`;
+  if (to) return <RouterLink to={to} onClick={onClick} aria-label={ariaLabel} className={asLink(classes)}>{children}</RouterLink>;
+  return <button type={type} onClick={onClick} disabled={disabled} aria-label={ariaLabel} className={classes}>{children}</button>;
+};
 
 // 3. CARD COMPONENT
 // Padding is responsive: a flat p-12 left only 246px of interior on a 390px screen, which clipped
@@ -136,39 +137,72 @@ export const IntelligenceIndicator: React.FC<{ score: number }> = ({ score }) =>
 );
 
 // 5. TABS. `tone="dark"` (default) sits on the page; `tone="light"` sits inside a white Card.
-// The rail scrolls horizontally on narrow screens instead of wrapping, so 5+ tabs stay on one line.
+// The rail scrolls horizontally on narrow screens instead of wrapping, so 5+ tabs stay on one line;
+// when it is cut off, the cut edge fades so it reads as "more this way". Keyboard: only the selected
+// tab is in the Tab order, and the arrow keys (plus Home/End) move between tabs and select them.
 export const Tabs: React.FC<{
   tabs: string[];
   activeTab: string;
   onTabChange: (tab: string) => void;
   tone?: Tone;
   className?: string;
-}> = ({ tabs, activeTab, onTabChange, tone = 'dark', className = '' }) => (
-  <div
-    role="tablist"
-    className={`flex gap-6 border-b ${tone === 'dark' ? 'border-gray-900/50' : 'border-gray-100'} mb-8 overflow-x-auto no-scrollbar ${className}`}
-  >
-    {tabs.map((tab) => {
-      const active = activeTab === tab;
-      return (
-        <button
-          key={tab}
-          role="tab"
-          aria-selected={active}
-          onClick={() => onTabChange(tab)}
-          className={`pb-4 text-[11px] font-bold uppercase tracking-widest whitespace-nowrap transition-all relative ${
-            active
-              ? tone === 'dark' ? 'text-white' : 'text-[#0B0B0B]'
-              : tone === 'dark' ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          {tab}
-          {active && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#FF0000] rounded-full" />}
-        </button>
-      );
-    })}
-  </div>
-);
+  label?: string;
+}> = ({ tabs, activeTab, onTabChange, tone = 'dark', className = '', label = 'Sections' }) => {
+  const rail = React.useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+  useEffect(() => {
+    const el = rail.current;
+    if (!el) return;
+    const measure = () => setEdges({ left: el.scrollLeft > 2, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 2 });
+    measure();
+    el.addEventListener('scroll', measure, { passive: true });
+    window.addEventListener('resize', measure);
+    return () => { el.removeEventListener('scroll', measure); window.removeEventListener('resize', measure); };
+  }, [tabs.length]);
+  const onKey = (e: React.KeyboardEvent, i: number) => {
+    const next = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : null;
+    if (next === null) return;
+    e.preventDefault();
+    const j = (next + tabs.length) % tabs.length;
+    onTabChange(tabs[j]);
+    (rail.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[j])?.focus();
+  };
+  const fade = edges.left && edges.right ? 'linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent)'
+    : edges.right ? 'linear-gradient(to right, #000 calc(100% - 24px), transparent)'
+    : edges.left ? 'linear-gradient(to right, transparent, #000 24px)' : undefined;
+  return (
+    <div
+      ref={rail}
+      role="tablist"
+      aria-label={label}
+      style={fade ? { WebkitMaskImage: fade, maskImage: fade } : undefined}
+      className={`flex gap-6 border-b ${tone === 'dark' ? 'border-gray-900/50' : 'border-gray-100'} mb-8 overflow-x-auto no-scrollbar ${className}`}
+    >
+      {tabs.map((tab, i) => {
+        const active = activeTab === tab;
+        return (
+          <button
+            key={tab}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            tabIndex={active ? 0 : -1}
+            onClick={() => onTabChange(tab)}
+            onKeyDown={(e) => onKey(e, i)}
+            className={`pb-4 text-[11px] font-bold uppercase tracking-widest whitespace-nowrap transition-all relative rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF0000] focus-visible:ring-offset-2 ${tone === 'dark' ? 'focus-visible:ring-offset-[#0B0B0B]' : 'focus-visible:ring-offset-white'} ${
+              active
+                ? tone === 'dark' ? 'text-white' : 'text-[#0B0B0B]'
+                : tone === 'dark' ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {tab}
+            {active && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#FF0000] rounded-full" />}
+          </button>
+        );
+      })}
+    </div>
+  );
+};
 
 // Shared field chrome for Input and Select. Geometry matches components/auth/AuthField.
 const fieldClasses = (tone: Tone, error?: boolean) =>

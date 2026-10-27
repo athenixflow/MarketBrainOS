@@ -421,9 +421,7 @@ const Dashboard: React.FC = () => {
                         </div>
                         <p className="text-gray-500 font-medium leading-relaxed mb-8">{tool.description}</p>
                       </div>
-                      <Link to={tool.path} className="block">
-                        <PrimaryButton size="sm" className="w-full">Open tool</PrimaryButton>
-                      </Link>
+                      <PrimaryButton to={tool.path} size="sm" className="w-full">Open tool</PrimaryButton>
                     </div>
                   </Card>
                 ))}

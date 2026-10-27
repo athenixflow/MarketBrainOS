@@ -121,7 +121,7 @@ export function AdminTable<T extends { id?: string }>({
           // min-w is what actually makes the scroller work: with `w-full` alone the table shrank to
           // its container instead of overflowing, so columns collapsed to 1-2 characters and the
           // horizontal scrollbar never appeared. Cell padding is responsive for the same reason.
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF0000] rounded-sm" tabIndex={0} role="region" aria-label="Table">
             <table className="w-full min-w-[720px] text-left">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>

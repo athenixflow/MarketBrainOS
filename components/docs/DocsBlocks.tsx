@@ -104,7 +104,7 @@ const Block: React.FC<{ block: DocBlock }> = ({ block }) => {
       return (
         // min-w makes the scroller real (w-full alone let the table squash instead of overflowing).
         // Per-column alignment so money/token columns can be right-aligned and actually line up.
-        <div className="mb-8 overflow-x-auto rounded-2xl border border-gray-100">
+        <div className="mb-8 overflow-x-auto rounded-2xl border border-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF0000]" tabIndex={0} role="region" aria-label="Table">
           <table className="w-full min-w-[520px] text-left border-collapse">
             {block.caption && <caption className="text-left text-[10px] font-bold uppercase tracking-widest text-gray-400 px-4 sm:px-5 pt-4 pb-2">{block.caption}</caption>}
             <thead>

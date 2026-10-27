@@ -12,7 +12,7 @@ import { PageSeo } from '../config/seo';
 export const LegalSection: React.FC<{ heading: string; id?: string; children: React.ReactNode }> = ({ heading, id, children }) => (
   <section id={id} className="max-w-4xl mx-auto px-6 md:px-12 py-8 border-t border-gray-900/50 scroll-mt-24">
     <h2 className="text-xl md:text-2xl font-bold text-white mb-5 tracking-tight">{heading}</h2>
-    <div className="space-y-4 text-[15px] text-gray-400 leading-relaxed">{children}</div>
+    <div className="space-y-4 text-[15px] text-gray-400 leading-relaxed [&_a]:underline [&_a]:underline-offset-4">{children}</div>
   </section>
 );
 

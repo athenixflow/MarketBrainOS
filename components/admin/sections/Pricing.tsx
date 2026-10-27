@@ -76,7 +76,7 @@ const PricingAdmin: React.FC = () => {
 
       <Card title="Plans">
         <p className="text-xs font-medium text-gray-500 mb-4">{PRICES_NOTE}</p>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF0000] rounded-sm" tabIndex={0} role="region" aria-label="Price table">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-[10px] font-black uppercase tracking-widest text-gray-400 text-left">

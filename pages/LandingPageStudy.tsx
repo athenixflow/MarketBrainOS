@@ -43,7 +43,8 @@ const Histogram: React.FC<{ title: string; s: SegmentSummary; max: number }> = (
             onMouseEnter={() => setHover(i)}
             onFocus={() => setHover(i)}
             tabIndex={0}
-            aria-label={`${b.from} to ${b.to}: ${b.count} pages`}
+            role="img"
+            aria-label={`${b.from} to ${b.to}: ${b.count} ${b.count === 1 ? 'page' : 'pages'}`}
           >
             <div
               className="w-full rounded-t-[4px] bg-[#FF0000]"
@@ -153,7 +154,7 @@ const LandingPageStudy: React.FC = () => {
         <p className="text-gray-400 text-sm mb-6">
           Share of pages with at least one blocker in each category. A page with three pricing problems counts once.
         </p>
-        <div className="overflow-x-auto mb-16">
+        <div className="overflow-x-auto mb-16 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF0000] rounded-sm" tabIndex={0} role="region" aria-label="Results table">
           <table className="w-full text-sm min-w-[560px]">
             <thead>
               <tr className="text-left text-[10px] uppercase tracking-widest text-gray-400 border-b border-gray-800">
