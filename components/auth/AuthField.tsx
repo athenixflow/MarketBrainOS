@@ -5,6 +5,7 @@
 // Every control here: label above the field, helper/error below, WCAG-AA contrast on white, a proper
 // input type + autoComplete so password managers and browser autofill work.
 import React, { useId, useState } from 'react';
+import { PASSWORD_MIN } from '../../config/auth';
 
 const FIELD_BASE =
   'w-full bg-white border rounded-2xl px-4 py-3.5 text-base text-[#0B0B0B] placeholder:text-gray-500 outline-none transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
@@ -90,12 +91,12 @@ export const PasswordStrength: React.FC<{ password: string }> = ({ password }) =
   if (!password) return null;
   const score = Math.min(
     4,
-    (password.length >= 8 ? 1 : 0) +
+    (password.length >= PASSWORD_MIN ? 1 : 0) +
       (/[A-Z]/.test(password) ? 1 : 0) +
       (/[0-9]/.test(password) ? 1 : 0) +
       (/[^A-Za-z0-9]/.test(password) ? 1 : 0),
   );
-  const weak = password.length < 8;
+  const weak = password.length < PASSWORD_MIN;
   const label = weak ? 'Too short' : ['', 'Weak', 'Fair', 'Good', 'Strong'][score];
   const tone = weak || score <= 1 ? 'bg-red-400' : score === 2 ? 'bg-amber-400' : 'bg-green-500';
 

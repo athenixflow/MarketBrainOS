@@ -10,6 +10,7 @@ import { verifyPasswordResetCode, confirmPasswordReset, applyActionCode } from '
 import { PrimaryButton } from '../components/UI';
 import AuthShell from '../components/auth/AuthShell';
 import { AuthField, PasswordStrength, FormAlert } from '../components/auth/AuthField';
+import { passwordProblem } from '../config/auth';
 
 type Phase = 'loading' | 'form' | 'success' | 'error';
 
@@ -71,13 +72,14 @@ const AuthAction: React.FC = () => {
     return () => { cancelled = true; };
   }, [mode, oobCode]);
 
-  const strongEnough = password.length >= 8;
+  const tooShort = passwordProblem(password);
+  const strongEnough = tooShort === null;
   const matches = password.length > 0 && password === confirm;
 
   const submitReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!strongEnough) { setError('Use at least 8 characters.'); return; }
+    if (tooShort) { setError(tooShort); return; }
     if (!matches) { setError('The two passwords do not match.'); return; }
     setBusy(true);
     try {

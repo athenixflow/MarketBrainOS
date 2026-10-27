@@ -26,6 +26,7 @@ import { downloadAsCSV, paymentsToCSV } from '../services/exportService';
 import { paymentView } from '../services/payments';
 import { PaymentRecord, NotificationPrefs } from '../types';
 import { canSeeFeature, tierAtLeast } from '../config/access';
+import { PASSWORD_MIN, passwordProblem } from '../config/auth';
 import { SecurityEngine } from '../services/securityEngine';
 
 const TIMEZONES = ['UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Europe/London', 'Europe/Berlin', 'Africa/Lagos', 'Asia/Dubai', 'Asia/Kolkata', 'Asia/Singapore', 'Australia/Sydney'];
@@ -161,7 +162,8 @@ const Settings: React.FC = () => {
   const changePassword = async () => {
     if (!user || !user.email) return;
     setSecurityMsg(''); setSecurityErr(false);
-    if (pwd.next.length < 6) { setSecurityErr(true); setSecurityMsg('New password must be at least 6 characters.'); return; }
+    const tooShort = passwordProblem(pwd.next);
+    if (tooShort) { setSecurityErr(true); setSecurityMsg(tooShort); return; }
     try {
       const cred = EmailAuthProvider.credential(user.email, pwd.current);
       await reauthenticateWithCredential(user, cred);
@@ -542,7 +544,7 @@ const Settings: React.FC = () => {
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
                   <Input label="Current password" type="password" autoComplete="current-password" placeholder="Enter your current password" value={pwd.current} onChange={(e) => setPwd(p => ({ ...p, current: e.target.value }))} />
-                  <Input label="New password" type="password" autoComplete="new-password" placeholder="At least 6 characters" value={pwd.next} onChange={(e) => setPwd(p => ({ ...p, next: e.target.value }))} />
+                  <Input label="New password" type="password" autoComplete="new-password" placeholder={`At least ${PASSWORD_MIN} characters`} value={pwd.next} onChange={(e) => setPwd(p => ({ ...p, next: e.target.value }))} />
                 </div>
                 <div className="flex flex-wrap gap-4">
                   <PrimaryButton onClick={changePassword}>Update password</PrimaryButton>

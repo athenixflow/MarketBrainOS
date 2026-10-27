@@ -13,6 +13,7 @@ import {
 import { PrimaryButton } from '../components/UI';
 import AuthShell from '../components/auth/AuthShell';
 import { AuthField, PasswordStrength, FormAlert, GoogleButton, OrDivider } from '../components/auth/AuthField';
+import { passwordProblem } from '../config/auth';
 import { SecurityEngine } from '../services/securityEngine';
 import { readAttribution, track } from '../services/analytics';
 import { useAuth } from '../context/AuthContext';
@@ -116,6 +117,11 @@ const AuthPage: React.FC = () => {
       setError(velocity.error || 'Too many attempts. Please wait a moment and try again.');
       if (velocity.waitSeconds) setWaitTimer(velocity.waitSeconds);
       return;
+    }
+
+    if (mode === 'signup') {
+      const tooShort = passwordProblem(password);
+      if (tooShort) { setError(tooShort); return; }
     }
 
     setLoading(true);
