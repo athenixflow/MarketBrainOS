@@ -11,7 +11,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEFAULT_PRICING_CONFIG as CFG } from '../config/pricingConfig';
 import { catalogItem, toMajorString, toMinor, withPinnedPrices } from '../functions/src/bachs/catalog';
-import { billingLive, productForTier, tierForProduct } from '../functions/src/bachs/config';
+import { billingLive, productForItem, productForTier, tierForProduct } from '../functions/src/bachs/config';
 import { signPayload, verifyBachsSignature } from '../functions/src/bachs/signature';
 import { parseBachsEvent, parseCheckoutSession, parseSubscription } from '../functions/src/bachs/events';
 import { applyOneOff, checkoutAllowed, expirePass, invoicePayment, manageOwnership, reminderDue, syncSubscription, upgradeRefusal, PASS_DAYS } from '../functions/src/bachs/grant';
@@ -851,6 +851,19 @@ ok(!readsPinnedPrices('const cfg = await getBillingConfig(); const live = await 
 export const pinsCurrency = (body: string): boolean => /const common = \{[\s\S]*?\bbilling_currency: currency\b[\s\S]*?\};/.test(body);
 ok(pinsCurrency(bodyOf('createCheckout')), 'createCheckout pins billing_currency to the currency the buyer chose, on every kind');
 ok(!pinsCurrency('const common = { reference, metadata: { currency } };'), 'CONTROL: a session without billing_currency is caught');
+/* THE CHECKOUT NAMES WHAT IS BOUGHT (M5). A raw `pricing` session has no name field, so Bachs showed a
+   bare "Payment" for every pass and pack. Each has its own product now, one per currency. */
+const itemEnv = { BACHS_PRODUCT_PACK_STARTER_USD: 'prod_su', BACHS_PRODUCT_PASS_PRO_NGN: 'prod_pp', BACHS_PRODUCT_PRO: 'prod_p' };
+ok(productForItem('pack', 'starter', 'USD', itemEnv) === 'prod_su' && productForItem('pass', 'pro', 'NGN', itemEnv) === 'prod_pp',
+  'a pack or pass finds its own product for its currency');
+ok(productForItem('pack', 'starter', 'NGN', itemEnv) === null, 'a pack with no product in that currency falls back (no cross-currency product)');
+ok(tierForProduct('prod_pp', itemEnv) === null && tierForProduct('prod_su', itemEnv) === null, 'a pass or pack product never reads as a plan tier');
+export const namesOneOffs = (body: string): boolean =>
+  /const productId = kind === 'plan' \? productForTier\([^)]*\) : productForItem\(kind, item, currency, process\.env\);/.test(body)
+  && /const body = productId\s*\?\s*\{ \.\.\.common, product_cart: \[\{ product_id: productId, quantity: 1 \}\] \}/.test(body);
+ok(namesOneOffs(bodyOf('createCheckout')), 'createCheckout sends a pass or pack as its product when one is set up');
+ok(!namesOneOffs("const productId = kind === 'plan' ? productForTier(ci.tier as PaidTier, process.env) : null; const body = kind === 'plan' ? { ...common, product_cart: [{ product_id: productId, quantity: 1 }] } : x;"),
+  'CONTROL: the old raw-amount-only checkout is caught');
 
 /* THE RENEWAL EMAIL LANDS WHERE A PASS CAN BE RENEWED (final review I2). passReminder and passExpired link to
    /billing, which offered only "Change plan" → /pricing, where the holder's own tier was a disabled

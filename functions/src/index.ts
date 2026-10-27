@@ -16,7 +16,7 @@ import { verifyResendWebhook, webhookConfigured, EVENT_FIELD, emailStatusFor } f
 import { claimWelcome, releaseWelcome } from './email/welcome';
 import { appendAuditEntry } from './audit';
 import { catalogItem, toMajorString, withPinnedPrices, TIER_RANK, PAID_TIERS, PaidTier, Kind, Currency } from './bachs/catalog';
-import { billingLive as bachsBillingLive, productForTier, tierForProduct } from './bachs/config';
+import { billingLive as bachsBillingLive, productForItem, productForTier, tierForProduct } from './bachs/config';
 import { BachsEvent, SubscriptionSnapshot, parseBachsEvent, parseCheckoutSession, parseSubscription } from './bachs/events';
 import { BACHS_SIGNATURE_HEADER, verifyBachsSignature } from './bachs/signature';
 import { Account, CheckoutRecord, applyOneOff, checkoutAllowed, expirePass, invoicePayment, manageOwnership, reminderDue, syncSubscription, upgradeRefusal } from './bachs/grant';
@@ -4412,7 +4412,7 @@ export const createCheckout = functions.runWith({ secrets: BACHS_SECRETS }).http
   if (!allowed.ok) throw new functions.https.HttpsError('failed-precondition', allowed.reason);
   const ci = catalogItem(await getBillingConfig(), kind, item, currency);
   if (!ci) throw new functions.https.HttpsError('invalid-argument', 'That is not for sale in that currency.');
-  const productId = kind === 'plan' ? productForTier(ci.tier as PaidTier, process.env) : null;
+  const productId = kind === 'plan' ? productForTier(ci.tier as PaidTier, process.env) : productForItem(kind, item, currency, process.env);
   if (kind === 'plan' && !productId) throw new functions.https.HttpsError('failed-precondition', 'Plans are not set up yet.');
 
   const reference = `mb_${crypto.randomBytes(12).toString('hex')}`;
@@ -4432,7 +4432,9 @@ export const createCheckout = functions.runWith({ secrets: BACHS_SECRETS }).http
     billing_currency: currency,
     ...(email ? { customer: { email, name } } : {}),
   };
-  const body = kind === 'plan'
+  /* A product names the purchase on Bachs's page; a raw amount shows only "Payment". Passes and packs
+     use theirs once scripts/bachs/setup.ts has created them, and fall back to the amount until then. */
+  const body = productId
     ? { ...common, product_cart: [{ product_id: productId, quantity: 1 }] }
     : { ...common, pricing: { currency, amount: toMajorString(ci.amountMinor) } };
   let session: any;

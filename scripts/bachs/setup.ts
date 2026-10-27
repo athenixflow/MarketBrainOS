@@ -1,5 +1,6 @@
 /**
- * Creates the three USD monthly products in a Bachs environment, idempotently (spec §3).
+ * Creates the three USD monthly products in a Bachs environment, idempotently (spec §3), and the
+ * one-off products for naira passes and token packs (one per currency).
  *
  *   npx tsx scripts/bachs/setup.ts            # uses BACHS_SECRET_KEY from functions/.secret.local
  *   npx tsx scripts/bachs/setup.ts --write    # also writes BACHS_PRODUCT_* into functions/.env
@@ -15,7 +16,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEFAULT_PRICING_CONFIG as CFG } from '../../config/pricingConfig';
-import { PAID_TIERS, catalogItem, toMajorString } from '../../functions/src/bachs/catalog';
+import { PAID_TIERS, catalogItem, toMajorString, type Currency } from '../../functions/src/bachs/catalog';
+import { productEnvKey } from '../../functions/src/bachs/config';
 import { bachsApi } from '../../functions/src/bachs/api';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -60,7 +62,35 @@ for (const tier of PAID_TIERS) {
   console.log(`${tier}: created ${created.id}`);
 }
 
-const lines = PAID_TIERS.map((t) => `BACHS_PRODUCT_${t.toUpperCase()}=${ids[t]}`);
+/* One-off products for the naira passes and the token packs (M5), so the hosted page names the purchase
+   instead of "Payment". One product per currency (see productForItem). The key carries the amount, so a
+   price changed in code makes a new product rather than charging the old one: the webhook would refuse
+   the mismatch, but the buyer would already have paid the wrong figure. */
+const oneOffs: Array<{ kind: 'pass' | 'pack'; item: string; currency: Currency }> = [
+  ...PAID_TIERS.map((t) => ({ kind: 'pass' as const, item: t, currency: 'NGN' as Currency })),
+  ...CFG.tokenPacks.flatMap((p) => (['USD', 'NGN'] as Currency[]).map((currency) => ({ kind: 'pack' as const, item: p.id, currency }))),
+];
+const oneOffLines: string[] = [];
+for (const o of oneOffs) {
+  const item = catalogItem(CFG, o.kind, o.item, o.currency);
+  if (!item) { console.log(`${o.kind} ${o.item} ${o.currency}: not for sale, skipped`); continue; }
+  const mbKey = `${o.kind}_${o.item}_${o.currency}_${item.amountMinor}`.toLowerCase();
+  let id = existing.find((p) => p?.metadata?.mb_key === mbKey)?.id;
+  if (id) console.log(`${mbKey}: exists ${id}`);
+  else {
+    const created = await api.createProduct({
+      name: o.kind === 'pack' ? `MarketBrain OS ${item.label}` : `MarketBrain OS ${item.label.replace(', 30 days', '')} pass`,
+      description: o.kind === 'pack' ? `${item.tokens.toLocaleString('en-US')} tokens, added to your balance` : `${item.tokens.toLocaleString('en-US')} tokens a month for 30 days`,
+      price: { currency: o.currency, amount: toMajorString(item.amountMinor), price_type: 'fixed' },
+      metadata: { mb_key: mbKey },
+    }, `setup_${mbKey}`);
+    id = created.id;
+    console.log(`${mbKey}: created ${id}`);
+  }
+  oneOffLines.push(`${productEnvKey(o.kind, o.item, o.currency)}=${id}`);
+}
+
+const lines = [...PAID_TIERS.map((t) => `BACHS_PRODUCT_${t.toUpperCase()}=${ids[t]}`), ...oneOffLines];
 console.log('\n' + lines.join('\n'));
 if (process.argv.includes('--write')) {
   const envPath = path.join(root, 'functions', '.env');
