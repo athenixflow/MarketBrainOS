@@ -421,7 +421,10 @@ export const Badge: React.FC<{
   children: React.ReactNode;
   tone?: 'neutral' | 'red' | 'green' | 'blue' | 'yellow' | 'dark';
   className?: string;
-}> = ({ children, tone = 'neutral', className = '' }) => {
+  /** For free text such as an AI verdict: wraps inside its container instead of running off it. */
+  wrap?: boolean;
+}> = ({ children, tone = 'neutral', className = '', wrap = false }) => {
+  const shape = wrap ? 'rounded-xl whitespace-normal break-words max-w-full text-left' : 'rounded-full whitespace-nowrap';
   const tones = {
     neutral: 'bg-gray-100 text-gray-600',
     red: 'bg-red-50 text-red-700',
@@ -431,7 +434,7 @@ export const Badge: React.FC<{
     dark: 'bg-[#1A1A1A] text-gray-300 border border-gray-800',
   };
   return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest whitespace-nowrap ${tones[tone]} ${className}`}>
+    <span className={`inline-flex items-center px-2.5 py-1 ${shape} text-[10px] font-bold uppercase tracking-widest ${tones[tone]} ${className}`}>
       {children}
     </span>
   );

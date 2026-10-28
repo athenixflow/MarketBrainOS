@@ -539,7 +539,7 @@ const ToolPage: React.FC<{ config: ToolConfig }> = ({ config }) => {
                         </>
                       )}
                     </div>
-                    {result.verdict && <Badge tone="dark">{result.verdict}</Badge>}
+                    {result.verdict && <Badge tone="dark" wrap>{result.verdict}</Badge>}
                   </div>
                 )}
                 {result.summary && (

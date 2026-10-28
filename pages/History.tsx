@@ -20,7 +20,8 @@ const BESPOKE_SLUG: Record<string, string> = {
 };
 
 const LOAD_ERROR = 'We could not load your history. Please try again.';
-const rowAction = 'text-[10px] font-bold text-gray-500 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors';
+// inline-flex min-h-6: a 24px tap target on phones (the bare text was 15px tall), same row height.
+const rowAction = 'inline-flex items-center min-h-6 -my-1 text-[10px] font-bold text-gray-500 hover:text-[#0B0B0B] uppercase tracking-widest transition-colors';
 
 const History: React.FC = () => {
   const { user, profile } = useAuth();
@@ -171,7 +172,7 @@ const History: React.FC = () => {
                           const b = getScoreBand(score);
                           return <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border tabular-nums ${b.bgClass} ${b.textClass}`}>{score} · {b.band}</span>;
                         })()}
-                        {rec.result?.verdict && <Badge tone="dark">{rec.result.verdict}</Badge>}
+                        {rec.result?.verdict && <Badge tone="dark" wrap>{rec.result.verdict}</Badge>}
                       </div>
                       <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 tabular-nums">
                         {rec.timestamp ? new Date(rec.timestamp).toLocaleString() : 'Date unknown'}
@@ -201,7 +202,7 @@ const History: React.FC = () => {
                         </button>
                       </>
                     )}
-                    <ConfirmTapButton onConfirm={() => handleDelete(rec)} className="text-[10px] font-bold text-gray-500 hover:text-[#FF0000] uppercase tracking-widest transition-colors" />
+                    <ConfirmTapButton onConfirm={() => handleDelete(rec)} className="inline-flex items-center min-h-6 -my-1 text-[10px] font-bold text-gray-500 hover:text-[#FF0000] uppercase tracking-widest transition-colors" />
                   </div>
 
                   {isOpen && (

@@ -68,7 +68,7 @@ export const ReportCard: React.FC<{
           const b = getScoreBand(result.score);
           return <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border tabular-nums ${b.bgClass} ${b.textClass}`}>{result.score} · {b.band}</span>;
         })()}
-        {result?.verdict && <Badge tone="dark">{result.verdict}</Badge>}
+        {result?.verdict && <Badge tone="dark" wrap>{result.verdict}</Badge>}
       </div>
       <h3 className="text-lg font-bold text-[#0B0B0B] tracking-tight leading-snug">{title}</h3>
       {result?.summary && !open && (
