@@ -1,4 +1,4 @@
-import { db, isFirebaseInitialized, functions } from './firebase';
+import { auth, db, isFirebaseInitialized, functions } from './firebase';
 import { angleResult, testlabResult, doctorResult, workflowResult } from './bespokeMappers';
 import { DEFAULT_PRICING_CONFIG, PricingConfig, mergeLivePricing } from '../config/pricingConfig';
 import { isPaidTier } from '../config/access';
@@ -882,8 +882,12 @@ export const deleteWorkspaceComment = async (id: string): Promise<void> => {
 };
 
 // --- Invitations (the invitee sees pending invites on login and accepts) ---
+/* The rules only let a verified address read its invitations, so an unverified one is refused every
+   time; skip the read (VerifyEmailNotice explains why the list is empty) instead of logging a refusal. */
+const unverified = () => !!auth?.currentUser && !auth.currentUser.emailVerified;
+
 export const getPendingInvitations = async (email: string): Promise<WorkspaceInvitation[]> => {
-  if (!isFirebaseInitialized || !email) return [];
+  if (!isFirebaseInitialized || !email || unverified()) return [];
   try {
     const snap = await getDocs(query(
       collection(db, 'workspace_invitations'),
@@ -1045,7 +1049,7 @@ export const logClientActivity = async (
 };
 
 export const getAgencyInvitations = async (email: string): Promise<AgencyInvitation[]> => {
-  if (!isFirebaseInitialized || !email) return [];
+  if (!isFirebaseInitialized || !email || unverified()) return [];
   try {
     const snap = await getDocs(query(
       collection(db, 'agency_invitations'),
@@ -1291,7 +1295,7 @@ export const getEnterpriseBriefings = async (enterpriseId: string): Promise<Ente
 };
 
 export const getEnterpriseInvitations = async (email: string): Promise<EnterpriseInvitation[]> => {
-  if (!isFirebaseInitialized || !email) return [];
+  if (!isFirebaseInitialized || !email || unverified()) return [];
   try {
     const s = await getDocs(query(collection(db, 'enterprise_invitations'), where('email', '==', email.toLowerCase()), where('status', '==', 'pending')));
     return s.docs.map(d => ({ id: d.id, ...(d.data() as any) }) as EnterpriseInvitation);
