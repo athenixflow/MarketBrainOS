@@ -60,7 +60,13 @@ const main = async () => {
     for (const route of targets) {
       const page = await browser.newPage();
       await page.setRequestInterception(true);
+      /* With analytics consent, so GA4 runs: without it the first enforcing check passed while GA4's
+         hits to www.google.com/g/collect were refused on every page of a consenting visitor. */
+      await page.evaluateOnNewDocument(() => { try { localStorage.setItem('mbos_consent', 'analytics:yes'); } catch {} });
       page.on('request', async (req: any) => {
+        /* The browser applies the policy before a request reaches interception, so a refusal is still
+           logged; a hit that IS allowed is aborted here, so a build never sends page views. */
+        if (/google-analytics\.com|analytics\.google\.com|www\.google\.com\/g\/collect/.test(req.url())) return req.abort();
         // Only OUR document responses carry the header in production; mirror that. A third-party
         // frame (the reCAPTCHA iframe from www.google.com) is served by its own origin with its own
         // headers: putting this policy on it made `frame-ancestors 'self'` refuse it, a false failure.
@@ -79,7 +85,7 @@ const main = async () => {
         // "[Report Only]" lines come from a third party's own report-only policy (Google's frames): they
         // block nothing. Ours is enforcing here, so every one of its violations is a real refusal.
         if (/^\[Report Only\]/.test(t)) return;
-        if (/Content Security Policy|Refused to/i.test(t)) violations.push(`${route}: ${t.slice(0, 220)}`);
+        if (/Content Security Policy|Refused to/i.test(t)) violations.push(`${route}: ${t.slice(0, 900)}`);
       });
       await page.goto(`http://localhost:${PORT}${route}`, { waitUntil: 'networkidle0', timeout: 60_000 }).catch(() => undefined);
       await new Promise((r) => setTimeout(r, 800));
