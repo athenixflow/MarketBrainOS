@@ -54,7 +54,7 @@ const Analyses: React.FC = () => {
         searchPlaceholder="Search by tool, user, or error code…"
         empty="No analyses match."
         rightControls={
-          <select value={status} onChange={e => setStatus(e.target.value as any)} className="bg-[#121212] border border-gray-800 rounded-xl px-4 py-3 text-[11px] font-bold uppercase tracking-widest text-gray-300 outline-none">
+          <select value={status} onChange={e => setStatus(e.target.value as any)} aria-label="Filter by status" className="bg-[#121212] border border-gray-800 rounded-xl px-4 py-3 text-[11px] font-bold uppercase tracking-widest text-gray-300 outline-none">
             <option value="all">All statuses</option><option value="success">Success</option><option value="failed_refunded">Failed</option><option value="blocked">Blocked</option>
           </select>
         }

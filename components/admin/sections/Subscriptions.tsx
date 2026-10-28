@@ -35,7 +35,7 @@ const Subscriptions: React.FC = () => {
     { key: 'status', header: 'Status', render: u => <Pill tone={u.subscription_status === 'active' ? 'green' : u.subscription_status === 'past_due' ? 'yellow' : 'gray'}>{u.subscription_status || 'free'}</Pill> },
     { key: 'renews', header: 'Renews', render: u => <span className="text-xs text-gray-500">{fmtDate(u.plan_renews_at)}</span> },
     { key: 'actions', header: 'Set plan', align: 'right', render: u => (
-      <select value={u.tier} disabled={a.isEmergencyActive}
+      <select value={u.tier} disabled={a.isEmergencyActive} aria-label={`Set plan for ${u.email || u.id}`}
         onChange={e => { const plan = e.target.value as UserTier; if (plan !== u.tier) changePlan(u, plan); }}
         className="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg bg-gray-50 text-gray-600 border border-gray-200 outline-none hover:text-[#0B0B0B] disabled:opacity-30">
         <option value="free">Free</option><option value="pro">Pro</option><option value="team">Team</option><option value="agency">Agency</option><option value="enterprise">Enterprise</option>

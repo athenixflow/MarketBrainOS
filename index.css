@@ -32,6 +32,13 @@ body {
   }
 }
 
+/* Accessibility: the keyboard focus ring appears at once. Most controls use `transition-all`, which
+   also animated the outline in from 0px over 300ms, so the ring lagged behind each Tab press (and a
+   check sampling right after Tab saw none). While focus-visible, transitions skip the outline. */
+:focus-visible {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform;
+}
+
 /* Accessibility: tailwindcss-animate does not honour prefers-reduced-motion on its own, and the app
    uses its enter utilities (animate-in / fade-in / slide-in-from-*) on page shells, modals, results
    and empty states. Collapse all of it to an instant, fully-visible final state for users who ask

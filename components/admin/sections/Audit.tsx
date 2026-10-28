@@ -43,7 +43,7 @@ const Audit: React.FC = () => {
 
       <div className="flex items-center gap-3 flex-wrap">
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search actor, target, action…" className="bg-[#121212] border border-gray-800 rounded-xl px-5 py-3 text-sm text-white outline-none focus:border-[#FF0000]/40 w-full sm:w-80" />
-        <select value={type} onChange={e => setType(e.target.value)} className="bg-[#121212] border border-gray-800 rounded-xl px-4 py-3 text-[11px] font-bold uppercase tracking-widest text-gray-300 outline-none">
+        <select value={type} onChange={e => setType(e.target.value)} aria-label="Filter by action type" className="bg-[#121212] border border-gray-800 rounded-xl px-4 py-3 text-[11px] font-bold uppercase tracking-widest text-gray-300 outline-none">
           {types.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
       </div>

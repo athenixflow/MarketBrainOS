@@ -112,7 +112,7 @@ const UserDetail: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card title="Token Adjustment">
           <div className="flex flex-wrap gap-3 mb-4">
-            <select value={tokAction} onChange={e => setTokAction(e.target.value as AdminTokenAction)} className="bg-[#FBFBFB] border border-gray-200 rounded-xl px-4 py-3 text-sm text-[#0B0B0B] outline-none">
+            <select value={tokAction} onChange={e => setTokAction(e.target.value as AdminTokenAction)} aria-label="Token action" className="bg-[#FBFBFB] border border-gray-200 rounded-xl px-4 py-3 text-sm text-[#0B0B0B] outline-none">
               <option value="add">Add</option><option value="remove">Remove</option><option value="refund">Refund</option><option value="bonus">Bonus</option><option value="reset">Reset to default</option>
             </select>
             {tokAction !== 'reset' && <input value={tokAmount} onChange={e => setTokAmount(e.target.value.replace(/[^0-9]/g, ''))} placeholder="Amount" className="w-28 bg-[#FBFBFB] border border-gray-200 rounded-xl px-4 py-3 text-sm text-[#0B0B0B] outline-none" />}
@@ -124,7 +124,7 @@ const UserDetail: React.FC = () => {
         <Card title="Subscription">
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Set Plan</p>
           <div className="flex flex-wrap items-center gap-3 mb-6">
-            <select value={planSel} onChange={e => setPlanSel(e.target.value as UserTier)} className="bg-[#FBFBFB] border border-gray-200 rounded-xl px-4 py-3 text-sm text-[#0B0B0B] outline-none">
+            <select value={planSel} onChange={e => setPlanSel(e.target.value as UserTier)} aria-label="Plan" className="bg-[#FBFBFB] border border-gray-200 rounded-xl px-4 py-3 text-sm text-[#0B0B0B] outline-none">
               <option value="free">Free</option><option value="pro">Pro</option><option value="team">Team</option><option value="agency">Agency</option><option value="enterprise">Enterprise</option>
             </select>
             <PrimaryButton onClick={applyPlan} className="!px-6 !py-3 !text-xs">Apply Plan</PrimaryButton>

@@ -45,7 +45,7 @@ const Users: React.FC = () => {
       </button>
     ) },
     { key: 'plan', header: 'Plan', render: u => (
-      <select value={u.tier} disabled={a.isEmergencyActive}
+      <select value={u.tier} disabled={a.isEmergencyActive} aria-label={`Plan for ${u.email || u.id}`}
         onChange={e => { const plan = e.target.value as UserTier; if (plan !== u.tier) changePlan(u, plan); }}
         className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1.5 rounded-lg bg-gray-50 text-gray-600 border border-gray-200 outline-none hover:text-[#0B0B0B] disabled:opacity-30 cursor-pointer">
         <option value="free">Free</option><option value="pro">Pro</option><option value="team">Team</option><option value="agency">Agency</option><option value="enterprise">Enterprise</option>
@@ -63,8 +63,8 @@ const Users: React.FC = () => {
     ) },
   ];
 
-  const Select = (val: string, set: (v: any) => void, opts: string[]) => (
-    <select value={val} onChange={e => set(e.target.value)} className="bg-[#121212] border border-gray-800 rounded-xl px-4 py-3 text-[11px] font-bold uppercase tracking-widest text-gray-300 outline-none">
+  const Select = (label: string, val: string, set: (v: any) => void, opts: string[]) => (
+    <select value={val} onChange={e => set(e.target.value)} aria-label={label} className="bg-[#121212] border border-gray-800 rounded-xl px-4 py-3 text-[11px] font-bold uppercase tracking-widest text-gray-300 outline-none">
       {opts.map(o => <option key={o} value={o}>{o === 'all' ? 'All' : o}</option>)}
     </select>
   );
@@ -78,7 +78,7 @@ const Users: React.FC = () => {
         searchKeys={[u => u.email, u => u.id || '', u => u.company_name || '']}
         searchPlaceholder="Search by email, company, or ID…"
         empty="No users match these filters."
-        rightControls={<div className="flex gap-3">{Select(tierFilter, setTierFilter, ['all', 'free', 'pro', 'team', 'agency', 'enterprise'])}{Select(statusFilter, setStatusFilter, ['all', 'active', 'suspended'])}</div>}
+        rightControls={<div className="flex gap-3">{Select('Filter by plan', tierFilter, setTierFilter, ['all', 'free', 'pro', 'team', 'agency', 'enterprise'])}{Select('Filter by status', statusFilter, setStatusFilter, ['all', 'active', 'suspended'])}</div>}
       />
     </div>
   );

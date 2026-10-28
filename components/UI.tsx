@@ -849,7 +849,8 @@ export const TokenStatusBanner: React.FC<{
         </p>
         <button
           onClick={() => navigate('/pricing')}
-          className="text-[10px] font-bold text-[#FF0000] uppercase tracking-widest hover:text-white transition-colors"
+          // #FF3333, not the brand #FF0000: on this #1A1A1A banner pure red is 4.35:1, under AA's 4.5.
+          className="text-[10px] font-bold text-[#FF3333] uppercase tracking-widest hover:text-white transition-colors"
         >
           Upgrade to Pro →
         </button>
