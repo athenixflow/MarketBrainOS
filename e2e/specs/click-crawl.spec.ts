@@ -24,20 +24,29 @@ async function snapshot(page: Page) {
     text: document.body.innerText.length,
     nodes: document.body.getElementsByTagName('*').length,
     dialogs: document.querySelectorAll('[role="dialog"], [aria-modal="true"], dialog[open]').length,
-    expanded: [...document.querySelectorAll('[aria-expanded="true"], [aria-pressed="true"], [aria-selected="true"]')].length,
+    // WHICH controls are on, not how many: picking another chip in a single-choice group moves
+    // aria-pressed from one to the other and leaves the count unchanged.
+    expanded: [...document.querySelectorAll('[aria-expanded="true"], [aria-pressed="true"], [aria-selected="true"]')]
+      .map((e) => (e.getAttribute('aria-label') || (e as HTMLElement).innerText || e.tagName).trim().slice(0, 40)).join('|'),
     checked: [...document.querySelectorAll('input:checked')].length,
   }));
 }
 
+/* Lists the pressable buttons and tags each with data-crawl=<its index here>, so the click lands on
+   exactly the button that was listed. Clicking by position in a broader locator (which kept the
+   already-chosen options and off-screen drawer buttons this list drops) pressed the wrong button once
+   the currency toggle and tabs gained aria-pressed/aria-selected. */
 async function buttonLabels(page: Page) {
   return page.evaluate(() => {
     const vis = (el: Element) => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el);
       return r.width > 0 && r.height > 0 && r.right > 0 && r.left < innerWidth && s.visibility !== 'hidden' && s.display !== 'none'; };
-    return [...document.querySelectorAll('button, [role="button"], [role="tab"]')]
-      .filter((b) => vis(b) && !(b as HTMLButtonElement).disabled && b.getAttribute('aria-disabled') !== 'true')
+    document.querySelectorAll('[data-crawl]').forEach((b) => b.removeAttribute('data-crawl'));
+    const list = [...document.querySelectorAll('button, [role="button"], [role="tab"]')]
+      .filter((b) => vis(b) && !(b as HTMLButtonElement).disabled && b.getAttribute('aria-disabled') !== 'true' && !b.closest('[inert]'))
       // The option that is already chosen (current tab, active currency) rightly does nothing.
-      .filter((b) => !['aria-pressed', 'aria-selected', 'aria-checked', 'aria-current'].some((a) => ['true', 'page'].includes(b.getAttribute(a) || '')))
-      .map((b) => ((b.getAttribute('aria-label') || (b as HTMLElement).innerText || '').trim().replace(/\s+/g, ' ').slice(0, 60)));
+      .filter((b) => !['aria-pressed', 'aria-selected', 'aria-checked', 'aria-current'].some((a) => ['true', 'page'].includes(b.getAttribute(a) || '')));
+    list.forEach((b, i) => b.setAttribute('data-crawl', String(i)));
+    return list.map((b) => ((b.getAttribute('aria-label') || (b as HTMLElement).innerText || '').trim().replace(/\s+/g, ' ').slice(0, 60)));
   });
 }
 
@@ -74,8 +83,14 @@ for (const role of ROLES) {
           const download = page.waitForEvent('download', { timeout: 2_500 }).then(() => true).catch(() => false);
           const popup = page.context().waitForEvent('page', { timeout: 2_500 }).then((p) => { p.close().catch(() => {}); return true; }).catch(() => false);
           try {
-            const target = page.locator('button, [role="button"], [role="tab"]').filter({ visible: true }).filter({ hasNot: page.locator('[disabled]') });
-            await target.nth(idx).click({ timeout: 5_000 });
+            try { await page.locator(`[data-crawl="${idx}"]`).click({ timeout: 5_000 }); }
+            catch {
+              // A late re-render (the header remounts once the profile loads, slowest on WebKit) can
+              // replace the tagged element between listing and clicking: list again and retry once.
+              const again = (await buttonLabels(page)).indexOf(label);
+              if (again < 0) continue;
+              await page.locator(`[data-crawl="${again}"]`).click({ timeout: 5_000 });
+            }
           } catch (e: any) { broken.push(`${label || '(no label)'}: click failed (${String(e.message).split('\n')[0].slice(0, 80)})`); continue; }
           await page.waitForTimeout(1_200);
           const after = await snapshot(page).catch(() => null);
