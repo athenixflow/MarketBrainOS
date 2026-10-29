@@ -56,8 +56,14 @@ export interface CheckoutSnapshot {
 }
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
-const idOf = (v: unknown): string | null =>
-  str(v) ?? (v && typeof v === 'object' ? str((v as Record<string, unknown>).id) : null);
+/* A reference is a bare id or an object. Live Bachs objects carry their id under their own name
+ * (`subscription.subscription_id`, `customer.customer_id`), not `id`, so `key` is tried too. */
+const idOf = (v: unknown, key?: string): string | null => {
+  if (str(v)) return str(v);
+  if (!v || typeof v !== 'object') return null;
+  const o = v as Record<string, unknown>;
+  return str(o.id) ?? (key ? str(o[key]) : null);
+};
 const upper = (v: unknown): string | null => str(v)?.toUpperCase() ?? null;
 /* Only scalars survive: an object, an array or a null is dropped, never stringified (String() on an
  * object can throw, and a null would otherwise read as the text "null"). */
@@ -93,8 +99,8 @@ export const parseBachsEvent = (body: unknown): BachsEvent | null => {
     amountMinor: toMinor(d.amount ?? d.amount_paid ?? d.total ?? d.pricing?.amount),
     currency: upper(d.currency ?? d.pricing?.currency),
     checkoutId: str(d.checkout_id) ?? (type.startsWith('checkout.') ? str(d.id) : null),
-    customerId: idOf(d.customer) ?? str(d.customer_id),
-    subscriptionId: str(d.subscription_id) ?? idOf(d.subscription)
+    customerId: idOf(d.customer, 'customer_id') ?? str(d.customer_id),
+    subscriptionId: str(d.subscription_id) ?? idOf(d.subscription, 'subscription_id')
       ?? (type.startsWith('customer.subscription.') ? str(d.id) : null),
     invoiceId: type.startsWith('invoice.') ? str(d.id) ?? str(d.invoice_id) : null,
   };
@@ -127,7 +133,7 @@ export const parseSubscription = (raw: unknown): SubscriptionSnapshot | null => 
     id,
     status: (str(s.status) ?? '').toLowerCase(),
     productId: str(s.product_id) ?? idOf(s.product) ?? str(s.items?.[0]?.product_id),
-    customerId: idOf(s.customer) ?? str(s.customer_id),
+    customerId: idOf(s.customer, 'customer_id') ?? str(s.customer_id),
     currency: upper(s.currency ?? s.price?.currency),
     amountMinor: toMinor(s.amount ?? s.price?.amount),
     currentPeriodStart: str(s.current_period_start),
@@ -156,7 +162,7 @@ export const parseCheckoutSession = (raw: unknown): CheckoutSnapshot | null => {
     mode: str(c.mode),
     amountMinor: toMinor(c.amount ?? c.pricing?.amount ?? c.amount_total),
     currency: upper(c.currency ?? c.pricing?.currency),
-    subscriptionId: idOf(c.subscription) ?? str(c.subscription_id),
-    customerId: idOf(c.customer) ?? str(c.customer_id),
+    subscriptionId: idOf(c.subscription, 'subscription_id') ?? str(c.subscription_id),
+    customerId: idOf(c.customer, 'customer_id') ?? str(c.customer_id),
   };
 };

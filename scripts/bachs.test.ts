@@ -743,6 +743,21 @@ ok(invoicePayment(parseBachsEvent(ev('invoice.paid', { id: 'in_3', subscription:
 ok(invoicePayment(parseBachsEvent(ev('invoice.paid', { id: 'in_4', subscription: 'sub_1', amount_paid: '0.00' }))!, 'USD') === null, 'a zero invoice is not a payment');
 ok(invoicePayment(parseBachsEvent(ev('invoice.payment_failed', { id: 'in_5', subscription: 'sub_1', amount_paid: '19.00' }))!, 'USD') === null,
   'a failed invoice records nothing');
+/* The shape live Bachs actually sends (invoice.paid, 2026-10-28): no data.id, the invoice id is
+   data.invoice_id, and the subscription and customer are objects keyed subscription_id /
+   customer_id, not id. Read as `subscription.id`, the event had no subscription, was dropped
+   with a 200, and the first $19 Pro payment got neither a payments record nor a receipt. */
+const liveInvoice = parseBachsEvent(ev('invoice.paid', {
+  invoice_id: 'inv_41fb', status: 'paid', currency: 'USD', total: '19.00', amount_paid: '19.00',
+  subscription: { subscription_id: 'sub_b4b3', customer: { customer_id: 'cust_9b1b' }, status: 'active', amount: '19.00' },
+  customer: { customer_id: 'cust_9b1b' },
+  charge: { id: 'ch_4142', amount: '19.00', currency: 'USD', status: 'succeeded' },
+}));
+ok(liveInvoice?.kind === 'subscription_changed' && liveInvoice.subscriptionId === 'sub_b4b3' && liveInvoice.customerId === 'cust_9b1b',
+  'the live invoice.paid shape is read: subscription.subscription_id and customer.customer_id');
+const liveRecorded = liveInvoice ? invoicePayment(liveInvoice, null) : null;
+ok(liveRecorded?.ledgerKey === 'invoice:inv_41fb' && liveRecorded.amountMinor === 1900 && liveRecorded.currency === 'USD',
+  'and becomes a $19.00 payment keyed by its invoice_id');
 ok(invoicePayment(parseBachsEvent(ev('customer.subscription.updated', { id: 'sub_1', status: 'active', amount: '19.00' }))!, 'USD') === null,
   'a state event records nothing, whatever amount it carries');
 ok([s1, renew, upgraded, recon, overlap, second].every((r) => r.grant.payment === null),
