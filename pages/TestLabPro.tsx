@@ -376,11 +376,11 @@ const TestLabPro: React.FC = () => {
                   <div className="flex flex-wrap justify-between items-start gap-6 mb-8">
                     <div className="min-w-0">
                       <h3 className="text-2xl sm:text-3xl font-bold text-[#0B0B0B] tracking-tight mb-2">
-                        {variantLabel(winningVariant)} is the projected winner
+                        {variantLabel(winningVariant)} is the strongest variation
                       </h3>
                       <div className="flex items-center gap-3">
                         <div className="w-1.5 h-1.5 rounded-full bg-[#FF0000]" />
-                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Highest projected performance</span>
+                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Highest score on copywriting principles</span>
                       </div>
                     </div>
                     <IntelligenceIndicator score={winningVariant.score} />

@@ -192,7 +192,7 @@ const LandingPage: React.FC = () => {
                    <div className="p-6 rounded-2xl bg-green-900/10 border border-green-900/30">
                       <p className="text-xs text-green-500 font-bold uppercase mb-4">Variant B</p>
                       <div className="text-2xl font-black text-green-500">94/100</div>
-                      <p className="text-[10px] text-green-400 mt-2">Projected Winner</p>
+                      <p className="text-[10px] text-green-400 mt-2">Strongest of the three</p>
                    </div>
                  </div>
               </div>

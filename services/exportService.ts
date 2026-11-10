@@ -157,9 +157,9 @@ export const formatAngleMinerExport = (results: AngleMinerResults): string => {
 
 export const formatTestLabExport = (results: TestLabResults): string => {
   const winner = resolveWinner(results.variants, results.winnerLabel);
-  let output = "TESTLAB PRO: PERFORMANCE PREDICTION REPORT\n\n";
-  
-  output += `PROJECTED WINNER: ${results.winnerLabel}\n`;
+  let output = "TESTLAB PRO: COMPARATIVE REVIEW\n\n";
+
+  output += `STRONGEST VARIATION: ${results.winnerLabel}\n`;
   output += `WINNING SCORE: ${winner?.score}\n\n`;
   
   output += "VARIANT CONTENT:\n";

@@ -123,6 +123,16 @@ const simulates = grep(
 );
 ok(simulates.length === 0, 'no copy claims the product simulates performance', simulates.join('\n        '));
 
+/* "Projected winner" and "highest projected performance" are the same forecast claim without the word
+   "predict" (found on the live TestLab result card, Nov 2026, while the press releases said the tool
+   is not a prediction). */
+const PROJECTED = /\bprojected\s+(winner|performance|results?|conversions?)\b|performance prediction/i;
+const projected = grep(PROJECTED);
+ok(projected.length === 0, 'no "projected winner" / "projected performance" — the strongest variation is a judgement',
+  projected.join('\n        '));
+ok(PROJECTED.test('Variant B is the projected winner') && PROJECTED.test('Highest projected performance'),
+  'CONTROL: the projected-claim pattern catches the wording that shipped');
+
 const winProb = grep(/win probability/i);
 ok(winProb.length === 0, 'no "Win Probability" — the score is a judgement, not a likelihood', winProb.join('\n        '));
 
