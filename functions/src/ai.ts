@@ -57,6 +57,9 @@ async function viaGemini(req: AiRequest): Promise<string> {
 async function viaDeepSeek(req: AiRequest): Promise<string> {
   const key = (process.env.DEEPSEEK_API_KEY || '').trim();
   if (!key) throw new Error('DeepSeek: DEEPSEEK_API_KEY is not set');
+  /* A key pasted into a console that does not take Ctrl+V arrives as a control character, and fetch
+     then fails with a bare "fetch failed" (Nov 10 2026). Name the real problem instead. */
+  if (!/^[\x21-\x7e]+$/.test(key)) throw new Error('DeepSeek: DEEPSEEK_API_KEY is malformed (non-printable characters)');
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), DEEPSEEK_TIMEOUT_MS);
   try {

@@ -73,6 +73,8 @@ const req = { modelClass: 'pro' as const, systemInstruction: 'SYS', prompt: 'Ret
   ok(await rejects(generateText(req), /DeepSeek 402: Insufficient Balance/), "an HTTP error carries DeepSeek's own reason into the log");
   reply(200, { choices: [{ message: { content: '  ' }, finish_reason: 'stop' }] });
   ok(await rejects(generateText(req), /empty/), 'an empty reply is an error');
+  process.env.DEEPSEEK_API_KEY = '\u0016';
+  ok(await rejects(generateText(req), /malformed/), 'a key that is a pasted control character is named as malformed, not "fetch failed"');
   delete process.env.DEEPSEEK_API_KEY;
   ok(await rejects(generateText(req), /DEEPSEEK_API_KEY is not set/), 'a missing key fails loudly instead of calling out unauthenticated');
 
