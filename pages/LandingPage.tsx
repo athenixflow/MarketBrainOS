@@ -111,7 +111,7 @@ const LandingPage: React.FC = () => {
             MarketBrain OS is a <strong>decision-support system</strong> for growth marketing. It is an AI marketing platform designed to act as a pre-flight checklist for your campaigns. 
           </p>
           <p className="text-lg text-gray-400 leading-relaxed">
-            Unlike generative writing tools that simply produce text, MarketBrain OS is built to <strong>audit, score, and refine</strong>. It uses Google's Gemini models to read your assets the way a demanding reviewer would and return ranked, specific fixes, so you can improve conversion rates (CRO) before a campaign goes live.
+            Unlike generative writing tools that simply produce text, MarketBrain OS is built to <strong>audit, score, and refine</strong>. It uses large language models to read your assets the way a demanding reviewer would and return ranked, specific fixes, so you can improve conversion rates (CRO) before a campaign goes live.
           </p>
         </div>
       </AnimatedSection>

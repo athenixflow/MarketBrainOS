@@ -4,7 +4,7 @@ import LegalPage, { LegalSection, LegalList } from '../components/LegalPage';
 import { MARKETING_SEO } from '../config/seo';
 import { CONSENT_STORAGE_KEY, CONSENT_ANALYTICS_YES, readStoredConsent, disableAnalytics } from '../services/firebase';
 
-const UPDATED = '15 September 2026';
+const UPDATED = '10 November 2026';
 const CONTACT = 'support@marketbrainos.app';
 
 // "Manage analytics choice": clears the stored decision (turning collection off first, so an
@@ -98,10 +98,12 @@ const Privacy: React.FC = () => (
 
     <LegalSection id="s4" heading="4. AI processing">
       <p>
-        To generate analyses, the content you submit to our tools is sent to Google’s Gemini API for
-        processing. This is essential to delivering the core functionality of the Service. Your inputs are
-        transmitted securely and used to return results to you; we do not use your private analysis content to
-        train our own models. Google processes this data under its own terms as our service provider.
+        To generate analyses, the content you submit to our tools is sent to a third-party AI model provider for
+        processing. Our current provider is DeepSeek, whose API processes and stores data on servers in the
+        People’s Republic of China; Google’s Gemini API is our alternate provider and may be used instead. This
+        is essential to delivering the core functionality of the Service. Your inputs are transmitted securely
+        and used to return results to you; we do not use your private analysis content to train our own models.
+        The provider processes this data under its own terms as our service provider.
       </p>
     </LegalSection>
 
@@ -109,7 +111,7 @@ const Privacy: React.FC = () => (
       <p>We do not sell your personal information. We share information only with:</p>
       <LegalList
         items={[
-          <><strong className="text-gray-200">Service providers</strong> that power the Service — including Google Firebase (authentication and database), Google Gemini (AI processing), Google Analytics (usage analytics, only after you accept in the banner — see <Link to="/privacy#s11" className="text-[#FF0000] hover:opacity-70 transition-opacity">section 11</Link>), Resend (transactional email), our payment processor (billing), and Vercel (hosting).</>,
+          <><strong className="text-gray-200">Service providers</strong> that power the Service — including Google Firebase (authentication and database), DeepSeek and Google Gemini (AI processing; see <Link to="/privacy#s4" className="text-[#FF0000] hover:opacity-70 transition-opacity">section 4</Link>), Google Analytics (usage analytics, only after you accept in the banner — see <Link to="/privacy#s11" className="text-[#FF0000] hover:opacity-70 transition-opacity">section 11</Link>), Resend (transactional email), our payment processor (billing), and Vercel (hosting).</>,
           <><strong className="text-gray-200">Members of your workspace</strong> — when you collaborate in a team, agency, or enterprise, relevant activity and content may be visible to authorized members and administrators of that group.</>,
           <><strong className="text-gray-200">Legal and safety</strong> — where required by law, or to protect the rights, property, or safety of MarketBrain OS, our users, or others.</>,
           <><strong className="text-gray-200">Business transfers</strong> — in connection with a merger, acquisition, or sale of assets, subject to this policy.</>,
@@ -161,7 +163,8 @@ const Privacy: React.FC = () => (
 
     <LegalSection id="s9" heading="9. International transfers">
       <p>
-        Our providers may process and store data in countries other than your own. Where we transfer personal
+        Our providers may process and store data in countries other than your own, including the People’s
+        Republic of China for content sent to our AI provider (section 4). Where we transfer personal
         information internationally, we take steps to ensure it remains protected consistent with this policy
         and applicable law.
       </p>

@@ -102,7 +102,7 @@ export const COMPETITORS: Competitor[] = [
     faq: [
       {
         q: 'Is this a different AI model?',
-        a: 'No, and it would be dishonest to imply it. MarketBrain OS runs on Google’s Gemini 2.5 Pro — the same class of model. The difference is what surrounds it: a fixed result format, a live page fetch, a saved history and the same structure for everybody on a team.',
+        a: 'No, and it would be dishonest to imply it. MarketBrain OS runs on a third-party large language model — the same class of model. The difference is what surrounds it: a fixed result format, a live page fetch, a saved history and the same structure for everybody on a team.',
       },
       {
         q: 'So why not just paste my page into a chat window?',
@@ -114,7 +114,7 @@ export const COMPETITORS: Competitor[] = [
       },
       {
         q: 'Is my data used for training?',
-        a: 'Analyses run through the Google Gemini API. See our privacy policy for what we store and for how long. For what any other provider does with your inputs, read their own policy rather than our summary of it.',
+        a: 'Analyses run through a third-party AI model provider, named in our privacy policy along with what we store and for how long. For what any other provider does with your inputs, read their own policy rather than our summary of it.',
       },
       {
         q: 'What does it cost to try?',
@@ -151,7 +151,7 @@ export const COMPETITORS: Competitor[] = [
       },
       {
         q: 'Do you use Claude?',
-        a: 'No — MarketBrain OS runs on Google’s Gemini 2.5 Pro.',
+        a: 'No. MarketBrain OS runs on a third-party large language model; the privacy policy names the provider.',
       },
       {
         q: 'Can I use both?',
@@ -171,7 +171,7 @@ export const COMPETITORS: Competitor[] = [
     /* Checked 2026-09-29 against gemini.google/us/subscriptions (US prices). */
     verifiedOn: '2026-09-29',
     strengths: [
-      'The same model family this product is built on, available directly — including on a free tier.',
+      'A capable general-purpose model, available directly — including on a free tier.',
       'Deep integration with Google Docs, Sheets and Gmail, where marketing work already lives.',
       'Generous free access compared with most assistants.',
     ],
@@ -183,7 +183,7 @@ export const COMPETITORS: Competitor[] = [
     faq: [
       {
         q: 'Does MarketBrain OS run on Gemini?',
-        a: 'Yes. It calls Google’s Gemini 2.5 Pro. Any page that implied a proprietary model would be lying, and this one says it plainly: the model is the same, the product around it is not.',
+        a: 'Gemini is one of the model providers it can use, and the privacy policy names the one in use. Any page that implied a proprietary model would be lying, and this one says it plainly: the model class is the same, the product around it is not.',
       },
       {
         q: 'Then why pay for this instead of using Gemini directly?',
@@ -195,7 +195,7 @@ export const COMPETITORS: Competitor[] = [
       },
       {
         q: 'Which model version?',
-        a: 'Gemini 2.5 Pro for the full analyses, and a Flash-class model for the free public scorer where speed matters more than depth.',
+        a: 'A third-party large language model for every analysis, including the free public scorer; the privacy policy names the current provider.',
       },
       {
         q: 'Is Gemini better value?',

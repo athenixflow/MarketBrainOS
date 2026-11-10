@@ -229,8 +229,8 @@ const LandingPageStudy: React.FC = () => {
           </p>
           <p>
             <strong className="text-gray-200">The audit.</strong> Each page was fetched once between {method.fetched_from} and{' '}
-            {method.fetched_to} and audited once by Conversion Doctor — the same prompt, fetcher and model ({method.audit_model})
-            the product runs. The product normally asks who the page is for and what it should make them do; nobody told us that
+            {method.fetched_to} and audited once by Conversion Doctor — the same prompt and fetcher the product runs, on the
+            model the product used at the time ({method.audit_model}). The product normally asks who the page is for and what it should make them do; nobody told us that
             for these pages, so the audit ran without an audience or a goal and judged each page as a first-time visitor would
             meet it. A single model run has variance: the same page audited twice can score a few points apart.
           </p>

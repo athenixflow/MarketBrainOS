@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import LegalPage, { LegalSection, LegalList } from '../components/LegalPage';
 import { MARKETING_SEO } from '../config/seo';
 
-const UPDATED = '29 August 2026';
+const UPDATED = '10 November 2026';
 const CONTACT = 'support@marketbrainos.app';
 
 const Terms: React.FC = () => (
@@ -80,7 +80,7 @@ const Terms: React.FC = () => (
 
     <LegalSection heading="7. Third-party services">
       <p>
-        The Service relies on third-party providers (including Google Firebase, Google Gemini, our payment
+        The Service relies on third-party providers (including Google Firebase, our AI model providers DeepSeek and Google Gemini, our payment
         processor, and hosting providers). Your use of the Service may be subject to their terms, and we are not
         responsible for third-party services outside our control.
       </p>

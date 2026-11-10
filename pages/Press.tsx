@@ -20,22 +20,22 @@ import { TOOL_COUNT } from '../config/toolConfigs';
 const BOILERPLATE: { words: number; text: string }[] = [
   {
     words: 50,
-    text: 'MarketBrain OS is a pre-spend review tool for marketers. Paste a landing page address, an offer, a campaign plan or two to five ad variants, and it returns a 0–100 score, the problems ranked by impact, and specific fixes, in about a minute. It runs on Google’s Gemini 2.5 Pro.',
+    text: 'MarketBrain OS is a pre-spend review tool for marketers. Paste a landing page address, an offer, a campaign plan or two to five ad variants, and it returns a 0–100 score, the problems ranked by impact, and specific fixes, in about a minute. It runs on a third-party large language model.',
   },
   {
     words: 100,
-    text: 'MarketBrain OS is a pre-spend review tool for marketers and small agencies: it checks the work before money goes behind it. Conversion Doctor reads a live landing page and returns a 0–100 score, the blockers ranked by impact and ready-to-paste rewrites. TestLab Pro compares two to five headlines or ads and says which is strongest and why. Ten further tools cover offers, audiences, competitors, messaging, campaigns and growth. Results are saved, searchable and exportable as a branded PDF. It runs on Google’s Gemini 2.5 Pro and does not forecast results. There is a free tier; paid plans start at $19 a month.',
+    text: 'MarketBrain OS is a pre-spend review tool for marketers and small agencies: it checks the work before money goes behind it. Conversion Doctor reads a live landing page and returns a 0–100 score, the blockers ranked by impact and ready-to-paste rewrites. TestLab Pro compares two to five headlines or ads and says which is strongest and why. Ten further tools cover offers, audiences, competitors, messaging, campaigns and growth. Results are saved, searchable and exportable as a branded PDF. It runs on a third-party large language model and does not forecast results. There is a free tier; paid plans start at $19 a month.',
   },
   {
     words: 200,
-    text: 'MarketBrain OS is a pre-spend review tool for marketers and the small agencies that serve clients: it checks marketing work before money goes behind it. Most small teams launch a page or an ad and learn whether it works from the bill. MarketBrain OS moves the review to the start. Conversion Doctor reads a live landing page — or pasted copy — and returns a 0–100 score, the blockers ranked by impact, concrete fixes and ready-to-paste rewrites, judged against the audience and the goal the user names. TestLab Pro compares two to five headlines or ads and explains which is strongest and why. Ten further tools cover offers, audiences, markets, competitors, messaging, content, campaigns, growth, strategy and workflows, each returning the same scored structure so this week’s review can be compared with last week’s. Results are saved to a searchable history, can be shared by link, and export as a branded PDF for a client. Team and Agency plans add shared workspaces. The analysis runs on Google’s Gemini 2.5 Pro; the product is honest about that, and its scores are a judgement of the work, not a forecast of results. There is a free tier with no card; Pro is $19 a month, Team $79 and Agency $199.',
+    text: 'MarketBrain OS is a pre-spend review tool for marketers and the small agencies that serve clients: it checks marketing work before money goes behind it. Most small teams launch a page or an ad and learn whether it works from the bill. MarketBrain OS moves the review to the start. Conversion Doctor reads a live landing page — or pasted copy — and returns a 0–100 score, the blockers ranked by impact, concrete fixes and ready-to-paste rewrites, judged against the audience and the goal the user names. TestLab Pro compares two to five headlines or ads and explains which is strongest and why. Ten further tools cover offers, audiences, markets, competitors, messaging, content, campaigns, growth, strategy and workflows, each returning the same scored structure so this week’s review can be compared with last week’s. Results are saved to a searchable history, can be shared by link, and export as a branded PDF for a client. Team and Agency plans add shared workspaces. The analysis runs on a third-party large language model; the product is honest about that, and its scores are a judgement of the work, not a forecast of results. There is a free tier with no card; Pro is $19 a month, Team $79 and Agency $199.',
   },
 ];
 
 const FAQ: { q: string; a: string }[] = [
   {
     q: 'Why not just use ChatGPT?',
-    a: 'For a one-off question, you might. The model class is the same — MarketBrain OS runs on Gemini 2.5 Pro and says so. The difference is the discipline around it: it reads the live page itself, returns the same scored sections every time so two reviews can be compared, keeps a searchable history, exports a client-ready PDF and gives a team one shared workspace.',
+    a: 'For a one-off question, you might. The model class is the same — MarketBrain OS runs on a third-party large language model and says so. The difference is the discipline around it: it reads the live page itself, returns the same scored sections every time so two reviews can be compared, keeps a searchable history, exports a client-ready PDF and gives a team one shared workspace.',
   },
   {
     q: 'Does the score tell me how the page will perform?',
@@ -43,7 +43,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: 'Where does my data go?',
-    a: 'Accounts and saved analyses are stored in Google Firebase. The content a user submits is sent to Google’s Gemini API to produce the result, and is not used to train our own models. Users can delete analyses, or their whole account, from Settings. The privacy policy has the detail.',
+    a: 'Accounts and saved analyses are stored in Google Firebase. The content a user submits is sent to a third-party AI model provider to produce the result, and is not used to train our own models. Users can delete analyses, or their whole account, from Settings. The privacy policy has the detail.',
   },
   {
     q: 'How does it make money?',
@@ -98,10 +98,10 @@ const Press: React.FC = () => {
           {[
             ['What it is', 'A pre-spend review tool: it scores marketing work and says what to fix before money goes behind it. It does not buy media, schedule posts or forecast results.'],
             ['Tools', `${TOOL_COUNT}, led by Conversion Doctor (landing pages), TestLab Pro (comparing variants) and Offer Analyzer.`],
-            ['Model', 'Google Gemini 2.5 Pro, one call per analysis.'],
+            ['Model', 'A third-party large language model, one call per analysis.'],
             ['Pricing', `Free tier, no card. ${paid.map((p) => `${p.t[0].toUpperCase()}${p.t.slice(1)} $${p.price}/month (${p.tokens} tokens)`).join(', ')}.`],
             ['Free to try', 'The landing page scorer needs no account.'],
-            ['Data', 'Stored in Google Firebase; submitted content is processed by the Gemini API and not used to train our models.'],
+            ['Data', 'Stored in Google Firebase; submitted content is processed by a third-party AI model provider (named in the privacy policy) and not used to train our models.'],
           ].map(([k, v]) => (
             <div key={k}>
               <dt className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">{k}</dt>

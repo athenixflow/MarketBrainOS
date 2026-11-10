@@ -64,9 +64,15 @@ ok(!/const systemInstruction\s*=/.test(index) && /import \{[^}]*systemInstructio
 ok(/from '\.\.\/\.\.\/functions\/src\/prompts'/.test(run) && /buildConversionDoctorPrompt\(/.test(run)
   && /systemInstruction/.test(run.slice(run.indexOf('getGenerativeModel'))),
   'the study sends the same builder and the same system instruction');
+/* Since Nov 2026 the product's provider is switchable (functions/src/ai.ts, AI_PROVIDER), so the study
+   matches the paid audit's GEMINI model, and the study page says "the model the product used at the
+   time" rather than claiming it is whatever the product runs today. */
 ok(/AUDIT_MODEL/.test(run) && /AUDIT_MODEL = 'gemini-2\.5-pro'/.test(read('scripts/study/shared.ts'))
-  && /getGenerativeModel\(\{ model: "gemini-2\.5-pro", systemInstruction \}\)/.test(index),
-  'and the same model the paid audit runs');
+  && /pro: 'gemini-2\.5-pro'/.test(read('functions/src/ai.ts'))
+  && /askJson\('pro', prompt\)/.test(cdBranch(index)),
+  'and the same Gemini model the paid audit runs on Gemini');
+ok(!/same prompt, fetcher and model/.test(read('pages/LandingPageStudy.tsx')),
+  'the study page does not claim the product still runs the model it was audited with');
 ok(/fetchPageText\(u\.url, \{ userAgent: STUDY_USER_AGENT \}\)/.test(run),
   'the study fetches with the product fetcher, under its own honest User-Agent');
 ok(/robotsAllows\(u\.url\)/.test(run), 'and asks robots.txt first');
